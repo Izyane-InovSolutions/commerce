@@ -1,12 +1,22 @@
 import { ValidationPipe, type ValidationError } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { json, urlencoded } from 'express';
+import helmet from 'helmet';
 
 import { AppModule } from './app.module';
 import { ValidationException } from './common/http/validation-exception';
+import { AppLogger } from './infrastructure/logging/app-logger.service';
+
+const REQUEST_BODY_LIMIT = '1mb';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+
+  app.useLogger(app.get(AppLogger));
+  app.use(helmet());
+  app.use(json({ limit: REQUEST_BODY_LIMIT }));
+  app.use(urlencoded({ limit: REQUEST_BODY_LIMIT, extended: true }));
 
   app.setGlobalPrefix('api/v1');
   app.useGlobalPipes(

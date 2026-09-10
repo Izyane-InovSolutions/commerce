@@ -29,8 +29,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const status: number =
       exception instanceof HttpException
         ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
-    const { message, details } = this.resolveMessageAndDetails(exception);
+        : (this.getPlainErrorStatus(exception) ??
+          HttpStatus.INTERNAL_SERVER_ERROR);
+    const { message, details } = this.resolveMessageAndDetails(
+      exception,
+      status,
+    );
 
     if (status >= (HttpStatus.INTERNAL_SERVER_ERROR as number)) {
       this.logger.error(
@@ -51,12 +55,42 @@ export class AllExceptionsFilter implements ExceptionFilter {
     response.status(status).json(envelope);
   }
 
-  private resolveMessageAndDetails(exception: unknown): {
+  // Some errors never pass through Nest's routing (e.g. body-parser rejecting
+  // an oversized payload before a controller is even matched) and so are
+  // never HttpException instances, even though they carry a legitimate,
+  // safe-to-expose HTTP status such as 413.
+  private getPlainErrorStatus(exception: unknown): number | undefined {
+    if (typeof exception !== 'object' || exception === null) {
+      return undefined;
+    }
+
+    const candidate =
+      (exception as { status?: unknown; statusCode?: unknown }).status ??
+      (exception as { statusCode?: unknown }).statusCode;
+
+    return typeof candidate === 'number' && candidate >= 400 && candidate < 600
+      ? candidate
+      : undefined;
+  }
+
+  private resolveMessageAndDetails(
+    exception: unknown,
+    status: number,
+  ): {
     message: string;
     details: ErrorDetail[];
   } {
     if (!(exception instanceof HttpException)) {
-      return { message: 'An unexpected error occurred', details: [] };
+      const isKnownClientError =
+        status < (HttpStatus.INTERNAL_SERVER_ERROR as number) &&
+        exception instanceof Error;
+
+      return {
+        message: isKnownClientError
+          ? exception.message
+          : 'An unexpected error occurred',
+        details: [],
+      };
     }
 
     const body = exception.getResponse();

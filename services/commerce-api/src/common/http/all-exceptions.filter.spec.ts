@@ -87,4 +87,43 @@ describe('AllExceptionsFilter', () => {
       requestId: 'req-3',
     });
   });
+
+  it('maps a plain error carrying a client-error status (e.g. body-parser) to its own status and message', () => {
+    const { host, json, status } = createHost('req-4');
+    const payloadTooLarge = Object.assign(
+      new Error('request entity too large'),
+      { status: 413 },
+    );
+
+    filter.catch(payloadTooLarge, host);
+
+    expect(status).toHaveBeenCalledWith(413);
+    expect(json).toHaveBeenCalledWith({
+      error: {
+        code: 'PAYLOAD_TOO_LARGE',
+        message: 'request entity too large',
+        details: [],
+      },
+      requestId: 'req-4',
+    });
+  });
+
+  it('does not leak the message of a plain error carrying a 5xx status', () => {
+    const { host, json, status } = createHost('req-5');
+    const badGateway = Object.assign(new Error('upstream connection refused'), {
+      status: 502,
+    });
+
+    filter.catch(badGateway, host);
+
+    expect(status).toHaveBeenCalledWith(502);
+    expect(json).toHaveBeenCalledWith({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'An unexpected error occurred',
+        details: [],
+      },
+      requestId: 'req-5',
+    });
+  });
 });
