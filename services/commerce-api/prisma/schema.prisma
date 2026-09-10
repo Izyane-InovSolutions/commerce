@@ -1,0 +1,25 @@
+// Commerce API — Prisma schema
+//
+// Conventions for every model added here (see docs/backend-development.md):
+// - Primary keys are UUIDs: `id String @id @default(uuid()) @db.Uuid`
+// - Timestamps are UTC: `createdAt DateTime @default(now())`,
+//   `updatedAt DateTime @updatedAt`
+// - Monetary amounts are stored as integer minor units (e.g. cents) alongside
+//   an explicit currency column (e.g. `amount Int`, `currency String`) —
+//   never as floating point.
+// - Model names are singular PascalCase; fields are camelCase.
+// - Tables and columns are mapped to plural snake_case via `@@map`/`@map`.
+// - Add optimistic concurrency (`version Int @default(0)`) and soft-delete
+//   (`deletedAt DateTime?`) only where the business actually needs them.
+//
+// No domain models exist yet — the first migration lands with the auth
+// domain (users, roles, sessions).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
