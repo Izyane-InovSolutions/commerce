@@ -236,9 +236,9 @@ export class AuthService {
       ...context,
     });
 
-    // No email delivery mechanism exists yet (Notifications is a later phase);
-    // logging the token is a placeholder until that module lands.
-    this.logger.debug(`Password reset token for ${user.email}: ${rawToken}`);
+    // Delivery belongs to the later notifications phase. The raw token is
+    // deliberately never logged; only its hash is persisted.
+    this.logger.debug(`Password reset requested for user ${user.id}`);
   }
 
   async confirmPasswordReset(

@@ -2,6 +2,8 @@ import { Type, plainToInstance } from 'class-transformer';
 import {
   IsEnum,
   IsInt,
+  IsNotEmpty,
+  IsString,
   IsUrl,
   Max,
   Min,
@@ -43,6 +45,23 @@ class EnvironmentVariables {
   @IsInt()
   @Min(60)
   REFRESH_TOKEN_TTL_SECONDS = 2_592_000;
+
+  @IsString()
+  @IsNotEmpty()
+  MEDIA_STORAGE_PATH = '.data/media';
+
+  @MinLength(32)
+  MEDIA_SIGNING_SECRET!: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  MEDIA_MAX_FILE_SIZE_BYTES = 10_485_760;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(60)
+  MEDIA_URL_TTL_SECONDS = 900;
 }
 
 export function validate(

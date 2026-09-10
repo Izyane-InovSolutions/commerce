@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n \"private productDetail\\\\|private variantDetail\\\\|findMany: \\(\\\\|findFirst: \\(\\\\|findUnique: \\({ where }: { where: { id: string } }\\): Promise<Record<string, unknown> | null> =>\\\\n      Promise.resolve\\(this.productDetail\" \"c:/Users/iZyane/Documents/E-Commerce_Platform/commerce/services/commerce-api/test/support/fake-prisma.service.ts\")",
+      "Bash(grep -n '$transaction' c:/Users/iZyane/Documents/E-Commerce_Platform/commerce/services/commerce-api/test/support/fake-prisma.service.ts)",
+      "Bash(npm run *)",
+      "Bash(npm test *)",
+      "Bash(npx prisma *)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name = 'node.exe'\")",
+      "Bash(curl -s -w \"\\\\nSTATUS:%{http_code}\\\\n\" http://localhost:3000/api/v1/health)",
+      "Bash(curl -s -w \"\\\\nSTATUS:%{http_code}\\\\n\" http://localhost:3000/api/v1/catalog/categories)",
+      "Bash(curl -s -w \"\\\\nSTATUS:%{http_code}\\\\n\" http://localhost:3000/api/v1/catalog/brands)",
+      "Bash(curl -s -w \"\\\\nSTATUS:%{http_code}\\\\n\" http://localhost:3000/api/v1/catalog/products)"
+    ]
+  }
+}

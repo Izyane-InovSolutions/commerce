@@ -1,0 +1,35 @@
+import {
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MinLength,
+  ValidateIf,
+} from 'class-validator';
+
+import { IsSlug } from '../../common/slug';
+
+export class UpdateCategoryDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsSlug()
+  slug?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== null)
+  @IsUUID()
+  parentId?: string | null;
+
+  @IsOptional()
+  @IsInt()
+  position?: number;
+}

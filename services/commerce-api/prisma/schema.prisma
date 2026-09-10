@@ -29,16 +29,42 @@ enum Role {
   ADMIN
 }
 
+enum BackgroundJobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  DEAD_LETTER
+}
+
+enum OutboxEventStatus {
+  PENDING
+  PUBLISHED
+  DEAD_LETTER
+}
+
+enum MediaStatus {
+  PENDING_UPLOAD
+  AVAILABLE
+  DELETED
+}
+
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
 model User {
-  id           String    @id @default(uuid()) @db.Uuid
-  email        String    @unique
-  passwordHash String    @map("password_hash")
-  role         Role      @default(CUSTOMER)
-  isActive     Boolean   @default(true) @map("is_active")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
-  sessions     Session[]
+  id                  String               @id @default(uuid()) @db.Uuid
+  email               String               @unique
+  passwordHash        String               @map("password_hash")
+  role                Role                 @default(CUSTOMER)
+  isActive            Boolean              @default(true) @map("is_active")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+  sessions            Session[]
   passwordResetTokens PasswordResetToken[]
+  mediaAssets         MediaAsset[]
 
   @@map("users")
 }
@@ -75,17 +101,233 @@ model PasswordResetToken {
 // No foreign key on actorUserId: audit history must survive the actor
 // (or their account) being deleted later.
 model AuditEvent {
-  id           String   @id @default(uuid()) @db.Uuid
-  actorUserId  String?  @map("actor_user_id") @db.Uuid
-  action       String
-  targetType   String?  @map("target_type")
-  targetId     String?  @map("target_id")
-  metadata     Json?
-  ipAddress    String?  @map("ip_address")
-  userAgent    String?  @map("user_agent")
-  createdAt    DateTime @default(now()) @map("created_at")
+  id          String   @id @default(uuid()) @db.Uuid
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  action      String
+  targetType  String?  @map("target_type")
+  targetId    String?  @map("target_id")
+  metadata    Json?
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
 
   @@index([actorUserId])
   @@index([action])
   @@map("audit_events")
+}
+
+model CacheEntry {
+  key       String   @id @db.VarChar(255)
+  value     Json
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([expiresAt])
+  @@map("cache_entries")
+}
+
+model BackgroundJob {
+  id          String              @id @default(uuid()) @db.Uuid
+  type        String              @db.VarChar(100)
+  payload     Json
+  status      BackgroundJobStatus @default(PENDING)
+  attempts    Int                 @default(0)
+  maxAttempts Int                 @default(5) @map("max_attempts")
+  runAt       DateTime            @default(now()) @map("run_at")
+  lockedAt    DateTime?           @map("locked_at")
+  lockToken   String?             @unique @map("lock_token") @db.Uuid
+  lastError   String?             @map("last_error") @db.Text
+  completedAt DateTime?           @map("completed_at")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+
+  @@index([status, runAt])
+  @@index([status, lockedAt])
+  @@map("background_jobs")
+}
+
+model OutboxEvent {
+  id            String            @id @default(uuid()) @db.Uuid
+  topic         String            @db.VarChar(100)
+  aggregateType String            @map("aggregate_type") @db.VarChar(100)
+  aggregateId   String            @map("aggregate_id") @db.VarChar(100)
+  payload       Json
+  status        OutboxEventStatus @default(PENDING)
+  attempts      Int               @default(0)
+  maxAttempts   Int               @default(10) @map("max_attempts")
+  availableAt   DateTime          @default(now()) @map("available_at")
+  publishedAt   DateTime?         @map("published_at")
+  lastError     String?           @map("last_error") @db.Text
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+
+  @@index([status, availableAt])
+  @@index([aggregateType, aggregateId])
+  @@map("outbox_events")
+}
+
+model MediaAsset {
+  id               String         @id @default(uuid()) @db.Uuid
+  ownerUserId      String         @map("owner_user_id") @db.Uuid
+  ownerUser        User           @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  storageKey       String         @unique @map("storage_key")
+  originalFileName String         @map("original_file_name")
+  mimeType         String         @map("mime_type") @db.VarChar(100)
+  byteSize         BigInt         @map("byte_size")
+  status           MediaStatus    @default(PENDING_UPLOAD)
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+  deletedAt        DateTime?      @map("deleted_at")
+  productMedia     ProductMedia[]
+
+  @@index([ownerUserId, status])
+  @@map("media_assets")
+}
+
+model Category {
+  id          String     @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String     @unique
+  description String?
+  parentId    String?    @map("parent_id") @db.Uuid
+  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Category[] @relation("CategoryHierarchy")
+  position    Int        @default(0)
+  products    Product[]
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@index([parentId])
+  @@map("categories")
+}
+
+model Brand {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String    @unique
+  description String?
+  products    Product[]
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("brands")
+}
+
+model Attribute {
+  id        String           @id @default(uuid()) @db.Uuid
+  name      String
+  code      String           @unique
+  values    AttributeValue[]
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  @@map("attributes")
+}
+
+model AttributeValue {
+  id          String                         @id @default(uuid()) @db.Uuid
+  attributeId String                         @map("attribute_id") @db.Uuid
+  attribute   Attribute                      @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  value       String
+  variants    ProductVariantAttributeValue[]
+  createdAt   DateTime                       @default(now()) @map("created_at")
+
+  @@unique([attributeId, value])
+  @@map("attribute_values")
+}
+
+model Product {
+  id          String           @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String           @unique
+  description String?
+  brandId     String?          @map("brand_id") @db.Uuid
+  brand       Brand?           @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  categoryId  String?          @map("category_id") @db.Uuid
+  category    Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  status      ProductStatus    @default(DRAFT)
+  variants    ProductVariant[]
+  media       ProductMedia[]
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  @@index([brandId])
+  @@index([categoryId])
+  @@index([status])
+  @@map("products")
+}
+
+model ProductVariant {
+  id              String                         @id @default(uuid()) @db.Uuid
+  productId       String                         @map("product_id") @db.Uuid
+  product         Product                        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  skuCode         String                         @unique @map("sku_code")
+  name            String?
+  status          ProductStatus                  @default(DRAFT)
+  attributeValues ProductVariantAttributeValue[]
+  offers          Offer[]
+  createdAt       DateTime                       @default(now()) @map("created_at")
+  updatedAt       DateTime                       @updatedAt @map("updated_at")
+
+  @@index([productId])
+  @@map("product_variants")
+}
+
+model ProductVariantAttributeValue {
+  variantId        String         @map("variant_id") @db.Uuid
+  variant          ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  attributeValueId String         @map("attribute_value_id") @db.Uuid
+  attributeValue   AttributeValue @relation(fields: [attributeValueId], references: [id], onDelete: Cascade)
+
+  @@id([variantId, attributeValueId])
+  @@map("product_variant_attribute_values")
+}
+
+model ProductMedia {
+  id           String     @id @default(uuid()) @db.Uuid
+  productId    String     @map("product_id") @db.Uuid
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  mediaAssetId String     @map("media_asset_id") @db.Uuid
+  mediaAsset   MediaAsset @relation(fields: [mediaAssetId], references: [id], onDelete: Cascade)
+  position     Int        @default(0)
+  isPrimary    Boolean    @default(false) @map("is_primary")
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@unique([productId, mediaAssetId])
+  @@map("product_media")
+}
+
+// sellerId has no foreign key yet: Seller doesn't exist until Phase 3. Null
+// means first-party — the platform's own inventory is represented as an
+// offer too, so retail and marketplace purchases share one model.
+model Offer {
+  id        String         @id @default(uuid()) @db.Uuid
+  variantId String         @map("variant_id") @db.Uuid
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  sellerId  String?        @map("seller_id") @db.Uuid
+  status    ProductStatus  @default(DRAFT)
+  prices    Price[]
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+
+  @@index([variantId])
+  @@index([sellerId])
+  @@map("offers")
+}
+
+// The current price for an offer is whichever row has
+// startsAt <= now < (endsAt ?? infinity); most recent startsAt wins on overlap.
+model Price {
+  id        String    @id @default(uuid()) @db.Uuid
+  offerId   String    @map("offer_id") @db.Uuid
+  offer     Offer     @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  amount    Int
+  currency  String    @db.VarChar(3)
+  startsAt  DateTime  @default(now()) @map("starts_at")
+  endsAt    DateTime? @map("ends_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([offerId, startsAt])
+  @@map("prices")
 }
