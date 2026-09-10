@@ -1,0 +1,27 @@
+{
+  "name": "commerce-platform",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "services/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "format": "npm run format --workspaces --if-present",
+    "format:check": "npm run format:check --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:e2e": "npm run test:e2e --workspaces --if-present",
+    "api:dev": "npm run start:dev --workspace @commerce/commerce-api"
+  },
+  "engines": {
+    "node": ">=24.0.0",
+    "npm": ">=11.0.0"
+  },
+  "overrides": {
+    "@nestjs/platform-express": {
+      "multer": "2.3.0"
+    }
+  }
+}
