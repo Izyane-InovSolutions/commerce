@@ -1,0 +1,43 @@
+'use client';
+
+import { useState } from 'react';
+
+import { ProductCard } from '@/components/product-card';
+import { Button } from '@/components/ui/button';
+import type { ProductCategory } from '@/lib/mock-data/products';
+
+const INITIAL_VISIBLE_COUNT = 4;
+
+export function ProductCategorySection({
+  category,
+}: {
+  category: ProductCategory;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  const hasMore = category.products.length > INITIAL_VISIBLE_COUNT;
+  const visibleProducts = expanded
+    ? category.products
+    : category.products.slice(0, INITIAL_VISIBLE_COUNT);
+
+  return (
+    <section className="space-y-4">
+      <h2 className="text-xl font-semibold tracking-tight">{category.title}</h2>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        {visibleProducts.map((product) => (
+          <ProductCard key={product.id} product={product} />
+        ))}
+      </div>
+      {hasMore ? (
+        <Button
+          variant="outline"
+          size="sm"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? 'View less' : 'View more'}
+        </Button>
+      ) : null}
+    </section>
+  );
+}
