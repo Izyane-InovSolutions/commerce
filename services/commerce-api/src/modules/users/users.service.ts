@@ -27,6 +27,13 @@ export class UsersService {
     return this.prisma.user.update({ where: { id }, data: { passwordHash } });
   }
 
+  updateProfile(
+    id: string,
+    data: { firstName?: string; lastName?: string; phone?: string },
+  ): Promise<User> {
+    return this.prisma.user.update({ where: { id }, data });
+  }
+
   normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
   }

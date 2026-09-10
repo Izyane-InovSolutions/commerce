@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { ProductStatus } from '@prisma/client';
 
-import { PrismaService } from '../../../database/prisma.service';
+import { PrismaService } from '../../database/prisma.service';
 import { ProductsService } from './products.service';
 
 function buildPrisma(): {

@@ -14,7 +14,7 @@ import {
   DEFAULT_PAGE,
   DEFAULT_PAGE_SIZE,
   MAX_PAGE_SIZE,
-} from '../../../../common/pagination/pagination-query.dto';
+} from '../../../common/pagination/pagination-query.dto';
 
 const SORT_PATTERN = /^([a-zA-Z0-9_]+):(asc|desc)$/;
 

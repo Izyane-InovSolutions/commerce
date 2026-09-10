@@ -1,7 +1,7 @@
 import { ValidationPipe, type ValidationError } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { json, urlencoded } from 'express';
+import { json, urlencoded, type Request } from 'express';
 import helmet from 'helmet';
 
 import { AppModule } from './app.module';
@@ -15,7 +15,16 @@ async function bootstrap(): Promise<void> {
 
   app.useLogger(app.get(AppLogger));
   app.use(helmet());
-  app.use(json({ limit: REQUEST_BODY_LIMIT }));
+  app.use(
+    json({
+      limit: REQUEST_BODY_LIMIT,
+      // Webhook signature verification needs the raw bytes, which are
+      // otherwise discarded once the body is parsed as JSON.
+      verify: (req: Request & { rawBody?: Buffer }, _res, buf) => {
+        req.rawBody = buf;
+      },
+    }),
+  );
   app.use(urlencoded({ limit: REQUEST_BODY_LIMIT, extended: true }));
 
   app.setGlobalPrefix('api/v1');

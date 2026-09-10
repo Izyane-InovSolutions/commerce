@@ -6,7 +6,7 @@ import {
   ValidateIf,
 } from 'class-validator';
 
-import { IsSlug } from '../../common/slug';
+import { IsSlug } from '../../../common/catalog/slug';
 
 export class UpdateProductDto {
   @IsOptional()

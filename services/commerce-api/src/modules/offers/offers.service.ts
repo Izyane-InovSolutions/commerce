@@ -5,8 +5,8 @@ import {
 } from '@nestjs/common';
 import type { Offer, Price } from '@prisma/client';
 
-import { PrismaService } from '../../../database/prisma.service';
-import { UpdateStatusDto } from '../common/dto/update-status.dto';
+import { PrismaService } from '../../database/prisma.service';
+import { UpdateStatusDto } from '../../common/catalog/dto/update-status.dto';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { CreatePriceDto } from './dto/create-price.dto';
 

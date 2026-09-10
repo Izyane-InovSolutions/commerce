@@ -12,8 +12,8 @@ import {
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
 
-import { Roles } from '../../../common/auth/roles.decorator';
-import { UpdateStatusDto } from '../common/dto/update-status.dto';
+import { Roles } from '../../common/auth/roles.decorator';
+import { UpdateStatusDto } from '../../common/catalog/dto/update-status.dto';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { CreatePriceDto } from './dto/create-price.dto';
 import { OffersService, OfferWithPrices } from './offers.service';

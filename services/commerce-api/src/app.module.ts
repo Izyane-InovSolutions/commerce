@@ -20,11 +20,18 @@ import { MetricsInterceptor } from './infrastructure/metrics/metrics.interceptor
 import { MetricsModule } from './infrastructure/metrics/metrics.module';
 import { StorageModule } from './infrastructure/storage/storage.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { CartModule } from './modules/cart/cart.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
+import { CheckoutModule } from './modules/checkout/checkout.module';
 import { HealthModule } from './modules/health/health.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
 import { MediaModule } from './modules/media/media.module';
+import { OffersModule } from './modules/offers/offers.module';
+import { OrdersModule } from './modules/orders/orders.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { ProductsModule } from './modules/products/products.module';
 import { UsersModule } from './modules/users/users.module';
+import { WishlistModule } from './modules/wishlist/wishlist.module';
 
 @Module({
   imports: [
@@ -45,6 +52,13 @@ import { UsersModule } from './modules/users/users.module';
     MediaModule,
     PaymentsModule,
     CatalogModule,
+    ProductsModule,
+    OffersModule,
+    InventoryModule,
+    CartModule,
+    WishlistModule,
+    OrdersModule,
+    CheckoutModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

@@ -13,10 +13,10 @@ import {
 import {
   PaginatedResult,
   paginatedResult,
-} from '../../../common/pagination/paginated-result';
-import { parseSort } from '../../../common/pagination/sort.dto';
-import { PrismaService } from '../../../database/prisma.service';
-import { pickCurrentPrice } from '../common/current-price';
+} from '../../common/pagination/paginated-result';
+import { parseSort } from '../../common/pagination/sort.dto';
+import { PrismaService } from '../../database/prisma.service';
+import { pickCurrentPrice } from '../../common/catalog/current-price';
 import { AttachMediaDto } from './dto/attach-media.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { CreateVariantDto } from './dto/create-variant.dto';
@@ -24,7 +24,7 @@ import { ProductQueryDto } from './dto/product-query.dto';
 import { UpdateProductMediaDto } from './dto/update-product-media.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
-import { UpdateStatusDto } from '../common/dto/update-status.dto';
+import { UpdateStatusDto } from '../../common/catalog/dto/update-status.dto';
 import {
   ProductWithRelations,
   PublicProduct,

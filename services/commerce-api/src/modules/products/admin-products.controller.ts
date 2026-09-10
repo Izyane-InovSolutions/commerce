@@ -12,14 +12,14 @@ import {
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
 
-import { Roles } from '../../../common/auth/roles.decorator';
+import { Roles } from '../../common/auth/roles.decorator';
 import { AttachMediaDto } from './dto/attach-media.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { UpdateProductMediaDto } from './dto/update-product-media.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
-import { UpdateStatusDto } from '../common/dto/update-status.dto';
+import { UpdateStatusDto } from '../../common/catalog/dto/update-status.dto';
 import { ProductsService } from './products.service';
 import { ProductWithRelations, VariantWithRelations } from './products.types';
 

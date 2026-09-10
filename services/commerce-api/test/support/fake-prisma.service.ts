@@ -5,6 +5,9 @@ type FakeUser = {
   id: string;
   email: string;
   passwordHash: string;
+  firstName: string | null;
+  lastName: string | null;
+  phone: string | null;
   role: Role;
   isActive: boolean;
   createdAt: Date;
@@ -62,6 +65,72 @@ export class FakePrismaService {
     return Promise.all(arg);
   }
 
+  // Recognizes the small, fixed set of raw guarded-update queries
+  // InventoryService issues, by matching the literal (placeholder-free) SQL
+  // text — a full SQL engine isn't needed for four known shapes.
+  $executeRaw(
+    strings: TemplateStringsArray,
+    ...values: unknown[]
+  ): Promise<number> {
+    const sql = strings.join('');
+
+    if (sql.includes('on_hand = on_hand +')) {
+      const [delta, id] = [values[0] as number, values[1] as string];
+      const record = this.inventoryRecords.get(id);
+      if (!record || (record.onHand as number) + delta < 0)
+        return Promise.resolve(0);
+      record.onHand = (record.onHand as number) + delta;
+      record.updatedAt = new Date();
+      return Promise.resolve(1);
+    }
+
+    if (sql.includes('reserved = reserved +')) {
+      const [quantity, id] = [values[0] as number, values[1] as string];
+      const record = this.inventoryRecords.get(id);
+      if (
+        !record ||
+        (record.onHand as number) - (record.reserved as number) < quantity
+      )
+        return Promise.resolve(0);
+      record.reserved = (record.reserved as number) + quantity;
+      record.updatedAt = new Date();
+      return Promise.resolve(1);
+    }
+
+    if (sql.includes('on_hand = on_hand -')) {
+      const [qty1, qty2, id] = [
+        values[0] as number,
+        values[1] as number,
+        values[2] as string,
+      ];
+      const record = this.inventoryRecords.get(id);
+      if (
+        !record ||
+        (record.onHand as number) < qty1 ||
+        (record.reserved as number) < qty2
+      )
+        return Promise.resolve(0);
+      record.onHand = (record.onHand as number) - qty1;
+      record.reserved = (record.reserved as number) - qty2;
+      record.updatedAt = new Date();
+      return Promise.resolve(1);
+    }
+
+    if (sql.includes('GREATEST(reserved -')) {
+      const [quantity, id] = [values[0] as number, values[1] as string];
+      const record = this.inventoryRecords.get(id);
+      if (record) {
+        record.reserved = Math.max((record.reserved as number) - quantity, 0);
+        record.updatedAt = new Date();
+      }
+      return Promise.resolve(1);
+    }
+
+    throw new Error(
+      `FakePrismaService.$executeRaw: unrecognized query: ${sql}`,
+    );
+  }
+
   user = {
     findUnique: ({
       where,
@@ -87,6 +156,9 @@ export class FakePrismaService {
         id: randomUUID(),
         email: data.email,
         passwordHash: data.passwordHash,
+        firstName: null,
+        lastName: null,
+        phone: null,
         role: Role.CUSTOMER,
         isActive: true,
         createdAt: now,
@@ -786,6 +858,16 @@ export class FakePrismaService {
         ),
       });
     },
+    findMany: ({
+      where,
+    }: {
+      where?: { id?: { in: string[] } };
+    } = {}): Promise<Record<string, unknown>[]> => {
+      let rows = [...this.offers.values()];
+      if (where?.id?.in)
+        rows = rows.filter((row) => where.id!.in.includes(row.id as string));
+      return Promise.resolve(rows);
+    },
     create: ({
       data,
     }: {
@@ -839,6 +921,728 @@ export class FakePrismaService {
         ...data,
       };
       this.prices.set(row.id as string, row);
+      return Promise.resolve(row);
+    },
+  };
+
+  // --- Inventory (Phase 1.2) ------------------------------------------------
+  private readonly warehouses = new Map<string, Record<string, unknown>>();
+  private readonly inventoryRecords = new Map<
+    string,
+    Record<string, unknown>
+  >();
+  private readonly inventoryMovements = new Map<
+    string,
+    Record<string, unknown>
+  >();
+  private readonly reservations = new Map<string, Record<string, unknown>>();
+  private readonly backgroundJobs = new Map<string, Record<string, unknown>>();
+
+  warehouse = {
+    findMany: (): Promise<Record<string, unknown>[]> =>
+      Promise.resolve([...this.warehouses.values()]),
+    findUnique: ({
+      where,
+    }: {
+      where: { id: string };
+    }): Promise<Record<string, unknown> | null> =>
+      Promise.resolve(this.warehouses.get(where.id) ?? null),
+    create: ({
+      data,
+    }: {
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const now = new Date();
+      const row = {
+        id: randomUUID(),
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+        ...data,
+      };
+      this.warehouses.set(row.id as string, row);
+      return Promise.resolve(row);
+    },
+    update: ({
+      where,
+      data,
+    }: {
+      where: { id: string };
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const row = this.warehouses.get(where.id)!;
+      Object.assign(row, data, { updatedAt: new Date() });
+      return Promise.resolve(row);
+    },
+    delete: ({ where }: { where: { id: string } }): Promise<void> => {
+      this.warehouses.delete(where.id);
+      return Promise.resolve();
+    },
+  };
+
+  inventoryRecord = {
+    findUnique: ({
+      where,
+    }: {
+      where: {
+        id?: string;
+        warehouseId_variantId?: { warehouseId: string; variantId: string };
+      };
+    }): Promise<Record<string, unknown> | null> => {
+      if (where.id)
+        return Promise.resolve(this.inventoryRecords.get(where.id) ?? null);
+      const { warehouseId, variantId } = where.warehouseId_variantId!;
+      const row = [...this.inventoryRecords.values()].find(
+        (r) => r.warehouseId === warehouseId && r.variantId === variantId,
+      );
+      return Promise.resolve(row ?? null);
+    },
+    findUniqueOrThrow: async (args: {
+      where: {
+        id?: string;
+        warehouseId_variantId?: { warehouseId: string; variantId: string };
+      };
+    }): Promise<Record<string, unknown>> => {
+      const row = await this.inventoryRecord.findUnique(args);
+      if (!row) throw new Error('InventoryRecord not found');
+      return row;
+    },
+    findMany: ({
+      where,
+    }: {
+      where?: {
+        id?: { in: string[] };
+        warehouseId?: string;
+        variantId?: string;
+      };
+    } = {}): Promise<Record<string, unknown>[]> => {
+      let rows = [...this.inventoryRecords.values()];
+      if (where?.id?.in)
+        rows = rows.filter((row) => where.id!.in.includes(row.id as string));
+      if (where?.warehouseId)
+        rows = rows.filter((row) => row.warehouseId === where.warehouseId);
+      if (where?.variantId)
+        rows = rows.filter((row) => row.variantId === where.variantId);
+      return Promise.resolve(rows);
+    },
+    create: ({
+      data,
+    }: {
+      data: { warehouseId: string; variantId: string };
+    }): Promise<Record<string, unknown>> => {
+      const now = new Date();
+      const row = {
+        id: randomUUID(),
+        onHand: 0,
+        reserved: 0,
+        createdAt: now,
+        updatedAt: now,
+        ...data,
+      };
+      this.inventoryRecords.set(row.id, row);
+      return Promise.resolve(row);
+    },
+    update: ({
+      where,
+      data,
+    }: {
+      where: { id: string };
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const row = this.inventoryRecords.get(where.id)!;
+      const increments: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(data)) {
+        if (value && typeof value === 'object' && 'increment' in value) {
+          increments[key] =
+            (row[key] as number) + (value as { increment: number }).increment;
+        } else {
+          increments[key] = value;
+        }
+      }
+      Object.assign(row, increments, { updatedAt: new Date() });
+      return Promise.resolve(row);
+    },
+  };
+
+  inventoryMovement = {
+    create: ({
+      data,
+    }: {
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const row = {
+        id: randomUUID(),
+        note: null,
+        referenceType: null,
+        referenceId: null,
+        createdAt: new Date(),
+        ...data,
+      };
+      this.inventoryMovements.set(row.id as string, row);
+      return Promise.resolve(row);
+    },
+    findMany: ({
+      where,
+    }: {
+      where: { inventoryRecordId: string };
+    }): Promise<Record<string, unknown>[]> =>
+      Promise.resolve(
+        [...this.inventoryMovements.values()].filter(
+          (row) => row.inventoryRecordId === where.inventoryRecordId,
+        ),
+      ),
+  };
+
+  reservation = {
+    findUnique: ({
+      where,
+    }: {
+      where: { id: string };
+    }): Promise<Record<string, unknown> | null> =>
+      Promise.resolve(this.reservations.get(where.id) ?? null),
+    findMany: ({
+      where,
+    }: {
+      where: {
+        inventoryRecordId: string;
+        status?: string;
+        expiresAt?: { lt: Date };
+      };
+    }): Promise<Record<string, unknown>[]> => {
+      let rows = [...this.reservations.values()].filter(
+        (row) => row.inventoryRecordId === where.inventoryRecordId,
+      );
+      if (where.status)
+        rows = rows.filter((row) => row.status === where.status);
+      if (where.expiresAt?.lt)
+        rows = rows.filter(
+          (row) => (row.expiresAt as Date) < where.expiresAt!.lt,
+        );
+      return Promise.resolve(rows);
+    },
+    create: ({
+      data,
+    }: {
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const now = new Date();
+      const row = {
+        id: randomUUID(),
+        status: 'ACTIVE',
+        holderType: null,
+        holderId: null,
+        createdAt: now,
+        updatedAt: now,
+        ...data,
+      };
+      this.reservations.set(row.id as string, row);
+      return Promise.resolve(row);
+    },
+    update: ({
+      where,
+      data,
+    }: {
+      where: { id: string };
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const row = this.reservations.get(where.id)!;
+      Object.assign(row, data, { updatedAt: new Date() });
+      return Promise.resolve(row);
+    },
+  };
+
+  backgroundJob = {
+    create: ({
+      data,
+    }: {
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const now = new Date();
+      const row = {
+        id: randomUUID(),
+        status: 'PENDING',
+        attempts: 0,
+        maxAttempts: 5,
+        createdAt: now,
+        updatedAt: now,
+        ...data,
+      };
+      this.backgroundJobs.set(row.id as string, row);
+      return Promise.resolve(row);
+    },
+  };
+
+  // --- Users / addresses (Phase 1.3) ---------------------------------------
+  private readonly addresses = new Map<string, Record<string, unknown>>();
+
+  address = {
+    findMany: ({
+      where,
+    }: {
+      where: { userId: string };
+    }): Promise<Record<string, unknown>[]> =>
+      Promise.resolve(
+        [...this.addresses.values()].filter(
+          (row) => row.userId === where.userId,
+        ),
+      ),
+    findUnique: ({
+      where,
+    }: {
+      where: { id: string };
+    }): Promise<Record<string, unknown> | null> =>
+      Promise.resolve(this.addresses.get(where.id) ?? null),
+    findFirst: ({
+      where,
+    }: {
+      where: { userId: string };
+    }): Promise<Record<string, unknown> | null> => {
+      const rows = [...this.addresses.values()]
+        .filter((row) => row.userId === where.userId)
+        .sort(
+          (a, b) =>
+            (b.updatedAt as Date).getTime() - (a.updatedAt as Date).getTime(),
+        );
+      return Promise.resolve(rows[0] ?? null);
+    },
+    count: ({ where }: { where: { userId: string } }): Promise<number> =>
+      Promise.resolve(
+        [...this.addresses.values()].filter(
+          (row) => row.userId === where.userId,
+        ).length,
+      ),
+    create: ({
+      data,
+    }: {
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const now = new Date();
+      const row = {
+        id: randomUUID(),
+        label: null,
+        phone: null,
+        line2: null,
+        region: null,
+        createdAt: now,
+        updatedAt: now,
+        ...data,
+      };
+      this.addresses.set(row.id as string, row);
+      return Promise.resolve(row);
+    },
+    update: ({
+      where,
+      data,
+    }: {
+      where: { id: string };
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const row = this.addresses.get(where.id)!;
+      Object.assign(row, data, { updatedAt: new Date() });
+      return Promise.resolve(row);
+    },
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: { userId: string; isDefault: boolean };
+      data: Record<string, unknown>;
+    }): Promise<{ count: number }> => {
+      let count = 0;
+      for (const row of this.addresses.values()) {
+        if (row.userId === where.userId && row.isDefault === where.isDefault) {
+          Object.assign(row, data, { updatedAt: new Date() });
+          count += 1;
+        }
+      }
+      return Promise.resolve({ count });
+    },
+    delete: ({ where }: { where: { id: string } }): Promise<void> => {
+      this.addresses.delete(where.id);
+      return Promise.resolve();
+    },
+  };
+
+  // --- Cart / wishlist (Phase 1.4) -----------------------------------------
+  private readonly carts = new Map<string, Record<string, unknown>>();
+  private readonly cartItems = new Map<string, Record<string, unknown>>();
+  private readonly wishlistItems = new Map<string, Record<string, unknown>>();
+
+  private offerWithPrices(
+    offerId: string,
+  ): Record<string, unknown> | undefined {
+    const offer = this.offers.get(offerId);
+    if (!offer) return undefined;
+    return {
+      ...offer,
+      prices: [...this.prices.values()].filter(
+        (price) => price.offerId === offerId,
+      ),
+    };
+  }
+
+  private cartDetail(id: string): Record<string, unknown> | undefined {
+    const cart = this.carts.get(id);
+    if (!cart) return undefined;
+    const items = [...this.cartItems.values()]
+      .filter((item) => item.cartId === id)
+      .map((item) => ({
+        ...item,
+        offer: this.offerWithPrices(item.offerId as string),
+      }));
+    return { ...cart, items };
+  }
+
+  cart = {
+    findUnique: ({
+      where,
+    }: {
+      where: { id?: string; userId?: string; guestToken?: string };
+    }): Promise<Record<string, unknown> | null> => {
+      if (where.id) {
+        return Promise.resolve(this.cartDetail(where.id) ?? null);
+      }
+      const row = [...this.carts.values()].find(
+        (cart) =>
+          (where.userId && cart.userId === where.userId) ||
+          (where.guestToken && cart.guestToken === where.guestToken),
+      );
+      if (!row) return Promise.resolve(null);
+      return Promise.resolve(this.cartDetail(row.id as string) ?? null);
+    },
+    findFirst: ({
+      where,
+    }: {
+      where: { userId?: string; guestToken?: string; status?: string };
+    }): Promise<Record<string, unknown> | null> => {
+      const row = [...this.carts.values()].find(
+        (cart) =>
+          ((where.userId && cart.userId === where.userId) ||
+            (where.guestToken && cart.guestToken === where.guestToken)) &&
+          (!where.status || cart.status === where.status),
+      );
+      return Promise.resolve(row ?? null);
+    },
+    create: ({
+      data,
+    }: {
+      data: { userId?: string; guestToken?: string };
+    }): Promise<Record<string, unknown>> => {
+      const now = new Date();
+      const row = {
+        id: randomUUID(),
+        userId: null,
+        guestToken: null,
+        status: 'ACTIVE',
+        createdAt: now,
+        updatedAt: now,
+        ...data,
+      };
+      this.carts.set(row.id, row);
+      return Promise.resolve(row);
+    },
+    update: ({
+      where,
+      data,
+    }: {
+      where: { id: string };
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const row = this.carts.get(where.id)!;
+      Object.assign(row, data, { updatedAt: new Date() });
+      return Promise.resolve(row);
+    },
+  };
+
+  cartItem = {
+    findUnique: ({
+      where,
+    }: {
+      where: { id: string };
+    }): Promise<Record<string, unknown> | null> =>
+      Promise.resolve(this.cartItems.get(where.id) ?? null),
+    upsert: ({
+      where,
+      create,
+      update,
+    }: {
+      where: { cartId_offerId: { cartId: string; offerId: string } };
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const { cartId, offerId } = where.cartId_offerId;
+      const existing = [...this.cartItems.values()].find(
+        (item) => item.cartId === cartId && item.offerId === offerId,
+      );
+
+      if (existing) {
+        if (
+          update.quantity &&
+          typeof update.quantity === 'object' &&
+          'increment' in update.quantity
+        ) {
+          existing.quantity =
+            (existing.quantity as number) +
+            (update.quantity as { increment: number }).increment;
+        } else {
+          Object.assign(existing, update);
+        }
+        existing.updatedAt = new Date();
+        return Promise.resolve(existing);
+      }
+
+      const now = new Date();
+      const row = {
+        id: randomUUID(),
+        createdAt: now,
+        updatedAt: now,
+        ...create,
+      };
+      this.cartItems.set(row.id, row);
+      return Promise.resolve(row);
+    },
+    update: ({
+      where,
+      data,
+    }: {
+      where: { id: string };
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const row = this.cartItems.get(where.id)!;
+      Object.assign(row, data, { updatedAt: new Date() });
+      return Promise.resolve(row);
+    },
+    delete: ({ where }: { where: { id: string } }): Promise<void> => {
+      this.cartItems.delete(where.id);
+      return Promise.resolve();
+    },
+    deleteMany: ({
+      where,
+    }: {
+      where: { cartId: string };
+    }): Promise<{ count: number }> => {
+      let count = 0;
+      for (const [id, item] of this.cartItems.entries()) {
+        if (item.cartId === where.cartId) {
+          this.cartItems.delete(id);
+          count += 1;
+        }
+      }
+      return Promise.resolve({ count });
+    },
+  };
+
+  wishlistItem = {
+    findMany: ({
+      where,
+    }: {
+      where: { userId: string };
+    }): Promise<Record<string, unknown>[]> =>
+      Promise.resolve(
+        [...this.wishlistItems.values()]
+          .filter((item) => item.userId === where.userId)
+          .map((item) => ({
+            ...item,
+            offer: this.offerWithPrices(item.offerId as string),
+          })),
+      ),
+    create: ({
+      data,
+    }: {
+      data: { userId: string; offerId: string };
+    }): Promise<Record<string, unknown>> => {
+      const duplicate = [...this.wishlistItems.values()].some(
+        (item) => item.userId === data.userId && item.offerId === data.offerId,
+      );
+      if (duplicate) {
+        return Promise.reject(
+          Object.assign(new Error('Unique constraint violation'), {
+            code: 'P2002',
+          }),
+        );
+      }
+      const row = { id: randomUUID(), createdAt: new Date(), ...data };
+      this.wishlistItems.set(row.id, row);
+      return Promise.resolve(row);
+    },
+    deleteMany: ({
+      where,
+    }: {
+      where: { userId: string; offerId: string };
+    }): Promise<{ count: number }> => {
+      let count = 0;
+      for (const [id, item] of this.wishlistItems.entries()) {
+        if (item.userId === where.userId && item.offerId === where.offerId) {
+          this.wishlistItems.delete(id);
+          count += 1;
+        }
+      }
+      return Promise.resolve({ count });
+    },
+  };
+
+  // --- Orders / payments (Phase 1.5) ---------------------------------------
+  private readonly orders = new Map<string, Record<string, unknown>>();
+  private readonly orderItems = new Map<string, Record<string, unknown>>();
+  private readonly payments = new Map<string, Record<string, unknown>>();
+  private readonly paymentEvents = new Map<string, Record<string, unknown>>();
+
+  private orderDetail(id: string): Record<string, unknown> | undefined {
+    const order = this.orders.get(id);
+    if (!order) return undefined;
+    const items = [...this.orderItems.values()].filter(
+      (item) => item.orderId === id,
+    );
+    return { ...order, items };
+  }
+
+  order = {
+    create: ({
+      data,
+    }: {
+      data: Record<string, unknown> & {
+        items?: { create: Record<string, unknown>[] };
+      };
+    }): Promise<Record<string, unknown>> => {
+      const now = new Date();
+      const { items, ...orderData } = data;
+      const row = {
+        id: randomUUID(),
+        createdAt: now,
+        updatedAt: now,
+        ...orderData,
+      };
+      this.orders.set(row.id as string, row);
+
+      for (const itemData of items?.create ?? []) {
+        const itemRow = {
+          id: randomUUID(),
+          orderId: row.id,
+          reservationId: null,
+          createdAt: now,
+          ...itemData,
+        };
+        this.orderItems.set(itemRow.id, itemRow);
+      }
+
+      return Promise.resolve(this.orderDetail(row.id as string)!);
+    },
+    findUnique: ({
+      where,
+    }: {
+      where: { id: string };
+    }): Promise<Record<string, unknown> | null> =>
+      Promise.resolve(this.orderDetail(where.id) ?? null),
+    findMany: ({
+      where,
+    }: {
+      where: { userId: string };
+    }): Promise<Record<string, unknown>[]> =>
+      Promise.resolve(
+        [...this.orders.values()]
+          .filter((row) => row.userId === where.userId)
+          .sort(
+            (a, b) =>
+              (b.createdAt as Date).getTime() - (a.createdAt as Date).getTime(),
+          )
+          .map((row) => this.orderDetail(row.id as string)!),
+      ),
+    update: ({
+      where,
+      data,
+    }: {
+      where: { id: string };
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const row = this.orders.get(where.id)!;
+      Object.assign(row, data, { updatedAt: new Date() });
+      return Promise.resolve(row);
+    },
+  };
+
+  orderItem = {
+    findUnique: ({
+      where,
+    }: {
+      where: { id: string };
+    }): Promise<Record<string, unknown> | null> =>
+      Promise.resolve(this.orderItems.get(where.id) ?? null),
+    update: ({
+      where,
+      data,
+    }: {
+      where: { id: string };
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const row = this.orderItems.get(where.id)!;
+      Object.assign(row, data);
+      return Promise.resolve(row);
+    },
+  };
+
+  payment = {
+    create: ({
+      data,
+    }: {
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const now = new Date();
+      const row = {
+        id: randomUUID(),
+        providerReference: null,
+        failureReason: null,
+        createdAt: now,
+        updatedAt: now,
+        ...data,
+      };
+      this.payments.set(row.id as string, row);
+      return Promise.resolve(row);
+    },
+    findUnique: ({
+      where,
+    }: {
+      where: { id?: string; orderId?: string; providerReference?: string };
+    }): Promise<Record<string, unknown> | null> => {
+      if (where.id) return Promise.resolve(this.payments.get(where.id) ?? null);
+      const row = [...this.payments.values()].find(
+        (payment) =>
+          (where.orderId && payment.orderId === where.orderId) ||
+          (where.providerReference &&
+            payment.providerReference === where.providerReference),
+      );
+      return Promise.resolve(row ?? null);
+    },
+    update: ({
+      where,
+      data,
+    }: {
+      where: { id: string };
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const row = this.payments.get(where.id)!;
+      Object.assign(row, data, { updatedAt: new Date() });
+      return Promise.resolve(row);
+    },
+  };
+
+  paymentEvent = {
+    findUnique: ({
+      where,
+    }: {
+      where: { providerEventId: string };
+    }): Promise<Record<string, unknown> | null> =>
+      Promise.resolve(
+        [...this.paymentEvents.values()].find(
+          (event) => event.providerEventId === where.providerEventId,
+        ) ?? null,
+      ),
+    create: ({
+      data,
+    }: {
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const row = { id: randomUUID(), createdAt: new Date(), ...data };
+      this.paymentEvents.set(row.id as string, row);
       return Promise.resolve(row);
     },
   };

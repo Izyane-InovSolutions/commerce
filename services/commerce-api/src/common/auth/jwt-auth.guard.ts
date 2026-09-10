@@ -9,6 +9,7 @@ import { Reflector } from '@nestjs/core';
 
 import { AccessTokenPayload } from './access-token-payload';
 import { RequestWithUser } from './authenticated-user';
+import { IS_OPTIONAL_AUTH_KEY } from './optional-auth.decorator';
 import { IS_PUBLIC_KEY } from './public.decorator';
 
 @Injectable()
@@ -28,10 +29,19 @@ export class JwtAuthGuard implements CanActivate {
       return true;
     }
 
+    const isOptionalAuth = this.reflector.getAllAndOverride<boolean>(
+      IS_OPTIONAL_AUTH_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+
     const request = context.switchToHttp().getRequest<RequestWithUser>();
     const token = this.extractToken(request);
 
     if (!token) {
+      if (isOptionalAuth) {
+        return true;
+      }
+
       throw new UnauthorizedException('Missing bearer token');
     }
 
