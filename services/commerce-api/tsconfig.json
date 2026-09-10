@@ -5,6 +5,7 @@
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "incremental": true,
+    "isolatedModules": true,
     "module": "NodeNext",
     "outDir": "./dist",
     "removeComments": true,
