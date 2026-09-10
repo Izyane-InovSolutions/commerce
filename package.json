@@ -15,7 +15,9 @@
     "test": "npm run test --workspaces --if-present",
     "test:e2e": "npm run test:e2e --workspaces --if-present",
     "api:dev": "npm run start:dev --workspace @commerce/commerce-api",
-    "web:dev": "npm run dev --workspace @commerce/web"
+    "web:dev": "npm run dev --workspace @commerce/web",
+    "admin:dev": "npm run dev --workspace @commerce/admin",
+    "seller:dev": "npm run dev --workspace @commerce/seller"
   },
   "engines": {
     "node": ">=24.0.0",

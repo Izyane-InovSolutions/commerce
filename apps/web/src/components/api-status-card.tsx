@@ -1,5 +1,6 @@
-import { getHealth } from '@/lib/api/health';
-import { env } from '@/lib/env';
+import { getHealth } from '@commerce/api-client';
+
+import { apiClient } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import {
   Card,
@@ -13,7 +14,7 @@ type ApiStatus = { reachable: true } | { reachable: false; detail: string };
 
 async function readApiStatus(): Promise<ApiStatus> {
   try {
-    await getHealth();
+    await getHealth(apiClient);
     return { reachable: true };
   } catch (error) {
     return {
@@ -40,7 +41,7 @@ export async function ApiStatusCard() {
           </Badge>
         </CardTitle>
         <CardDescription>
-          <code className="font-mono">{env.apiBaseUrl}</code>
+          <code className="font-mono">{apiClient.baseUrl}</code>
         </CardDescription>
       </CardHeader>
       <CardContent className="text-muted-foreground text-sm">
