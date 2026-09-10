@@ -6,6 +6,64 @@
 
 ---
 
+## Architecture Decision — Modular Monolith First
+
+The platform will begin as a **modular monolith** rather than a distributed microservices system.
+
+All transactional commerce domains will live in one deployable NestJS application while remaining separated into explicit business modules with clear ownership boundaries.
+
+```text
+apps/
+├── web/
+├── admin/
+├── seller/
+└── mobile/
+
+services/
+└── commerce-api/
+    └── src/
+        ├── modules/
+        │   ├── auth/
+        │   ├── users/
+        │   ├── catalog/
+        │   ├── products/
+        │   ├── offers/
+        │   ├── cart/
+        │   ├── checkout/
+        │   ├── orders/
+        │   ├── payments/
+        │   ├── inventory/
+        │   ├── fulfillment/
+        │   ├── shipping/
+        │   ├── sellers/
+        │   ├── marketplace/
+        │   ├── commissions/
+        │   ├── payouts/
+        │   ├── reviews/
+        │   ├── promotions/
+        │   ├── notifications/
+        │   └── admin/
+        │
+        ├── common/
+        ├── database/
+        ├── integrations/
+        └── infrastructure/
+```
+
+### Modular monolith rules
+
+- Each business module owns its domain logic, application services, controllers, DTOs, validation and persistence boundaries.
+- Modules communicate through explicit services/interfaces rather than reaching directly into another module's repositories or tables.
+- `common/` contains shared primitives, decorators, guards, pipes, exception types and cross-cutting utilities.
+- `database/` contains Prisma configuration/client access and migration support.
+- `integrations/` contains adapters for the in-house payment gateway, couriers, 3PLs and other external systems.
+- `infrastructure/` contains Redis, queues, object storage, observability and runtime infrastructure.
+- The application remains one deployable NestJS service until there is a demonstrated reason to extract a module into an independently deployed service.
+
+This gives the project strong boundaries without paying the operational and distributed-system cost of microservices too early. Modules should be designed so they can later be extracted if scale, team ownership or operational requirements justify it.
+
+---
+
 ## 1. Project Vision
 
 The platform will combine two commercial models in one unified commerce system:
@@ -23,7 +81,7 @@ The system is designed once as a complete platform and implemented progressively
 flowchart TD
     C[Customer] --> WEB[Web Storefront]
     C --> MOB[Mobile App]
-    WEB --> API[Commerce API]
+    WEB --> API[NestJS Commerce API]
     MOB --> API
 
     API --> CAT[Catalog]
@@ -71,7 +129,7 @@ The business logic belongs in the backend, not in the Next.js storefront or mobi
 
 ```text
 Web              ─┐
-                   ├──> Commerce API ───> Domain Services ───> Database
+                   ├──> NestJS Commerce API ───> Domain Modules ───> Database
 Mobile            ─┤
 Seller Portal     ─┤
 Admin Portal      ─┘
@@ -112,20 +170,20 @@ flowchart TB
         ADMIN[Admin Portal]
     end
 
-    subgraph Platform[Commerce Platform]
-        API[Go Commerce API]
-        AUTH[Identity & Access]
-        CAT[Catalog Service]
-        SEARCH[Search Service]
-        CART[Cart & Checkout]
-        ORDER[Order Service]
-        PAYMENT[Payment Service]
-        INV[Inventory Service]
-        FUL[Fulfillment & Shipping]
+    subgraph Platform[Commerce Platform — Modular Monolith]
+        API[NestJS Commerce API]
+        AUTH[Auth Module]
+        CAT[Catalog Module]
+        SEARCH[Search Module]
+        CART[Cart & Checkout Modules]
+        ORDER[Orders Module]
+        PAYMENT[Payments Module]
+        INV[Inventory Module]
+        FUL[Fulfillment & Shipping Modules]
         RETURN[Returns & Refunds]
-        MARKET[Marketplace & Seller Service]
-        REVIEW[Reviews]
-        NOTIFY[Notification Service]
+        MARKET[Marketplace & Seller Modules]
+        REVIEW[Reviews Module]
+        NOTIFY[Notifications Module]
         ANALYTICS[Analytics]
         SUPPORT[Support]
     end
@@ -181,6 +239,8 @@ flowchart TB
     FUL --> COURIER
     NOTIFY --> MSG
 ```
+
+The NestJS API is a single deployable process initially. NestJS modules provide logical isolation inside the process while preserving a path to future service extraction.
 
 ---
 
@@ -258,7 +318,7 @@ Use role-based access control (RBAC) with explicit permissions rather than hardc
 
 ## 6. Domain Architecture
 
-The backend should be divided into clear business domains.
+The backend should be divided into clear business domains. In the initial implementation these are NestJS modules inside the modular monolith.
 
 ```text
 Identity & Access
@@ -410,13 +470,13 @@ This leaves room for an eventual **Fulfilled by Platform** capability similar to
 sequenceDiagram
     actor Customer
     participant Web as Web/Mobile
-    participant API as Commerce API
-    participant Catalog as Catalog
-    participant Cart as Cart
-    participant Payment as Payment Service
+    participant API as NestJS API
+    participant Catalog as Catalog Module
+    participant Cart as Cart Module
+    participant Payment as Payment Module
     participant Gateway as In-house Gateway
-    participant Order as Order Service
-    participant Inventory as Inventory
+    participant Order as Orders Module
+    participant Inventory as Inventory Module
 
     Customer->>Web: Browse products
     Web->>API: Search products
@@ -460,9 +520,9 @@ The commerce platform should still use an internal provider abstraction so gatew
 
 ```mermaid
 flowchart TD
-    CHECKOUT[Checkout] --> PAY[Payment Service]
+    CHECKOUT[Checkout Module] --> PAY[Payments Module]
     PAY --> PROVIDER[Payment Provider Interface]
-    PROVIDER --> INHOUSE[In-house Gateway]
+    PROVIDER --> INHOUSE[In-house Gateway Adapter]
 
     INHOUSE --> INIT[Initialize Payment]
     INHOUSE --> STATUS[Payment Status]
@@ -475,14 +535,14 @@ flowchart TD
 
 Conceptually:
 
-```go
+```typescript
 interface PaymentProvider {
-    InitializePayment(...)
-    GetPaymentStatus(...)
-    VerifyPayment(...)
-    HandleWebhook(...)
-    CreateRefund(...)
-    GetRefundStatus(...)
+    initializePayment(...): Promise<PaymentResult>;
+    getPaymentStatus(...): Promise<PaymentStatus>;
+    verifyPayment(...): Promise<PaymentVerification>;
+    handleWebhook(...): Promise<void>;
+    createRefund(...): Promise<RefundResult>;
+    getRefundStatus(...): Promise<RefundStatus>;
 }
 ```
 
@@ -706,32 +766,24 @@ supplier_purchase_orders
 
 ```mermaid
 flowchart TD
-    ORDER[Confirmed Order]
-    ORDER --> ROUTER[Fulfillment Router]
+    ORDER[Order] --> FULFILL[Fulfillment Module]
+    FULFILL --> PLATFORM[Platform Fulfillment]
+    FULFILL --> SELLER[Seller Fulfillment]
+    FULFILL --> THREEPL[3PL Fulfillment]
+    FULFILL --> PICKUP[Customer Pickup]
 
-    ROUTER --> PLATFORM[Platform Warehouse]
-    ROUTER --> SELLER[Seller Fulfillment]
-    ROUTER --> THREEPL[3PL]
-    ROUTER --> PICKUP[Pickup Point]
+    PLATFORM --> WAREHOUSE[Warehouse]
+    SELLER --> SELLEROPS[Seller Operations]
+    THREEPL --> PROVIDER[3PL Provider]
 
-    PLATFORM --> SHIP[Shipment]
+    PLATFORM --> SHIP[Shipping Module]
     SELLER --> SHIP
     THREEPL --> SHIP
-    PICKUP --> READY[Ready for Pickup]
-
-    SHIP --> COURIER[Courier]
-    COURIER --> DELIVERY[Delivered]
+    SHIP --> COURIER[Courier / Carrier]
+    COURIER --> CUSTOMER[Customer]
 ```
 
-The fulfillment engine should eventually support:
-
-- Shipment creation
-- Tracking numbers
-- Delivery estimates
-- Partial shipments
-- Multiple shipments per order
-- Pickup locations
-- Courier integrations
+The fulfillment and shipping modules are provider-agnostic and remain inside the modular monolith initially.
 
 ---
 
@@ -740,40 +792,18 @@ The fulfillment engine should eventually support:
 ```mermaid
 flowchart TD
     CUSTOMER[Customer] --> RETURN[Return Request]
-    RETURN --> REVIEW[Review Request]
-    REVIEW --> APPROVE[Approved]
-    REVIEW --> REJECT[Rejected]
-    APPROVE --> SHIP[Return Shipment]
-    SHIP --> INSPECT[Inspection]
+    RETURN --> REVIEW[Review / Eligibility]
+    REVIEW --> APPROVED[Approved]
+    REVIEW --> REJECTED[Rejected]
+    APPROVED --> RECEIVED[Item Received]
+    RECEIVED --> INSPECT[Inspection]
     INSPECT --> REFUND[Refund]
-    INSPECT --> REPLACE[Replacement]
-
+    INSPECT --> REPLACEMENT[Replacement]
     CUSTOMER --> DISPUTE[Dispute]
-    SELLER --> DISPUTE
-    DISPUTE --> ADMIN[Admin Review]
-    ADMIN --> RESOLVE[Resolution]
+    DISPUTE --> SUPPORT[Support / Admin]
 ```
 
-Entities:
-
-```text
-return_requests
-return_items
-return_shipments
-return_inspections
-disputes
-refunds
-```
-
-Possible dispute outcomes:
-
-```text
-REFUND_BUYER
-PARTIAL_REFUND
-PAY_SELLER
-REPLACEMENT
-REJECT
-```
+Refunds must go through the payment abstraction and be connected to the original payment transaction.
 
 ---
 
@@ -781,388 +811,553 @@ REJECT
 
 ```mermaid
 flowchart TD
-    APPLY[Seller Application]
-    APPLY --> VERIFY[Verification]
-    VERIFY --> APPROVAL[Admin Approval]
-    APPROVAL --> STORE[Seller Store]
-    STORE --> PRODUCTS[Products / Offers]
-    STORE --> INVENTORY[Inventory]
-    STORE --> ORDERS[Orders]
-    STORE --> FULFILLMENT[Fulfillment]
-    STORE --> EARNINGS[Earnings]
-    EARNINGS --> PAYOUT[Payout Requests]
+    SELLER[Seller]
+    SELLER --> PROFILE[Seller Profile]
+    SELLER --> OFFER[Offers]
+    SELLER --> INVENTORY[Seller Inventory]
+    SELLER --> ORDERS[Seller Orders]
+    SELLER --> FULFILLMENT[Seller Fulfillment]
+    SELLER --> FINANCE[Seller Finance]
+    SELLER --> REVIEWS[Reviews]
+    SELLER --> ANALYTICS[Analytics]
+
+    FINANCE --> BALANCE[Seller Balance]
+    BALANCE --> PAYOUT[Payout]
 ```
 
-Seller domain entities:
+### Seller lifecycle
 
-```text
-sellers
-seller_profiles
-seller_verifications
-seller_users
-seller_settings
-seller_policies
-seller_metrics
-seller_balances
-payouts
+```mermaid
+stateDiagram-v2
+    [*] --> APPLICATION
+    APPLICATION --> UNDER_REVIEW
+    UNDER_REVIEW --> APPROVED
+    UNDER_REVIEW --> REJECTED
+    APPROVED --> ACTIVE
+    ACTIVE --> SUSPENDED
+    SUSPENDED --> ACTIVE
+    ACTIVE --> CLOSED
 ```
 
 ---
 
 ## 17. Admin Architecture
 
-The admin platform manages both first-party retail and marketplace operations.
-
-### Admin navigation
+Admin users require granular permissions.
 
 ```text
-Dashboard
-
-Commerce
-├── Products
-├── Categories
-├── Brands
-├── Offers
-├── Pricing
-└── Collections
-
-Orders
-├── All Orders
-├── Returns
-├── Refunds
-└── Shipments
-
-Inventory
-├── Inventory
-├── Warehouses
-├── Stock Transfers
-└── Low Stock
-
-Marketplace
-├── Sellers
-├── Seller Applications
-├── Seller Products
-├── Commissions
-├── Seller Balances
-└── Payouts
-
-Payments
-├── Transactions
-├── Failed Payments
-├── Refunds
-└── Payment Events
-
-Customers
-├── Customers
-├── Reviews
-└── Support
-
-Reports
-├── Sales
-├── Revenue
-├── Marketplace
-├── Inventory
-└── Customers
-
-System
-├── Users
-├── Roles
-├── Permissions
-├── Settings
-└── Audit Logs
+Admin
+ ├── Catalog Management
+ ├── Seller Management
+ ├── Order Management
+ ├── Inventory
+ ├── Fulfillment
+ ├── Finance
+ ├── Payments
+ ├── Promotions
+ ├── Reviews & Moderation
+ ├── Customer Support
+ ├── Analytics
+ ├── Security
+ └── Audit
 ```
 
-### Admin dashboard example
-
-```mermaid
-flowchart LR
-    D[Admin Dashboard]
-    D --> SALES[Sales KPIs]
-    D --> ORDERS[Orders]
-    D --> SELLERS[Sellers]
-    D --> PAYMENTS[Payments]
-    D --> INVENTORY[Inventory]
-    D --> RETURNS[Returns]
-    D --> REPORTS[Reports]
-```
+Administrative actions must generate audit records for privileged or business-critical operations.
 
 ---
 
-## 18. Mobile App Architecture
+## 18. Mobile Architecture
 
-The customer mobile app is a first-class client, not a later retrofit.
-
-```mermaid
-flowchart LR
-    MOBILE[Mobile App]
-    MOBILE --> AUTH[Authentication]
-    MOBILE --> HOME[Home]
-    MOBILE --> SEARCH[Search]
-    MOBILE --> CATEGORY[Categories]
-    MOBILE --> PRODUCT[Product Details]
-    MOBILE --> CART[Cart]
-    MOBILE --> CHECKOUT[Checkout]
-    MOBILE --> ORDERS[Orders]
-    MOBILE --> TRACK[Tracking]
-    MOBILE --> WISHLIST[Wishlist]
-    MOBILE --> ACCOUNT[Account]
-    MOBILE --> NOTIFY[Notifications]
-
-    MOBILE --> API[Commerce API]
-```
-
-### Suggested mobile stack
-
-**Preferred:**
-
-- Kotlin
-- Kotlin Multiplatform
-- Jetpack Compose / Compose Multiplatform
-- Ktor client or equivalent HTTP client
-- Kotlin serialization
-
-**Alternative:**
-
-- Flutter
-- Dart
-
-The API contract must remain independent of the chosen mobile framework.
-
----
-
-## 19. Search Architecture
-
-Start simple and scale without changing the public API.
+The mobile application is not a separate backend.
 
 ```mermaid
 flowchart TD
-    PRODUCT[Product Created/Updated] --> API[Commerce API]
-    API --> DB[(PostgreSQL)]
-    API --> INDEXER[Indexing Worker]
-    INDEXER --> SEARCH[Search Index]
-
-    CUSTOMER[Customer Search] --> API
-    API --> SEARCH
-    SEARCH --> RESULTS[Ranked Results]
+    MOBILE[Mobile App]
+    MOBILE --> API[NestJS Commerce API]
+    API --> MODULES[NestJS Domain Modules]
+    MODULES --> DB[(PostgreSQL)]
+    MODULES --> REDIS[(Redis)]
+    MODULES --> EXTERNAL[External Integrations]
 ```
 
-### Phase 1
+The mobile application consumes the same versioned API as web, seller and admin clients.
 
-Use PostgreSQL search capabilities.
+### Mobile stack
 
-### Later
+Preferred:
 
-Introduce Meilisearch or OpenSearch for:
+```text
+Kotlin Multiplatform
+Compose Multiplatform
+Ktor Client / equivalent API client
+Secure local storage
+Push notifications
+```
 
-- Full-text search
-- Facets
-- Autocomplete
-- Synonyms
-- Filtering
-- Ranking
-- Suggestions
-- Large catalog performance
+Flutter remains a valid alternative without changing the backend architecture.
+
+---
+
+## 19. Search
+
+Initial search can use PostgreSQL capabilities.
+
+As catalog size grows, move search to a dedicated search engine without changing the domain API.
+
+```mermaid
+flowchart LR
+    PRODUCT[Product / Offer Changes] --> EVENT[Domain Event]
+    EVENT --> INDEXER[Search Indexer]
+    INDEXER --> SEARCH[(Meilisearch / OpenSearch)]
+    CLIENT[Web / Mobile] --> API[NestJS API]
+    API --> SEARCH
+```
+
+The search index is never the source of truth for product, pricing or inventory.
 
 ---
 
 ## 20. Notifications
 
+Notification events should originate from backend business events.
+
 ```mermaid
 flowchart TD
-    EVENT[Domain Event] --> NOTIFY[Notification Service]
+    EVENT[Domain Event]
+    EVENT --> NOTIFY[Notifications Module]
     NOTIFY --> EMAIL[Email]
     NOTIFY --> SMS[SMS]
-    NOTIFY --> PUSH[Push Notification]
-    NOTIFY --> INAPP[In-App Notification]
+    NOTIFY --> PUSH[Push]
+    NOTIFY --> INAPP[In-app Notifications]
 ```
 
 Examples:
 
 ```text
-Order confirmed
-Payment successful
-Order shipped
-Order delivered
-Return approved
-Refund processed
-Seller approved
-Seller payout processed
-Product rejected
-Low inventory
+Order Created
+Payment Successful
+Payment Failed
+Order Shipped
+Order Delivered
+Return Approved
+Refund Completed
+Seller Approved
+Seller Suspended
+Payout Completed
 ```
 
 ---
 
 ## 21. Audit Logging
 
-All sensitive administrative and financial actions should be auditable.
-
-Recommended entity:
+Important actions should be recorded.
 
 ```text
-audit_logs
-- id
-- actor_id
-- action
-- entity_type
-- entity_id
-- metadata
-- ip_address
-- user_agent
-- created_at
+User
+Action
+Resource
+Previous State
+New State
+Timestamp
+IP / Context where appropriate
+Request ID
 ```
 
-Example:
+Examples:
 
 ```text
-ADMIN
-CHANGED_PRODUCT_PRICE
-Product #239
-K12,000 -> K10,500
+Admin approved seller
+Admin changed price
+Seller updated offer
+Finance approved payout
+Customer requested refund
+Payment status changed
+Inventory manually adjusted
 ```
 
 ---
 
 ## 22. Security Architecture
 
-Because the system processes payments and seller funds, security is foundational.
+### Authentication
 
-### Required controls
+```text
+Access Token
+Refresh Token
+Session Management
+Password Reset
+Email Verification
+Optional MFA
+```
 
-- Strong authentication
-- Secure session/token handling
-- RBAC and permission checks
-- Admin 2FA
-- Server-side validation
+### Authorization
+
+Use RBAC.
+
+```text
+CUSTOMER
+SELLER_OWNER
+SELLER_STAFF
+ADMIN
+SUPER_ADMIN
+FINANCE
+OPERATIONS
+SUPPORT
+```
+
+### Security requirements
+
+- HTTPS everywhere
+- Secure token/session handling
+- Password hashing
 - Rate limiting
-- Secure cookies where applicable
-- Input sanitization
-- Webhook signature verification
-- Idempotency for payment/order operations
-- Encryption in transit
-- Encryption for sensitive stored secrets/data
-- Secret management
+- Request validation
+- RBAC
+- Resource ownership checks
 - Audit logging
-- Session revocation
-- Login attempt monitoring
-- Database least-privilege access
-- Secure file upload validation
+- Webhook verification
+- Idempotency protection
+- Input sanitization
+- Secure headers
+- PII protection
+- Secrets management
 
-### Trust boundary
+---
+
+## 23. Database Logical Structure
+
+PostgreSQL is the primary transactional database.
+
+### Identity
+
+```text
+users
+roles
+permissions
+user_roles
+sessions
+```
+
+### Catalog
+
+```text
+categories
+brands
+products
+product_variants
+attributes
+product_media
+skus
+```
+
+### Marketplace
+
+```text
+sellers
+seller_users
+offers
+seller_inventory
+commissions
+seller_balances
+payouts
+```
+
+### Commerce
+
+```text
+carts
+cart_items
+orders
+order_items
+seller_orders
+```
+
+### Payments
+
+```text
+payments
+payment_attempts
+payment_events
+refunds
+refund_events
+```
+
+### Inventory
+
+```text
+warehouses
+inventory
+inventory_movements
+stock_reservations
+```
+
+### Fulfillment
+
+```text
+fulfillments
+shipments
+shipment_items
+shipping_events
+```
+
+### Customer
+
+```text
+addresses
+wishlists
+reviews
+returns
+```
+
+### System
+
+```text
+audit_logs
+notifications
+background_jobs
+```
+
+---
+
+## 24. Recommended Backend Structure
+
+The backend is a **NestJS modular monolith**.
+
+```text
+apps/
+├── web/
+├── admin/
+├── seller/
+└── mobile/
+
+services/
+└── commerce-api/
+    └── src/
+        ├── modules/
+        │   ├── auth/
+        │   ├── users/
+        │   ├── catalog/
+        │   ├── products/
+        │   ├── offers/
+        │   ├── cart/
+        │   ├── checkout/
+        │   ├── orders/
+        │   ├── payments/
+        │   ├── inventory/
+        │   ├── fulfillment/
+        │   ├── shipping/
+        │   ├── sellers/
+        │   ├── marketplace/
+        │   ├── commissions/
+        │   ├── payouts/
+        │   ├── reviews/
+        │   ├── promotions/
+        │   ├── notifications/
+        │   └── admin/
+        │
+        ├── common/
+        ├── database/
+        ├── integrations/
+        └── infrastructure/
+```
+
+### Module structure guideline
+
+A typical business module can use:
+
+```text
+catalog/
+├── catalog.module.ts
+├── controllers/
+├── dto/
+├── entities/
+├── services/
+├── repositories/
+├── policies/
+├── events/
+└── tests/
+```
+
+The exact internal layout can vary by domain, but module boundaries must remain explicit.
+
+### Dependency rule
+
+```text
+Controller
+    ↓
+Application Service
+    ↓
+Domain Logic
+    ↓
+Repository / Infrastructure Adapter
+    ↓
+PostgreSQL / Redis / External Provider
+```
+
+Cross-module dependencies should use explicit service interfaces or application-level contracts.
+
+---
+
+## 25. API Strategy
+
+All clients use the versioned API.
+
+```text
+/api/v1
+```
+
+Example:
+
+```text
+GET    /api/v1/products
+GET    /api/v1/products/:id
+GET    /api/v1/offers
+POST   /api/v1/cart
+POST   /api/v1/checkout
+POST   /api/v1/orders
+GET    /api/v1/orders/:id
+POST   /api/v1/payments
+POST   /api/v1/payments/webhook
+POST   /api/v1/returns
+```
+
+Use consistent:
+
+- HTTP semantics
+- Error response shape
+- Pagination
+- Filtering
+- Sorting
+- Idempotency keys for sensitive mutations
+- Request IDs / correlation IDs
+
+NestJS controllers should remain thin; business behavior belongs in application/domain services.
+
+---
+
+## 26. Background Jobs
+
+Some operations should execute asynchronously.
 
 ```mermaid
 flowchart TD
-    CLIENT[Browser / Mobile] -->|Untrusted Input| API[API Boundary]
-    API --> AUTH[Authentication]
-    AUTH --> AUTHZ[Authorization]
-    AUTHZ --> VALIDATE[Validation]
-    VALIDATE --> DOMAIN[Domain Logic]
-    DOMAIN --> DB[(Database)]
-    DOMAIN --> EXTERNAL[External Services]
+    API[NestJS API] --> QUEUE[Job Queue]
+    QUEUE --> WORKER[Worker Process]
+    WORKER --> EMAIL[Email]
+    WORKER --> SMS[SMS]
+    WORKER --> PUSH[Push Notifications]
+    WORKER --> SEARCH[Search Indexing]
+    WORKER --> REPORT[Reports]
+    WORKER --> PAYOUT[Payout Jobs]
+    WORKER --> CLEANUP[Cleanup]
 ```
 
-Never trust:
+The worker can start as part of the same modular application/runtime boundary and be separated later if operational needs justify it.
 
-- Client-side prices
-- Client-side order totals
-- Client-side seller IDs
-- Client-side payment success flags
-- Client-side permissions
-- Client-side inventory counts
+Use retries and dead-letter handling.
 
 ---
 
-## 23. Recommended Database Modules
+## 27. Observability
 
-The database should be structured around the following logical groups.
+Use:
 
 ```text
-identity
-├── users
-├── roles
-├── permissions
-├── user_roles
-└── user_sessions
+Structured Logs
+Metrics
+Distributed/Request Tracing
+Error Tracking
+Audit Logs
+Health Checks
+```
 
-catalog
-├── categories
-├── brands
-├── products
-├── product_variants
-├── product_attributes
-├── product_media
-└── collections
+Monitor:
 
-commerce
-├── offers
-├── prices
-├── carts
-├── cart_items
-├── wishlists
-└── wishlist_items
-
-marketplace
-├── sellers
-├── seller_profiles
-├── seller_verifications
-├── seller_users
-├── seller_policies
-└── seller_settings
-
-inventory
-├── warehouses
-├── warehouse_inventory
-├── inventory_movements
-├── stock_reservations
-└── stock_transfers
-
-orders
-├── orders
-├── order_items
-├── seller_orders
-├── shipments
-├── shipment_items
-└── fulfillments
-
-payments
-├── payments
-├── payment_attempts
-├── payment_events
-├── payment_methods
-├── refunds
-└── refund_events
-
-finance
-├── financial_accounts
-├── ledger_entries
-├── commission_transactions
-├── seller_balances
-└── payouts
-
-customer
-├── addresses
-├── reviews
-├── notifications
-└── support_tickets
-
-returns
-├── return_requests
-├── return_items
-├── return_shipments
-├── return_inspections
-└── disputes
-
-platform
-├── audit_logs
-├── settings
-└── feature_flags
+```text
+API latency
+5xx rate
+Database latency
+Redis health
+Payment failures
+Order failures
+Webhook failures
+Queue failures
+Search failures
 ```
 
 ---
 
-## 24. Technology Stack
+## 28. Environment Strategy
 
-### Frontend — Web
+```text
+Development
+Testing
+Staging
+Production
+```
+
+### Environment variables
+
+Example:
+
+```text
+DATABASE_URL=
+REDIS_URL=
+JWT_SECRET=
+OBJECT_STORAGE_ENDPOINT=
+OBJECT_STORAGE_BUCKET=
+PAYMENT_GATEWAY_URL=
+PAYMENT_GATEWAY_SECRET=
+EMAIL_PROVIDER_KEY=
+SMS_PROVIDER_KEY=
+```
+
+Never commit real secrets.
+
+---
+
+## 29. CI/CD
+
+Recommended pipeline:
+
+```mermaid
+flowchart LR
+    PUSH[Git Push] --> LINT[Lint]
+    LINT --> TEST[Test]
+    TEST --> BUILD[Build]
+    BUILD --> SECURITY[Security Checks]
+    SECURITY --> DEPLOY[Deploy]
+```
+
+### Web
+
+Deploy Next.js application to:
+
+```text
+Vercel
+```
+
+### API
+
+Deploy NestJS modular monolith to:
+
+```text
+Render / Fly.io / AWS / Equivalent
+```
+
+### Database
+
+Use managed PostgreSQL.
+
+### Redis
+
+Use managed Redis.
+
+---
+
+## 30. Development Tools
+
+### Frontend
 
 | Tool | Purpose |
 |---|---|
@@ -1179,869 +1374,606 @@ platform
 
 | Tool | Purpose |
 |---|---|
-| Go | Backend language |
-| Gin | HTTP/API framework |
-| GORM | ORM |
-| PostgreSQL | Primary database |
-| Redis | Cache, rate limits, jobs |
-| Go worker processes | Background processing |
+| TypeScript | Backend language |
+| NestJS | HTTP/API framework and modular application architecture |
+| Prisma | Type-safe PostgreSQL ORM and migrations |
+| PostgreSQL | Primary transactional database |
+| Redis | Cache, rate limits and background jobs |
 
 ### Mobile
 
 | Tool | Purpose |
 |---|---|
-| Kotlin | Mobile language |
-| Kotlin Multiplatform | Shared application/domain capability |
-| Jetpack Compose | Android UI |
-| Compose Multiplatform | Shared UI where practical |
-
-Alternative: Flutter/Dart.
+| Kotlin Multiplatform | Cross-platform application architecture |
+| Compose Multiplatform | UI |
+| Ktor Client / equivalent | HTTP client |
 
 ### Infrastructure
 
 | Tool | Purpose |
 |---|---|
-| Vercel | Next.js hosting |
-| Render or equivalent cloud | Go API / workers |
-| Managed PostgreSQL | Production database |
-| Redis | Cache and queues |
-| S3 / Cloudflare R2 | Object/file storage |
-| GitHub | Source control |
+| Docker | Containers |
 | GitHub Actions | CI/CD |
-| Sentry | Application error monitoring |
-
-### Search
-
-Start with PostgreSQL; move to Meilisearch or OpenSearch when the catalog/search workload requires it.
-
-### Payments
-
-**In-house payment gateway** is the primary integration.
-
-Use a provider abstraction internally to avoid coupling domain code directly to gateway-specific APIs.
+| Vercel | Next.js hosting |
+| Render or equivalent | NestJS API / workers |
+| Managed PostgreSQL | Database |
+| Managed Redis | Caching / jobs |
+| S3 / Cloudflare R2 | Object storage |
+| Meilisearch / OpenSearch | Search |
+| Sentry / equivalent | Error tracking |
 
 ---
 
-## 25. Repository Structure
+## 31. Repository Structure
 
-A monorepo is recommended for the platform codebase.
+Recommended high-level repository:
 
 ```text
 commerce-platform/
 │
 ├── apps/
 │   ├── web/
-│   │   ├── storefront
-│   │   ├── seller
-│   │   └── admin
-│   │
-│   ├── api/
-│   │   └── Go backend
-│   │
+│   ├── admin/
+│   ├── seller/
 │   └── mobile/
-│       └── customer mobile app
+│
+├── services/
+│   └── commerce-api/
+│       └── NestJS modular monolith
 │
 ├── packages/
+│   ├── api-client/
+│   ├── contracts/
 │   ├── types/
-│   ├── validation/
-│   ├── ui/
-│   └── config/
+│   ├── config/
+│   └── tooling/
 │
 ├── infrastructure/
 │   ├── docker/
-│   ├── scripts/
-│   └── deployment/
+│   ├── ci/
+│   ├── environments/
+│   └── scripts/
 │
 ├── docs/
 │   ├── architecture/
 │   ├── api/
 │   ├── database/
-│   └── decisions/
+│   └── runbooks/
 │
+├── package.json
+├── pnpm-workspace.yaml
 └── README.md
 ```
 
-The exact repository split can be adjusted depending on deployment and team preferences, but the logical separation should remain.
+Use a workspace-capable package manager such as pnpm for the TypeScript monorepo.
 
 ---
 
-## 26. Next.js Structure
+## 32. Critical Business Rules
 
-Recommended starting point:
+### Product
 
-```text
-apps/web/
-├── app/
-│   ├── (store)/
-│   │   ├── page.tsx
-│   │   ├── products/
-│   │   ├── categories/
-│   │   ├── sellers/
-│   │   ├── cart/
-│   │   └── checkout/
-│   │
-│   ├── account/
-│   │   ├── profile/
-│   │   ├── orders/
-│   │   ├── wishlist/
-│   │   ├── addresses/
-│   │   └── settings/
-│   │
-│   ├── seller/
-│   │   ├── dashboard/
-│   │   ├── products/
-│   │   ├── orders/
-│   │   ├── inventory/
-│   │   ├── earnings/
-│   │   ├── payouts/
-│   │   └── settings/
-│   │
-│   └── admin/
-│       ├── dashboard/
-│       ├── users/
-│       ├── sellers/
-│       ├── products/
-│       ├── categories/
-│       ├── orders/
-│       ├── inventory/
-│       ├── payments/
-│       ├── payouts/
-│       ├── refunds/
-│       ├── disputes/
-│       ├── reports/
-│       └── settings/
-│
-├── components/
-├── features/
-├── lib/
-├── hooks/
-├── schemas/
-└── styles/
-```
+Products are not owned by sellers.
 
-Business logic should remain in the backend. Next.js may provide API proxy/BFF capabilities where useful, but it should not become the financial source of truth.
+Sellers own offers against products.
+
+### Offer
+
+An offer belongs to a seller and points to a product/SKU.
+
+### Price
+
+Prices must be stored server-side.
+
+### Order
+
+Order totals should be snapshotted at checkout.
+
+### Payment
+
+Payment status is controlled by the server.
+
+### Inventory
+
+Inventory must be reserved atomically.
+
+### Marketplace
+
+Seller balances must be ledger-backed.
+
+### Refunds
+
+Refunds must reference original payment transactions.
+
+### Authentication
+
+Authorization must be enforced server-side.
 
 ---
 
-## 27. Backend Structure
-
-Recommended Go organization:
-
-```text
-apps/api/
-├── cmd/
-│   └── server/
-│
-├── internal/
-│   ├── auth/
-│   ├── catalog/
-│   ├── marketplace/
-│   ├── offers/
-│   ├── inventory/
-│   ├── cart/
-│   ├── checkout/
-│   ├── orders/
-│   ├── payments/
-│   ├── finance/
-│   ├── fulfillment/
-│   ├── shipping/
-│   ├── returns/
-│   ├── reviews/
-│   ├── notifications/
-│   ├── support/
-│   ├── analytics/
-│   └── audit/
-│
-├── migrations/
-├── pkg/
-└── configs/
-```
-
----
-
-## 28. API Strategy
-
-All public API endpoints should be versioned.
-
-```text
-/api/v1/
-```
-
-Examples:
-
-```text
-GET    /api/v1/products
-GET    /api/v1/products/{id}
-GET    /api/v1/categories
-GET    /api/v1/search
-
-POST   /api/v1/auth/login
-POST   /api/v1/auth/register
-POST   /api/v1/auth/refresh
-
-GET    /api/v1/cart
-POST   /api/v1/cart/items
-PATCH  /api/v1/cart/items/{id}
-DELETE /api/v1/cart/items/{id}
-
-POST   /api/v1/checkout
-POST   /api/v1/payments
-GET    /api/v1/payments/{id}
-
-GET    /api/v1/orders
-GET    /api/v1/orders/{id}
-
-GET    /api/v1/sellers/{id}
-POST   /api/v1/seller/apply
-
-GET    /api/v1/seller/products
-POST   /api/v1/seller/products
-GET    /api/v1/seller/orders
-GET    /api/v1/seller/balance
-POST   /api/v1/seller/payouts
-```
-
-Use consistent:
-
-- HTTP semantics
-- Error response shape
-- Pagination
-- Filtering
-- Sorting
-- Idempotency keys for sensitive mutations
-- Request IDs / correlation IDs
-
----
-
-## 29. API Request Flow
+## 33. End-to-End Retail Purchase
 
 ```mermaid
 sequenceDiagram
-    participant Client as Web / Mobile
-    participant API as API Gateway
-    participant Auth as Auth
-    participant Domain as Domain Service
-    participant DB as PostgreSQL
+    actor Customer
+    participant Web as Next.js
+    participant API as NestJS API
+    participant Product as Product Module
+    participant Cart as Cart Module
+    participant Checkout as Checkout Module
+    participant Orders as Orders Module
+    participant Payment as Payments Module
+    participant Gateway as In-house Gateway
+    participant Inventory as Inventory Module
+    participant Fulfillment as Fulfillment Module
 
-    Client->>API: HTTP Request
-    API->>Auth: Authenticate
-    Auth-->>API: Identity + Claims
-    API->>Auth: Authorize
-    Auth-->>API: Allowed
-    API->>Domain: Business Operation
-    Domain->>DB: Read/Write
-    DB-->>Domain: Result
-    Domain-->>API: Result
-    API-->>Client: JSON Response
+    Customer->>Web: Browse
+    Web->>API: GET /products
+    API->>Product: Find products
+    Product-->>API: Products
+    API-->>Web: Products
+
+    Customer->>Web: Add to cart
+    Web->>API: POST /cart/items
+    API->>Cart: Add item
+    Cart-->>Web: Cart
+
+    Customer->>Web: Checkout
+    Web->>API: POST /checkout
+    API->>Checkout: Validate cart
+    Checkout->>Orders: Create order
+    Orders-->>Checkout: PENDING_PAYMENT
+    Checkout->>Payment: Initialize payment
+    Payment->>Gateway: Initialize
+    Gateway-->>Payment: Payment reference
+    Payment-->>Web: Payment instructions
+
+    Customer->>Gateway: Pay
+    Gateway->>Payment: Webhook
+    Payment->>Gateway: Verify
+    Gateway-->>Payment: PAID
+    Payment->>Orders: Confirm order
+    Orders->>Inventory: Reserve/commit
+    Orders->>Fulfillment: Create fulfillment
+    Fulfillment-->>Orders: Fulfillment created
+    Orders-->>Web: Order confirmed
 ```
 
 ---
 
-## 30. Background Jobs
-
-Long-running/non-critical operations should be asynchronous.
+## 34. End-to-End Marketplace Purchase
 
 ```mermaid
-flowchart TD
-    API[Commerce API] --> QUEUE[Redis Queue]
-    QUEUE --> WORKER[Worker]
-    WORKER --> EMAIL[Email]
-    WORKER --> SMS[SMS]
-    WORKER --> SEARCH[Search Index]
-    WORKER --> REPORT[Reports]
-    WORKER --> NOTIFY[Push/In-app]
-    WORKER --> RECON[Payment Reconciliation]
+sequenceDiagram
+    actor Customer
+    participant Web as Web/Mobile
+    participant API as NestJS API
+    participant Offer as Offers Module
+    participant Cart as Cart Module
+    participant Checkout as Checkout Module
+    participant Orders as Orders Module
+    participant Payment as Payments Module
+    participant Gateway as In-house Gateway
+    participant Ledger as Ledger
+    participant Seller as Seller
+    participant Fulfillment as Fulfillment
+
+    Customer->>Web: View product
+    Web->>API: Get offers
+    API->>Offer: Find eligible offers
+    Offer-->>Web: Platform + seller offers
+
+    Customer->>Web: Add seller offer
+    Web->>API: Add to cart
+    API->>Cart: Validate offer
+
+    Customer->>Web: Checkout
+    Web->>API: Create checkout
+    API->>Checkout: Validate all cart lines
+    Checkout->>Orders: Create unified order
+    Orders-->>Checkout: Order created
+
+    Checkout->>Payment: Initialize payment
+    Payment->>Gateway: Payment request
+    Gateway-->>Payment: Reference
+    Customer->>Gateway: Pay
+    Gateway->>Payment: Callback
+    Payment->>Gateway: Verify
+    Gateway-->>Payment: Confirmed
+
+    Payment->>Orders: Mark paid
+    Orders->>Fulfillment: Create seller fulfillment
+    Orders->>Ledger: Allocate seller payable
+    Ledger-->>Seller: Balance updated
+    Fulfillment-->>Seller: Seller order
 ```
-
-Good candidates:
-
-- Email
-- SMS
-- Push notifications
-- Search indexing
-- Report generation
-- Payment reconciliation
-- Large imports
-- Image processing
-- Seller analytics aggregation
 
 ---
 
-## 31. Observability
+## 35. Development Phases
 
-Every environment should have:
-
-- Structured logging
-- Request IDs
-- Error tracking
-- API latency monitoring
-- Database monitoring
-- Queue/job monitoring
-- Payment event monitoring
-- Audit logs
-
-### Payment observability
-
-Payment-related logs should make it possible to trace:
-
-```text
-Customer
-→ Order
-→ Payment
-→ Gateway Transaction
-→ Gateway Event
-→ Verification
-→ Ledger Entry
-→ Seller Balance
-```
-
-without logging sensitive payment credentials or secrets.
+The platform is intentionally implemented progressively.
 
 ---
 
-## 32. Environment Strategy
-
-Use separate environments:
-
-```text
-local
-   ↓
-development
-   ↓
-staging
-   ↓
-production
-```
-
-### Environment categories
-
-```text
-Database
-Redis
-Object Storage
-Payment Gateway
-Email
-SMS
-Push Notifications
-Search
-Monitoring
-```
-
-The in-house gateway should provide a sandbox/test environment if available and production credentials must never be committed to source control.
-
----
-
-## 33. CI/CD
-
-```mermaid
-flowchart LR
-    DEV[Developer] --> GIT[GitHub]
-    GIT --> PR[Pull Request]
-    PR --> CI[CI Checks]
-    CI --> TEST[Test]
-    CI --> LINT[Lint]
-    CI --> BUILD[Build]
-    CI --> SECURITY[Security Checks]
-    PR --> REVIEW[Code Review]
-    REVIEW --> MERGE[Merge]
-    MERGE --> DEPLOY[Deployment]
-    DEPLOY --> STAGING[Staging]
-    STAGING --> PRODUCTION[Production]
-```
-
-Minimum CI checks:
-
-- Formatting
-- Linting
-- Type checks
-- Unit tests
-- Integration tests
-- Build verification
-- Dependency/security scanning
-
----
-
-## 34. Development Phases
-
-The platform architecture is planned once. Delivery happens in phases.
-
-### Phase 0 — Architecture & Foundation
+# PHASE 0 — Architecture & Foundation
 
 **Goal:** establish the technical foundation.
 
-Deliver:
+Includes:
 
-- Repository/monorepo
-- Development environments
-- CI/CD
-- Database migrations
+- Repository structure
+- NestJS modular monolith bootstrap
+- Prisma/PostgreSQL foundations
+- Redis
 - Authentication
 - RBAC
-- API conventions
-- Design system
-- Logging/monitoring
-- Security baseline
-- Core domain skeleton
+- API versioning
+- Error handling
+- Object storage
+- Observability
+- Audit logging
+- CI/CD
+- Payment provider abstraction
 
-### Phase 1 — Retail Storefront
+**Outcome:** the platform can be developed safely.
+
+---
+
+# PHASE 1 — Retail Storefront
 
 **Goal:** operate as a normal online retailer.
 
-Deliver:
+Includes:
 
-- Catalog
-- Categories
-- Products
-- Product variants
-- Offers
+- Product catalog
 - Search
 - Product pages
-- Customer accounts
 - Cart
+- Wishlist
+- Account
 - Checkout
-- In-house payment integration
+- Payment
 - Orders
 
-### Phase 2 — Retail Operations
+**Outcome:** customers can purchase products directly from the platform.
+
+---
+
+# PHASE 2 — Retail Operations
 
 **Goal:** support first-party operations.
 
-Deliver:
+Includes:
 
 - Warehouses
 - Inventory
-- Stock movements
+- Stock management
+- Suppliers
+- Purchase orders
+- Receiving
 - Fulfillment
 - Shipping
+- Tracking
 - Returns
 - Refunds
-- Admin commerce operations
-- Reports
+- Operations dashboard
 
-### Phase 3 — Marketplace
+**Outcome:** platform-owned retail can operate end-to-end.
+
+---
+
+# PHASE 3 — Marketplace
 
 **Goal:** allow external sellers.
 
-Deliver:
+Includes:
 
-- Seller registration
+- Seller onboarding
 - Seller verification
-- Seller approval
-- Seller stores
-- Seller products/offers
+- Seller storefronts
+- Offers
 - Seller inventory
 - Seller orders
+- Seller fulfillment
 - Commissions
 - Seller balances
 - Payouts
-- Seller analytics
+- Reviews
+- Marketplace administration
 
-### Phase 4 — Customer Mobile App
+**Outcome:** third-party sellers can sell through the same platform.
+
+---
+
+# PHASE 4 — Mobile Customer App
 
 **Goal:** provide a native mobile shopping experience.
 
-Deliver:
+Includes:
 
-- Authentication
-- Home
+- Mobile authentication
+- Product discovery
 - Search
-- Categories
-- Product detail
-- Offer selection
+- Product details
 - Cart
 - Checkout
 - Payment
 - Orders
 - Tracking
-- Wishlist
-- Account
-- Push notifications
+- Notifications
 
-### Phase 5 — Advanced Commerce
+**Outcome:** customers can shop through mobile.
 
-Deliver:
+---
+
+# PHASE 5 — Advanced Commerce
+
+**Goal:** increase customer engagement.
+
+Includes:
 
 - Coupons
 - Promotions
-- Gift cards
+- Collections
 - Loyalty
+- Gift cards
 - Advanced search
 - Recommendations
-- Personalization
-- Seller ratings
-- Enhanced analytics
+- Recently viewed
+- Customer support
+- Analytics
 
-### Phase 6 — Marketplace Expansion
+**Outcome:** a more sophisticated commerce platform.
 
-Deliver:
+---
 
-- Seller advertising
-- Sponsored products
-- Seller fulfillment
+# PHASE 6 — Marketplace Expansion
+
+**Goal:** scale the seller ecosystem.
+
+Includes:
+
+- Seller fulfillment programs
+- Courier integrations
 - 3PL integrations
-- Messaging
-- Advanced seller analytics
-- Promotion tools
+- Seller messaging
+- Seller promotions
+- Sponsored products
+- Seller analytics
+- Performance controls
+- Automated payouts
+- Fraud/risk controls
 
-### Phase 7 — Advanced Marketplace
+**Outcome:** scalable marketplace ecosystem.
 
-Potential future features:
+---
+
+# PHASE 7 — Advanced Marketplace
+
+**Goal:** introduce advanced marketplace mechanics.
+
+Includes:
 
 - Buy Box
+- Offer ranking
 - Make an Offer
-- Counter Offers
+- Counter-offers
 - Auctions
 - Bidding
 - Dynamic pricing
-- AI search
-- AI recommendations
-- Fraud/risk scoring
+- Advanced recommendations
+- AI
+- Fraud detection
+- A/B testing
+- Personalization
+
+**Outcome:** advanced marketplace capability.
 
 ---
 
-## 35. MVP Scope
+## 36. MVP Scope
 
-The MVP should **not** attempt to reproduce all of Amazon.
+The first production release should not attempt to implement the entire roadmap.
 
-### MVP customer capabilities
+### MVP
 
 ```text
-Register / Login
-Browse catalog
+Catalog
+Product pages
 Search
-Filter
-View product
-Select offer
-Add to cart
+Cart
 Checkout
-Pay
-View orders
-Manage profile
-Review purchased products
+In-house payment
+Orders
+Customer accounts
+Basic inventory
+Basic fulfillment
+Basic admin
 ```
 
-### MVP retail capabilities
+### Phase 2+ marketplace
 
 ```text
-Products
-Categories
+Seller onboarding
+Seller portal
 Offers
-Inventory
-Orders
-Fulfillment
-Payments
-Admin
-```
-
-### MVP marketplace capabilities
-
-```text
-Seller application
-Seller approval
-Seller store
-Seller listing
 Seller inventory
-Seller orders
-Commission calculation
-Payout request
-```
-
-### MVP administration
-
-```text
-Dashboard
-Users
-Products
-Categories
-Sellers
-Orders
-Payments
-Inventory
-Returns
-Refunds
+Marketplace checkout
+Commissions
+Seller balances
 Payouts
-Audit Logs
 ```
+
+This allows the system to generate value before the entire marketplace ecosystem is built.
 
 ---
 
-## 36. Features Intentionally Deferred
+## 37. Future Features
 
-The following are planned but should not block the initial launch:
+Potential future capabilities:
 
 ```text
+Buy Box
 Auctions
 Bidding
-Make Offer
-AI recommendations
-Advanced personalization
-Advertising
-Subscriptions
-Gift cards
+Make an Offer
+Dynamic Pricing
 Loyalty
-Advanced fraud scoring
-Complex multi-warehouse optimization
-Full 3PL orchestration
+Subscriptions
+Gift Cards
+Advertising
+Sponsored Products
+AI Recommendations
+Fraud Detection
+Personalization
+A/B Testing
+Seller Messaging
+Wholesale
+B2B Marketplace
+International Expansion
 ```
 
-The architecture must leave extension points for these features without requiring major rewrites.
+These should be treated as extensions, not MVP requirements.
 
 ---
 
-## 37. Non-Functional Requirements
+## 38. Non-Functional Requirements
 
 ### Performance
 
-- Fast storefront initial load
-- Aggressive caching for catalog data where appropriate
-- Pagination for large datasets
-- Async processing for background work
-- Search optimized independently from transactional database access
+Target:
 
-### Reliability
+```text
+Fast page loads
+Low API latency
+Efficient database queries
+Caching for high-volume reads
+```
 
-- Payment idempotency
-- Order idempotency
-- Retryable background jobs
-- Webhook retries
-- Transactional database operations
-- Graceful failure of external integrations
+### Availability
+
+Important transactional systems should be resilient.
 
 ### Scalability
 
-The backend should allow horizontal scaling of:
+The architecture should allow:
 
 ```text
-API instances
-Workers
-Search infrastructure
-Redis
-Database read capacity
-Object storage
+More API instances
+Read replicas
+Redis scaling
+Search scaling
+Background worker scaling
+Object storage scaling
 ```
 
-### Maintainability
+The modular monolith is the starting deployment model; scaling the whole API horizontally comes before splitting domains into microservices.
 
-- Domain-oriented code
-- Clear interfaces
-- Strong typing
-- Automated tests
-- API versioning
-- Documentation
-- Architecture decision records
+### Security
+
+Financial and customer information must be handled securely.
+
+### Auditability
+
+Transactions should be traceable end to end.
 
 ---
 
-## 38. Critical Business Rules
+## 39. Project Management Structure
 
-1. **Backend is the source of truth for prices.**
-2. **Backend is the source of truth for inventory.**
-3. **Frontend cannot declare a payment successful.**
-4. **Gateway callbacks/webhooks must be validated and verified.**
-5. **Payment operations must be idempotent.**
-6. **Order transitions must follow explicit state rules.**
-7. **Seller balances must come from ledger/accounting records, not UI calculations.**
-8. **Only authorized administrators can approve sellers or release payouts.**
-9. **Reviews should normally require a verified purchase.**
-10. **Every financial/admin-sensitive action must be auditable.**
+Use GitHub Issues and GitHub Projects.
 
----
-
-## 39. Key End-to-End Flows
-
-### Customer purchases a platform-owned product
-
-```mermaid
-flowchart LR
-    CUSTOMER[Customer] --> PRODUCT[Platform Product]
-    PRODUCT --> CART[Cart]
-    CART --> CHECKOUT[Checkout]
-    CHECKOUT --> PAYMENT[In-house Gateway]
-    PAYMENT --> ORDER[Order]
-    ORDER --> INVENTORY[Platform Inventory]
-    INVENTORY --> FULFILL[Platform Fulfillment]
-    FULFILL --> DELIVERY[Delivery]
-```
-
-### Customer purchases a marketplace product
-
-```mermaid
-flowchart LR
-    CUSTOMER[Customer] --> PRODUCT[Marketplace Product]
-    PRODUCT --> SELLER[Seller Offer]
-    SELLER --> CART[Cart]
-    CART --> CHECKOUT[Checkout]
-    CHECKOUT --> PAYMENT[In-house Gateway]
-    PAYMENT --> ORDER[Order]
-    ORDER --> SELLERORDER[Seller Order]
-    SELLERORDER --> FULFILL[Seller / 3PL Fulfillment]
-    FULFILL --> DELIVERY[Delivery]
-    ORDER --> LEDGER[Commission + Seller Payable]
-    LEDGER --> PAYOUT[Payout]
-```
-
-### Customer buys from multiple sellers
-
-```mermaid
-flowchart TD
-    CART[Single Customer Cart]
-    CART --> ORDER[Single Customer Order]
-    ORDER --> PLATFORM[Platform Items]
-    ORDER --> SELLERA[Seller A Items]
-    ORDER --> SELLERB[Seller B Items]
-
-    PLATFORM --> SHIPA[Shipment A]
-    SELLERA --> SHIPB[Shipment B]
-    SELLERB --> SHIPC[Shipment C]
-
-    ORDER --> PAYMENT[Single/Unified Customer Payment]
-    PAYMENT --> LEDGER[Financial Allocation]
-```
-
-The customer's experience remains one checkout and one order history even when operationally the order is split into multiple fulfillment streams.
-
----
-
-## 40. Future Mobile and Client Strategy
-
-The platform should eventually support:
+### Phase issues
 
 ```text
-Customer Web
-Customer Mobile
-Seller Web
-Seller Mobile (optional future)
-Admin Web
-Partner APIs
+PHASE 0 — Architecture & Foundation
+PHASE 1 — Retail Storefront
+PHASE 2 — Retail Operations
+PHASE 3 — Marketplace
+PHASE 4 — Mobile Customer App
+PHASE 5 — Advanced Commerce
+PHASE 6 — Marketplace Expansion
+PHASE 7 — Advanced Marketplace
 ```
 
-All clients should consume the same versioned Commerce API.
+### Suggested board columns
 
-```mermaid
-flowchart TD
-    API[Versioned Commerce API]
-    API --> WEB[Customer Web]
-    API --> MOBILE[Customer Mobile]
-    API --> SELLERWEB[Seller Web]
-    API --> ADMINWEB[Admin Web]
-    API --> PARTNER[Future Partner APIs]
+```text
+Backlog
+Ready
+In Progress
+Code Review
+QA
+Done
+Blocked
+```
+
+### Issue types
+
+```text
+Feature
+Bug
+Technical Debt
+Architecture
+Security
+Infrastructure
+Documentation
 ```
 
 ---
 
-## 41. Recommended Tooling Summary
-
-### Required at project start
+## 40. Recommended Development Order
 
 ```text
-GitHub
-Next.js
-TypeScript
-Tailwind CSS
-shadcn/ui
-Go
-Gin
-GORM
-PostgreSQL
-Redis
-GitHub Actions
-S3/R2-compatible object storage
-Sentry
-In-house payment gateway
+Phase 0
+   ↓
+Phase 1
+   ↓
+Phase 2
+   ↓
+Phase 3
+   ↓
+Phase 4
+   ↓
+Phase 5
+   ↓
+Phase 6
+   ↓
+Phase 7
 ```
 
-### Introduce as scale requires
+Do not build marketplace-specific infrastructure before the retail transaction lifecycle is stable.
 
-```text
-Meilisearch / OpenSearch
-Dedicated message broker if Redis queues become insufficient
-Advanced observability stack
-Data warehouse / BI platform
-CDN/image optimization infrastructure
-Fraud/risk tooling
-```
+Do not build mobile business logic independently of the backend.
 
-### Development tools
-
-```text
-VS Code / Cursor / JetBrains
-Docker
-Git
-Postman / Insomnia
-OpenAPI
-Swagger UI
-DBeaver / pgAdmin
-```
+Do not introduce microservices simply because the final system is intended to be large.
 
 ---
 
-## 42. Suggested First Engineering Milestone
+## 41. Architecture Position
 
-Before building the storefront, complete these architectural artifacts:
-
-1. **Entity Relationship Diagram (ERD)**
-2. **Database migration plan**
-3. **OpenAPI specification**
-4. **RBAC permission matrix**
-5. **Payment gateway integration contract**
-6. **Order state machine**
-7. **Inventory state model**
-8. **Financial ledger model**
-9. **Seller onboarding flow**
-10. **Deployment topology**
-11. **Mobile API contract**
-12. **ADR (Architecture Decision Records)** for major technology decisions
-
-These should be treated as the source-of-truth documents for the implementation team.
-
----
-
-## 43. Definition of Done for the Platform Foundation
-
-The foundation is ready for feature development when:
-
-- Local development environment is reproducible.
-- CI runs automatically on pull requests.
-- Authentication and RBAC are working.
-- PostgreSQL migrations are established.
-- API versioning is established.
-- Error response conventions are defined.
-- Logging and request tracing exist.
-- Payment integration contract is documented.
-- Webhook handling and idempotency strategy are documented.
-- Order states are implemented centrally.
-- Financial ledger concepts are defined.
-- Object storage strategy is defined.
-- Web and mobile clients can authenticate against the API.
-
----
-
-## 44. Final Architecture Position
-
-The platform should be treated as a **commerce operating system**, not simply a website.
+The final architecture intentionally combines simplicity at the beginning with an escape hatch for later scale.
 
 ```text
-                         COMMERCE PLATFORM
+                      ┌───────────────────┐
+                      │   Web / Mobile    │
+                      └─────────┬─────────┘
+                                │
+                      ┌─────────▼─────────┐
+                      │   NestJS API      │
+                      │ Modular Monolith  │
+                      └─────────┬─────────┘
                                 │
           ┌─────────────────────┼─────────────────────┐
           │                     │                     │
-       RETAIL              MARKETPLACE            CUSTOMERS
-          │                     │                     │
-          └─────────────────────┼─────────────────────┘
+     ┌────▼────┐           ┌────▼────┐          ┌────▼────┐
+     │Postgres │           │  Redis  │          │ Storage │
+     └─────────┘           └─────────┘          └─────────┘
                                 │
-                         COMMERCE API
-                                │
-       ┌───────────┬────────────┼───────────┬────────────┐
-       │           │            │           │            │
-    Catalog     Orders       Payments   Inventory   Fulfillment
-       │           │            │           │            │
-       └───────────┴────────────┼───────────┴────────────┘
-                                │
-                           PostgreSQL
-                                │
-                ┌───────────────┼───────────────┐
-                │               │               │
-              Redis       Object Storage      Search
+                     ┌──────────▼─────────┐
+                     │ Background Workers │
+                     └────────────────────┘
 ```
 
 The most important architectural decisions are:
@@ -2053,76 +1985,175 @@ The most important architectural decisions are:
 - **The in-house payment gateway is the primary payment integration.**
 - **Payment, ledger, seller balance, and payout are separate concepts.**
 - **Orders can contain products from multiple sellers.**
-- **Fulfillment is modeled independently from selling.**
-- **The architecture is defined once; implementation is phased.**
+- **The backend starts as a NestJS modular monolith.**
+- **NestJS modules have explicit boundaries and are designed for future extraction when justified.**
+- **Prisma is the primary PostgreSQL data-access and migration layer.**
 
 ---
 
-## 45. Implementation Order at a Glance
+## 42. Final Technology Stack
 
-```mermaid
-flowchart LR
-    P0[Phase 0\nFoundation] --> P1[Phase 1\nRetail Storefront]
-    P1 --> P2[Phase 2\nRetail Operations]
-    P2 --> P3[Phase 3\nMarketplace]
-    P3 --> P4[Phase 4\nMobile]
-    P4 --> P5[Phase 5\nAdvanced Commerce]
-    P5 --> P6[Phase 6\nMarketplace Expansion]
-    P6 --> P7[Phase 7\nAdvanced Marketplace]
+### Frontend
+
+```text
+Next.js
+TypeScript
+Tailwind CSS
+shadcn/ui
 ```
 
-The architecture should be locked conceptually before Phase 1 begins, while implementation details can evolve through documented Architecture Decision Records (ADRs).
+### Backend
+
+```text
+NestJS
+TypeScript
+Prisma
+PostgreSQL
+Redis
+```
+
+### Mobile
+
+```text
+Kotlin Multiplatform
+Compose Multiplatform
+```
+
+### Infrastructure
+
+```text
+Docker
+GitHub Actions
+Vercel
+Render / AWS / Equivalent
+Object Storage
+Meilisearch / OpenSearch
+Sentry / Equivalent
+```
+
+### Payments
+
+```text
+In-house Payment Gateway
+```
 
 ---
 
-## 46. Project Status
+## 43. Implementation Checklist
 
-**Planning status:** Master architecture defined.
+### Foundation
 
-**Implementation status:** Not started.
+- [ ] Repository initialized
+- [ ] Workspace structure created
+- [ ] Next.js application created
+- [ ] Admin application created
+- [ ] Seller application created
+- [ ] Mobile project initialized
+- [ ] NestJS commerce API created
+- [ ] Modular architecture defined
+- [ ] Prisma initialized
+- [ ] PostgreSQL configured
+- [ ] Redis configured
+- [ ] Authentication implemented
+- [ ] RBAC implemented
+- [ ] API versioning implemented
+- [ ] Error handling standardized
+- [ ] Logging implemented
+- [ ] Audit logging implemented
+- [ ] CI/CD configured
+- [ ] Payment provider abstraction defined
+
+### Retail
+
+- [ ] Catalog
+- [ ] Products
+- [ ] Categories
+- [ ] Search
+- [ ] Cart
+- [ ] Checkout
+- [ ] Payments
+- [ ] Orders
+- [ ] Inventory
+- [ ] Fulfillment
+- [ ] Shipping
+- [ ] Returns
+- [ ] Refunds
+
+### Marketplace
+
+- [ ] Seller onboarding
+- [ ] Seller verification
+- [ ] Seller storefront
+- [ ] Offers
+- [ ] Seller inventory
+- [ ] Seller orders
+- [ ] Seller fulfillment
+- [ ] Marketplace commissions
+- [ ] Seller balances
+- [ ] Seller payouts
+- [ ] Reviews
+
+---
+
+## 44. Next Technical Documents
+
+After this README, the next technical documents should be:
+
+```text
+01-domain-model.md
+02-database-schema.md
+03-api-specification.md
+04-payment-gateway-integration.md
+05-authentication-and-security.md
+06-order-state-machine.md
+07-inventory-model.md
+08-marketplace-financial-model.md
+09-mobile-architecture.md
+10-deployment-architecture.md
+```
+
+These documents should remain version-controlled with the project.
+
+---
+
+## Project Status
 
 **Primary target:** Amazon-style retail + marketplace.
+
+**Architecture:** Modular monolith first; future service extraction only when justified.
 
 **Primary payment integration:** In-house payment gateway.
 
 **Primary web stack:** Next.js + TypeScript + shadcn/ui + Tailwind CSS.
 
-**Primary backend stack:** Go + Gin + PostgreSQL + GORM + Redis.
+**Primary backend stack:** NestJS + TypeScript + PostgreSQL + Prisma + Redis, implemented as a modular monolith.
 
 **Mobile:** Kotlin Multiplatform + Compose preferred; Flutter remains a viable alternative.
 
+**Current stage:** Planning / Architecture / Development Backlog.
+
 ---
 
-## 47. Next Technical Documents
+# Final Position
 
-After this README, the project should produce the following detailed documents:
+This platform should be treated as a serious commerce system rather than a simple online store.
+
+The architecture therefore separates:
 
 ```text
-docs/
-├── architecture/
-│   ├── system-architecture.md
-│   ├── domain-model.md
-│   ├── payment-architecture.md
-│   ├── order-architecture.md
-│   ├── inventory-architecture.md
-│   └── mobile-architecture.md
-│
-├── database/
-│   ├── erd.md
-│   └── schema.md
-│
-├── api/
-│   ├── openapi.yaml
-│   └── conventions.md
-│
-├── security/
-│   └── security-architecture.md
-│
-└── decisions/
-    ├── ADR-001-backend-stack.md
-    ├── ADR-002-payment-gateway.md
-    ├── ADR-003-product-offer-model.md
-    └── ADR-004-mobile-platform.md
+Customer Experience
+        ↓
+Commerce API
+        ↓
+Domain Modules
+        ↓
+Transactional Infrastructure
+        ↓
+External Integrations
 ```
 
-This README is the **master plan**. Those documents become the deeper implementation references as the project progresses.
+The initial implementation remains intentionally simple:
+
+> **One NestJS application. Clearly separated modules. One PostgreSQL database. Redis for supporting infrastructure. Provider abstractions around external systems.**
+
+That gives the project a practical starting point while keeping the architecture ready for substantial growth.
