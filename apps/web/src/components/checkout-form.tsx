@@ -1,10 +1,14 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useActionState, useMemo, useState } from 'react';
 
+import { FieldError } from '@/components/field-error';
+import { FormError } from '@/components/form-error';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import type { Address } from '@/lib/commerce-types';
+import { idleFormState, type FormState } from '@/lib/form';
 import {
   formatCardNumber,
   formatCvc,
@@ -18,36 +22,92 @@ type PaymentMethod = 'card' | 'mobile-money';
  * (below the order summary) but submits it via the `form` attribute. */
 export const CHECKOUT_FORM_ID = 'checkout-form';
 
-export function CheckoutForm({ onPlaced }: { onPlaced: () => void }) {
-  const [method, setMethod] = useState<PaymentMethod>('card');
+/**
+ * Delivery address and payment.
+ *
+ * The card and mobile-money fields are posted to a server action, which hands
+ * them to the API — they never touch this app's own storage. Billing details
+ * the gateway needs are derived from the chosen address rather than asked for
+ * twice.
+ */
+export function CheckoutForm({
+  addresses,
+  placeOrder,
+}: {
+  addresses: Address[];
+  placeOrder: (state: FormState, formData: FormData) => Promise<FormState>;
+}) {
+  const [state, formAction] = useActionState(placeOrder, idleFormState);
+  const [method, setMethod] = useState<PaymentMethod>('mobile-money');
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvc, setCardCvc] = useState('');
   const [momoPhone, setMomoPhone] = useState('');
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    onPlaced();
-  }
+  // Minted once per mounted form, so a double submit or a retry after a
+  // timeout is the same checkout rather than a second order.
+  const idempotencyKey = useMemo(() => crypto.randomUUID(), []);
+
+  const defaultAddress =
+    addresses.find((address) => address.isDefault) ?? addresses[0];
 
   return (
-    <form id={CHECKOUT_FORM_ID} onSubmit={handleSubmit} className="space-y-6">
+    <form id={CHECKOUT_FORM_ID} action={formAction} className="space-y-6">
+      <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+      <input type="hidden" name="paymentMethod" value={method} />
+
+      <fieldset className="space-y-3">
+        <legend className="text-sm font-medium">Deliver to</legend>
+        <RadioGroup
+          name="shippingAddressId"
+          defaultValue={defaultAddress?.id}
+          required
+        >
+          {addresses.map((address) => (
+            <div
+              key={address.id}
+              className="border-input flex items-start gap-3 rounded-lg border px-3 py-2.5"
+            >
+              <RadioGroupItem
+                value={address.id}
+                id={`address-${address.id}`}
+                className="mt-1"
+              />
+              <Label
+                htmlFor={`address-${address.id}`}
+                className="flex-1 font-normal"
+              >
+                <span className="block font-medium">
+                  {address.recipientName}
+                </span>
+                <span className="text-muted-foreground block text-sm">
+                  {[address.line1, address.line2, address.city, address.country]
+                    .filter(Boolean)
+                    .join(', ')}
+                </span>
+              </Label>
+            </div>
+          ))}
+        </RadioGroup>
+        <FieldError messages={state.fieldErrors?.shippingAddressId} />
+      </fieldset>
+
       <fieldset className="space-y-3">
         <legend className="text-sm font-medium">Payment method</legend>
         <RadioGroup
           value={method}
           onValueChange={(value) => setMethod(value as PaymentMethod)}
         >
-          <div className="flex items-center gap-3 rounded-lg border border-input px-3 py-2.5">
-            <RadioGroupItem value="card" id="payment-card" />
-            <Label htmlFor="payment-card" className="flex-1">
-              Card
-            </Label>
-          </div>
-          <div className="flex items-center gap-3 rounded-lg border border-input px-3 py-2.5">
+          <div className="border-input flex items-center gap-3 rounded-lg border px-3 py-2.5">
             <RadioGroupItem value="mobile-money" id="payment-mobile-money" />
             <Label htmlFor="payment-mobile-money" className="flex-1">
               Mobile Money
+            </Label>
+          </div>
+          <div className="border-input flex items-center gap-3 rounded-lg border px-3 py-2.5">
+            <RadioGroupItem value="card" id="payment-card" />
+            <Label htmlFor="payment-card" className="flex-1">
+              Card
             </Label>
           </div>
         </RadioGroup>
@@ -127,12 +187,11 @@ export function CheckoutForm({ onPlaced }: { onPlaced: () => void }) {
             <select
               id="momo-provider"
               name="momoProvider"
-              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border bg-transparent px-2.5 text-sm outline-none focus-visible:ring-3"
               required
             >
-              <option>MTN Money</option>
-              <option>Airtel Money</option>
-              <option>Zamtel Kwacha</option>
+              <option value="MTN">MTN Money</option>
+              <option value="AIRTEL">Airtel Money</option>
             </select>
           </div>
           <div className="space-y-1.5 sm:col-span-2">
@@ -152,9 +211,12 @@ export function CheckoutForm({ onPlaced }: { onPlaced: () => void }) {
               }
               required
             />
+            <FieldError messages={state.fieldErrors?.phoneNumber} />
           </div>
         </div>
       )}
+
+      <FormError state={state} />
     </form>
   );
 }

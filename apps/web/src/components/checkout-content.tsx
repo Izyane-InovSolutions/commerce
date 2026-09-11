@@ -1,24 +1,34 @@
-'use client';
-
-import { useState } from 'react';
 import Link from 'next/link';
 
+import { AddressForm } from '@/components/address-form';
 import { CHECKOUT_FORM_ID, CheckoutForm } from '@/components/checkout-form';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { getCartTotal, resolveCartLines } from '@/lib/cart';
-import { useCart } from '@/lib/cart-context';
-import { formatCurrency } from '@/lib/currency';
+import type { Address, CartView, PublicOffer } from '@/lib/commerce-types';
+import { formatMinor } from '@/lib/currency';
+import type { FormState } from '@/lib/form';
 
-export function CheckoutContent() {
-  const { items } = useCart();
-  const [placed, setPlaced] = useState(false);
-
-  const lines = resolveCartLines(items);
-  const total = getCartTotal(lines);
-
-  if (lines.length === 0) {
+/**
+ * Checkout: what is being bought, where it goes, and how it is paid for.
+ *
+ * An empty cart and an account with no address are both dead ends rather than
+ * errors, so each gets its own answer instead of a form that cannot succeed.
+ */
+export function CheckoutContent({
+  cart,
+  offers,
+  addresses,
+  placeOrder,
+  createAddress,
+}: {
+  cart: CartView;
+  offers: Map<string, PublicOffer>;
+  addresses: Address[];
+  placeOrder: (state: FormState, formData: FormData) => Promise<FormState>;
+  createAddress: (state: FormState, formData: FormData) => Promise<FormState>;
+}) {
+  if (cart.items.length === 0) {
     return (
       <div className="space-y-3 rounded-2xl border border-dashed p-8 text-center">
         <p className="font-medium">Your cart is empty</p>
@@ -32,36 +42,39 @@ export function CheckoutContent() {
     );
   }
 
-  if (placed) {
+  if (addresses.length === 0) {
     return (
-      <div className="space-y-2 rounded-2xl border border-dashed p-8 text-center">
-        <p className="text-lg font-semibold">Order placed</p>
-        <p className="text-muted-foreground text-sm">
-          This is a demo checkout, so no payment was actually charged. Real
-          payments arrive with Phase 1.
-        </p>
+      <div className="max-w-xl space-y-4">
+        <div className="space-y-1">
+          <h2 className="text-base font-semibold">Add a delivery address</h2>
+          <p className="text-muted-foreground text-sm text-pretty">
+            An order needs somewhere to go. This is saved to your account, so
+            you only do it once.
+          </p>
+        </div>
+        <AddressForm action={createAddress} />
       </div>
     );
   }
 
+  const currency = cart.currency ?? 'ZMW';
+
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_340px]">
-      <CheckoutForm onPlaced={() => setPlaced(true)} />
+      <CheckoutForm addresses={addresses} placeOrder={placeOrder} />
 
       <Card className="h-fit">
         <CardContent className="space-y-4">
           <h2 className="text-base font-semibold">Order summary</h2>
           <ul className="space-y-3">
-            {lines.map((line) => (
-              <li
-                key={line.slug}
-                className="flex justify-between gap-3 text-sm"
-              >
+            {cart.items.map((line) => (
+              <li key={line.id} className="flex justify-between gap-3 text-sm">
                 <span className="text-muted-foreground">
-                  {line.name} × {line.quantity}
+                  {offers.get(line.offerId)?.listingTitle ?? 'Item'} ×{' '}
+                  {line.quantity}
                 </span>
                 <span className="font-medium">
-                  {formatCurrency(line.lineTotal)}
+                  {formatMinor(line.lineTotal, currency)}
                 </span>
               </li>
             ))}
@@ -69,11 +82,15 @@ export function CheckoutContent() {
           <Separator />
           <div className="flex justify-between text-sm font-semibold">
             <span>Total</span>
-            <span>{formatCurrency(total)}</span>
+            <span>{formatMinor(cart.subtotal, currency)}</span>
           </div>
           <Button type="submit" form={CHECKOUT_FORM_ID} className="w-full">
-            Pay {formatCurrency(total)}
+            Pay {formatMinor(cart.subtotal, currency)}
           </Button>
+          <p className="text-muted-foreground text-xs text-pretty">
+            If the payment provider cannot be reached, the order is cancelled
+            and your cart is left as it is.
+          </p>
         </CardContent>
       </Card>
     </div>

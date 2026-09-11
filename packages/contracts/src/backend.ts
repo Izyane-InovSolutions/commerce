@@ -252,3 +252,260 @@ export const backendStockMovementSchema = z.object({
 export function backendMoneyToMinor(value: BackendMoney): number {
   return value.amount;
 }
+
+/* ---- the marketplace domain, as the backend now exposes it ---- */
+
+/**
+ * The seller-scoped and admin-seller endpoints page differently from the
+ * catalog: they return `{ items, total, page, limit }` flat, not the
+ * `{ data, meta }` shape `BackendPage` describes. Two pagination conventions
+ * live in this API at once, so callers need both.
+ */
+export type BackendItemsPage<T> = {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+};
+
+export const backendSellerStatuses = [
+  'PENDING',
+  'APPROVED',
+  'REJECTED',
+  'SUSPENDED',
+] as const;
+export const backendSellerStatusSchema = z.enum(backendSellerStatuses);
+export type BackendSellerStatus = z.infer<typeof backendSellerStatusSchema>;
+
+/** What the admin *list* returns — five fields, not the whole seller. */
+export const backendSellerSummarySchema = z.object({
+  id: z.uuid(),
+  businessName: z.string(),
+  status: backendSellerStatusSchema,
+  createdAt: z.iso.datetime(),
+  version: z.int(),
+});
+export type BackendSellerSummary = z.infer<typeof backendSellerSummarySchema>;
+
+export const backendSellerDocumentSchema = z.object({
+  mediaAssetId: z.uuid(),
+  createdAt: z.iso.datetime(),
+});
+export type BackendSellerDocument = z.infer<typeof backendSellerDocumentSchema>;
+
+export const backendSellerDetailSchema = backendSellerSummarySchema.extend({
+  ownerUserId: z.uuid(),
+  registrationNumber: z.string(),
+  country: z.string(),
+  businessAddress: z.string(),
+  contactEmail: z.string(),
+  reviewReason: z.string().nullable(),
+  reviewedBy: z.uuid().nullable(),
+  reviewedAt: z.iso.datetime().nullable(),
+  storefrontSlug: z.string().nullable(),
+  displayName: z.string().nullable(),
+  description: z.string().nullable(),
+  documents: z.array(backendSellerDocumentSchema).default([]),
+  updatedAt: z.iso.datetime(),
+});
+export type BackendSellerDetail = z.infer<typeof backendSellerDetailSchema>;
+
+export const backendOfferConditions = ['NEW', 'USED', 'REFURBISHED'] as const;
+export const backendOfferConditionSchema = z.enum(backendOfferConditions);
+export type BackendOfferCondition = z.infer<typeof backendOfferConditionSchema>;
+
+/** Who holds the stock, and who ships it. Both default to the platform. */
+export const backendOfferSources = ['PLATFORM', 'SELLER'] as const;
+export const backendOfferSourceSchema = z.enum(backendOfferSources);
+export type BackendOfferSource = z.infer<typeof backendOfferSourceSchema>;
+
+/**
+ * A seller's own offer. Like the admin read it carries the whole price
+ * history rather than a resolved price, so `pickCurrentPrice` applies here
+ * too. `version` is required on every write — the API rejects a stale one.
+ */
+export const backendSellerOfferSchema = z.object({
+  id: z.uuid(),
+  variantId: z.uuid(),
+  sellerId: z.uuid().nullable(),
+  sellerSku: z.string().nullable(),
+  listingTitle: z.string().nullable(),
+  condition: backendOfferConditionSchema,
+  stockSource: backendOfferSourceSchema,
+  fulfillmentMode: backendOfferSourceSchema,
+  version: z.int(),
+  status: backendProductStatusSchema,
+  prices: z.array(backendPriceSchema).default([]),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+export type BackendSellerOffer = z.infer<typeof backendSellerOfferSchema>;
+
+export const backendOrderStatuses = [
+  'PENDING_PAYMENT',
+  'PAID',
+  'CANCELLED',
+  'PARTIALLY_REFUNDED',
+  'REFUNDED',
+] as const;
+export const backendOrderStatusSchema = z.enum(backendOrderStatuses);
+export type BackendOrderStatus = z.infer<typeof backendOrderStatusSchema>;
+
+/** Amounts are minor units. A line names its offer, never its product. */
+export const backendOrderItemSchema = z.object({
+  id: z.uuid(),
+  orderId: z.uuid(),
+  sellerOrderId: z.uuid().nullable(),
+  offerId: z.uuid(),
+  quantity: z.int(),
+  unitAmount: z.int(),
+  currency: z.string(),
+  lineTotal: z.int(),
+  createdAt: z.iso.datetime(),
+});
+export type BackendOrderItem = z.infer<typeof backendOrderItemSchema>;
+
+/**
+ * One seller's slice of a customer order. `sellerId: null` is the platform's
+ * own group rather than "no seller"; every order has at least one.
+ */
+export const backendSellerOrderSchema = z.object({
+  id: z.uuid(),
+  orderId: z.uuid(),
+  sellerId: z.uuid().nullable(),
+  status: backendOrderStatusSchema,
+  subtotal: z.int(),
+  total: z.int(),
+  refundedAmount: z.int(),
+  currency: z.string(),
+  items: z.array(backendOrderItemSchema).default([]),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+export type BackendSellerOrder = z.infer<typeof backendSellerOrderSchema>;
+
+export const backendLedgerEntryTypes = ['SALE', 'REFUND', 'PAYOUT'] as const;
+export const backendLedgerEntryTypeSchema = z.enum(backendLedgerEntryTypes);
+export type BackendLedgerEntryType = z.infer<
+  typeof backendLedgerEntryTypeSchema
+>;
+
+export const backendLedgerEntrySchema = z.object({
+  id: z.uuid(),
+  sellerId: z.uuid(),
+  type: backendLedgerEntryTypeSchema,
+  referenceType: z.string(),
+  referenceId: z.string(),
+  grossAmount: z.int(),
+  commissionAmount: z.int(),
+  netAmount: z.int(),
+  currency: z.string(),
+  description: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+});
+export type BackendLedgerEntry = z.infer<typeof backendLedgerEntrySchema>;
+
+/** A running total kept in step with the ledger, not an independent source. */
+export const backendSellerBalanceSchema = z.object({
+  sellerId: z.uuid(),
+  balance: z.int(),
+  currency: z.string(),
+});
+export type BackendSellerBalance = z.infer<typeof backendSellerBalanceSchema>;
+
+/** Bookkeeping only: "this seller was paid externally", not a payout rail. */
+export const backendPayoutSchema = z.object({
+  id: z.uuid(),
+  sellerId: z.uuid(),
+  amount: z.int(),
+  currency: z.string(),
+  reference: z.string().nullable(),
+  note: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+});
+export type BackendPayout = z.infer<typeof backendPayoutSchema>;
+
+/* ---- marketplace request payloads, matching the backend's DTOs ---- */
+
+/** Every review carries the version it was decided against, and a reason. */
+export const backendReviewSellerSchema = z.object({
+  version: z.int().min(0),
+  reason: z
+    .string()
+    .trim()
+    .min(3, 'Give a reason of at least 3 characters.')
+    .max(1000, 'Keep the reason under 1000 characters.'),
+});
+export type BackendReviewSellerInput = z.input<
+  typeof backendReviewSellerSchema
+>;
+
+const backendSellerOfferDetails = {
+  sellerSku: z
+    .string()
+    .trim()
+    .min(1, 'SKU is required.')
+    .max(100, 'Keep the SKU under 100 characters.'),
+  listingTitle: z
+    .string()
+    .trim()
+    .min(2, 'Give the listing a title of at least 2 characters.')
+    .max(200, 'Keep the title under 200 characters.'),
+  condition: backendOfferConditionSchema,
+  stockSource: backendOfferSourceSchema,
+  fulfillmentMode: backendOfferSourceSchema,
+};
+
+export const backendCreateSellerOfferSchema = z.object({
+  ...backendSellerOfferDetails,
+  variantId: z.uuid('Choose a variant to list against.'),
+});
+export type BackendCreateSellerOfferInput = z.input<
+  typeof backendCreateSellerOfferSchema
+>;
+
+export const backendUpdateSellerOfferSchema = z.object({
+  ...backendSellerOfferDetails,
+  version: z.int().min(0),
+});
+export type BackendUpdateSellerOfferInput = z.input<
+  typeof backendUpdateSellerOfferSchema
+>;
+
+export const backendSellerOfferStatusSchema = z.object({
+  version: z.int().min(0),
+  status: backendProductStatusSchema,
+});
+export type BackendSellerOfferStatusInput = z.input<
+  typeof backendSellerOfferStatusSchema
+>;
+
+/** Amount is minor units, and must be at least 1 — the API rejects zero. */
+export const backendSellerOfferPriceSchema = z.object({
+  version: z.int().min(0),
+  amount: z.int().min(1, 'Enter a price above zero.'),
+  currency: z
+    .string()
+    .trim()
+    .regex(/^[A-Z]{3}$/, 'Use a three-letter currency code, such as ZMW.'),
+});
+export type BackendSellerOfferPriceInput = z.input<
+  typeof backendSellerOfferPriceSchema
+>;
+
+export const backendRecordPayoutSchema = z.object({
+  amount: z.int().min(1, 'Enter an amount above zero.'),
+  reference: z
+    .string()
+    .trim()
+    .max(200, 'Keep the reference under 200 characters.')
+    .optional(),
+  note: z
+    .string()
+    .trim()
+    .max(500, 'Keep the note under 500 characters.')
+    .optional(),
+});
+export type BackendRecordPayoutInput = z.input<
+  typeof backendRecordPayoutSchema
+>;

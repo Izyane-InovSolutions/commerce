@@ -29,11 +29,10 @@ export const navigation: NavItem[] = [
     icon: Package,
     children: [
       { href: '/products', label: 'My Products' },
-      { href: '/products/new', label: 'Add Product' },
-      { href: '/products?view=draft', label: 'Drafts' },
-      { href: '/products?view=pending', label: 'Pending Approval' },
-      { href: '/products?view=active', label: 'Approved' },
-      { href: '/products?view=rejected', label: 'Rejected' },
+      { href: '/products/new', label: 'List a Product' },
+      { href: '/products?status=DRAFT', label: 'Drafts' },
+      { href: '/products?status=PUBLISHED', label: 'Published' },
+      { href: '/products?status=ARCHIVED', label: 'Archived' },
     ],
   },
   { href: '/orders', label: 'Orders', icon: ClipboardList },
@@ -48,9 +47,10 @@ export const navigation: NavItem[] = [
 /**
  * Navigation for a signed-in user.
  *
- * Every section is listed regardless of role, because the Commerce API has no
- * seller domain yet: there is nothing to gate on beyond the role string, and
- * each section says for itself what it is waiting for.
+ * Every section is listed regardless of role. What actually gates a section is
+ * the seller account behind the user — the API answers 403 until it is
+ * approved — and each section resolves that for itself, so the menu stays the
+ * same shape whether an application is pending or approved.
  */
 export function navigationFor(user: BackendUser): NavItem[] {
   void user;

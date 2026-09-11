@@ -100,27 +100,26 @@ describe('DashboardNav', () => {
 
     for (const label of [
       'My Products',
-      'Add Product',
+      'List a Product',
       'Drafts',
-      'Pending Approval',
-      'Approved',
-      'Rejected',
+      'Published',
+      'Archived',
     ]) {
       expect(screen.getByRole('link', { name: label })).toBeVisible();
     }
   });
 
   it('marks the sub-view that matches the query string', () => {
-    at('/products', 'view=draft');
+    at('/products', 'status=DRAFT');
     render(<DashboardNav user={seller} />);
 
     expect(screen.getByRole('link', { name: 'Drafts' })).toHaveAttribute(
       'aria-current',
       'page',
     );
-    expect(
-      screen.getByRole('link', { name: 'Pending Approval' }),
-    ).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: 'Published' })).not.toHaveAttribute(
+      'aria-current',
+    );
     // "My Products" is the unfiltered list, so it is not current here.
     expect(
       screen.getByRole('link', { name: 'My Products' }),

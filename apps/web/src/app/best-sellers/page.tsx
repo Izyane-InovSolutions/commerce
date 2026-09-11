@@ -10,7 +10,7 @@ export default function BestSellersPage() {
   return (
     <PlaceholderPage
       title="Best Sellers"
-      description="Top-selling products across the marketplace, ranked by the catalog module's sales signals."
+      description="Nothing to show yet: orders record what sold, but the API exposes no ranking over them, so any list here would be invented rather than measured."
     />
   );
 }

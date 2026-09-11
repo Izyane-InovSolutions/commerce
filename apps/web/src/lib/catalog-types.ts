@@ -59,6 +59,25 @@ export type ProductListPage = {
  * which cannot be part of a client bundle.
  */
 export function getDisplayPrice(product: Product): number | null {
-  const amount = product.variants[0]?.offers[0]?.currentPrice?.amount;
+  const amount = getPrimaryOffer(product)?.currentPrice?.amount;
   return typeof amount === 'number' ? amount / 100 : null;
+}
+
+/**
+ * The offer a shopper actually buys when they add this product to the cart.
+ *
+ * The cart is keyed by offer, not by product, so adding anything to it means
+ * choosing one — and with no variant picker yet that choice is the first
+ * variant's first priced offer, the same one the displayed price comes from.
+ * Null when nothing on the product is currently sellable.
+ */
+export function getPrimaryOffer(product: Product): ProductOffer | null {
+  for (const variant of product.variants) {
+    const offer = variant.offers.find((candidate) => candidate.currentPrice);
+    if (offer) {
+      return offer;
+    }
+  }
+
+  return null;
 }

@@ -78,11 +78,16 @@ export function backendDeleteBrand(
   return client.delete(`/admin/catalog/brands/${id}`);
 }
 
+/**
+ * Query for the *public* listing. The search term is `q` and there is no
+ * status filter — that listing is published products only by definition.
+ */
 export type BackendProductQuery = {
   page?: number;
   limit?: number;
-  search?: string;
-  status?: BackendProductStatus;
+  q?: string;
+  categorySlug?: string;
+  brandSlug?: string;
 };
 
 /**

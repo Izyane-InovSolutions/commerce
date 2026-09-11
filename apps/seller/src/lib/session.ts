@@ -35,11 +35,11 @@ export async function requireUser(): Promise<BackendUser> {
 }
 
 /**
- * Whether this account could trade, if the API let it.
+ * Whether this account carries the seller role.
  *
- * The Commerce API has no seller domain yet — `Offer.sellerId` is nullable and
- * unused, and there are no seller-scoped endpoints — so the role is as far as
- * the check can go today.
+ * Not the same question as whether they can trade: that depends on the seller
+ * account behind the user being approved, which `getSellerAccount` answers.
+ * The API enforces both independently.
  */
 export function isSeller(user: BackendUser | null): boolean {
   return user?.role === 'SELLER';

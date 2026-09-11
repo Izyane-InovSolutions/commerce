@@ -22,8 +22,20 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   const access = request.cookies.get(ACCESS_COOKIE)?.value;
   const refresh = request.cookies.get(REFRESH_COOKIE)?.value;
 
-  if (access || !refresh) {
+  // Forwards Bearer token from session cookie for proxied /api calls if not already supplied
+  const createNextResponse = (accessToken?: string): NextResponse => {
+    const isApiRequest = request.nextUrl.pathname.startsWith('/api');
+    const token = accessToken ?? access;
+    if (isApiRequest && token && !request.headers.has('authorization')) {
+      const requestHeaders = new Headers(request.headers);
+      requestHeaders.set('authorization', `Bearer ${token}`);
+      return NextResponse.next({ request: { headers: requestHeaders } });
+    }
     return NextResponse.next();
+  };
+
+  if (access || !refresh) {
+    return createNextResponse();
   }
 
   try {
@@ -43,7 +55,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     }
 
     const session = (await response.json()) as RefreshedSession;
-    const next = NextResponse.next();
+    const next = createNextResponse(session.data.accessToken);
     const secure = process.env.NODE_ENV === 'production';
 
     next.cookies.set(ACCESS_COOKIE, session.data.accessToken, {
@@ -64,7 +76,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return next;
   } catch {
     // The API is unreachable. Let the page render and report that itself.
-    return NextResponse.next();
+    return createNextResponse();
   }
 }
 

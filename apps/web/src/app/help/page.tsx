@@ -10,7 +10,7 @@ export default function HelpPage() {
   return (
     <PlaceholderPage
       title="Help & Support"
-      description="Support articles and contact options for the marketplace."
+      description="Support articles and contact options are not part of the Commerce API; this page is waiting on a content source rather than an endpoint."
     />
   );
 }

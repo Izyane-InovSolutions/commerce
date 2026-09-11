@@ -12,9 +12,12 @@ export default async function InventoryPage() {
     <AwaitingBackend
       title={'Inventory'}
       description={'The stock you hold.'}
-      needs={['GET  /seller/inventory', 'POST /seller/inventory/adjustments']}
+      needs={[
+        'GET  /sellers/me/inventory',
+        'POST /sellers/me/inventory/adjustments',
+      ]}
       note={
-        'Stock exists in the API, but every record belongs to a platform warehouse; there is no seller-held stock.'
+        'An offer can already declare that you hold the stock and ship it yourself, but every inventory record still belongs to a platform warehouse and no endpoint is scoped to a seller, so there is nothing here to count.'
       }
     />
   );

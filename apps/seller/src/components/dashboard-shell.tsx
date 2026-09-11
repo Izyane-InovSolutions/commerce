@@ -45,9 +45,9 @@ export async function DashboardShell({ children }: { children: ReactNode }) {
         <main className="min-w-0 flex-1 p-6">{children}</main>
       </div>
 
-      <footer className="text-muted-foreground border-t px-4 py-4 text-sm">
+      {/* <footer className="text-muted-foreground border-t px-4 py-4 text-sm">
         Every request is scoped to the resources your seller account owns.
-      </footer>
+      </footer> */}
     </div>
   );
 }

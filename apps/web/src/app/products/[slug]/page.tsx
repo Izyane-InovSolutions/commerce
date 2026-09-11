@@ -5,8 +5,9 @@ import { PackageSearch } from 'lucide-react';
 import { BackButton } from '@/components/back-button';
 import { ProductCard } from '@/components/product-card';
 import { ProductDetailActions } from '@/components/product-detail-actions';
+import { addToCartAction } from '@/app/cart/actions';
 import { getProductBySlug, listProducts } from '@/lib/catalog';
-import { getDisplayPrice } from '@/lib/catalog-types';
+import { getDisplayPrice, getPrimaryOffer } from '@/lib/catalog-types';
 import { formatCurrency } from '@/lib/currency';
 
 type ProductDetailPageProps = PageProps<'/products/[slug]'>;
@@ -31,6 +32,7 @@ export default async function ProductDetailPage({
   }
 
   const price = getDisplayPrice(product);
+  const offer = getPrimaryOffer(product);
   const relatedProducts = product.category
     ? (
         await listProducts({
@@ -77,9 +79,9 @@ export default async function ProductDetailPage({
           ) : null}
 
           <ProductDetailActions
-            slug={product.slug}
             name={product.name}
-            unitPrice={price}
+            available={offer !== null}
+            addToCart={addToCartAction.bind(null, offer?.id ?? '')}
           />
         </div>
       </div>

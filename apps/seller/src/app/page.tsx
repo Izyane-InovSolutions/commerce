@@ -1,8 +1,15 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 
+import {
+  backendGetOwnBalance,
+  backendListSellerOffers,
+  backendListSellerOrders,
+} from '@commerce/api-client';
+
 import { ApiStatusCard } from '@/components/api-status-card';
 import { PageHeader } from '@/components/page-header';
+import { SellerGateNotice } from '@/components/seller-gate-notice';
 import {
   Card,
   CardContent,
@@ -10,50 +17,89 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { apiClient } from '@/lib/api';
+import { formatMinor } from '@/lib/money';
 import { navigation } from '@/lib/navigation';
+import { getSellerAccount } from '@/lib/seller';
 import { requireUser } from '@/lib/session';
 
-/**
- * The seller portal signed in against the real API.
- *
- * Authentication is live; nothing else can be, because the Commerce API has
- * no seller domain yet. Saying so plainly beats showing empty tables that
- * would read as "you have nothing" rather than "this does not exist".
- */
+/** Sections the Commerce API still has no endpoints for. */
+const AWAITING_API = new Set([
+  '/inventory',
+  '/customers',
+  '/promotions',
+  '/analytics',
+]);
+
 export default async function DashboardPage() {
   const user = await requireUser();
+  const account = await getSellerAccount();
+
+  if (account.state !== 'approved') {
+    return (
+      <SellerGateNotice
+        title="Dashboard"
+        description={`Signed in as ${user.email}.`}
+        account={account}
+      />
+    );
+  }
+
+  // Each read stands on its own: a figure that cannot be fetched is shown as
+  // unavailable rather than taking the whole dashboard down with it.
+  const [balance, offers, orders] = await Promise.all([
+    backendGetOwnBalance(apiClient).catch(() => null),
+    backendListSellerOffers(apiClient, { limit: 1 }).catch(() => null),
+    backendListSellerOrders(apiClient, { limit: 1 }).catch(() => null),
+  ]);
+
+  const figures = [
+    {
+      label: 'Balance',
+      value: balance
+        ? formatMinor(balance.balance, balance.currency)
+        : 'Unavailable',
+      href: '/payments',
+      hint: 'Owed to you after commission and payouts.',
+    },
+    {
+      label: 'Listings',
+      value: offers ? String(offers.total) : 'Unavailable',
+      href: '/products',
+      hint: 'Everything you sell, published or not.',
+    },
+    {
+      label: 'Orders',
+      value: orders ? String(orders.total) : 'Unavailable',
+      href: '/orders',
+      hint: 'Your share of every customer order.',
+    },
+  ];
 
   return (
     <div className="space-y-10">
       <PageHeader
-        title="Dashboard"
-        description="Signed in against the Commerce API."
+        title={account.seller.displayName ?? account.seller.businessName}
+        description={`Signed in as ${user.email}.`}
       />
 
-      <Card className="border-primary/40 max-w-2xl">
-        <CardHeader>
-          <CardTitle>Selling is not available in the API yet</CardTitle>
-          <CardDescription>
-            You are signed in as{' '}
-            <span className="font-medium">{user.email}</span> with the{' '}
-            <code className="font-mono">{user.role}</code> role.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="text-muted-foreground space-y-3 text-sm">
-          <p className="text-pretty">
-            The Commerce API covers authentication, the catalog, inventory,
-            cart, and orders — all of it platform-owned. There is a{' '}
-            <code className="font-mono">SELLER</code> role and a nullable{' '}
-            <code className="font-mono">Offer.sellerId</code>, but no seller
-            table and no seller-scoped endpoints; the schema notes that sellers
-            arrive in Phase 3.
-          </p>
-          <p className="text-pretty">
-            Every section below is built and wired. Each one names the endpoints
-            it is waiting for.
-          </p>
-        </CardContent>
-      </Card>
+      <div className="grid gap-4 sm:grid-cols-3">
+        {figures.map((figure) => (
+          <Link key={figure.label} href={figure.href} className="group">
+            <Card className="group-hover:border-foreground/25 h-full transition-colors">
+              <CardHeader>
+                <CardDescription>{figure.label}</CardDescription>
+                <CardTitle className="text-3xl tabular-nums">
+                  {figure.value}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-muted-foreground text-sm text-pretty">
+                {figure.hint}
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
+      </div>
 
       <Suspense fallback={null}>
         <ApiStatusCard />
@@ -71,9 +117,11 @@ export default async function DashboardPage() {
                   className="hover:border-foreground/25 flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors"
                 >
                   {item.label}
-                  <span className="text-muted-foreground text-xs italic">
-                    awaiting API
-                  </span>
+                  {AWAITING_API.has(item.href) ? (
+                    <span className="text-muted-foreground text-xs italic">
+                      awaiting API
+                    </span>
+                  ) : null}
                 </Link>
               </li>
             ))}
