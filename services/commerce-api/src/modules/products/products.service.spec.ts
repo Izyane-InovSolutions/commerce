@@ -35,7 +35,7 @@ function buildPrisma(): {
     updateMany: jest.Mock;
     delete: jest.Mock;
   };
-  mediaAsset: { findUnique: jest.Mock };
+  mediaAsset: { findUnique: jest.Mock; updateMany: jest.Mock };
   $transaction: jest.Mock;
 } {
   const prisma = {
@@ -65,7 +65,10 @@ function buildPrisma(): {
       updateMany: jest.fn(),
       delete: jest.fn(),
     },
-    mediaAsset: { findUnique: jest.fn() },
+    mediaAsset: {
+      findUnique: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
     $transaction: jest.fn(),
   };
   // Runs the callback with `prisma` standing in for the transaction client.

@@ -54,6 +54,8 @@ export class CartService {
     if (!offer || offer.status !== ProductStatus.PUBLISHED) {
       throw new BadRequestException('This offer is not available');
     }
+    if (offer.sellerId)
+      throw new BadRequestException('Seller checkout is not available yet');
 
     const { cart, newGuestToken } = await this.getOrCreateCart(identity);
 
@@ -229,11 +231,13 @@ export class CartService {
     const lines: CartLineView[] = await Promise.all(
       cart.items.map(async (item) => {
         const currentPrice = pickCurrentPrice(item.offer.prices);
-        const availableQuantity =
-          await this.inventoryService.getAvailableQuantity(
-            item.offer.variantId,
-          );
+        const availableQuantity = item.offer.sellerId
+          ? 0
+          : await this.inventoryService.getAvailableQuantity(
+              item.offer.variantId,
+            );
         const isAvailable =
+          !item.offer.sellerId &&
           item.offer.status === ProductStatus.PUBLISHED &&
           !!currentPrice &&
           availableQuantity >= item.quantity;

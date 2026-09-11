@@ -78,7 +78,7 @@ export class ProductsService {
                 include: { attributeValue: { include: { attribute: true } } },
               },
               offers: {
-                where: { status: ProductStatus.PUBLISHED },
+                where: { status: ProductStatus.PUBLISHED, sellerId: null },
                 include: { prices: true },
               },
             },
@@ -110,7 +110,7 @@ export class ProductsService {
               include: { attributeValue: { include: { attribute: true } } },
             },
             offers: {
-              where: { status: ProductStatus.PUBLISHED },
+              where: { status: ProductStatus.PUBLISHED, sellerId: null },
               include: { prices: true },
             },
           },
@@ -290,7 +290,11 @@ export class ProductsService {
       where: { id: dto.mediaAssetId },
     });
 
-    if (!mediaAsset || mediaAsset.status !== 'AVAILABLE') {
+    if (
+      !mediaAsset ||
+      mediaAsset.status !== 'AVAILABLE' ||
+      mediaAsset.verificationLocked
+    ) {
       throw new BadRequestException(
         'Media asset does not exist or is not available',
       );
@@ -298,6 +302,18 @@ export class ProductsService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
+        const eligible = await tx.mediaAsset.updateMany({
+          where: {
+            id: dto.mediaAssetId,
+            status: 'AVAILABLE',
+            verificationLocked: false,
+          },
+          data: { updatedAt: new Date() },
+        });
+        if (eligible.count !== 1)
+          throw new BadRequestException(
+            'Media is unavailable or reserved for verification',
+          );
         if (dto.isPrimary) {
           await tx.productMedia.updateMany({
             where: { productId },

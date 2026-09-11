@@ -31,6 +31,25 @@ describe('OffersService', () => {
   });
 
   describe('create', () => {
+    it('does not permit admin retail routes to bypass seller approval', async () => {
+      prisma.offer.findUnique.mockResolvedValue({
+        id: 'seller-offer',
+        sellerId: 'seller-1',
+        prices: [],
+      });
+      await expect(
+        service.updateStatus('seller-offer', { status: 'PUBLISHED' }),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.addPrice('seller-offer', { amount: 100, currency: 'USD' }),
+      ).rejects.toThrow(BadRequestException);
+      await expect(service.remove('seller-offer')).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(prisma.offer.update).not.toHaveBeenCalled();
+      expect(prisma.price.create).not.toHaveBeenCalled();
+      expect(prisma.offer.delete).not.toHaveBeenCalled();
+    });
     it('rejects when the variant does not exist', async () => {
       prisma.productVariant.findUnique.mockResolvedValue(null);
 

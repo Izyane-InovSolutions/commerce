@@ -38,8 +38,7 @@ export class OffersService {
       throw new BadRequestException('The referenced variant does not exist');
     }
 
-    // This ticket only ever creates first-party offers (sellerId: null);
-    // Phase 3 marketplace work adds seller-owned offers on top of this model.
+    // The admin retail creation route always creates first-party offers.
     const offer = await this.prisma.offer.create({
       data: { variantId: dto.variantId, sellerId: null },
     });
@@ -50,7 +49,7 @@ export class OffersService {
     id: string,
     dto: UpdateStatusDto,
   ): Promise<OfferWithPrices> {
-    await this.findByIdAdmin(id);
+    this.requireFirstParty(await this.findByIdAdmin(id));
     await this.prisma.offer.update({
       where: { id },
       data: { status: dto.status },
@@ -59,7 +58,7 @@ export class OffersService {
   }
 
   async remove(id: string): Promise<void> {
-    await this.findByIdAdmin(id);
+    this.requireFirstParty(await this.findByIdAdmin(id));
     await this.prisma.offer.delete({ where: { id } });
   }
 
@@ -67,7 +66,7 @@ export class OffersService {
     offerId: string,
     dto: CreatePriceDto,
   ): Promise<OfferWithPrices> {
-    await this.findByIdAdmin(offerId);
+    this.requireFirstParty(await this.findByIdAdmin(offerId));
 
     if (dto.endsAt && dto.startsAt && dto.endsAt <= dto.startsAt) {
       throw new BadRequestException('endsAt must be after startsAt');
@@ -84,5 +83,12 @@ export class OffersService {
     });
 
     return this.findByIdAdmin(offerId);
+  }
+
+  private requireFirstParty(offer: Offer): void {
+    if (offer.sellerId)
+      throw new BadRequestException(
+        'Seller offers must use the seller workflow; admin can suspend the seller account',
+      );
   }
 }

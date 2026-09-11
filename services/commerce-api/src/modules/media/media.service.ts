@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -70,6 +71,14 @@ export class MediaService {
     const asset = await this.ownedAsset(ownerUserId, id);
     this.verify('upload', id, expires, signature);
     if (
+      asset.status !== MediaStatus.PENDING_UPLOAD ||
+      asset.verificationLocked
+    ) {
+      throw new ConflictException(
+        'Upload a new asset to replace existing content',
+      );
+    }
+    if (
       !file ||
       file.mimetype !== asset.mimeType ||
       BigInt(file.size) !== asset.byteSize
@@ -78,10 +87,18 @@ export class MediaService {
         'Uploaded file does not match its reservation',
       );
     }
-    await this.storage.put(asset.storageKey, file.buffer, file.mimetype);
-    await this.prisma.mediaAsset.update({
-      where: { id },
-      data: { status: MediaStatus.AVAILABLE },
+    await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.mediaAsset.updateMany({
+        where: {
+          id,
+          status: MediaStatus.PENDING_UPLOAD,
+          verificationLocked: false,
+        },
+        data: { status: MediaStatus.AVAILABLE },
+      });
+      if (claimed.count !== 1)
+        throw new ConflictException('Upload is already completed');
+      await this.storage.put(asset.storageKey, file.buffer, file.mimetype);
     });
   }
 
@@ -109,11 +126,15 @@ export class MediaService {
 
   async delete(ownerUserId: string, id: string): Promise<void> {
     const asset = await this.ownedAsset(ownerUserId, id);
-    await this.storage.delete(asset.storageKey);
-    await this.prisma.mediaAsset.update({
-      where: { id },
+    const updated = await this.prisma.mediaAsset.updateMany({
+      where: { id, verificationLocked: false },
       data: { status: MediaStatus.DELETED, deletedAt: new Date() },
     });
+    if (updated.count !== 1)
+      throw new ConflictException(
+        'Verification documents are retained for review',
+      );
+    await this.storage.delete(asset.storageKey);
   }
 
   private async ownedAsset(

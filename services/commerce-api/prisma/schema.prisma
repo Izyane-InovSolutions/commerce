@@ -29,6 +29,66 @@ enum Role {
   ADMIN
 }
 
+enum SellerStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum OfferCondition {
+  NEW
+  USED
+  REFURBISHED
+}
+
+enum OfferStockSource {
+  PLATFORM
+  SELLER
+}
+
+enum OfferFulfillmentMode {
+  PLATFORM
+  SELLER
+}
+
+model Seller {
+  id                 String           @id @default(uuid()) @db.Uuid
+  ownerUserId        String           @unique @map("owner_user_id") @db.Uuid
+  ownerUser          User             @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  businessName       String           @map("business_name")
+  registrationNumber String           @map("registration_number")
+  country            String           @db.VarChar(2)
+  businessAddress    String           @map("business_address")
+  contactEmail       String           @map("contact_email")
+  status             SellerStatus     @default(PENDING)
+  reviewReason       String?          @map("review_reason")
+  reviewedBy         String?          @map("reviewed_by") @db.Uuid
+  reviewedAt         DateTime?        @map("reviewed_at")
+  version            Int              @default(0)
+  documents          SellerDocument[]
+  storefrontSlug     String?          @unique @map("storefront_slug") @db.VarChar(100)
+  displayName        String?          @map("display_name") @db.VarChar(120)
+  description        String?          @db.VarChar(2000)
+  offers             Offer[]
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@map("sellers")
+}
+
+model SellerDocument {
+  sellerId     String     @map("seller_id") @db.Uuid
+  seller       Seller     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  mediaAssetId String     @map("media_asset_id") @db.Uuid
+  mediaAsset   MediaAsset @relation(fields: [mediaAssetId], references: [id], onDelete: Restrict)
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@id([sellerId, mediaAssetId])
+  @@map("seller_documents")
+}
+
 enum BackgroundJobStatus {
   PENDING
   RUNNING
@@ -72,6 +132,7 @@ model User {
   cart                Cart?
   wishlistItems       WishlistItem[]
   orders              Order[]
+  seller              Seller?
 
   @@map("users")
 }
@@ -199,18 +260,20 @@ model OutboxEvent {
 }
 
 model MediaAsset {
-  id               String         @id @default(uuid()) @db.Uuid
-  ownerUserId      String         @map("owner_user_id") @db.Uuid
-  ownerUser        User           @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
-  storageKey       String         @unique @map("storage_key")
-  originalFileName String         @map("original_file_name")
-  mimeType         String         @map("mime_type") @db.VarChar(100)
-  byteSize         BigInt         @map("byte_size")
-  status           MediaStatus    @default(PENDING_UPLOAD)
-  createdAt        DateTime       @default(now()) @map("created_at")
-  updatedAt        DateTime       @updatedAt @map("updated_at")
-  deletedAt        DateTime?      @map("deleted_at")
-  productMedia     ProductMedia[]
+  id                 String           @id @default(uuid()) @db.Uuid
+  ownerUserId        String           @map("owner_user_id") @db.Uuid
+  ownerUser          User             @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  storageKey         String           @unique @map("storage_key")
+  originalFileName   String           @map("original_file_name")
+  mimeType           String           @map("mime_type") @db.VarChar(100)
+  byteSize           BigInt           @map("byte_size")
+  status             MediaStatus      @default(PENDING_UPLOAD)
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+  deletedAt          DateTime?        @map("deleted_at")
+  productMedia       ProductMedia[]
+  sellerDocuments    SellerDocument[]
+  verificationLocked Boolean          @default(false) @map("verification_locked")
 
   @@index([ownerUserId, status])
   @@map("media_assets")
@@ -330,22 +393,28 @@ model ProductMedia {
   @@map("product_media")
 }
 
-// sellerId has no foreign key yet: Seller doesn't exist until Phase 3. Null
-// means first-party — the platform's own inventory is represented as an
-// offer too, so retail and marketplace purchases share one model.
+// Null sellerId means first-party. Seller offers reference an approved merchant.
 model Offer {
-  id            String         @id @default(uuid()) @db.Uuid
-  variantId     String         @map("variant_id") @db.Uuid
-  variant       ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
-  sellerId      String?        @map("seller_id") @db.Uuid
-  status        ProductStatus  @default(DRAFT)
-  prices        Price[]
-  cartItems     CartItem[]
-  wishlistItems WishlistItem[]
-  orderItems    OrderItem[]
-  createdAt     DateTime       @default(now()) @map("created_at")
-  updatedAt     DateTime       @updatedAt @map("updated_at")
+  id              String               @id @default(uuid()) @db.Uuid
+  variantId       String               @map("variant_id") @db.Uuid
+  variant         ProductVariant       @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  sellerId        String?              @map("seller_id") @db.Uuid
+  seller          Seller?              @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  sellerSku       String?              @map("seller_sku") @db.VarChar(100)
+  listingTitle    String?              @map("listing_title") @db.VarChar(200)
+  condition       OfferCondition       @default(NEW)
+  stockSource     OfferStockSource     @default(PLATFORM) @map("stock_source")
+  fulfillmentMode OfferFulfillmentMode @default(PLATFORM) @map("fulfillment_mode")
+  version         Int                  @default(0)
+  status          ProductStatus        @default(DRAFT)
+  prices          Price[]
+  cartItems       CartItem[]
+  wishlistItems   WishlistItem[]
+  orderItems      OrderItem[]
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
 
+  @@unique([sellerId, sellerSku])
   @@index([variantId])
   @@index([sellerId])
   @@map("offers")
