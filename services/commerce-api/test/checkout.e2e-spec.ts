@@ -254,4 +254,83 @@ describe('Checkout (e2e)', () => {
       .send({ shippingAddressId: addressId })
       .expect(409);
   });
+
+  it('splits a checkout spanning a first-party offer and a seller offer into per-seller SellerOrders', async () => {
+    // Seeded directly via the fake Prisma instance rather than through
+    // seller-auth HTTP endpoints - Cart/Orders only ever read
+    // offer.sellerId/stockSource/seller?.status off the offer they already
+    // load, so no full seller/marketplace-offers fake is needed here.
+    const prisma = app.get(PrismaService);
+    await prisma.seller.create({
+      data: { id: 'seller-approved-1', status: 'APPROVED' },
+    });
+    const sellerOffer = (await prisma.offer.create({
+      data: {
+        variantId,
+        sellerId: 'seller-approved-1',
+        stockSource: 'SELLER',
+        status: 'PUBLISHED',
+      },
+    })) as { id: string };
+    await prisma.price.create({
+      data: { offerId: sellerOffer.id, amount: 3000, currency: 'USD' },
+    });
+
+    const userHeaders = await registerCustomer(
+      'multi-seller-buyer@example.com',
+    );
+    const addressId = await createAddress(userHeaders);
+
+    await request(server())
+      .post('/api/v1/cart/items')
+      .set(userHeaders)
+      .send({ offerId, quantity: 1 })
+      .expect(201);
+    await request(server())
+      .post('/api/v1/cart/items')
+      .set(userHeaders)
+      .send({ offerId: sellerOffer.id, quantity: 1 })
+      .expect(201);
+
+    const checkoutResponse = await request(server())
+      .post('/api/v1/checkout')
+      .set(userHeaders)
+      .send({ shippingAddressId: addressId })
+      .expect(201);
+    const checkoutBody = checkoutResponse.body as Body<{
+      order: {
+        id: string;
+        sellerOrders: { sellerId: string | null; status: string }[];
+      };
+      payment: { providerReference: string };
+    }>;
+    expect(checkoutBody.data.order.sellerOrders).toHaveLength(2);
+    expect(
+      checkoutBody.data.order.sellerOrders
+        .map((group) => group.sellerId)
+        .sort(),
+    ).toEqual([null, 'seller-approved-1'].sort());
+
+    paymentProvider.queueEvent(
+      checkoutBody.data.payment.providerReference,
+      'SUCCEEDED',
+    );
+    await request(server())
+      .post('/api/v1/payments/webhook')
+      .set('x-webhook-signature', 'fake-signature')
+      .send({ providerReference: checkoutBody.data.payment.providerReference })
+      .expect(200);
+
+    const orderAfterWebhook = (
+      await request(server())
+        .get(`/api/v1/orders/${checkoutBody.data.order.id}`)
+        .set(userHeaders)
+        .expect(200)
+    ).body as Body<{ sellerOrders: { status: string }[] }>;
+    expect(
+      orderAfterWebhook.data.sellerOrders.every(
+        (group) => group.status === 'PAID',
+      ),
+    ).toBe(true);
+  });
 });

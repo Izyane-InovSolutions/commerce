@@ -15,6 +15,7 @@ import {
   paginatedResult,
 } from '../../common/pagination/paginated-result';
 import { parseSort } from '../../common/pagination/sort.dto';
+import { MediaService } from '../media/media.service';
 import { PrismaService } from '../../database/prisma.service';
 import { pickCurrentPrice } from '../../common/catalog/current-price';
 import { AttachMediaDto } from './dto/attach-media.dto';
@@ -50,7 +51,7 @@ const PRODUCT_DETAIL_INCLUDE = {
 
 @Injectable()
 export class ProductsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly media:MediaService) {}
 
   async findPublished(
     query: ProductQueryDto,
@@ -286,34 +287,11 @@ export class ProductsService {
   ): Promise<ProductWithRelations> {
     await this.findByIdAdmin(productId);
 
-    const mediaAsset = await this.prisma.mediaAsset.findUnique({
-      where: { id: dto.mediaAssetId },
-    });
-
-    if (
-      !mediaAsset ||
-      mediaAsset.status !== 'AVAILABLE' ||
-      mediaAsset.verificationLocked
-    ) {
-      throw new BadRequestException(
-        'Media asset does not exist or is not available',
-      );
-    }
+    await this.media.requireProductAsset(dto.mediaAssetId);
 
     try {
       await this.prisma.$transaction(async (tx) => {
-        const eligible = await tx.mediaAsset.updateMany({
-          where: {
-            id: dto.mediaAssetId,
-            status: 'AVAILABLE',
-            verificationLocked: false,
-          },
-          data: { updatedAt: new Date() },
-        });
-        if (eligible.count !== 1)
-          throw new BadRequestException(
-            'Media is unavailable or reserved for verification',
-          );
+        await this.media.lockForProductAttachment(dto.mediaAssetId,tx);
         if (dto.isPrimary) {
           await tx.productMedia.updateMany({
             where: { productId },

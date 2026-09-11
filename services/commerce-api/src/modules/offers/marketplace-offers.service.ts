@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, ProductStatus, SellerStatus } from '@prisma/client';
 import type { Offer, Price, Seller } from '@prisma/client';
+import { ProductReferencesService } from '../products/product-references.service';
 import { PrismaService } from '../../database/prisma.service';
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
 import { pickCurrentPrice } from '../../common/catalog/current-price';
@@ -53,6 +54,7 @@ export class MarketplaceOffersService {
     private readonly prisma: PrismaService,
     private readonly sellers: SellersService,
     private readonly storefronts: StorefrontsService,
+    private readonly products:ProductReferencesService,
   ) {}
 
   async create(
@@ -61,7 +63,7 @@ export class MarketplaceOffersService {
   ): Promise<SellerOffer> {
     return this.write(async (tx) => {
       const seller = await this.sellers.lockApproved(userId, tx);
-      await this.publishedVariant(tx, dto.variantId);
+      await this.products.requirePublishedVariant(dto.variantId, tx);
       const offer = await tx.offer.create({
         data: { ...dto, sellerSku: dto.sellerSku.trim(), sellerId: seller.id },
         include: withPrices,
@@ -178,7 +180,7 @@ export class MarketplaceOffersService {
     variantId: string,
     query: PaginationQueryDto,
   ): Promise<OfferPage<ComparableOffer>> {
-    await this.publishedVariant(this.prisma, variantId);
+    await this.products.requirePublishedVariant(variantId);
     return this.publicPage({ variantId }, query);
   }
 
@@ -278,25 +280,10 @@ export class MarketplaceOffersService {
       throw new BadRequestException(
         'Seller SKU and listing title are required',
       );
-    await this.publishedVariant(tx, offer.variantId);
+    await this.products.requirePublishedVariant(offer.variantId, tx);
     const price = pickCurrentPrice(offer.prices);
     if (!price || price.amount <= 0)
       throw new BadRequestException('A current positive price is required');
-  }
-
-  private async publishedVariant(
-    tx: Prisma.TransactionClient,
-    id: string,
-  ): Promise<void> {
-    const variant = await tx.productVariant.findFirst({
-      where: {
-        id,
-        status: ProductStatus.PUBLISHED,
-        product: { status: ProductStatus.PUBLISHED },
-      },
-      select: { id: true },
-    });
-    if (!variant) throw new NotFoundException('Published variant not found');
   }
 
   private async owned(

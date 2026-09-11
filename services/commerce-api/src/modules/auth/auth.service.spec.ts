@@ -36,6 +36,7 @@ describe('AuthService', () => {
       findMany: jest.Mock;
     };
     passwordResetToken: {
+      updateMany: jest.Mock;
       create: jest.Mock;
       findUnique: jest.Mock;
       update: jest.Mock;
@@ -65,6 +66,7 @@ describe('AuthService', () => {
         findMany: jest.fn(),
       },
       passwordResetToken: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         create: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
@@ -394,6 +396,23 @@ describe('AuthService', () => {
       ).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
+    it('rejects a reset token consumed by a concurrent request', async () => {
+      prisma.passwordResetToken.findUnique.mockResolvedValue({
+        id: 'reset-1',
+        userId: 'user-1',
+        usedAt: null,
+        expiresAt: new Date(Date.now() + 60000),
+      });
+      prisma.passwordResetToken.updateMany.mockResolvedValue({ count: 0 });
+      prisma.$transaction.mockImplementation(
+        (fn: (tx: typeof prisma) => unknown) => fn(prisma),
+      );
+      await expect(
+        authService.confirmPasswordReset('valid-token', 'new-password'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(usersService.updatePasswordHash).not.toHaveBeenCalled();
+    });
+
     it('updates the password, marks the token used, and revokes all sessions', async () => {
       prisma.passwordResetToken.findUnique.mockResolvedValue({
         id: 'reset-1',
@@ -401,7 +420,9 @@ describe('AuthService', () => {
         usedAt: null,
         expiresAt: new Date(Date.now() + 1000),
       });
-      prisma.$transaction.mockResolvedValue(undefined);
+      prisma.$transaction.mockImplementation(
+        (fn: (tx: typeof prisma) => unknown) => fn(prisma),
+      );
 
       await authService.confirmPasswordReset('valid-token', 'new-password');
 

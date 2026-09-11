@@ -5,8 +5,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { MediaStatus, Prisma, Role, SellerStatus } from '@prisma/client';
+import { Prisma, Role, SellerStatus } from '@prisma/client';
 import type { Seller } from '@prisma/client';
+import { ProductReferencesService } from '../products/product-references.service';
+import { UsersService } from '../users/users.service';
 import { PrismaService } from '../../database/prisma.service';
 import { MediaService } from '../media/media.service';
 import type { SignedMediaUrl } from '../media/media.service';
@@ -30,6 +32,8 @@ export class SellersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly media: MediaService,
+    private readonly products:ProductReferencesService,
+    private readonly users:UsersService,
   ) {}
 
   async apply(
@@ -230,10 +234,7 @@ export class SellersService {
           'Application changed; reload before reviewing',
         );
       if (status === SellerStatus.APPROVED)
-        await tx.user.updateMany({
-          where: { id: seller.ownerUserId, role: Role.CUSTOMER },
-          data: { role: Role.SELLER },
-        });
+        await this.users.promoteCustomerToSeller(seller.ownerUserId,tx);
       await this.audit(tx, actorId, id, `seller.${status.toLowerCase()}`, {
         from: seller.status,
         to: status,
@@ -274,26 +275,8 @@ export class SellersService {
     userId: string,
     ids: string[],
   ): Promise<void> {
-    if (!ids.length)
-      throw new BadRequestException(
-        'At least one business verification document is required',
-      );
-    const locked = await tx.mediaAsset.updateMany({
-      where: {
-        id: { in: ids },
-        ownerUserId: userId,
-        status: MediaStatus.AVAILABLE,
-        deletedAt: null,
-      },
-      data: { verificationLocked: true },
-    });
-    if (locked.count !== ids.length)
-      throw new BadRequestException(
-        'Documents must be available uploads owned by the applicant',
-      );
-    const published = await tx.productMedia.count({
-      where: { mediaAssetId: { in: ids } },
-    });
+    await this.media.lockVerificationDocuments(userId,ids,tx);
+    const published=await this.products.hasMediaAssignments(ids,tx);
     if (published)
       throw new BadRequestException(
         'Product media cannot be used as private verification documents',
@@ -304,10 +287,7 @@ export class SellersService {
     tx: Prisma.TransactionClient,
     id: string,
   ): Promise<void> {
-    const user = await tx.user.findUnique({
-      where: { id },
-      select: { isActive: true },
-    });
+    const user = await this.users.findAccessById(id,tx);
     if (!user?.isActive)
       throw new ForbiddenException('Active account required');
   }
@@ -316,10 +296,7 @@ export class SellersService {
     id: string,
     tx: Prisma.TransactionClient = this.prisma,
   ): Promise<void> {
-    const user = await tx.user.findUnique({
-      where: { id },
-      select: { role: true, isActive: true },
-    });
+    const user = await this.users.findAccessById(id,tx);
     if (!user?.isActive || user.role !== Role.ADMIN)
       throw new ForbiddenException('Administrator access required');
   }

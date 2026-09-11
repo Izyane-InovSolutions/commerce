@@ -2351,6 +2351,445 @@
         }
       }
     },
+    "AdminFinancialsController_balance": {
+      "operationId": "AdminFinancialsController_balance",
+      "tags": [
+        "admin"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/SellerBalanceView"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: ADMIN."
+    },
+    "AdminFinancialsController_ledger": {
+      "operationId": "AdminFinancialsController_ledger",
+      "tags": [
+        "admin"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "page",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "default": 1
+          }
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/LedgerPage"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: ADMIN."
+    },
+    "AdminFinancialsController_recordPayout": {
+      "operationId": "AdminFinancialsController_recordPayout",
+      "tags": [
+        "admin"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/__type8"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputRecordPayoutDto"
+            }
+          }
+        }
+      }
+    },
+    "AdminFinancialsController_listPayouts": {
+      "operationId": "AdminFinancialsController_listPayouts",
+      "tags": [
+        "admin"
+      ],
+      "parameters": [
+        {
+          "name": "page",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "default": 1
+          }
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/LedgerPage2"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: ADMIN."
+    },
+    "SellerFinancialsController_balance": {
+      "operationId": "SellerFinancialsController_balance",
+      "tags": [
+        "sellers/me"
+      ],
+      "parameters": [],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/SellerBalanceView"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      }
+    },
+    "SellerFinancialsController_ledger": {
+      "operationId": "SellerFinancialsController_ledger",
+      "tags": [
+        "sellers/me"
+      ],
+      "parameters": [
+        {
+          "name": "page",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "default": 1
+          }
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/LedgerPage"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      }
+    },
     "HealthController_getHealth": {
       "operationId": "HealthController_getHealth",
       "tags": [
@@ -2692,7 +3131,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type7"
+                      "$ref": "#/components/schemas/__type9"
                     }
                   },
                   "meta": {
@@ -2760,7 +3199,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type8"
+                      "$ref": "#/components/schemas/__type10"
                     }
                   },
                   "meta": {
@@ -2818,7 +3257,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type9"
+                      "$ref": "#/components/schemas/__type11"
                     }
                   },
                   "meta": {
@@ -2884,7 +3323,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type9"
+                    "$ref": "#/components/schemas/__type11"
                   },
                   "meta": {
                     "type": "object",
@@ -2939,7 +3378,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type9"
+                    "$ref": "#/components/schemas/__type11"
                   },
                   "meta": {
                     "type": "object",
@@ -3014,7 +3453,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type9"
+                    "$ref": "#/components/schemas/__type11"
                   },
                   "meta": {
                     "type": "object",
@@ -4496,6 +4935,296 @@
           }
         }
       }
+    },
+    "SellerOrdersController_list": {
+      "operationId": "SellerOrdersController_list",
+      "tags": [
+        "sellers/me/orders"
+      ],
+      "parameters": [
+        {
+          "name": "page",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "default": 1
+          }
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/SellerOrderPage"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      }
+    },
+    "SellerOrdersController_findOne": {
+      "operationId": "SellerOrdersController_findOne",
+      "tags": [
+        "sellers/me/orders"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/SellerOrderWithItems"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      }
+    },
+    "AdminRefundsController_refund": {
+      "operationId": "AdminRefundsController_refund",
+      "tags": [
+        "admin"
+      ],
+      "parameters": [
+        {
+          "name": "sellerOrderId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "idempotency-key",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/__type14"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputRefundPaymentDto"
+            }
+          }
+        }
+      }
+    },
+    "AdminRefundsController_reconcile": {
+      "operationId": "AdminRefundsController_reconcile",
+      "tags": [
+        "admin"
+      ],
+      "parameters": [
+        {
+          "name": "refundId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/__type14"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: ADMIN."
     },
     "GatewayPaymentsController_get": {
       "operationId": "GatewayPaymentsController_get",
@@ -6095,7 +6824,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type17"
+                    "$ref": "#/components/schemas/__type20"
                   },
                   "meta": {
                     "type": "object",
@@ -6755,7 +7484,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/Object3"
+                    "$ref": "#/components/schemas/Object4"
                   },
                   "meta": {
                     "type": "object",
@@ -6821,7 +7550,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type19"
+                      "$ref": "#/components/schemas/__type22"
                     }
                   },
                   "meta": {
@@ -6886,7 +7615,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type19"
+                    "$ref": "#/components/schemas/__type22"
                   },
                   "meta": {
                     "type": "object",
@@ -6940,7 +7669,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type19"
+                    "$ref": "#/components/schemas/__type22"
                   },
                   "meta": {
                     "type": "object",
@@ -7014,7 +7743,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type19"
+                    "$ref": "#/components/schemas/__type22"
                   },
                   "meta": {
                     "type": "object",
@@ -7125,7 +7854,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type19"
+                    "$ref": "#/components/schemas/__type22"
                   },
                   "meta": {
                     "type": "object",
@@ -7711,6 +8440,10 @@
         "offerId": {
           "type": "string"
         },
+        "sellerId": {
+          "type": "string",
+          "nullable": true
+        },
         "quantity": {
           "type": "number"
         },
@@ -7733,6 +8466,7 @@
       "required": [
         "id",
         "offerId",
+        "sellerId",
         "quantity",
         "unitPrice",
         "lineTotal",
@@ -8305,7 +9039,9 @@
           "enum": [
             "PENDING_PAYMENT",
             "PAID",
-            "CANCELLED"
+            "CANCELLED",
+            "PARTIALLY_REFUNDED",
+            "REFUNDED"
           ]
         },
         "currency": {
@@ -8326,6 +9062,12 @@
           "items": {
             "$ref": "#/components/schemas/__type6"
           }
+        },
+        "sellerOrders": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Object"
+          }
         }
       },
       "required": [
@@ -8338,7 +9080,8 @@
         "subtotal",
         "total",
         "shippingAddress",
-        "items"
+        "items",
+        "sellerOrders"
       ]
     },
     "__type6": {
@@ -8391,6 +9134,70 @@
         "reservationId"
       ]
     },
+    "Object": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PENDING_PAYMENT",
+            "PAID",
+            "CANCELLED",
+            "PARTIALLY_REFUNDED",
+            "REFUNDED"
+          ]
+        },
+        "currency": {
+          "type": "string"
+        },
+        "subtotal": {
+          "type": "number"
+        },
+        "total": {
+          "type": "number"
+        },
+        "orderId": {
+          "type": "string"
+        },
+        "sellerId": {
+          "type": "string",
+          "nullable": true
+        },
+        "refundedAmount": {
+          "type": "number"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/__type6"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "updatedAt",
+        "status",
+        "currency",
+        "subtotal",
+        "total",
+        "orderId",
+        "sellerId",
+        "refundedAmount",
+        "items"
+      ]
+    },
     "PaymentWithRedirect": {
       "type": "object",
       "properties": {
@@ -8409,6 +9216,8 @@
           "type": "string",
           "enum": [
             "CANCELLED",
+            "PARTIALLY_REFUNDED",
+            "REFUNDED",
             "PENDING",
             "REQUIRES_ACTION",
             "PROCESSING",
@@ -8421,6 +9230,9 @@
         },
         "orderId": {
           "type": "string"
+        },
+        "refundedAmount": {
+          "type": "number"
         },
         "provider": {
           "type": "string"
@@ -8456,11 +9268,222 @@
         "status",
         "currency",
         "orderId",
+        "refundedAmount",
         "provider",
         "providerReference",
         "amount",
         "idempotencyKey",
         "failureReason"
+      ]
+    },
+    "SellerBalanceView": {
+      "type": "object",
+      "properties": {
+        "sellerId": {
+          "type": "string"
+        },
+        "balance": {
+          "type": "number"
+        },
+        "currency": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sellerId",
+        "balance",
+        "currency"
+      ]
+    },
+    "InputPaginationQueryDto": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1,
+          "default": 1
+        },
+        "limit": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        }
+      },
+      "additionalProperties": false
+    },
+    "LedgerPage": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/__type7"
+          }
+        },
+        "total": {
+          "type": "number"
+        },
+        "page": {
+          "type": "number"
+        },
+        "limit": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "items",
+        "total",
+        "page",
+        "limit"
+      ]
+    },
+    "__type7": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "description": {
+          "type": "string",
+          "nullable": true
+        },
+        "currency": {
+          "type": "string"
+        },
+        "sellerId": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "SALE",
+            "REFUND",
+            "PAYOUT"
+          ]
+        },
+        "referenceType": {
+          "type": "string"
+        },
+        "referenceId": {
+          "type": "string"
+        },
+        "grossAmount": {
+          "type": "number"
+        },
+        "commissionAmount": {
+          "type": "number"
+        },
+        "netAmount": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "description",
+        "currency",
+        "sellerId",
+        "type",
+        "referenceType",
+        "referenceId",
+        "grossAmount",
+        "commissionAmount",
+        "netAmount"
+      ]
+    },
+    "InputRecordPayoutDto": {
+      "type": "object",
+      "properties": {
+        "amount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "reference": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 200
+        },
+        "note": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 500
+        }
+      },
+      "required": [
+        "amount"
+      ],
+      "additionalProperties": false
+    },
+    "__type8": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "sellerId": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "number"
+        },
+        "reference": {
+          "type": "string",
+          "nullable": true
+        },
+        "note": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "currency",
+        "sellerId",
+        "amount",
+        "reference",
+        "note"
+      ]
+    },
+    "LedgerPage2": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/__type8"
+          }
+        },
+        "total": {
+          "type": "number"
+        },
+        "page": {
+          "type": "number"
+        },
+        "limit": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "items",
+        "total",
+        "page",
+        "limit"
       ]
     },
     "HealthResponse": {
@@ -8507,10 +9530,10 @@
       "type": "object",
       "properties": {},
       "additionalProperties": {
-        "$ref": "#/components/schemas/Object"
+        "$ref": "#/components/schemas/Object2"
       }
     },
-    "Object": {
+    "Object2": {
       "type": "object",
       "properties": {
         "status": {
@@ -8530,7 +9553,7 @@
       "type": "object",
       "properties": {},
       "additionalProperties": {
-        "$ref": "#/components/schemas/Object"
+        "$ref": "#/components/schemas/Object2"
       }
     },
     "InventoryRecordView": {
@@ -8632,7 +9655,7 @@
       ],
       "additionalProperties": false
     },
-    "__type7": {
+    "__type9": {
       "type": "object",
       "properties": {
         "id": {
@@ -8645,9 +9668,6 @@
         "quantity": {
           "type": "number"
         },
-        "inventoryRecordId": {
-          "type": "string"
-        },
         "type": {
           "type": "string",
           "enum": [
@@ -8655,7 +9675,8 @@
             "ADJUSTMENT",
             "RESERVATION",
             "RELEASE",
-            "COMMITMENT"
+            "COMMITMENT",
+            "RETURN"
           ]
         },
         "referenceType": {
@@ -8669,20 +9690,23 @@
         "note": {
           "type": "string",
           "nullable": true
+        },
+        "inventoryRecordId": {
+          "type": "string"
         }
       },
       "required": [
         "id",
         "createdAt",
         "quantity",
-        "inventoryRecordId",
         "type",
         "referenceType",
         "referenceId",
-        "note"
+        "note",
+        "inventoryRecordId"
       ]
     },
-    "__type8": {
+    "__type10": {
       "type": "object",
       "properties": {
         "id": {
@@ -8736,7 +9760,7 @@
         "expiresAt"
       ]
     },
-    "__type9": {
+    "__type11": {
       "type": "object",
       "properties": {
         "name": {
@@ -8947,12 +9971,12 @@
             "ARCHIVED"
           ]
         },
-        "variantId": {
-          "type": "string"
-        },
         "sellerId": {
           "type": "string",
           "nullable": true
+        },
+        "variantId": {
+          "type": "string"
         },
         "sellerSku": {
           "type": "string",
@@ -8990,7 +10014,7 @@
         "prices": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type10"
+            "$ref": "#/components/schemas/__type12"
           }
         }
       },
@@ -8999,8 +10023,8 @@
         "createdAt",
         "updatedAt",
         "status",
-        "variantId",
         "sellerId",
+        "variantId",
         "sellerSku",
         "listingTitle",
         "condition",
@@ -9010,7 +10034,7 @@
         "prices"
       ]
     },
-    "__type10": {
+    "__type12": {
       "type": "object",
       "properties": {
         "id": {
@@ -9108,25 +10132,6 @@
       ],
       "additionalProperties": false
     },
-    "InputPaginationQueryDto": {
-      "type": "object",
-      "properties": {
-        "page": {
-          "type": "integer",
-          "nullable": true,
-          "minimum": 1,
-          "default": 1
-        },
-        "limit": {
-          "type": "integer",
-          "nullable": true,
-          "minimum": 1,
-          "maximum": 100,
-          "default": 20
-        }
-      },
-      "additionalProperties": false
-    },
     "OfferPage": {
       "type": "object",
       "properties": {
@@ -9201,7 +10206,7 @@
           ]
         },
         "currentPrice": {
-          "$ref": "#/components/schemas/__type11"
+          "$ref": "#/components/schemas/__type13"
         },
         "checkoutSupported": {
           "type": "boolean"
@@ -9246,7 +10251,7 @@
         "description"
       ]
     },
-    "__type11": {
+    "__type13": {
       "type": "object",
       "properties": {
         "amount": {
@@ -9309,12 +10314,12 @@
             "ARCHIVED"
           ]
         },
-        "variantId": {
-          "type": "string"
-        },
         "sellerId": {
           "type": "string",
           "nullable": true
+        },
+        "variantId": {
+          "type": "string"
         },
         "sellerSku": {
           "type": "string",
@@ -9352,7 +10357,7 @@
         "prices": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type10"
+            "$ref": "#/components/schemas/__type12"
           }
         }
       },
@@ -9361,8 +10366,8 @@
         "createdAt",
         "updatedAt",
         "status",
-        "variantId",
         "sellerId",
+        "variantId",
         "sellerSku",
         "listingTitle",
         "condition",
@@ -9522,6 +10527,183 @@
       ],
       "additionalProperties": false
     },
+    "SellerOrderPage": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/SellerOrderWithItems"
+          }
+        },
+        "total": {
+          "type": "number"
+        },
+        "page": {
+          "type": "number"
+        },
+        "limit": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "items",
+        "total",
+        "page",
+        "limit"
+      ]
+    },
+    "SellerOrderWithItems": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PENDING_PAYMENT",
+            "PAID",
+            "CANCELLED",
+            "PARTIALLY_REFUNDED",
+            "REFUNDED"
+          ]
+        },
+        "currency": {
+          "type": "string"
+        },
+        "subtotal": {
+          "type": "number"
+        },
+        "total": {
+          "type": "number"
+        },
+        "orderId": {
+          "type": "string"
+        },
+        "sellerId": {
+          "type": "string",
+          "nullable": true
+        },
+        "refundedAmount": {
+          "type": "number"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/__type6"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "updatedAt",
+        "status",
+        "currency",
+        "subtotal",
+        "total",
+        "orderId",
+        "sellerId",
+        "refundedAmount",
+        "items"
+      ]
+    },
+    "InputRefundPaymentDto": {
+      "type": "object",
+      "properties": {
+        "amount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 500,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "amount",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "__type14": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "CANCELLED",
+            "PENDING",
+            "PROCESSING",
+            "SUCCEEDED",
+            "FAILED"
+          ]
+        },
+        "currency": {
+          "type": "string"
+        },
+        "sellerOrderId": {
+          "type": "string"
+        },
+        "providerReference": {
+          "type": "string",
+          "nullable": true
+        },
+        "amount": {
+          "type": "number"
+        },
+        "idempotencyKey": {
+          "type": "string"
+        },
+        "failureReason": {
+          "type": "string",
+          "nullable": true
+        },
+        "paymentId": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "updatedAt",
+        "status",
+        "currency",
+        "sellerOrderId",
+        "providerReference",
+        "amount",
+        "idempotencyKey",
+        "failureReason",
+        "paymentId",
+        "reason"
+      ]
+    },
     "PaymentSnapshot": {
       "type": "object",
       "properties": {
@@ -9535,6 +10717,8 @@
           "type": "string",
           "enum": [
             "CANCELLED",
+            "PARTIALLY_REFUNDED",
+            "REFUNDED",
             "PENDING",
             "REQUIRES_ACTION",
             "PROCESSING",
@@ -9674,27 +10858,6 @@
         "first",
         "last"
       ]
-    },
-    "InputRefundPaymentDto": {
-      "type": "object",
-      "properties": {
-        "amount": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 2147483647
-        },
-        "reason": {
-          "type": "string",
-          "minLength": 3,
-          "maxLength": 500,
-          "pattern": "\\S"
-        }
-      },
-      "required": [
-        "amount",
-        "reason"
-      ],
-      "additionalProperties": false
     },
     "ProductWithRelations": {
       "type": "object",
@@ -9850,7 +11013,7 @@
           "type": "string"
         },
         "attributeValue": {
-          "$ref": "#/components/schemas/Object2"
+          "$ref": "#/components/schemas/Object3"
         }
       },
       "required": [
@@ -9859,7 +11022,7 @@
         "attributeValue"
       ]
     },
-    "Object2": {
+    "Object3": {
       "type": "object",
       "properties": {
         "id": {
@@ -9909,12 +11072,12 @@
             "ARCHIVED"
           ]
         },
-        "variantId": {
-          "type": "string"
-        },
         "sellerId": {
           "type": "string",
           "nullable": true
+        },
+        "variantId": {
+          "type": "string"
         },
         "sellerSku": {
           "type": "string",
@@ -9952,7 +11115,7 @@
         "prices": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type10"
+            "$ref": "#/components/schemas/__type12"
           }
         }
       },
@@ -9961,8 +11124,8 @@
         "createdAt",
         "updatedAt",
         "status",
-        "variantId",
         "sellerId",
+        "variantId",
         "sellerSku",
         "listingTitle",
         "condition",
@@ -9995,7 +11158,7 @@
           "type": "boolean"
         },
         "mediaAsset": {
-          "$ref": "#/components/schemas/__type12"
+          "$ref": "#/components/schemas/__type15"
         }
       },
       "required": [
@@ -10008,7 +11171,7 @@
         "mediaAsset"
       ]
     },
-    "__type12": {
+    "__type15": {
       "type": "object",
       "properties": {
         "id": {
@@ -10284,7 +11447,7 @@
           }
         },
         "meta": {
-          "$ref": "#/components/schemas/__type16"
+          "$ref": "#/components/schemas/__type19"
         }
       },
       "required": [
@@ -10337,7 +11500,7 @@
         "media": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type13"
+            "$ref": "#/components/schemas/__type16"
           }
         },
         "variants": {
@@ -10359,7 +11522,7 @@
         "variants"
       ]
     },
-    "__type13": {
+    "__type16": {
       "type": "object",
       "properties": {
         "id": {
@@ -10406,7 +11569,7 @@
         "attributes": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type14"
+            "$ref": "#/components/schemas/__type17"
           }
         },
         "offers": {
@@ -10425,7 +11588,7 @@
         "offers"
       ]
     },
-    "__type14": {
+    "__type17": {
       "type": "object",
       "properties": {
         "attributeId": {
@@ -10466,7 +11629,7 @@
           "type": "object",
           "allOf": [
             {
-              "$ref": "#/components/schemas/__type15"
+              "$ref": "#/components/schemas/__type18"
             }
           ],
           "nullable": true
@@ -10478,7 +11641,7 @@
         "currentPrice"
       ]
     },
-    "__type15": {
+    "__type18": {
       "type": "object",
       "properties": {
         "amount": {
@@ -10493,7 +11656,7 @@
         "currency"
       ]
     },
-    "__type16": {
+    "__type19": {
       "type": "object",
       "properties": {
         "page": {
@@ -10541,7 +11704,7 @@
       },
       "additionalProperties": false
     },
-    "__type17": {
+    "__type20": {
       "type": "object",
       "properties": {
         "items": {
@@ -10673,7 +11836,7 @@
         "documents": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type18"
+            "$ref": "#/components/schemas/__type21"
           }
         }
       },
@@ -10698,7 +11861,7 @@
         "documents"
       ]
     },
-    "__type18": {
+    "__type21": {
       "type": "object",
       "properties": {
         "mediaAssetId": {
@@ -10817,7 +11980,7 @@
       ],
       "additionalProperties": false
     },
-    "Object3": {
+    "Object4": {
       "type": "object",
       "properties": {
         "id": {
@@ -10847,7 +12010,7 @@
         "version"
       ]
     },
-    "__type19": {
+    "__type22": {
       "type": "object",
       "properties": {
         "id": {
@@ -11087,7 +12250,7 @@
           "type": "object",
           "allOf": [
             {
-              "$ref": "#/components/schemas/__type20"
+              "$ref": "#/components/schemas/__type23"
             }
           ],
           "nullable": true
@@ -11103,7 +12266,7 @@
         "isAvailable"
       ]
     },
-    "__type20": {
+    "__type23": {
       "type": "object",
       "properties": {
         "amount": {
