@@ -248,8 +248,13 @@ export class UnifiedPaymentProvider implements PaymentProvider {
     } catch {
       throw new ServiceUnavailableException('Invalid gateway base URL');
     }
+    const allowsHttp = ['development', 'test'].includes(
+      this.config.get<string>('NODE_ENV', 'production'),
+    );
+
     if (
-      url.protocol !== 'https:' ||
+      (url.protocol !== 'https:' &&
+        !(allowsHttp && url.protocol === 'http:')) ||
       url.username ||
       url.password ||
       url.search ||
@@ -257,7 +262,9 @@ export class UnifiedPaymentProvider implements PaymentProvider {
       (url.pathname !== '/' && url.pathname !== '')
     )
       throw new ServiceUnavailableException(
-        'Gateway base URL must be an HTTPS origin',
+        allowsHttp
+          ? 'Gateway base URL must be an HTTP or HTTPS origin'
+          : 'Gateway base URL must be an HTTPS origin',
       );
     return { base: url.origin, key };
   }

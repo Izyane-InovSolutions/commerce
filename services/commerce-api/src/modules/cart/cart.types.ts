@@ -6,6 +6,7 @@ export type CartIdentity = {
 export type CartLineView = {
   id: string;
   offerId: string;
+  sellerId: string | null;
   quantity: number;
   unitPrice: { amount: number; currency: string } | null;
   lineTotal: number;

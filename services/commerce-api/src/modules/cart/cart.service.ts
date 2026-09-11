@@ -51,13 +51,17 @@ export class CartService {
 
     const offer = await this.prisma.offer.findUnique({
       where: { id: offerId },
+      include: { seller: true },
     });
 
     if (!offer || offer.status !== ProductStatus.PUBLISHED) {
       throw new BadRequestException('This offer is not available');
     }
-    if (offer.sellerId)
-      throw new BadRequestException('Seller checkout is not available yet');
+    if (offer.sellerId && offer.seller?.status !== SellerStatus.APPROVED) {
+      throw new BadRequestException(
+        'This seller is not currently accepting orders',
+      );
+    }
 
     const { cart, newGuestToken } = await this.getOrCreateCart(identity);
 
@@ -223,7 +227,11 @@ export class CartService {
   private async buildView(cartId: string): Promise<CartView> {
     const cart = await this.prisma.cart.findUnique({
       where: { id: cartId },
-      include: { items: { include: { offer: { include: { prices: true } } } } },
+      include: {
+        items: {
+          include: { offer: { include: { prices: true, seller: true } } },
+        },
+      },
     });
 
     if (!cart) {
@@ -233,20 +241,29 @@ export class CartService {
     const lines: CartLineView[] = await Promise.all(
       cart.items.map(async (item) => {
         const currentPrice = pickCurrentPrice(item.offer.prices);
-        const availableQuantity = item.offer.sellerId
-          ? 0
+        // SELLER-stockSource offers have no backing inventory model yet
+        // (that's #33's job) - treat them as always available rather than
+        // checking platform InventoryRecord, which they never use.
+        const isSellerStock =
+          item.offer.stockSource === OfferStockSource.SELLER;
+        const availableQuantity = isSellerStock
+          ? item.quantity
           : await this.inventoryService.getAvailableQuantity(
               item.offer.variantId,
             );
+        const sellerApproved =
+          !item.offer.sellerId ||
+          item.offer.seller?.status === SellerStatus.APPROVED;
         const isAvailable =
-          !item.offer.sellerId &&
+          sellerApproved &&
           item.offer.status === ProductStatus.PUBLISHED &&
           !!currentPrice &&
-          availableQuantity >= item.quantity;
+          (isSellerStock || availableQuantity >= item.quantity);
 
         return {
           id: item.id,
           offerId: item.offerId,
+          sellerId: item.offer.sellerId,
           quantity: item.quantity,
           unitPrice: currentPrice
             ? { amount: currentPrice.amount, currency: currentPrice.currency }

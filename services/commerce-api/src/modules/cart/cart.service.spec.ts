@@ -1,5 +1,10 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { CartStatus, ProductStatus } from '@prisma/client';
+import {
+  CartStatus,
+  OfferStockSource,
+  ProductStatus,
+  SellerStatus,
+} from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { InventoryService } from '../inventory/inventory.service';
@@ -82,16 +87,38 @@ describe('CartService', () => {
   });
 
   describe('addItem', () => {
-    it('does not allow seller offers to consume retail inventory', async () => {
+    it('allows adding a SELLER-stockSource offer from an approved seller', async () => {
       prisma.offer.findUnique.mockResolvedValue(
-        buildOffer({ sellerId: 'seller-1' }),
+        buildOffer({
+          sellerId: 'seller-1',
+          stockSource: OfferStockSource.SELLER,
+          seller: { id: 'seller-1', status: SellerStatus.APPROVED },
+        }),
       );
-      await expect(service.addItem({}, 'offer-1', 1)).rejects.toThrow(
-        'Seller checkout is not available yet',
+      prisma.cart.findFirst.mockResolvedValue({ id: 'cart-1' });
+      prisma.cart.findUnique.mockResolvedValue({ id: 'cart-1', items: [] });
+
+      await expect(
+        service.addItem({ userId: 'user-1' }, 'offer-1', 1),
+      ).resolves.toBeDefined();
+
+      expect(prisma.cartItem.upsert).toHaveBeenCalled();
+    });
+
+    it('rejects adding an offer from a suspended seller', async () => {
+      prisma.offer.findUnique.mockResolvedValue(
+        buildOffer({
+          sellerId: 'seller-1',
+          seller: { id: 'seller-1', status: SellerStatus.SUSPENDED },
+        }),
+      );
+
+      await expect(service.addItem({}, 'offer-1', 1)).rejects.toBeInstanceOf(
+        BadRequestException,
       );
       expect(prisma.cartItem.upsert).not.toHaveBeenCalled();
-      expect(inventoryService.getAvailableQuantity).not.toHaveBeenCalled();
     });
+
     it('rejects a non-positive quantity', async () => {
       await expect(service.addItem({}, 'offer-1', 0)).rejects.toBeInstanceOf(
         BadRequestException,
@@ -251,6 +278,56 @@ describe('CartService', () => {
 
       expect(view.subtotal).toBe(2000);
       expect(view.currency).toBe('USD');
+    });
+
+    it('marks a SELLER-stockSource line available without checking platform inventory', async () => {
+      prisma.cart.findFirst.mockResolvedValue({ id: 'cart-1' });
+      prisma.cart.findUnique.mockResolvedValue({
+        id: 'cart-1',
+        items: [
+          {
+            id: 'item-1',
+            offerId: 'offer-1',
+            quantity: 2,
+            offer: buildOffer({
+              sellerId: 'seller-1',
+              stockSource: OfferStockSource.SELLER,
+              seller: { id: 'seller-1', status: SellerStatus.APPROVED },
+            }),
+          },
+        ],
+      });
+
+      const view = await service.getCartView({ userId: 'user-1' });
+
+      expect(view.items[0]).toMatchObject({
+        isAvailable: true,
+        sellerId: 'seller-1',
+      });
+      expect(inventoryService.getAvailableQuantity).not.toHaveBeenCalled();
+    });
+
+    it('marks a line from a now-suspended seller unavailable', async () => {
+      prisma.cart.findFirst.mockResolvedValue({ id: 'cart-1' });
+      prisma.cart.findUnique.mockResolvedValue({
+        id: 'cart-1',
+        items: [
+          {
+            id: 'item-1',
+            offerId: 'offer-1',
+            quantity: 1,
+            offer: buildOffer({
+              sellerId: 'seller-1',
+              stockSource: OfferStockSource.SELLER,
+              seller: { id: 'seller-1', status: SellerStatus.SUSPENDED },
+            }),
+          },
+        ],
+      });
+
+      const view = await service.getCartView({ userId: 'user-1' });
+
+      expect(view.items[0]).toMatchObject({ isAvailable: false });
     });
   });
 

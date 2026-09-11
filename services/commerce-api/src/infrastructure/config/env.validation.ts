@@ -71,7 +71,11 @@ class EnvironmentVariables {
   @ValidateIf(
     (env: EnvironmentVariables) => env.PAYMENTS_PROVIDER === 'unified',
   )
-  @IsUrl({ protocols: ['https'], require_protocol: true, require_tld: false })
+  @IsUrl({
+    protocols: ['http', 'https'],
+    require_protocol: true,
+    require_tld: false,
+  })
   UNIFIED_PAYMENTS_BASE_URL?: string;
 
   @ValidateIf(

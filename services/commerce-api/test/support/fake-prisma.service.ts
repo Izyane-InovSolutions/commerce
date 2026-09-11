@@ -843,6 +843,34 @@ export class FakePrismaService {
     },
   };
 
+  // --- Sellers (marketplace) -----------------------------------------------
+  // Minimal: just enough for Cart/Orders to read offer.seller?.status when an
+  // offer has a sellerId. Not a full sellers-module fake.
+  private readonly sellers = new Map<string, Record<string, unknown>>();
+
+  private attachSeller(
+    offer: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const sellerId = offer.sellerId as string | undefined;
+    return {
+      ...offer,
+      seller: sellerId ? (this.sellers.get(sellerId) ?? null) : null,
+    };
+  }
+
+  seller = {
+    create: ({
+      data,
+    }: {
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const now = new Date();
+      const row = { id: randomUUID(), createdAt: now, updatedAt: now, ...data };
+      this.sellers.set(row.id as string, row);
+      return Promise.resolve(row);
+    },
+  };
+
   offer = {
     findUnique: ({
       where,
@@ -851,12 +879,14 @@ export class FakePrismaService {
     }): Promise<Record<string, unknown> | null> => {
       const row = this.offers.get(where.id);
       if (!row) return Promise.resolve(null);
-      return Promise.resolve({
-        ...row,
-        prices: [...this.prices.values()].filter(
-          (price) => price.offerId === row.id,
-        ),
-      });
+      return Promise.resolve(
+        this.attachSeller({
+          ...row,
+          prices: [...this.prices.values()].filter(
+            (price) => price.offerId === row.id,
+          ),
+        }),
+      );
     },
     findMany: ({
       where,
@@ -866,7 +896,7 @@ export class FakePrismaService {
       let rows = [...this.offers.values()];
       if (where?.id?.in)
         rows = rows.filter((row) => where.id!.in.includes(row.id as string));
-      return Promise.resolve(rows);
+      return Promise.resolve(rows.map((row) => this.attachSeller(row)));
     },
     create: ({
       data,
@@ -877,6 +907,11 @@ export class FakePrismaService {
       const row = {
         id: randomUUID(),
         status: ProductStatus.DRAFT,
+        // Mirrors the schema's @default(PLATFORM)/@default(NEW) - offers
+        // created without an explicit sellerId are first-party.
+        condition: 'NEW',
+        stockSource: 'PLATFORM',
+        fulfillmentMode: 'PLATFORM',
         createdAt: now,
         updatedAt: now,
         ...data,
@@ -1357,12 +1392,12 @@ export class FakePrismaService {
   ): Record<string, unknown> | undefined {
     const offer = this.offers.get(offerId);
     if (!offer) return undefined;
-    return {
+    return this.attachSeller({
       ...offer,
       prices: [...this.prices.values()].filter(
         (price) => price.offerId === offerId,
       ),
-    };
+    });
   }
 
   private cartDetail(id: string): Record<string, unknown> | undefined {
@@ -1568,6 +1603,7 @@ export class FakePrismaService {
   // --- Orders / payments (Phase 1.5) ---------------------------------------
   private readonly orders = new Map<string, Record<string, unknown>>();
   private readonly orderItems = new Map<string, Record<string, unknown>>();
+  private readonly sellerOrders = new Map<string, Record<string, unknown>>();
   private readonly payments = new Map<string, Record<string, unknown>>();
   private readonly paymentEvents = new Map<string, Record<string, unknown>>();
 
@@ -1577,7 +1613,15 @@ export class FakePrismaService {
     const items = [...this.orderItems.values()].filter(
       (item) => item.orderId === id,
     );
-    return { ...order, items };
+    const sellerOrders = [...this.sellerOrders.values()]
+      .filter((sellerOrder) => sellerOrder.orderId === id)
+      .map((sellerOrder) => ({
+        ...sellerOrder,
+        items: [...this.orderItems.values()].filter(
+          (item) => item.sellerOrderId === sellerOrder.id,
+        ),
+      }));
+    return { ...order, items, sellerOrders };
   }
 
   order = {
@@ -1641,6 +1685,55 @@ export class FakePrismaService {
       const row = this.orders.get(where.id)!;
       Object.assign(row, data, { updatedAt: new Date() });
       return Promise.resolve(row);
+    },
+  };
+
+  sellerOrder = {
+    create: ({
+      data,
+    }: {
+      data: Record<string, unknown> & {
+        items?: { create: Record<string, unknown>[] };
+      };
+    }): Promise<Record<string, unknown>> => {
+      const now = new Date();
+      const { items, ...sellerOrderData } = data;
+      const row = {
+        id: randomUUID(),
+        createdAt: now,
+        updatedAt: now,
+        ...sellerOrderData,
+      };
+      this.sellerOrders.set(row.id as string, row);
+
+      for (const itemData of items?.create ?? []) {
+        const itemRow = {
+          id: randomUUID(),
+          sellerOrderId: row.id,
+          reservationId: null,
+          createdAt: now,
+          ...itemData,
+        };
+        this.orderItems.set(itemRow.id as string, itemRow);
+      }
+
+      return Promise.resolve(row);
+    },
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: { orderId: string };
+      data: Record<string, unknown>;
+    }): Promise<{ count: number }> => {
+      let count = 0;
+      for (const row of this.sellerOrders.values()) {
+        if (row.orderId === where.orderId) {
+          Object.assign(row, data, { updatedAt: new Date() });
+          count += 1;
+        }
+      }
+      return Promise.resolve({ count });
     },
   };
 

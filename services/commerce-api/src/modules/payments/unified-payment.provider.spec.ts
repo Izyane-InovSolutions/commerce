@@ -103,7 +103,7 @@ describe('UnifiedPaymentProvider', () => {
       currency: 'USD',
       details: { paymentMethod: 'CARD', card },
     });
-    expect(fetchMock.mock.calls[0][1]?.body).toBe(
+    expect(fetchMock.mock.calls[0]?.[1]?.body).toBe(
       JSON.stringify({
         amount: 123.45,
         currency: 'USD',
@@ -131,6 +131,9 @@ describe('UnifiedPaymentProvider', () => {
   it('requires a configured HTTPS origin before sending credentials', async () => {
     const insecure = new UnifiedPaymentProvider(
       new ConfigService({
+        // Pinned explicitly: Jest's ambient NODE_ENV is 'test', which the
+        // provider treats as dev-like and would otherwise let http:// pass.
+        NODE_ENV: 'production',
         PAYMENTS_PROVIDER: 'unified',
         UNIFIED_PAYMENTS_BASE_URL: 'http://gateway.example',
         UNIFIED_PAYMENTS_API_KEY: 'test-only',

@@ -4497,6 +4497,148 @@
         }
       }
     },
+    "SellerOrdersController_list": {
+      "operationId": "SellerOrdersController_list",
+      "tags": [
+        "sellers/me/orders"
+      ],
+      "parameters": [
+        {
+          "name": "page",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "default": 1
+          }
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/SellerOrderPage"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      }
+    },
+    "SellerOrdersController_findOne": {
+      "operationId": "SellerOrdersController_findOne",
+      "tags": [
+        "sellers/me/orders"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/SellerOrderWithItems"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      }
+    },
     "GatewayPaymentsController_get": {
       "operationId": "GatewayPaymentsController_get",
       "tags": [
@@ -6755,7 +6897,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/Object3"
+                    "$ref": "#/components/schemas/Object4"
                   },
                   "meta": {
                     "type": "object",
@@ -7711,6 +7853,10 @@
         "offerId": {
           "type": "string"
         },
+        "sellerId": {
+          "type": "string",
+          "nullable": true
+        },
         "quantity": {
           "type": "number"
         },
@@ -7733,6 +7879,7 @@
       "required": [
         "id",
         "offerId",
+        "sellerId",
         "quantity",
         "unitPrice",
         "lineTotal",
@@ -8326,6 +8473,12 @@
           "items": {
             "$ref": "#/components/schemas/__type6"
           }
+        },
+        "sellerOrders": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Object"
+          }
         }
       },
       "required": [
@@ -8338,7 +8491,8 @@
         "subtotal",
         "total",
         "shippingAddress",
-        "items"
+        "items",
+        "sellerOrders"
       ]
     },
     "__type6": {
@@ -8389,6 +8543,64 @@
         "unitAmount",
         "lineTotal",
         "reservationId"
+      ]
+    },
+    "Object": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PENDING_PAYMENT",
+            "PAID",
+            "CANCELLED"
+          ]
+        },
+        "currency": {
+          "type": "string"
+        },
+        "subtotal": {
+          "type": "number"
+        },
+        "total": {
+          "type": "number"
+        },
+        "orderId": {
+          "type": "string"
+        },
+        "sellerId": {
+          "type": "string",
+          "nullable": true
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/__type6"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "updatedAt",
+        "status",
+        "currency",
+        "subtotal",
+        "total",
+        "orderId",
+        "sellerId",
+        "items"
       ]
     },
     "PaymentWithRedirect": {
@@ -8507,10 +8719,10 @@
       "type": "object",
       "properties": {},
       "additionalProperties": {
-        "$ref": "#/components/schemas/Object"
+        "$ref": "#/components/schemas/Object2"
       }
     },
-    "Object": {
+    "Object2": {
       "type": "object",
       "properties": {
         "status": {
@@ -8530,7 +8742,7 @@
       "type": "object",
       "properties": {},
       "additionalProperties": {
-        "$ref": "#/components/schemas/Object"
+        "$ref": "#/components/schemas/Object2"
       }
     },
     "InventoryRecordView": {
@@ -8947,12 +9159,12 @@
             "ARCHIVED"
           ]
         },
-        "variantId": {
-          "type": "string"
-        },
         "sellerId": {
           "type": "string",
           "nullable": true
+        },
+        "variantId": {
+          "type": "string"
         },
         "sellerSku": {
           "type": "string",
@@ -8999,8 +9211,8 @@
         "createdAt",
         "updatedAt",
         "status",
-        "variantId",
         "sellerId",
+        "variantId",
         "sellerSku",
         "listingTitle",
         "condition",
@@ -9309,12 +9521,12 @@
             "ARCHIVED"
           ]
         },
-        "variantId": {
-          "type": "string"
-        },
         "sellerId": {
           "type": "string",
           "nullable": true
+        },
+        "variantId": {
+          "type": "string"
         },
         "sellerSku": {
           "type": "string",
@@ -9361,8 +9573,8 @@
         "createdAt",
         "updatedAt",
         "status",
-        "variantId",
         "sellerId",
+        "variantId",
         "sellerSku",
         "listingTitle",
         "condition",
@@ -9521,6 +9733,90 @@
         "currency"
       ],
       "additionalProperties": false
+    },
+    "SellerOrderPage": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/SellerOrderWithItems"
+          }
+        },
+        "total": {
+          "type": "number"
+        },
+        "page": {
+          "type": "number"
+        },
+        "limit": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "items",
+        "total",
+        "page",
+        "limit"
+      ]
+    },
+    "SellerOrderWithItems": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PENDING_PAYMENT",
+            "PAID",
+            "CANCELLED"
+          ]
+        },
+        "currency": {
+          "type": "string"
+        },
+        "subtotal": {
+          "type": "number"
+        },
+        "total": {
+          "type": "number"
+        },
+        "orderId": {
+          "type": "string"
+        },
+        "sellerId": {
+          "type": "string",
+          "nullable": true
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/__type6"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "updatedAt",
+        "status",
+        "currency",
+        "subtotal",
+        "total",
+        "orderId",
+        "sellerId",
+        "items"
+      ]
     },
     "PaymentSnapshot": {
       "type": "object",
@@ -9850,7 +10146,7 @@
           "type": "string"
         },
         "attributeValue": {
-          "$ref": "#/components/schemas/Object2"
+          "$ref": "#/components/schemas/Object3"
         }
       },
       "required": [
@@ -9859,7 +10155,7 @@
         "attributeValue"
       ]
     },
-    "Object2": {
+    "Object3": {
       "type": "object",
       "properties": {
         "id": {
@@ -9909,12 +10205,12 @@
             "ARCHIVED"
           ]
         },
-        "variantId": {
-          "type": "string"
-        },
         "sellerId": {
           "type": "string",
           "nullable": true
+        },
+        "variantId": {
+          "type": "string"
         },
         "sellerSku": {
           "type": "string",
@@ -9961,8 +10257,8 @@
         "createdAt",
         "updatedAt",
         "status",
-        "variantId",
         "sellerId",
+        "variantId",
         "sellerSku",
         "listingTitle",
         "condition",
@@ -10817,7 +11113,7 @@
       ],
       "additionalProperties": false
     },
-    "Object3": {
+    "Object4": {
       "type": "object",
       "properties": {
         "id": {
