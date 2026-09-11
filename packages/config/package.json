@@ -1,0 +1,31 @@
+{
+  "name": "@commerce/config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared build, lint, and test presets for the Next.js clients",
+  "exports": {
+    "./eslint": "./eslint/next.mjs",
+    "./postcss": "./postcss/next.mjs",
+    "./tsconfig/next.json": "./tsconfig/next.json",
+    "./vitest": {
+      "types": "./vitest/next.d.mts",
+      "default": "./vitest/next.mjs"
+    }
+  },
+  "scripts": {
+    "format": "prettier --write \"**/*.{mjs,mts,json}\"",
+    "format:check": "prettier --check \"**/*.{mjs,mts,json}\""
+  },
+  "dependencies": {
+    "@tailwindcss/postcss": "4.3.3",
+    "@testing-library/jest-dom": "7.0.1",
+    "@vitejs/plugin-react": "6.1.1",
+    "eslint-config-next": "16.3.4",
+    "eslint-config-prettier": "10.1.8",
+    "jsdom": "30.0.1"
+  },
+  "devDependencies": {
+    "prettier": "3.6.2"
+  }
+}
