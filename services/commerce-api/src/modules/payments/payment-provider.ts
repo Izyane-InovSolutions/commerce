@@ -1,10 +1,38 @@
 export const PAYMENT_PROVIDER = Symbol('PAYMENT_PROVIDER');
 
+export type PaymentMethod = 'MOBILE_MONEY' | 'CARD';
+export type MobileMoneyProvider = 'AIRTEL' | 'MTN';
+
+export type CardPaymentDetails = {
+  number: string;
+  expiryMonth: string;
+  expiryYear: string;
+  securityCode: string;
+  holderName: string;
+  billing: {
+    firstName: string;
+    lastName: string;
+    address1: string;
+    locality: string;
+    administrativeArea: string;
+    postalCode: string;
+    country: string;
+    email: string;
+  };
+};
+
 export type InitializePaymentInput = {
   paymentId: string;
   amount: number;
   currency: string;
   idempotencyKey: string;
+  paymentMethod: PaymentMethod;
+  reference: string;
+  description?: string;
+  metadata?: Record<string, unknown>;
+  phoneNumber?: string;
+  provider?: MobileMoneyProvider;
+  card?: CardPaymentDetails;
 };
 
 export type ProviderPaymentResult = {
