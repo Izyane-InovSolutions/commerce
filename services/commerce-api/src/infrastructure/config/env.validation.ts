@@ -3,6 +3,7 @@ import {
   IsEnum,
   IsInt,
   IsNotEmpty,
+  IsOptional,
   IsString,
   IsUrl,
   Max,
@@ -62,6 +63,22 @@ class EnvironmentVariables {
   @IsInt()
   @Min(60)
   MEDIA_URL_TTL_SECONDS = 900;
+
+  @IsUrl({ require_tld: false })
+  UNIFIED_PAYMENTS_API_URL = 'http://72.62.61.21:9002';
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  UNIFIED_PAYMENTS_API_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  UNIFIED_PAYMENTS_MERCHANT_ID?: string;
+
+  @IsOptional()
+  @IsUrl({ require_tld: false })
+  UNIFIED_PAYMENTS_CALLBACK_URL?: string;
 }
 
 export function validate(
