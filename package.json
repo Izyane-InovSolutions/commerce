@@ -15,6 +15,7 @@
     "test": "npm run test --workspaces --if-present",
     "test:e2e": "npm run test:e2e --workspaces --if-present",
     "api:dev": "npm run start:dev --workspace @commerce/commerce-api",
+    "mock:dev": "npm run serve --workspace @commerce/mock-api",
     "web:dev": "npm run dev --workspace @commerce/web",
     "admin:dev": "npm run dev --workspace @commerce/admin",
     "seller:dev": "npm run dev --workspace @commerce/seller"

@@ -10,12 +10,14 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 
-type ApiStatus = { reachable: true } | { reachable: false; detail: string };
+type ApiStatus =
+  | { reachable: true; mock: boolean }
+  | { reachable: false; detail: string };
 
 async function readApiStatus(): Promise<ApiStatus> {
   try {
-    await getHealth(apiClient);
-    return { reachable: true };
+    const health = await getHealth(apiClient);
+    return { reachable: true, mock: health.mock === true };
   } catch (error) {
     return {
       reachable: false,
@@ -25,8 +27,11 @@ async function readApiStatus(): Promise<ApiStatus> {
 }
 
 /**
- * Renders live connectivity to the Commerce API so a misconfigured
- * `NEXT_PUBLIC_API_BASE_URL` is obvious during local development.
+ * Renders live connectivity to the Commerce API.
+ *
+ * The mock and the real API share an address, so which one answered is read
+ * from the health response rather than guessed from the URL. That keeps
+ * fixture data from being mistaken for the real thing.
  */
 export async function ApiStatusCard() {
   const status = await readApiStatus();
@@ -34,18 +39,37 @@ export async function ApiStatusCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle className="flex flex-wrap items-center gap-2">
           Commerce API
           <Badge variant={status.reachable ? 'default' : 'destructive'}>
             {status.reachable ? 'Reachable' : 'Unreachable'}
           </Badge>
+          {status.reachable && status.mock ? (
+            <Badge variant="secondary">Mock data</Badge>
+          ) : null}
         </CardTitle>
         <CardDescription>
           <code className="font-mono">{apiClient.baseUrl}</code>
         </CardDescription>
       </CardHeader>
-      <CardContent className="text-muted-foreground text-sm">
-        {status.reachable ? 'The portal can reach GET /health.' : status.detail}
+      <CardContent className="text-muted-foreground space-y-1 text-sm">
+        {status.reachable ? (
+          status.mock ? (
+            <p>
+              Answered by the stand-in mock API, serving fixtures from{' '}
+              <code className="font-mono">@commerce/contracts</code>. Every
+              client shares this one dataset. Stop it and start the real API to
+              integrate — no configuration changes.
+            </p>
+          ) : (
+            <p>Answered by the Commerce API.</p>
+          )
+        ) : (
+          <p>
+            {status.detail} Start one with{' '}
+            <code className="font-mono">npm run mock:dev</code>.
+          </p>
+        )}
       </CardContent>
     </Card>
   );

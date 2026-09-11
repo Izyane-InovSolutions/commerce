@@ -1,6 +1,8 @@
+import type { User } from '@commerce/contracts';
 import {
   Boxes,
   ChartLine,
+  FolderTree,
   CreditCard,
   Landmark,
   LayoutDashboard,
@@ -12,6 +14,7 @@ import {
   ShieldCheck,
   ShoppingCart,
   Store,
+  Tag,
   Truck,
   type LucideIcon,
 } from 'lucide-react';
@@ -33,6 +36,16 @@ export const navigation: NavItem[] = [
     href: '/catalog',
     label: 'Catalog',
     icon: Package,
+  },
+  {
+    href: '/categories',
+    label: 'Categories',
+    icon: FolderTree,
+  },
+  {
+    href: '/brands',
+    label: 'Brands',
+    icon: Tag,
   },
   {
     href: '/sellers',
@@ -95,3 +108,13 @@ export const navigation: NavItem[] = [
     icon: ScrollText,
   },
 ];
+
+/**
+ * Navigation for a signed-in user.
+ *
+ * Admin sections are all one role, so this is a straight pass-through today;
+ * it exists so finer-grained roles have somewhere to land.
+ */
+export function navigationFor(user: User): NavItem[] {
+  return user.roles.includes('admin') ? navigation : [];
+}

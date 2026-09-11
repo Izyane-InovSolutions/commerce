@@ -1,94 +1,159 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 
-import { ApiStatusCard } from '@/components/api-status-card';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { getAdminInsights } from '@commerce/api-client';
 
-const sections = [
+import { ApiStatusCard } from '@/components/api-status-card';
+import { BuyabilityChart } from '@/components/charts/buyability-chart';
+import { ContributionChart } from '@/components/charts/contribution-chart';
+import { OfferDepthChart } from '@/components/charts/offer-depth-chart';
+import { PageHeader } from '@/components/page-header';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { apiClient } from '@/lib/api';
+import { requireAdmin } from '@/lib/session';
+
+const SECTIONS = [
   {
     href: '/catalog',
     label: 'Catalog',
-    description:
-      'Products, variants, categories, brands, and media. Products are owned by the platform, never by a seller.',
+    description: 'Products, variants, and the moderation queue.',
   },
+  {
+    href: '/categories',
+    label: 'Categories',
+    description: 'The shared category tree.',
+  },
+  { href: '/brands', label: 'Brands', description: 'The shared brand list.' },
   {
     href: '/sellers',
     label: 'Sellers',
-    description: 'Seller applications, verification, approval, and suspension.',
-  },
-  {
-    href: '/orders',
-    label: 'Orders',
-    description:
-      'Customer orders, the seller orders beneath them, and their fulfillment groups.',
-  },
-  {
-    href: '/payments',
-    label: 'Payments',
-    description:
-      'Payments, refunds, and reconciliation against the in-house gateway. Payment state is only ever trusted after server-side verification.',
+    description: 'Applications, approval, and suspension.',
   },
   {
     href: '/inventory',
     label: 'Inventory',
-    description:
-      'On-hand, reserved, available, damaged, and in-transit stock by location.',
+    description: 'Stock across platform and seller locations.',
   },
   {
-    href: '/fulfillment',
-    label: 'Fulfillment',
-    description: 'Shipments, carrier handoffs, 3PL integrations, and pickup.',
+    href: '/orders',
+    label: 'Orders',
+    description: 'Customer orders and their seller breakdown.',
   },
   {
-    href: '/promotions',
-    label: 'Promotions',
-    description: 'Campaigns, coupons, and curated collections.',
-  },
-  {
-    href: '/moderation',
-    label: 'Moderation',
-    description: 'Review moderation and reported content.',
-  },
-  {
-    href: '/support',
-    label: 'Support',
-    description:
-      'Customer and seller support cases, including returns and disputes.',
+    href: '/payments',
+    label: 'Payments',
+    description: 'Payments, refunds, and reconciliation.',
   },
   {
     href: '/finance',
     label: 'Finance',
-    description:
-      'Ledger entries, commissions, seller balances, and payouts. Balances are derived from auditable financial events.',
-  },
-  {
-    href: '/analytics',
-    label: 'Analytics',
-    description: 'Trading, catalog, and marketplace reporting.',
-  },
-  {
-    href: '/security',
-    label: 'Security',
-    description: 'Roles, permissions, and access controls.',
+    description: 'Ledger, commissions, balances, and payouts.',
   },
   {
     href: '/audit',
     label: 'Audit',
-    description: 'Audit events raised by privileged actions.',
+    description: 'Events raised by privileged actions.',
   },
 ];
 
-export default function OverviewPage() {
+/**
+ * What needs attention, and what the marketplace looks like.
+ *
+ * Every figure is derived from catalog, offer and stock state. Nothing is
+ * trend-shaped because there is no time dimension in the data yet — a
+ * sales-over-time chart here would be decoration, not information.
+ */
+async function AdminInsights() {
+  let insights;
+  try {
+    insights = await getAdminInsights(apiClient);
+  } catch {
+    // The status card below already reports an unreachable API.
+    return null;
+  }
+
+  const { queue, totals } = insights;
+  const waiting = [
+    {
+      href: '/sellers',
+      label: 'Applications waiting',
+      value: queue.applicationsPending,
+      urgent: queue.applicationsPending > 0,
+    },
+    {
+      href: '/catalog?status=pending',
+      label: 'Products waiting for review',
+      value: queue.productsPending,
+      urgent: queue.productsPending > 0,
+    },
+    {
+      href: '/sellers',
+      label: 'Active sellers',
+      value: totals.activeSellers,
+      urgent: false,
+    },
+    {
+      href: '/sellers?status=suspended',
+      label: 'Suspended sellers',
+      value: totals.suspendedSellers,
+      urgent: totals.suspendedSellers > 0,
+    },
+    {
+      href: '/catalog?status=active',
+      label: 'Products on sale',
+      value: totals.productsOnSale,
+      urgent: false,
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {waiting.map((item) => (
+          <Link
+            key={item.label}
+            href={item.href}
+            className="hover:border-foreground/25 rounded-xl border p-4 transition-colors"
+          >
+            <p
+              className={
+                item.urgent
+                  ? 'text-destructive text-2xl font-semibold'
+                  : 'text-2xl font-semibold'
+              }
+            >
+              {item.value}
+            </p>
+            <p className="text-muted-foreground mt-1 text-sm text-pretty">
+              {item.label}
+            </p>
+          </Link>
+        ))}
+      </div>
+
+      <BuyabilityChart buyability={insights.buyability} />
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <ContributionChart contribution={insights.contribution} />
+        <OfferDepthChart offerDepth={insights.offerDepth} />
+      </div>
+    </div>
+  );
+}
+
+export default async function OverviewPage() {
+  await requireAdmin();
+
   return (
     <div className="space-y-10">
-      <section className="space-y-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Admin portal</h1>
-        <p className="text-muted-foreground max-w-2xl text-pretty">
-          Administrative control over the catalog, sellers, orders, payments,
-          and finance. Authorization is enforced by the Commerce API; this
-          portal only decides what to show.
-        </p>
-      </section>
+      <PageHeader
+        title="Admin portal"
+        description="Administrative control over the catalog, sellers, orders, payments, and finance. Authorization is enforced by the Commerce API; this portal only decides what to show."
+      />
+
+      <Suspense fallback={null}>
+        <AdminInsights />
+      </Suspense>
 
       <Suspense fallback={null}>
         <ApiStatusCard />
@@ -97,10 +162,10 @@ export default function OverviewPage() {
       <section className="space-y-4">
         <h2 className="text-lg font-semibold tracking-tight">Sections</h2>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {sections.map((section) => (
+          {SECTIONS.map((section) => (
             <Card
               key={section.href}
-              className="relative hover:border-foreground/20"
+              className="hover:border-foreground/20 relative"
             >
               <CardHeader>
                 <CardTitle>

@@ -2,6 +2,11 @@ import type { ApiClient } from './client';
 
 export type HealthResponse = {
   status: 'ok';
+  /**
+   * Present and `true` only when the stand-in mock API answered. The real
+   * Commerce API omits it, so a client can tell which one it is talking to.
+   */
+  mock?: boolean;
 };
 
 /**

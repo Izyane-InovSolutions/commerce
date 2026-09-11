@@ -128,3 +128,65 @@
     @apply font-sans;
   }
 }
+
+/*
+ * Chart tokens.
+ *
+ * Taken from a validated palette rather than picked by eye: every value below
+ * was checked against this app's actual card surface (#ffffff light, #171717
+ * dark) for lightness band, chroma, contrast, and colourblind separation.
+ * Dark is a selected set of steps for the dark surface, not a flip of light.
+ *
+ * Roles, not hues — a chart is written against `--viz-diverging-neg`, so
+ * changing the brand means changing this block and nothing else.
+ */
+:root {
+  --viz-grid: #e1e0d9;
+  --viz-axis: #c3c2b7;
+  --viz-muted: #898781;
+
+  /* Magnitude, nominal categories: one hue for every bar. */
+  --viz-series-1: #2a78d6;
+
+  /* Delta to a target: warm/cool poles, neutral middle. */
+  --viz-diverging-pos: #2a78d6;
+  --viz-diverging-neg: #e34948;
+
+  /* Before/after on one row: one hue, two shades. */
+  --viz-pair-strong: #184f95;
+  --viz-pair-soft: #3987e5;
+
+  /* Ordered buckets: one hue, monotone lightness. */
+  --viz-ordinal-1: #86b6ef;
+  --viz-ordinal-2: #3987e5;
+  --viz-ordinal-3: #184f95;
+
+  /* Reserved state meanings. Always shipped with an icon and a label. */
+  --viz-good: #0ca30c;
+  --viz-warning: #fab219;
+  --viz-serious: #ec835a;
+  --viz-critical: #d03b3b;
+}
+
+.dark {
+  --viz-grid: #2c2c2a;
+  --viz-axis: #383835;
+  --viz-muted: #898781;
+
+  --viz-series-1: #3987e5;
+
+  --viz-diverging-pos: #3987e5;
+  --viz-diverging-neg: #e66767;
+
+  --viz-pair-strong: #9ec5f4;
+  --viz-pair-soft: #3987e5;
+
+  --viz-ordinal-1: #184f95;
+  --viz-ordinal-2: #3987e5;
+  --viz-ordinal-3: #9ec5f4;
+
+  --viz-good: #0ca30c;
+  --viz-warning: #fab219;
+  --viz-serious: #ec835a;
+  --viz-critical: #d03b3b;
+}

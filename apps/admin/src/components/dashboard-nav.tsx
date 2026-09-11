@@ -3,19 +3,21 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import { navigation } from '@/lib/navigation';
+import type { User } from '@commerce/contracts';
+
+import { navigationFor } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 
 /**
  * Section navigation. A section is active when the current path is the section
  * itself or one of its descendants, so a detail route keeps its parent lit.
  */
-export function DashboardNav() {
+export function DashboardNav({ user }: { user: User }) {
   const pathname = usePathname();
 
   return (
     <nav className="flex gap-1 overflow-x-auto md:flex-col md:overflow-visible">
-      {navigation.map(({ href, label, icon: Icon }) => {
+      {navigationFor(user).map(({ href, label, icon: Icon }) => {
         const isActive =
           href === '/' ? pathname === '/' : pathname.startsWith(href);
 
