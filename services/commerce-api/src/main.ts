@@ -1,11 +1,12 @@
 import { ValidationPipe, type ValidationError } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { SwaggerModule } from '@nestjs/swagger';
 import { json, urlencoded, type Request } from 'express';
 import helmet from 'helmet';
 
 import { AppModule } from './app.module';
 import { ValidationException } from './common/http/validation-exception';
+import { createApiDocument } from './common/openapi/create-api-document';
 import { AppLogger } from './infrastructure/logging/app-logger.service';
 
 const REQUEST_BODY_LIMIT = '1mb';
@@ -39,10 +40,7 @@ async function bootstrap(): Promise<void> {
   );
   app.enableShutdownHooks();
 
-  const document = SwaggerModule.createDocument(
-    app,
-    new DocumentBuilder().setTitle('Commerce API').setVersion('v1').build(),
-  );
+  const document = createApiDocument(app);
   SwaggerModule.setup('api/docs', app, document);
 
   const port = Number(process.env.PORT ?? 3000);

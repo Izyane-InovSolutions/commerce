@@ -23,10 +23,11 @@ export class WishlistService {
     return Promise.all(
       items.map(async (item) => {
         const currentPrice = pickCurrentPrice(item.offer.prices);
-        const availableQuantity =
-          await this.inventoryService.getAvailableQuantity(
-            item.offer.variantId,
-          );
+        const availableQuantity = item.offer.sellerId
+          ? 0
+          : await this.inventoryService.getAvailableQuantity(
+              item.offer.variantId,
+            );
 
         return {
           id: item.id,
@@ -35,6 +36,7 @@ export class WishlistService {
             ? { amount: currentPrice.amount, currency: currentPrice.currency }
             : null,
           isAvailable:
+            !item.offer.sellerId &&
             item.offer.status === ProductStatus.PUBLISHED &&
             !!currentPrice &&
             availableQuantity > 0,

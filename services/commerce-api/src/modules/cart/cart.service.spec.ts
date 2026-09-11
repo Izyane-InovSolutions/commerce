@@ -82,6 +82,16 @@ describe('CartService', () => {
   });
 
   describe('addItem', () => {
+    it('does not allow seller offers to consume retail inventory', async () => {
+      prisma.offer.findUnique.mockResolvedValue(
+        buildOffer({ sellerId: 'seller-1' }),
+      );
+      await expect(service.addItem({}, 'offer-1', 1)).rejects.toThrow(
+        'Seller checkout is not available yet',
+      );
+      expect(prisma.cartItem.upsert).not.toHaveBeenCalled();
+      expect(inventoryService.getAvailableQuantity).not.toHaveBeenCalled();
+    });
     it('rejects a non-positive quantity', async () => {
       await expect(service.addItem({}, 'offer-1', 0)).rejects.toBeInstanceOf(
         BadRequestException,

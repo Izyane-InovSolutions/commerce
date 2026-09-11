@@ -52,6 +52,10 @@ export class OrdersService {
     const offers = await this.prisma.offer.findMany({
       where: { id: { in: cart.items.map((item) => item.offerId) } },
     });
+    if (offers.some((offer) => offer.sellerId))
+      throw new ConflictException(
+        'Seller checkout requires seller inventory and order splitting',
+      );
     const variantIdByOfferId = new Map(
       offers.map((offer) => [offer.id, offer.variantId]),
     );

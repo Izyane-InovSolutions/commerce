@@ -32,6 +32,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { ProductsModule } from './modules/products/products.module';
 import { UsersModule } from './modules/users/users.module';
 import { WishlistModule } from './modules/wishlist/wishlist.module';
+import { SellersModule } from './modules/sellers/sellers.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { WishlistModule } from './modules/wishlist/wishlist.module';
     WishlistModule,
     OrdersModule,
     CheckoutModule,
+    SellersModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
