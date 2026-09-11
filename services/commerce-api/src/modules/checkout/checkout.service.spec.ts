@@ -46,4 +46,14 @@ describe('CheckoutService', () => {
     expect(ordersService.cancel).toHaveBeenCalledWith('order-1');
     expect(cartService.clearCart).not.toHaveBeenCalled();
   });
+
+  it('does not cancel an accepted payment when clearing the cart fails', async () => {
+    ordersService.createFromCart.mockResolvedValue({ id: 'order-1' });
+    paymentsService.initializeForOrder.mockResolvedValue({ id: 'payment-1' });
+    cartService.clearCart.mockRejectedValue(new Error('Database unavailable'));
+    await expect(service.checkout('user-1', 'addr-1')).rejects.toThrow(
+      'Database unavailable',
+    );
+    expect(ordersService.cancel).not.toHaveBeenCalled();
+  });
 });

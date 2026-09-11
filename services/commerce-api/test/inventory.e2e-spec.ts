@@ -14,6 +14,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { ValidationException } from '../src/common/http/validation-exception';
 import { PrismaService } from '../src/database/prisma.service';
+import { JobWorkerService } from '../src/infrastructure/jobs/job-worker.service';
 import { InventoryService } from '../src/modules/inventory/inventory.service';
 import { FakePrismaService } from './support/fake-prisma.service';
 
@@ -22,6 +23,7 @@ type Body<T> = { data: T };
 describe('Inventory (e2e)', () => {
   let app: INestApplication;
   let inventoryService: InventoryService;
+  let jobWorkerService: JobWorkerService;
   let adminToken: string;
 
   beforeAll(async () => {
@@ -46,6 +48,7 @@ describe('Inventory (e2e)', () => {
     await app.init();
 
     inventoryService = app.get(InventoryService);
+    jobWorkerService = app.get(JobWorkerService);
     const jwtService = app.get(JwtService);
     adminToken = await jwtService.signAsync({
       sub: 'admin-1',
@@ -157,6 +160,52 @@ describe('Inventory (e2e)', () => {
 
     await expect(inventoryService.reserve(variantId, 5)).rejects.toBeInstanceOf(
       ConflictException,
+    );
+  });
+
+  it('expires a reservation via the job worker once its TTL has passed, freeing the stock', async () => {
+    const variantId = randomUUID();
+    const warehouse = (
+      await request(server())
+        .post('/api/v1/admin/inventory/warehouses')
+        .set(asAdmin())
+        .send({ name: 'Expiry Warehouse', code: 'EXPIRE' })
+        .expect(201)
+    ).body as Body<{ id: string }>;
+
+    await request(server())
+      .post('/api/v1/admin/inventory/receive')
+      .set(asAdmin())
+      .send({ warehouseId: warehouse.data.id, variantId, quantity: 10 })
+      .expect(201);
+
+    const reservation = await inventoryService.reserve(variantId, 4, {
+      ttlSeconds: -1, // already expired, so the worker picks it up immediately
+    });
+
+    await jobWorkerService.poll();
+
+    const afterExpiry = (
+      await request(server())
+        .get('/api/v1/admin/inventory')
+        .set(asAdmin())
+        .query({ variantId })
+        .expect(200)
+    ).body as Body<{ onHand: number; reserved: number; available: number }[]>;
+    expect(afterExpiry.data[0]).toMatchObject({
+      onHand: 10,
+      reserved: 0,
+      available: 10,
+    });
+
+    const reservations = (
+      await request(server())
+        .get(`/api/v1/admin/inventory/${afterExpiry.data[0].id}/reservations`)
+        .set(asAdmin())
+        .expect(200)
+    ).body as Body<{ id: string; status: string }[]>;
+    expect(reservations.data.find((r) => r.id === reservation.id)?.status).toBe(
+      'EXPIRED',
     );
   });
 

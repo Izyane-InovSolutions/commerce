@@ -1,6 +1,21 @@
 import { redact } from './redact';
 
 describe('redact', () => {
+  it('removes payment credentials and card details from structured logs', () => {
+    expect(
+      redact({
+        headers: { 'X-API-Key': 'test-key' },
+        paymentDetails: {
+          card: { number: '4111111111111111', securityCode: '123' },
+        },
+        card: { securityCode: '123' },
+      }),
+    ).toEqual({
+      headers: { 'X-API-Key': '[REDACTED]' },
+      paymentDetails: '[REDACTED]',
+      card: '[REDACTED]',
+    });
+  });
   it('redacts known-sensitive keys at the top level', () => {
     expect(redact({ email: 'a@b.com', password: 'hunter2' })).toEqual({
       email: 'a@b.com',

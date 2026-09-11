@@ -71,6 +71,7 @@ model Seller {
   displayName        String?          @map("display_name") @db.VarChar(120)
   description        String?          @db.VarChar(2000)
   offers             Offer[]
+  orders             SellerOrder[]
   createdAt          DateTime         @default(now()) @map("created_at")
   updatedAt          DateTime         @updatedAt @map("updated_at")
 
@@ -586,41 +587,75 @@ enum PaymentStatus {
 // src/common/addresses/address-snapshot.ts), not a live FK to Address, so the
 // order survives the customer later editing or deleting that address.
 model Order {
-  id              String      @id @default(uuid()) @db.Uuid
-  userId          String      @map("user_id") @db.Uuid
-  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  status          OrderStatus @default(PENDING_PAYMENT)
-  currency        String      @db.VarChar(3)
+  id              String        @id @default(uuid()) @db.Uuid
+  userId          String        @map("user_id") @db.Uuid
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status          OrderStatus   @default(PENDING_PAYMENT)
+  currency        String        @db.VarChar(3)
   subtotal        Int
   total           Int
-  shippingAddress Json        @map("shipping_address")
+  shippingAddress Json          @map("shipping_address")
   items           OrderItem[]
+  sellerOrders    SellerOrder[]
   payment         Payment?
-  createdAt       DateTime    @default(now()) @map("created_at")
-  updatedAt       DateTime    @updatedAt @map("updated_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
 
   @@index([userId])
   @@map("orders")
+}
+
+// One row per seller group within an Order - sellerId: null is the
+// platform/first-party group, not "no seller". Every Order gets at least one
+// SellerOrder, even a purely first-party one, so consumers can always
+// iterate order.sellerOrders uniformly instead of branching on whether
+// splitting happened. Status moves in lockstep with the parent Order for now
+// (see OrdersService) - independent per-seller fulfillment/refund status is
+// a later ticket, and this shape is what makes that possible without another
+// migration.
+model SellerOrder {
+  id        String      @id @default(uuid()) @db.Uuid
+  orderId   String      @map("order_id") @db.Uuid
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sellerId  String?     @map("seller_id") @db.Uuid
+  seller    Seller?     @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  status    OrderStatus @default(PENDING_PAYMENT)
+  subtotal  Int
+  total     Int
+  currency  String      @db.VarChar(3)
+  items     OrderItem[]
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  @@index([sellerId, status])
+  @@map("seller_orders")
 }
 
 // reservationId has no FK - same loose-reference convention as
 // Reservation.holderId/InventoryMovement.referenceId. It's set once
 // InventoryService.reserve() succeeds for this line, so OrdersService can
 // later commit()/release() it by id without a new lookup on InventoryService.
+// sellerOrderId is nullable at the schema level only (pre-existing dev-DB
+// rows predate it) - application code always sets it going forward.
+// orderId is kept as a direct FK too, deliberately denormalized alongside
+// sellerOrderId, so every existing order.items query keeps working unchanged.
 model OrderItem {
-  id            String   @id @default(uuid()) @db.Uuid
-  orderId       String   @map("order_id") @db.Uuid
-  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  offerId       String   @map("offer_id") @db.Uuid
-  offer         Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  id            String       @id @default(uuid()) @db.Uuid
+  orderId       String       @map("order_id") @db.Uuid
+  order         Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sellerOrderId String?      @map("seller_order_id") @db.Uuid
+  sellerOrder   SellerOrder? @relation(fields: [sellerOrderId], references: [id], onDelete: Cascade)
+  offerId       String       @map("offer_id") @db.Uuid
+  offer         Offer        @relation(fields: [offerId], references: [id], onDelete: Cascade)
   quantity      Int
-  unitAmount    Int      @map("unit_amount")
-  currency      String   @db.VarChar(3)
-  lineTotal     Int      @map("line_total")
-  reservationId String?  @map("reservation_id")
-  createdAt     DateTime @default(now()) @map("created_at")
+  unitAmount    Int          @map("unit_amount")
+  currency      String       @db.VarChar(3)
+  lineTotal     Int          @map("line_total")
+  reservationId String?      @map("reservation_id")
+  createdAt     DateTime     @default(now()) @map("created_at")
 
   @@index([orderId])
+  @@index([sellerOrderId])
   @@map("order_items")
 }
 
