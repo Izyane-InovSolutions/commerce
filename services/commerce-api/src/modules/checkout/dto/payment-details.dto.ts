@@ -1,4 +1,6 @@
+import { Type } from 'class-transformer';
 import {
+  IsDefined,
   IsEmail,
   IsIn,
   IsOptional,
@@ -7,7 +9,6 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
 
 class CardBillingDto {
   @IsString()
@@ -51,6 +52,7 @@ export class CardPaymentDto {
   @IsString()
   holderName!: string;
 
+  @IsDefined()
   @ValidateNested()
   @Type(() => CardBillingDto)
   billing!: CardBillingDto;
@@ -61,18 +63,16 @@ export class PaymentDetailsDto {
   paymentMethod!: 'MOBILE_MONEY' | 'CARD';
 
   @ValidateIf((dto: PaymentDetailsDto) => dto.paymentMethod === 'MOBILE_MONEY')
+  @IsDefined()
   @IsString()
   phoneNumber?: string;
 
-  @ValidateIf(
-    (dto: PaymentDetailsDto) =>
-      dto.paymentMethod === 'MOBILE_MONEY' && dto.provider !== undefined,
-  )
   @IsOptional()
   @IsIn(['AIRTEL', 'MTN'])
   provider?: 'AIRTEL' | 'MTN';
 
   @ValidateIf((dto: PaymentDetailsDto) => dto.paymentMethod === 'CARD')
+  @IsDefined()
   @ValidateNested()
   @Type(() => CardPaymentDto)
   card?: CardPaymentDto;
