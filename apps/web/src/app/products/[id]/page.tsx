@@ -76,7 +76,10 @@ export default async function ProductDetailPage({
             {product.description}
           </p>
 
-          <ProductDetailActions productName={product.name} />
+          <ProductDetailActions
+            productId={product.id}
+            productName={product.name}
+          />
         </div>
       </div>
 

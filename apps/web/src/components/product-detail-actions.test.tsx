@@ -2,10 +2,15 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { ProductDetailActions } from './product-detail-actions';
+import { CartProvider } from '@/lib/cart-context';
 
 describe('ProductDetailActions', () => {
   it('links the checkout button to the checkout route', () => {
-    render(<ProductDetailActions productName="Test Product" />);
+    render(
+      <CartProvider>
+        <ProductDetailActions productId="p-1" productName="Test Product" />
+      </CartProvider>,
+    );
 
     expect(screen.getByRole('link', { name: 'Checkout' })).toHaveAttribute(
       'href',
@@ -13,8 +18,12 @@ describe('ProductDetailActions', () => {
     );
   });
 
-  it('confirms the add to cart action once clicked', () => {
-    render(<ProductDetailActions productName="Test Product" />);
+  it('adds the product to the cart and confirms once clicked', () => {
+    render(
+      <CartProvider>
+        <ProductDetailActions productId="p-1" productName="Test Product" />
+      </CartProvider>,
+    );
 
     expect(
       screen.queryByText('Test Product added to your cart.'),
