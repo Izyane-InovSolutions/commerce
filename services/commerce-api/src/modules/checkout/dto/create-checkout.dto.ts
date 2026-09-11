@@ -1,6 +1,8 @@
 import { IsUUID } from 'class-validator';
 
-export class CreateCheckoutDto {
+import { PaymentDetailsDto } from './payment-details.dto';
+
+export class CreateCheckoutDto extends PaymentDetailsDto {
   @IsUUID()
   shippingAddressId!: string;
 }
