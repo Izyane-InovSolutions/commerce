@@ -1,6 +1,7 @@
 {
-  "extends": ["../../tsconfig.base.json", "@commerce/config/tsconfig/next.json"],
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "module": "NodeNext",
     "paths": {
       "@/*": ["./src/*"]
     }

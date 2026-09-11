@@ -1,10 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import type { ComponentProps } from 'react';
 
 import { ProductCard } from '@/components/product-card';
-import { Button } from '@/components/ui/button';
-import type { ProductCategory } from '@/lib/mock-data/products';
+
+type ProductCategory = {
+  title: string;
+  products: ComponentProps<typeof ProductCard>['product'][];
+};
 
 const INITIAL_VISIBLE_COUNT = 4;
 
@@ -29,14 +33,14 @@ export function ProductCategorySection({
         ))}
       </div>
       {hasMore ? (
-        <Button
-          variant="outline"
-          size="sm"
+        <button
+          type="button"
+          className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-3 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
           aria-expanded={expanded}
           onClick={() => setExpanded((value) => !value)}
         >
           {expanded ? 'View less' : 'View more'}
-        </Button>
+        </button>
       ) : null}
     </section>
   );
