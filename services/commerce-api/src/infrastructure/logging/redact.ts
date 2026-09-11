@@ -8,6 +8,15 @@ const SENSITIVE_KEYS = new Set([
   'accesstoken',
   'authorization',
   'secret',
+  'card',
+  'securitycode',
+  'cvv',
+  'pan',
+  'phonenumber',
+  'paymentdetails',
+  'x-api-key',
+  'apikey',
+  'unified_payments_api_key',
 ]);
 
 const REDACTED = '[REDACTED]';

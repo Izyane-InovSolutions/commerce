@@ -1,3 +1,5 @@
+import type { PaymentDetailsDto } from './dto/payment-details.dto';
+
 export const PAYMENT_PROVIDER = Symbol('PAYMENT_PROVIDER');
 
 export type InitializePaymentInput = {
@@ -5,6 +7,8 @@ export type InitializePaymentInput = {
   amount: number;
   currency: string;
   idempotencyKey: string;
+  reference?: string;
+  details?: PaymentDetailsDto;
 };
 
 export type ProviderPaymentResult = {
@@ -17,6 +21,7 @@ export type ProviderPaymentResult = {
     | 'FAILED'
     | 'CANCELLED';
   redirectUrl?: string;
+  gatewayStatus?: string;
 };
 
 export type ProviderRefundResult = {
@@ -34,6 +39,7 @@ export type VerifiedPaymentEvent = {
 
 export interface PaymentProvider {
   readonly name: string;
+  validateInput?(input: InitializePaymentInput): void;
   initialize(input: InitializePaymentInput): Promise<ProviderPaymentResult>;
   getPayment(providerReference: string): Promise<ProviderPaymentResult>;
   verifyWebhook(rawBody: Buffer, signature: string): VerifiedPaymentEvent;

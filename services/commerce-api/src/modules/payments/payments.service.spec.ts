@@ -4,6 +4,7 @@ import { OrdersService } from '../orders/orders.service';
 import { PrismaService } from '../../database/prisma.service';
 import type { PaymentProvider } from './payment-provider';
 import { PaymentsService } from './payments.service';
+import { PaymentOutcomeUnknownException } from './gateway-errors';
 
 function buildPrisma(): {
   payment: { create: jest.Mock; update: jest.Mock; findUnique: jest.Mock };
@@ -41,6 +42,41 @@ describe('PaymentsService', () => {
 
   describe('initializeForOrder', () => {
     const order = { id: 'order-1', total: 2000, currency: 'USD' } as never;
+
+    it('preserves the pending payment after an ambiguous gateway outcome', async () => {
+      const pending = { id: 'payment-1', status: PaymentStatus.PENDING };
+      prisma.payment.create.mockResolvedValue(pending);
+      prisma.payment.update.mockResolvedValue(pending);
+      provider.initialize.mockRejectedValue(
+        new PaymentOutcomeUnknownException(),
+      );
+      await expect(service.initializeForOrder(order)).resolves.toMatchObject({
+        ...pending,
+        requiresReconciliation: true,
+      });
+      expect(prisma.payment.update).toHaveBeenCalledWith({
+        where: { id: 'payment-1' },
+        data: { failureReason: 'Gateway outcome requires reconciliation' },
+      });
+      expect(ordersService.cancel).not.toHaveBeenCalled();
+    });
+
+    it('does not report a declined charge when saving an accepted payment fails', async () => {
+      const pending = { id: 'payment-1', status: PaymentStatus.PENDING };
+      prisma.payment.create.mockResolvedValue(pending);
+      prisma.payment.update.mockRejectedValue(
+        new Error('Database unavailable'),
+      );
+      provider.initialize.mockResolvedValue({
+        providerReference: 'pay_123',
+        status: 'PENDING',
+      });
+      await expect(service.initializeForOrder(order)).resolves.toMatchObject({
+        ...pending,
+        requiresReconciliation: true,
+      });
+      expect(ordersService.cancel).not.toHaveBeenCalled();
+    });
 
     it('records the provider result on success', async () => {
       prisma.payment.create.mockResolvedValue({ id: 'payment-1' });

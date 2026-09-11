@@ -5,7 +5,9 @@ import {
 } from '@nestjs/common';
 import {
   CartStatus,
+  OfferStockSource,
   ProductStatus,
+  SellerStatus,
   type Cart,
   type CartItem,
 } from '@prisma/client';

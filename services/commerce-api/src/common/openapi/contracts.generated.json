@@ -4497,6 +4497,393 @@
         }
       }
     },
+    "GatewayPaymentsController_get": {
+      "operationId": "GatewayPaymentsController_get",
+      "tags": [
+        "GatewayPaymentsController"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/PaymentSnapshot"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      }
+    },
+    "GatewayPaymentsController_status": {
+      "operationId": "GatewayPaymentsController_status",
+      "tags": [
+        "GatewayPaymentsController"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/PaymentSnapshot"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      }
+    },
+    "GatewayPaymentsController_cancel": {
+      "operationId": "GatewayPaymentsController_cancel",
+      "tags": [
+        "GatewayPaymentsController"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/PaymentSnapshot"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputPaymentReasonDto"
+            }
+          }
+        }
+      }
+    },
+    "GatewayPaymentsController_list": {
+      "operationId": "GatewayPaymentsController_list",
+      "tags": [
+        "GatewayPaymentsController"
+      ],
+      "parameters": [
+        {
+          "name": "page",
+          "in": "query",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          }
+        },
+        {
+          "name": "size",
+          "in": "query",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 25
+          }
+        },
+        {
+          "name": "sortBy",
+          "in": "query",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "createdAt"
+            ],
+            "default": "createdAt"
+          }
+        },
+        {
+          "name": "descending",
+          "in": "query",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "default": "true"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/GatewayPaymentPage"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: ADMIN."
+    },
+    "GatewayPaymentsController_refund": {
+      "operationId": "GatewayPaymentsController_refund",
+      "tags": [
+        "GatewayPaymentsController"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "idempotency-key",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/PaymentSnapshot"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputRefundPaymentDto"
+            }
+          }
+        }
+      }
+    },
     "PaymentsController_webhook": {
       "operationId": "PaymentsController_webhook",
       "tags": [
@@ -7746,10 +8133,138 @@
         "shippingAddressId": {
           "type": "string",
           "format": "uuid"
+        },
+        "paymentDetails": {
+          "$ref": "#/components/schemas/InputPaymentDetailsDto",
+          "nullable": true
         }
       },
       "required": [
         "shippingAddressId"
+      ],
+      "additionalProperties": false
+    },
+    "InputPaymentDetailsDto": {
+      "type": "object",
+      "properties": {
+        "paymentMethod": {
+          "type": "string",
+          "enum": [
+            "MOBILE_MONEY",
+            "CARD"
+          ]
+        },
+        "phoneNumber": {
+          "type": "string",
+          "pattern": "^(?:0|\\+?260)9\\d{8}$"
+        },
+        "provider": {
+          "type": "string",
+          "enum": [
+            "AIRTEL",
+            "MTN"
+          ],
+          "nullable": true
+        },
+        "card": {
+          "$ref": "#/components/schemas/InputPaymentCardDto"
+        }
+      },
+      "required": [
+        "paymentMethod"
+      ],
+      "additionalProperties": false
+    },
+    "InputPaymentCardDto": {
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "string",
+          "pattern": "^\\d{13,19}$"
+        },
+        "expiryMonth": {
+          "type": "string",
+          "pattern": "^(0[1-9]|1[0-2])$"
+        },
+        "expiryYear": {
+          "type": "string",
+          "pattern": "^20\\d{2}$"
+        },
+        "securityCode": {
+          "type": "string",
+          "pattern": "^\\d{3,4}$"
+        },
+        "holderName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 150
+        },
+        "billing": {
+          "$ref": "#/components/schemas/InputCardBillingDto"
+        }
+      },
+      "required": [
+        "number",
+        "expiryMonth",
+        "expiryYear",
+        "securityCode",
+        "holderName",
+        "billing"
+      ],
+      "additionalProperties": false
+    },
+    "InputCardBillingDto": {
+      "type": "object",
+      "properties": {
+        "firstName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "lastName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "address1": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "locality": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "administrativeArea": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "postalCode": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "country": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 254
+        }
+      },
+      "required": [
+        "firstName",
+        "lastName",
+        "address1",
+        "locality",
+        "administrativeArea",
+        "postalCode",
+        "country",
+        "email"
       ],
       "additionalProperties": false
     },
@@ -7842,6 +8357,10 @@
         "orderId": {
           "type": "string"
         },
+        "sellerOrderId": {
+          "type": "string",
+          "nullable": true
+        },
         "offerId": {
           "type": "string"
         },
@@ -7864,6 +8383,7 @@
         "createdAt",
         "currency",
         "orderId",
+        "sellerOrderId",
         "offerId",
         "quantity",
         "unitAmount",
@@ -7921,6 +8441,12 @@
         },
         "redirectUrl": {
           "type": "string"
+        },
+        "gatewayStatus": {
+          "type": "string"
+        },
+        "requiresReconciliation": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -8993,6 +9519,180 @@
         "version",
         "amount",
         "currency"
+      ],
+      "additionalProperties": false
+    },
+    "PaymentSnapshot": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "orderId": {
+          "type": "string"
+        },
+        "localStatus": {
+          "type": "string",
+          "enum": [
+            "CANCELLED",
+            "PENDING",
+            "REQUIRES_ACTION",
+            "PROCESSING",
+            "SUCCEEDED",
+            "FAILED"
+          ]
+        },
+        "gateway": {
+          "$ref": "#/components/schemas/GatewayPayment"
+        },
+        "requiresReconciliation": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "orderId",
+        "localStatus",
+        "gateway",
+        "requiresReconciliation"
+      ]
+    },
+    "GatewayPayment": {
+      "type": "object",
+      "properties": {
+        "paymentId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "number"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "reference": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "paymentId",
+        "status",
+        "amount",
+        "currency",
+        "reference"
+      ]
+    },
+    "InputPaymentReasonDto": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 500,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "InputGatewayPaymentQueryDto": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 25
+        },
+        "sortBy": {
+          "type": "string",
+          "enum": [
+            "createdAt"
+          ],
+          "default": "createdAt"
+        },
+        "descending": {
+          "type": "string",
+          "enum": [
+            "true",
+            "false"
+          ],
+          "default": "true"
+        }
+      },
+      "required": [
+        "page",
+        "size",
+        "sortBy",
+        "descending"
+      ],
+      "additionalProperties": false
+    },
+    "GatewayPaymentPage": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/GatewayPayment"
+          }
+        },
+        "page": {
+          "type": "number"
+        },
+        "size": {
+          "type": "number"
+        },
+        "totalElements": {
+          "type": "number"
+        },
+        "totalPages": {
+          "type": "number"
+        },
+        "first": {
+          "type": "boolean"
+        },
+        "last": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements",
+        "totalPages",
+        "first",
+        "last"
+      ]
+    },
+    "InputRefundPaymentDto": {
+      "type": "object",
+      "properties": {
+        "amount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 500,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "amount",
+        "reason"
       ],
       "additionalProperties": false
     },

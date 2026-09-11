@@ -1151,23 +1151,107 @@ export class FakePrismaService {
     },
   };
 
+  private matchesJobClause(
+    row: Record<string, unknown>,
+    clause: Record<string, unknown>,
+  ): boolean {
+    return Object.entries(clause).every(([key, value]) => {
+      if (value && typeof value === 'object' && 'lte' in value) {
+        const rowValue = row[key];
+        return (
+          rowValue instanceof Date &&
+          rowValue.getTime() <= (value as { lte: Date }).lte.getTime()
+        );
+      }
+      return row[key] === value;
+    });
+  }
+
   backgroundJob = {
     create: ({
       data,
     }: {
       data: Record<string, unknown>;
     }): Promise<Record<string, unknown>> => {
+      // Same "strip undefined so defaults apply" fix as price.create above.
+      data = Object.fromEntries(
+        Object.entries(data).filter(([, value]) => value !== undefined),
+      );
       const now = new Date();
       const row = {
         id: randomUUID(),
         status: 'PENDING',
         attempts: 0,
         maxAttempts: 5,
+        runAt: now,
+        lockedAt: null,
+        lockToken: null,
+        lastError: null,
+        completedAt: null,
         createdAt: now,
         updatedAt: now,
         ...data,
       };
       this.backgroundJobs.set(row.id as string, row);
+      return Promise.resolve(row);
+    },
+    findFirst: ({
+      where,
+    }: {
+      where: Record<string, unknown> & { OR?: Record<string, unknown>[] };
+    }): Promise<Record<string, unknown> | null> => {
+      const { OR, ...rest } = where;
+      const rows = [...this.backgroundJobs.values()]
+        .filter((row) =>
+          OR
+            ? OR.some((clause) => this.matchesJobClause(row, clause))
+            : this.matchesJobClause(row, rest),
+        )
+        .sort(
+          (a, b) =>
+            (a.runAt as Date).getTime() - (b.runAt as Date).getTime() ||
+            (a.createdAt as Date).getTime() - (b.createdAt as Date).getTime(),
+        );
+      return Promise.resolve(rows[0] ?? null);
+    },
+    findUnique: ({
+      where,
+    }: {
+      where: { id: string };
+    }): Promise<Record<string, unknown> | null> =>
+      Promise.resolve(this.backgroundJobs.get(where.id) ?? null),
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: Record<string, unknown>;
+      data: Record<string, unknown>;
+    }): Promise<{ count: number }> => {
+      let count = 0;
+      for (const row of this.backgroundJobs.values()) {
+        if (!this.matchesJobClause(row, where)) continue;
+
+        for (const [key, value] of Object.entries(data)) {
+          row[key] =
+            value && typeof value === 'object' && 'increment' in value
+              ? (row[key] as number) +
+                (value as { increment: number }).increment
+              : value;
+        }
+        row.updatedAt = new Date();
+        count += 1;
+      }
+      return Promise.resolve({ count });
+    },
+    update: ({
+      where,
+      data,
+    }: {
+      where: { id: string };
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const row = this.backgroundJobs.get(where.id)!;
+      Object.assign(row, data, { updatedAt: new Date() });
       return Promise.resolve(row);
     },
   };

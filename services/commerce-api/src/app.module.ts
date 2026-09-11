@@ -33,6 +33,7 @@ import { ProductsModule } from './modules/products/products.module';
 import { UsersModule } from './modules/users/users.module';
 import { WishlistModule } from './modules/wishlist/wishlist.module';
 import { SellersModule } from './modules/sellers/sellers.module';
+import { WorkersModule } from './infrastructure/workers/workers.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { SellersModule } from './modules/sellers/sellers.module';
     OrdersModule,
     CheckoutModule,
     SellersModule,
+    WorkersModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
