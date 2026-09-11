@@ -1,16 +1,24 @@
 import type { Metadata } from 'next';
 
-import { SectionPlaceholder } from '@/components/section-placeholder';
+import { AwaitingBackend } from '@/components/awaiting-backend';
+import { requireAdmin } from '@/lib/session';
 
-export const metadata: Metadata = {
-  title: 'Payments',
-};
+export const metadata: Metadata = { title: 'Payments' };
 
-export default function PaymentsPage() {
+export default async function PaymentsPage() {
+  await requireAdmin();
+
   return (
-    <SectionPlaceholder
-      title="Payments"
-      description="Payments, refunds, and reconciliation against the in-house gateway. Payment state is only ever trusted after server-side verification."
+    <AwaitingBackend
+      title={'Payments'}
+      description={'Payments, refunds, and reconciliation.'}
+      needs={[
+        'POST /payments/webhook  — exists, rejects unsigned calls',
+        'GET  /admin/payments  — not implemented',
+      ]}
+      note={
+        'Payment initialisation returns 503: the provider is a deliberate stub awaiting the in-house gateway, so checkout cannot complete.'
+      }
     />
   );
 }

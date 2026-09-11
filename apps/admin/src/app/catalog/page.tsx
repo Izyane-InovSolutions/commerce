@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
 
-import { listBrands, listCategories, listProducts } from '@commerce/api-client';
-import { productListQuerySchema, productStatuses } from '@commerce/contracts';
+import { backendListProducts } from '@commerce/api-client';
+import { backendProductStatuses } from '@commerce/contracts';
 
 import { ApiErrorNotice } from '@/components/api-error-notice';
 import { EmptyState } from '@/components/empty-state';
@@ -22,52 +22,73 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { apiClient } from '@/lib/api';
+import { readParam } from '@/lib/search-params';
 import { requireAdmin } from '@/lib/session';
-import { parseQueryParams } from '@/lib/query';
 
 export const metadata: Metadata = { title: 'Catalog' };
+
+const PAGE_SIZE = 20;
 
 export default async function CatalogPage({
   searchParams,
 }: PageProps<'/catalog'>) {
   await requireAdmin();
   const params = await searchParams;
-  const query = parseQueryParams(productListQuerySchema, params);
 
-  let result;
-  let brands;
-  let categories;
+  const page = Number(readParam(params, 'page') ?? '1');
+  const search = readParam(params, 'search');
+  const status = readParam(params, 'status');
+
+  let products;
   try {
-    [result, brands, categories] = await Promise.all([
-      listProducts(apiClient, query),
-      listBrands(apiClient),
-      listCategories(apiClient),
-    ]);
+    products = await backendListProducts(apiClient);
   } catch (error) {
     return (
       <div className="space-y-6">
         <PageHeader
           title="Catalog"
-          description="Products are owned by the platform. Sellers list offers against these SKUs."
+          description="Products, variants, offers, and prices."
         />
         <ApiErrorNotice error={error} />
+        <p className="text-muted-foreground max-w-2xl text-sm text-pretty">
+          The admin product listing fails with a server error whenever any
+          product has media attached — the response includes the media asset,
+          whose <code className="font-mono">byteSize</code> is a{' '}
+          <code className="font-mono">BigInt</code> that cannot be serialised to
+          JSON. The public catalog read is unaffected because it maps media to a
+          smaller shape.
+        </p>
       </div>
     );
   }
 
-  const brandName = new Map(brands.map((brand) => [brand.id, brand.name]));
-  const categoryName = new Map(
-    categories.map((category) => [category.id, category.name]),
+  // The admin listing takes no query parameters and returns everything, so
+  // searching and paging happen here rather than on the server.
+  const matching = products.filter(
+    (product) =>
+      (search === undefined ||
+        product.name.toLowerCase().includes(search.toLowerCase()) ||
+        product.slug.toLowerCase().includes(search.toLowerCase())) &&
+      (status === undefined || product.status === status),
   );
-  const isFiltered = Boolean(
-    query.q ?? query.status ?? query.brandId ?? query.categoryId,
+
+  const total = matching.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const current = Math.min(
+    Math.max(Number.isInteger(page) ? page : 1, 1),
+    totalPages,
   );
+  const visible = matching.slice(
+    (current - 1) * PAGE_SIZE,
+    current * PAGE_SIZE,
+  );
+  const isFiltered = Boolean(search ?? status);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Catalog"
-        description="Products are owned by the platform. Sellers list offers against these SKUs."
+        description="Products are platform-owned. A product reaches the storefront only once it, its variant, and its offer are all published."
         action={
           <Button asChild>
             <Link href="/catalog/new">
@@ -80,15 +101,15 @@ export default async function CatalogPage({
 
       <form className="flex flex-wrap items-end gap-2" action="/catalog">
         <div className="min-w-48 flex-1">
-          <label htmlFor="catalog-q" className="sr-only">
+          <label htmlFor="catalog-search" className="sr-only">
             Search products
           </label>
           <Input
-            id="catalog-q"
-            name="q"
+            id="catalog-search"
+            name="search"
             type="search"
-            placeholder="Search name or SKU code"
-            defaultValue={query.q ?? ''}
+            placeholder="Search by name"
+            defaultValue={search ?? ''}
           />
         </div>
         <label htmlFor="catalog-status" className="sr-only">
@@ -98,36 +119,10 @@ export default async function CatalogPage({
           id="catalog-status"
           name="status"
           placeholder="Any status"
-          defaultValue={query.status ?? ''}
-          options={productStatuses.map((status) => ({
-            value: status,
-            label: status.charAt(0).toUpperCase() + status.slice(1),
-          }))}
-        />
-        <label htmlFor="catalog-brand" className="sr-only">
-          Brand
-        </label>
-        <SelectField
-          id="catalog-brand"
-          name="brandId"
-          placeholder="Any brand"
-          defaultValue={query.brandId ?? ''}
-          options={brands.map((brand) => ({
-            value: brand.id,
-            label: brand.name,
-          }))}
-        />
-        <label htmlFor="catalog-category" className="sr-only">
-          Category
-        </label>
-        <SelectField
-          id="catalog-category"
-          name="categoryId"
-          placeholder="Any category"
-          defaultValue={query.categoryId ?? ''}
-          options={categories.map((category) => ({
-            value: category.id,
-            label: category.name,
+          defaultValue={status ?? ''}
+          options={backendProductStatuses.map((value) => ({
+            value,
+            label: value.charAt(0) + value.slice(1).toLowerCase(),
           }))}
         />
         <Button type="submit" variant="secondary">
@@ -140,13 +135,13 @@ export default async function CatalogPage({
         ) : null}
       </form>
 
-      {result.items.length === 0 ? (
+      {visible.length === 0 ? (
         <EmptyState
           title={isFiltered ? 'No matching products' : 'No products yet'}
           description={
             isFiltered
-              ? 'No product matches these filters. Try widening the search.'
-              : 'Create the first product so sellers have something to offer against.'
+              ? 'No product matches these filters.'
+              : 'Create the first product, then give it a variant and a price.'
           }
           action={
             <Button asChild>
@@ -169,7 +164,7 @@ export default async function CatalogPage({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {result.items.map((product) => (
+              {visible.map((product) => (
                 <TableRow key={product.id}>
                   <TableCell>
                     <Link
@@ -182,26 +177,13 @@ export default async function CatalogPage({
                       {product.slug}
                     </p>
                   </TableCell>
-                  <TableCell>
-                    {product.brandId
-                      ? (brandName.get(product.brandId) ?? '—')
-                      : '—'}
-                  </TableCell>
-                  <TableCell>
-                    {product.categoryId
-                      ? (categoryName.get(product.categoryId) ?? '—')
-                      : '—'}
-                  </TableCell>
+                  <TableCell>{product.brand?.name ?? '—'}</TableCell>
+                  <TableCell>{product.category?.name ?? '—'}</TableCell>
                   <TableCell className="text-right tabular-nums">
                     {product.variants.length}
                   </TableCell>
                   <TableCell>
-                    <StatusBadge status={product.status} />
-                    {product.submittedBySellerName ? (
-                      <p className="text-muted-foreground mt-1 text-xs">
-                        from {product.submittedBySellerName}
-                      </p>
-                    ) : null}
+                    <StatusBadge status={product.status.toLowerCase()} />
                   </TableCell>
                 </TableRow>
               ))}
@@ -213,10 +195,10 @@ export default async function CatalogPage({
       <Pagination
         pathname="/catalog"
         params={params}
-        page={result.page}
-        pageSize={result.pageSize}
-        total={result.total}
-        totalPages={result.totalPages}
+        page={current}
+        pageSize={PAGE_SIZE}
+        total={total}
+        totalPages={totalPages}
       />
     </div>
   );

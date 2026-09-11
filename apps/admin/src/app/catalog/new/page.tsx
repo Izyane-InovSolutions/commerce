@@ -1,23 +1,26 @@
 import type { Metadata } from 'next';
 
-import { listBrands, listCategories } from '@commerce/api-client';
+import { backendListBrands, backendListCategories } from '@commerce/api-client';
 
 import { ApiErrorNotice } from '@/components/api-error-notice';
 import { PageHeader } from '@/components/page-header';
 import { ProductForm } from '@/components/product-form';
 import { apiClient } from '@/lib/api';
+import { requireAdmin } from '@/lib/session';
 
 import { createProductAction } from '../actions';
 
 export const metadata: Metadata = { title: 'New product' };
 
 export default async function NewProductPage() {
+  await requireAdmin();
+
   let brands;
   let categories;
   try {
     [brands, categories] = await Promise.all([
-      listBrands(apiClient),
-      listCategories(apiClient),
+      backendListBrands(apiClient),
+      backendListCategories(apiClient),
     ]);
   } catch (error) {
     return <ApiErrorNotice error={error} />;
@@ -27,7 +30,7 @@ export default async function NewProductPage() {
     <div className="space-y-6">
       <PageHeader
         title="New product"
-        description="A product describes what an item is. Add at least one variant so sellers have a SKU to offer against."
+        description="Create the product record. You add its variants and pricing on the next screen."
       />
       <ProductForm
         action={createProductAction}

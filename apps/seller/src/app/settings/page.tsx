@@ -1,17 +1,18 @@
 import type { Metadata } from 'next';
 
-import { SectionPlaceholder } from '@/components/section-placeholder';
-import { requireSeller } from '@/lib/session';
+import { AwaitingBackend } from '@/components/awaiting-backend';
+import { requireUser } from '@/lib/session';
 
 export const metadata: Metadata = { title: 'Store Settings' };
 
 export default async function SettingsPage() {
-  await requireSeller();
+  await requireUser();
 
   return (
-    <SectionPlaceholder
-      title="Store Settings"
-      description="Your storefront details, logo, policies, and the users on your seller account."
+    <AwaitingBackend
+      title={'Store Settings'}
+      description={'Storefront details, policies, and account users.'}
+      needs={['GET /sellers/me', 'PATCH /sellers/me']}
     />
   );
 }

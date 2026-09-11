@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { listCategories } from '@commerce/api-client';
+import { backendListCategories } from '@commerce/api-client';
 
 import { ApiErrorNotice } from '@/components/api-error-notice';
 import { PageHeader } from '@/components/page-header';
@@ -29,7 +29,7 @@ export default async function CategoriesPage() {
 
   let categories;
   try {
-    categories = await listCategories(apiClient);
+    categories = await backendListCategories(apiClient);
   } catch (error) {
     return (
       <div className="space-y-6">

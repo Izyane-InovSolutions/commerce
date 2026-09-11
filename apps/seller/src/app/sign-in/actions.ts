@@ -2,29 +2,40 @@
 
 import { redirect } from 'next/navigation';
 
-import { signIn, signOut, signUp } from '@commerce/api-client';
-import type { Session } from '@commerce/contracts';
+import {
+  backendRegister,
+  backendSignIn,
+  backendSignOut,
+} from '@commerce/api-client';
+import type { BackendSession } from '@commerce/contracts';
 
 import { apiClient } from '@/lib/api';
 import { toFormState, type FormState } from '@/lib/form';
-import { clearSessionToken, writeSessionToken } from '@/lib/session-cookie';
+import { clearSession, writeSession } from '@/lib/session-cookie';
+
+function credentials(formData: FormData): {
+  email: string;
+  password: string;
+} {
+  return {
+    email: String(formData.get('email') ?? '').trim(),
+    password: String(formData.get('password') ?? ''),
+  };
+}
 
 export async function signInAction(
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  let session: Session;
+  let session: BackendSession;
 
   try {
-    session = await signIn(apiClient, {
-      email: String(formData.get('email') ?? '').trim(),
-      password: String(formData.get('password') ?? ''),
-    });
+    session = await backendSignIn(apiClient, credentials(formData));
   } catch (error) {
     return toFormState(error);
   }
 
-  await writeSessionToken(session.token, session.expiresAt);
+  await writeSession(session);
   redirect(String(formData.get('next') || '/'));
 }
 
@@ -32,30 +43,26 @@ export async function signUpAction(
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  let session: Session;
+  let session: BackendSession;
 
   try {
-    session = await signUp(apiClient, {
-      name: String(formData.get('name') ?? '').trim(),
-      email: String(formData.get('email') ?? '').trim(),
-      password: String(formData.get('password') ?? ''),
-    });
+    session = await backendRegister(apiClient, credentials(formData));
   } catch (error) {
     return toFormState(error);
   }
 
-  await writeSessionToken(session.token, session.expiresAt);
+  await writeSession(session);
   redirect(String(formData.get('next') || '/'));
 }
 
 export async function signOutAction(): Promise<void> {
   try {
-    await signOut(apiClient);
+    await backendSignOut(apiClient);
   } catch {
-    // The local cookie is cleared regardless, so a failed round trip cannot
+    // The local cookies are cleared regardless, so a failed round trip cannot
     // strand someone in a half-signed-in state.
   }
 
-  await clearSessionToken();
+  await clearSession();
   redirect('/sign-in');
 }

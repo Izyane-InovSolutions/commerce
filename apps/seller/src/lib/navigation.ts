@@ -1,4 +1,4 @@
-import type { User } from '@commerce/contracts';
+import type { BackendUser } from '@commerce/contracts';
 import {
   Boxes,
   Building2,
@@ -45,20 +45,14 @@ export const navigation: NavItem[] = [
   { href: '/settings', label: 'Store Settings', icon: Building2 },
 ];
 
-/** What someone who has not been approved to sell yet can reach. */
-const onboardingNavigation: NavItem[] = [
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/apply', label: 'Apply to sell', icon: Building2 },
-];
-
 /**
  * Navigation for a signed-in user.
  *
- * Trading sections are hidden until a seller account exists, so nobody is
- * offered a link that would only bounce them back to onboarding.
+ * Every section is listed regardless of role, because the Commerce API has no
+ * seller domain yet: there is nothing to gate on beyond the role string, and
+ * each section says for itself what it is waiting for.
  */
-export function navigationFor(user: User): NavItem[] {
-  return user.sellerId && user.roles.includes('seller')
-    ? navigation
-    : onboardingNavigation;
+export function navigationFor(user: BackendUser): NavItem[] {
+  void user;
+  return navigation;
 }

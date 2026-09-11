@@ -2,23 +2,21 @@
 
 import { revalidatePath } from 'next/cache';
 
-import { adjustInventory } from '@commerce/api-client';
-import { inventoryAdjustmentReasonSchema } from '@commerce/contracts';
+import { backendAdjustStock, backendReceiveStock } from '@commerce/api-client';
 
 import { apiClient } from '@/lib/api';
 import { toFormState, type FormState } from '@/lib/form';
 
-export async function adjustInventoryAction(
+/**
+ * Moves stock for one variant at one warehouse.
+ *
+ * `receive` adds a positive quantity; `adjust` applies a signed correction.
+ * Both are recorded as movements, so the running total stays auditable.
+ */
+export async function moveStockAction(
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const reason = inventoryAdjustmentReasonSchema.safeParse(
-    formData.get('reason'),
-  );
-  if (!reason.success) {
-    return { status: 'error', message: 'Choose a reason for the adjustment.' };
-  }
-
   const delta = Number(formData.get('delta'));
   if (!Number.isInteger(delta) || delta === 0) {
     return {
@@ -27,18 +25,20 @@ export async function adjustInventoryAction(
     };
   }
 
+  const target = {
+    warehouseId: String(formData.get('warehouseId') ?? ''),
+    variantId: String(formData.get('variantId') ?? ''),
+    note: String(formData.get('note') ?? '') || undefined,
+  };
+
   try {
-    await adjustInventory(apiClient, {
-      skuId: String(formData.get('skuId') ?? ''),
-      locationId: String(formData.get('locationId') ?? ''),
-      delta,
-      reason: reason.data,
-      note: String(formData.get('note') ?? ''),
-    });
+    await (formData.get('mode') === 'receive'
+      ? backendReceiveStock(apiClient, { ...target, quantity: delta })
+      : backendAdjustStock(apiClient, { ...target, delta }));
   } catch (error) {
     return toFormState(error);
   }
 
   revalidatePath('/inventory');
-  return { status: 'idle', message: 'Stock adjusted.' };
+  return { status: 'idle', message: 'Stock updated.' };
 }

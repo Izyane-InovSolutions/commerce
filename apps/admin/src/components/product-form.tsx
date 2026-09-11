@@ -2,9 +2,12 @@
 
 import { useActionState, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Trash2 } from 'lucide-react';
 
-import type { Brand, Category, Product } from '@commerce/contracts';
+import type {
+  BackendBrand,
+  BackendCategory,
+  BackendAdminProduct,
+} from '@commerce/contracts';
 
 import { FieldError } from '@/components/field-error';
 import { FormError } from '@/components/form-error';
@@ -23,20 +26,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { idleFormState, type FormState } from '@/lib/form';
 
-type VariantRow = {
-  key: string;
-  name: string;
-  skuCode: string;
-  attributes: string;
-};
-
-type ProductFormProps = {
-  action: (state: FormState, formData: FormData) => Promise<FormState>;
-  brands: Brand[];
-  categories: Category[];
-  product?: Product;
-};
-
 function toSlug(value: string): string {
   return value
     .toLowerCase()
@@ -44,60 +33,40 @@ function toSlug(value: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-function attributesToText(attributes: Record<string, string>): string {
-  return Object.entries(attributes)
-    .map(([key, value]) => `${key}=${value}`)
-    .join(', ');
-}
-
-function initialVariants(product?: Product): VariantRow[] {
-  if (!product || product.variants.length === 0) {
-    return [{ key: 'variant-0', name: '', skuCode: '', attributes: '' }];
-  }
-
-  return product.variants.map((variant, index) => ({
-    key: `variant-${index}`,
-    name: variant.name,
-    skuCode: variant.sku.code,
-    attributes: attributesToText(variant.attributes),
-  }));
-}
-
+/**
+ * The product record itself.
+ *
+ * Variants, offers and prices are separate resources in the Commerce API, so
+ * they are managed on the product's own page once it exists rather than being
+ * folded into one oversized create form.
+ */
 export function ProductForm({
   action,
   brands,
   categories,
   product,
-}: ProductFormProps) {
+}: {
+  action: (state: FormState, formData: FormData) => Promise<FormState>;
+  brands: BackendBrand[];
+  categories: BackendCategory[];
+  product?: BackendAdminProduct;
+}) {
   const [state, formAction] = useActionState(action, idleFormState);
   const [name, setName] = useState(product?.name ?? '');
   const [slug, setSlug] = useState(product?.slug ?? '');
   const [slugEdited, setSlugEdited] = useState(product !== undefined);
-  const [variants, setVariants] = useState<VariantRow[]>(() =>
-    initialVariants(product),
-  );
 
   const fieldErrors = state.fieldErrors ?? {};
 
-  function updateVariant(
-    key: string,
-    field: keyof Omit<VariantRow, 'key'>,
-    value: string,
-  ): void {
-    setVariants((rows) =>
-      rows.map((row) => (row.key === key ? { ...row, [field]: value } : row)),
-    );
-  }
-
   return (
-    <form action={formAction} className="max-w-3xl space-y-6">
+    <form action={formAction} className="max-w-2xl space-y-6">
       <FormError state={state} />
 
       <Card>
         <CardHeader>
           <CardTitle>Details</CardTitle>
           <CardDescription>
-            What the item is. Who sells it, and at what price, is an offer.
+            What the item is. Variants and pricing come next.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -125,6 +94,7 @@ export function ProductForm({
               id="slug"
               name="slug"
               required
+              className="font-mono"
               value={slug}
               onChange={(event) => {
                 setSlugEdited(true);
@@ -150,21 +120,7 @@ export function ProductForm({
             <FieldError messages={fieldErrors.description} />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="status">Status</Label>
-              <SelectField
-                id="status"
-                name="status"
-                className="w-full"
-                defaultValue={product?.status ?? 'draft'}
-                options={[
-                  { value: 'draft', label: 'Draft' },
-                  { value: 'active', label: 'Active' },
-                  { value: 'archived', label: 'Archived' },
-                ]}
-              />
-            </div>
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="brandId">Brand</Label>
               <SelectField
@@ -172,7 +128,7 @@ export function ProductForm({
                 name="brandId"
                 className="w-full"
                 placeholder="No brand"
-                defaultValue={product?.brandId ?? ''}
+                defaultValue={product?.brand?.id ?? ''}
                 options={brands.map((brand) => ({
                   value: brand.id,
                   label: brand.name,
@@ -186,7 +142,7 @@ export function ProductForm({
                 name="categoryId"
                 className="w-full"
                 placeholder="No category"
-                defaultValue={product?.categoryId ?? ''}
+                defaultValue={product?.category?.id ?? ''}
                 options={categories.map((category) => ({
                   value: category.id,
                   label: category.name,
@@ -194,105 +150,6 @@ export function ProductForm({
               />
             </div>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Variants</CardTitle>
-          <CardDescription>
-            Each variant carries the SKU that offers and stock are tracked
-            against.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <FieldError messages={fieldErrors.variants} />
-
-          {variants.map((variant, index) => (
-            <fieldset
-              key={variant.key}
-              className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_1fr_1fr_auto]"
-            >
-              <legend className="sr-only">Variant {index + 1}</legend>
-
-              <div className="space-y-1.5">
-                <Label htmlFor={`${variant.key}-name`}>Name</Label>
-                <Input
-                  id={`${variant.key}-name`}
-                  name="variantName"
-                  placeholder="Oak / 140cm"
-                  value={variant.name}
-                  onChange={(event) =>
-                    updateVariant(variant.key, 'name', event.target.value)
-                  }
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor={`${variant.key}-sku`}>SKU code</Label>
-                <Input
-                  id={`${variant.key}-sku`}
-                  name="variantSku"
-                  placeholder="MRD-DESK-OAK-140"
-                  className="font-mono"
-                  value={variant.skuCode}
-                  onChange={(event) =>
-                    updateVariant(variant.key, 'skuCode', event.target.value)
-                  }
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor={`${variant.key}-attributes`}>Attributes</Label>
-                <Input
-                  id={`${variant.key}-attributes`}
-                  name="variantAttributes"
-                  placeholder="finish=Oak, width=140cm"
-                  value={variant.attributes}
-                  onChange={(event) =>
-                    updateVariant(variant.key, 'attributes', event.target.value)
-                  }
-                />
-              </div>
-
-              <div className="flex items-end">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`Remove variant ${index + 1}`}
-                  disabled={variants.length === 1}
-                  onClick={() =>
-                    setVariants((rows) =>
-                      rows.filter((row) => row.key !== variant.key),
-                    )
-                  }
-                >
-                  <Trash2 />
-                </Button>
-              </div>
-            </fieldset>
-          ))}
-
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              setVariants((rows) => [
-                ...rows,
-                {
-                  key: `variant-${Date.now()}`,
-                  name: '',
-                  skuCode: '',
-                  attributes: '',
-                },
-              ])
-            }
-          >
-            <Plus data-icon="inline-start" />
-            Add variant
-          </Button>
         </CardContent>
       </Card>
 

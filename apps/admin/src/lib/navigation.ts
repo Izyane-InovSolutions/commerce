@@ -1,4 +1,4 @@
-import type { User } from '@commerce/contracts';
+import type { BackendUser } from '@commerce/contracts';
 import {
   Boxes,
   ChartLine,
@@ -115,6 +115,6 @@ export const navigation: NavItem[] = [
  * Admin sections are all one role, so this is a straight pass-through today;
  * it exists so finer-grained roles have somewhere to land.
  */
-export function navigationFor(user: User): NavItem[] {
-  return user.roles.includes('admin') ? navigation : [];
+export function navigationFor(user: BackendUser): NavItem[] {
+  return user.role === 'ADMIN' || user.role === 'STAFF' ? navigation : [];
 }

@@ -1,22 +1,22 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import {
   ApiError,
-  getProduct,
-  listBrands,
-  listCategories,
-  listInventory,
-  listOffers,
+  backendGetProduct,
+  backendListBrands,
+  backendListCategories,
 } from '@commerce/api-client';
-import { formatMoney } from '@commerce/contracts';
+
+import { pickCurrentPrice } from '@commerce/contracts';
 
 import { ApiErrorNotice } from '@/components/api-error-notice';
+import { OfferControls } from '@/components/offer-controls';
 import { PageHeader } from '@/components/page-header';
 import { ProductForm } from '@/components/product-form';
-import { ProductModeration } from '@/components/product-moderation';
 import { StatusBadge } from '@/components/status-badge';
+import { StatusControl } from '@/components/status-control';
+import { VariantAddForm } from '@/components/variant-add-form';
 import {
   Card,
   CardContent,
@@ -24,21 +24,15 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { apiClient } from '@/lib/api';
 import { requireAdmin } from '@/lib/session';
 
 import {
-  approveProductAction,
-  rejectProductAction,
-  resolveProposalAction,
+  addPriceAction,
+  addVariantAction,
+  createOfferAction,
+  setOfferStatusAction,
+  setStatusAction,
   updateProductAction,
 } from '../actions';
 
@@ -47,11 +41,17 @@ export async function generateMetadata({
 }: PageProps<'/catalog/[id]'>): Promise<Metadata> {
   const { id } = await params;
   try {
-    const product = await getProduct(apiClient, id);
-    return { title: product.name };
+    return { title: (await backendGetProduct(apiClient, id)).name };
   } catch {
     return { title: 'Product' };
   }
+}
+
+function formatMinor(amount: number, currency: string): string {
+  return new Intl.NumberFormat('en-GB', {
+    style: 'currency',
+    currency,
+  }).format(amount / 100);
 }
 
 export default async function ProductPage({
@@ -63,15 +63,11 @@ export default async function ProductPage({
   let product;
   let brands;
   let categories;
-  let offers;
-  let stock;
   try {
-    [product, brands, categories, offers, stock] = await Promise.all([
-      getProduct(apiClient, id),
-      listBrands(apiClient),
-      listCategories(apiClient),
-      listOffers(apiClient, { pageSize: 100 }),
-      listInventory(apiClient, { pageSize: 100 }),
+    [product, brands, categories] = await Promise.all([
+      backendGetProduct(apiClient, id),
+      backendListBrands(apiClient),
+      backendListCategories(apiClient),
     ]);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
@@ -80,149 +76,106 @@ export default async function ProductPage({
     return <ApiErrorNotice error={error} />;
   }
 
-  const productOffers = offers.items.filter(
-    (offer) => offer.productId === product.id,
-  );
-  const productStock = stock.items.filter(
-    (level) => level.productId === product.id,
-  );
-
-  const updateAction = updateProductAction.bind(null, product.id);
-
   return (
     <div className="space-y-8">
       <PageHeader
         title={product.name}
-        description="Edit the product and its variants. Offers and stock below are read-only here."
-        action={<StatusBadge status={product.status} />}
-      />
-
-      <ProductModeration
-        product={product}
-        brands={brands}
-        categories={categories}
-        approve={approveProductAction.bind(null, product.id)}
-        reject={rejectProductAction.bind(null, product.id)}
-        resolveBrand={resolveProposalAction.bind(null, product.id, 'brand')}
-        resolveCategory={resolveProposalAction.bind(
-          null,
-          product.id,
-          'category',
-        )}
-      />
-
-      {product.status === 'rejected' && product.rejectionReason ? (
-        <p className="border-destructive/40 bg-destructive/10 text-destructive rounded-lg border px-3 py-2 text-sm">
-          Rejected: {product.rejectionReason}
-        </p>
-      ) : null}
-
-      <ProductForm
-        action={updateAction}
-        brands={brands}
-        categories={categories}
-        product={product}
+        description="A product is buyable only when it, its variant, and its offer are all published."
+        action={<StatusBadge status={product.status.toLowerCase()} />}
       />
 
       <Card>
         <CardHeader>
-          <CardTitle>Offers</CardTitle>
+          <CardTitle>Status</CardTitle>
           <CardDescription>
-            Sellers listing against this product&apos;s SKUs. Sellers manage
-            these in the seller portal.
+            Publishing the product is the first of the three gates.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {productOffers.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              No seller has listed an offer against this product yet.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Seller</TableHead>
-                    <TableHead>SKU</TableHead>
-                    <TableHead className="text-right">Price</TableHead>
-                    <TableHead>Condition</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {productOffers.map((offer) => (
-                    <TableRow key={offer.id}>
-                      <TableCell>{offer.sellerName}</TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {offer.skuCode}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatMoney(offer.price)}
-                      </TableCell>
-                      <TableCell>{offer.condition}</TableCell>
-                      <TableCell>
-                        <StatusBadge status={offer.status} />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+          <StatusControl
+            current={product.status}
+            label="product"
+            action={setStatusAction.bind(null, {
+              kind: 'product',
+              productId: product.id,
+              id: product.id,
+            })}
+          />
         </CardContent>
       </Card>
 
+      <ProductForm
+        action={updateProductAction.bind(null, product.id)}
+        brands={brands}
+        categories={categories}
+        product={product}
+      />
+
       <Card>
         <CardHeader>
-          <CardTitle>Stock</CardTitle>
+          <CardTitle>Variants and pricing</CardTitle>
           <CardDescription>
-            Available is derived by the API as on-hand less reserved. Adjust it
-            from{' '}
-            <Link href="/inventory" className="underline">
-              Inventory
-            </Link>
-            .
+            Each variant carries a SKU. An offer holds the price, and a
+            published offer is what makes the variant buyable.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          {productStock.length === 0 ? (
+        <CardContent className="space-y-6">
+          {product.variants.length === 0 ? (
             <p className="text-muted-foreground text-sm">
-              No stock records for this product.
+              No variants yet. Add one below to be able to price this product.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>SKU</TableHead>
-                    <TableHead>Location</TableHead>
-                    <TableHead className="text-right">On hand</TableHead>
-                    <TableHead className="text-right">Reserved</TableHead>
-                    <TableHead className="text-right">Available</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {productStock.map((level) => (
-                    <TableRow key={`${level.skuId}-${level.locationId}`}>
-                      <TableCell className="font-mono text-xs">
-                        {level.skuCode}
-                      </TableCell>
-                      <TableCell>{level.locationName}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {level.onHand}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {level.reserved}
-                      </TableCell>
-                      <TableCell className="text-right font-medium tabular-nums">
-                        {level.available}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            product.variants.map((variant) => (
+              <div key={variant.id} className="space-y-3 rounded-lg border p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="font-medium">
+                      {variant.name ?? variant.skuCode}
+                    </p>
+                    <p className="text-muted-foreground font-mono text-xs">
+                      {variant.skuCode}
+                    </p>
+                  </div>
+                  <StatusControl
+                    current={variant.status}
+                    label={variant.skuCode}
+                    action={setStatusAction.bind(null, {
+                      kind: 'variant',
+                      productId: product.id,
+                      id: variant.id,
+                    })}
+                  />
+                </div>
+
+                <OfferControls
+                  productId={product.id}
+                  variantId={variant.id}
+                  variantLabel={variant.skuCode}
+                  offers={variant.offers.map((offer) => {
+                    // The admin read returns the whole price history, so the
+                    // one in force is resolved the same way the API does.
+                    const price = pickCurrentPrice(offer.prices);
+                    return {
+                      id: offer.id,
+                      status: offer.status,
+                      price: price
+                        ? formatMinor(price.amount, price.currency)
+                        : null,
+                    };
+                  })}
+                  createOffer={createOfferAction.bind(
+                    null,
+                    product.id,
+                    variant.id,
+                  )}
+                  addPrice={addPriceAction.bind(null, product.id)}
+                  setOfferStatus={setOfferStatusAction.bind(null, product.id)}
+                />
+              </div>
+            ))
           )}
+
+          <VariantAddForm action={addVariantAction.bind(null, product.id)} />
         </CardContent>
       </Card>
     </div>

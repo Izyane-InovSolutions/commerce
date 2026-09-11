@@ -1,16 +1,18 @@
 import type { Metadata } from 'next';
 
-import { SectionPlaceholder } from '@/components/section-placeholder';
+import { AwaitingBackend } from '@/components/awaiting-backend';
+import { requireAdmin } from '@/lib/session';
 
-export const metadata: Metadata = {
-  title: 'Finance',
-};
+export const metadata: Metadata = { title: 'Finance' };
 
-export default function FinancePage() {
+export default async function FinancePage() {
+  await requireAdmin();
+
   return (
-    <SectionPlaceholder
-      title="Finance"
-      description="Ledger entries, commissions, seller balances, and payouts. Balances are derived from auditable financial events."
+    <AwaitingBackend
+      title={'Finance'}
+      description={'Ledger, commissions, balances, and payouts.'}
+      needs={['GET /admin/ledger', 'GET /admin/payouts']}
     />
   );
 }

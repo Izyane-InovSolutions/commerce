@@ -1,8 +1,8 @@
 import { cache } from 'react';
 import { redirect } from 'next/navigation';
 
-import { ApiError, getMe, getMySeller } from '@commerce/api-client';
-import type { Seller, User } from '@commerce/contracts';
+import { ApiError, backendGetMe } from '@commerce/api-client';
+import type { BackendUser } from '@commerce/contracts';
 
 import { apiClient } from './api';
 
@@ -12,9 +12,9 @@ import { apiClient } from './api';
  * Cached per request so several server components can ask without each one
  * making its own call.
  */
-export const getCurrentUser = cache(async (): Promise<User | null> => {
+export const getCurrentUser = cache(async (): Promise<BackendUser | null> => {
   try {
-    return await getMe(apiClient);
+    return await backendGetMe(apiClient);
   } catch (error) {
     if (
       error instanceof ApiError &&
@@ -26,32 +26,7 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
   }
 });
 
-/**
- * The store the signed-in user runs, or null if they have none yet.
- *
- * Cached per request so the shell and the page can both ask. Returns null
- * rather than throwing, because having no store is an ordinary state in this
- * portal — it is what onboarding is for.
- */
-export const getCurrentSellerAccount = cache(
-  async (): Promise<Seller | null> => {
-    const user = await getCurrentUser();
-    if (!user?.sellerId) {
-      return null;
-    }
-
-    try {
-      return await getMySeller(apiClient);
-    } catch (error) {
-      if (error instanceof ApiError && [401, 403, 404].includes(error.status)) {
-        return null;
-      }
-      throw error;
-    }
-  },
-);
-
-export async function requireUser(): Promise<User> {
+export async function requireUser(): Promise<BackendUser> {
   const user = await getCurrentUser();
   if (!user) {
     redirect('/sign-in');
@@ -60,15 +35,12 @@ export async function requireUser(): Promise<User> {
 }
 
 /**
- * Guards a page that only makes sense for an approved seller.
+ * Whether this account could trade, if the API let it.
  *
- * Someone signed in without a seller account is sent to onboarding rather
- * than shown an empty trading screen.
+ * The Commerce API has no seller domain yet — `Offer.sellerId` is nullable and
+ * unused, and there are no seller-scoped endpoints — so the role is as far as
+ * the check can go today.
  */
-export async function requireSeller(): Promise<User & { sellerId: string }> {
-  const user = await requireUser();
-  if (!user.sellerId || !user.roles.includes('seller')) {
-    redirect('/apply');
-  }
-  return user as User & { sellerId: string };
+export function isSeller(user: BackendUser | null): boolean {
+  return user?.role === 'SELLER';
 }

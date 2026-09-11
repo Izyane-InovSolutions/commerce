@@ -9,44 +9,54 @@ import { Input } from '@/components/ui/input';
 import { idleFormState, type FormState } from '@/lib/form';
 
 /**
- * Adds to or removes from the seller's own stock for one SKU.
+ * Receives or corrects stock on one record.
  *
- * Posts a signed change rather than a new total, so two people counting the
- * same shelf add up instead of overwriting each other.
+ * Receiving and adjusting are separate endpoints because they mean different
+ * things in the movement log, so the button pressed decides which is called.
  */
-export function StockAdjuster({
-  skuId,
-  locationId,
+export function StockMoveForm({
+  warehouseId,
+  variantId,
   label,
   action,
 }: {
-  skuId: string;
-  locationId: string;
+  warehouseId: string;
+  variantId: string;
   label: string;
   action: (state: FormState, formData: FormData) => Promise<FormState>;
 }) {
   const [state, formAction] = useActionState(action, idleFormState);
-  const inputId = `delta-${skuId}`;
+  const inputId = `delta-${warehouseId}-${variantId}`;
 
   return (
     <form action={formAction} className="space-y-1 text-right">
-      <input type="hidden" name="skuId" value={skuId} />
-      <input type="hidden" name="locationId" value={locationId} />
+      <input type="hidden" name="warehouseId" value={warehouseId} />
+      <input type="hidden" name="variantId" value={variantId} />
 
       <div className="flex items-center justify-end gap-2">
         <label htmlFor={inputId} className="sr-only">
-          Adjust {label}
+          Quantity for {label}
         </label>
         <Input
           id={inputId}
           name="delta"
           type="number"
           step="1"
-          placeholder="±0"
+          placeholder="0"
           className="w-20 text-right"
           aria-invalid={state.fieldErrors?.delta !== undefined}
         />
-        <SubmitButton pendingLabel="Saving…">Apply</SubmitButton>
+        <SubmitButton name="mode" value="receive" pendingLabel="Receiving…">
+          Receive
+        </SubmitButton>
+        <SubmitButton
+          name="mode"
+          value="adjust"
+          variant="outline"
+          pendingLabel="Adjusting…"
+        >
+          Adjust
+        </SubmitButton>
       </div>
 
       <FieldError messages={state.fieldErrors?.delta} />

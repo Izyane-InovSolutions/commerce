@@ -1,142 +1,100 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 
-import { getAdminInsights } from '@commerce/api-client';
+import {
+  backendListBrands,
+  backendListCategories,
+  backendListInventory,
+  backendListProducts,
+} from '@commerce/api-client';
+
+import { pickCurrentPrice } from '@commerce/contracts';
 
 import { ApiStatusCard } from '@/components/api-status-card';
-import { BuyabilityChart } from '@/components/charts/buyability-chart';
-import { ContributionChart } from '@/components/charts/contribution-chart';
-import { OfferDepthChart } from '@/components/charts/offer-depth-chart';
 import { PageHeader } from '@/components/page-header';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiClient } from '@/lib/api';
 import { requireAdmin } from '@/lib/session';
 
 const SECTIONS = [
-  {
-    href: '/catalog',
-    label: 'Catalog',
-    description: 'Products, variants, and the moderation queue.',
-  },
-  {
-    href: '/categories',
-    label: 'Categories',
-    description: 'The shared category tree.',
-  },
-  { href: '/brands', label: 'Brands', description: 'The shared brand list.' },
-  {
-    href: '/sellers',
-    label: 'Sellers',
-    description: 'Applications, approval, and suspension.',
-  },
-  {
-    href: '/inventory',
-    label: 'Inventory',
-    description: 'Stock across platform and seller locations.',
-  },
-  {
-    href: '/orders',
-    label: 'Orders',
-    description: 'Customer orders and their seller breakdown.',
-  },
-  {
-    href: '/payments',
-    label: 'Payments',
-    description: 'Payments, refunds, and reconciliation.',
-  },
-  {
-    href: '/finance',
-    label: 'Finance',
-    description: 'Ledger, commissions, balances, and payouts.',
-  },
-  {
-    href: '/audit',
-    label: 'Audit',
-    description: 'Events raised by privileged actions.',
-  },
+  { href: '/catalog', label: 'Catalog', live: true },
+  { href: '/categories', label: 'Categories', live: true },
+  { href: '/brands', label: 'Brands', live: true },
+  { href: '/inventory', label: 'Inventory', live: true },
+  { href: '/sellers', label: 'Sellers', live: false },
+  { href: '/orders', label: 'Orders', live: false },
+  { href: '/payments', label: 'Payments', live: false },
+  { href: '/finance', label: 'Finance', live: false },
+  { href: '/audit', label: 'Audit', live: false },
 ];
 
 /**
- * What needs attention, and what the marketplace looks like.
+ * What can be counted from the endpoints that exist.
  *
- * Every figure is derived from catalog, offer and stock state. Nothing is
- * trend-shaped because there is no time dimension in the data yet — a
- * sales-over-time chart here would be decoration, not information.
+ * Deliberately small: the API exposes catalog and inventory today, so these
+ * are counts and totals rather than the marketplace charts the portal carried
+ * against the stand-in mock. Nothing here is trend-shaped — there is still no
+ * orders reporting to trend.
  */
-async function AdminInsights() {
-  let insights;
+async function CatalogSummary() {
+  let stats;
   try {
-    insights = await getAdminInsights(apiClient);
+    const [products, categories, brands, inventory] = await Promise.all([
+      backendListProducts(apiClient),
+      backendListCategories(apiClient),
+      backendListBrands(apiClient),
+      backendListInventory(apiClient),
+    ]);
+
+    const variants = products.flatMap((product) => product.variants);
+    const priced = variants.filter((variant) =>
+      variant.offers.some(
+        (offer) => pickCurrentPrice(offer.prices) !== undefined,
+      ),
+    );
+
+    stats = [
+      { label: 'Products', value: products.length, href: '/catalog' },
+      {
+        label: 'Published',
+        value: products.filter((p) => p.status === 'PUBLISHED').length,
+        href: '/catalog?status=PUBLISHED',
+      },
+      {
+        label: 'Drafts',
+        value: products.filter((p) => p.status === 'DRAFT').length,
+        href: '/catalog?status=DRAFT',
+      },
+      { label: 'Variants priced', value: priced.length, href: '/catalog' },
+      {
+        label: 'Units available',
+        value: inventory.reduce((sum, record) => sum + record.available, 0),
+        href: '/inventory',
+      },
+      {
+        label: 'Categories and brands',
+        value: categories.length + brands.length,
+        href: '/categories',
+      },
+    ];
   } catch {
-    // The status card below already reports an unreachable API.
+    // The status card below reports an unreachable or failing API.
     return null;
   }
 
-  const { queue, totals } = insights;
-  const waiting = [
-    {
-      href: '/sellers',
-      label: 'Applications waiting',
-      value: queue.applicationsPending,
-      urgent: queue.applicationsPending > 0,
-    },
-    {
-      href: '/catalog?status=pending',
-      label: 'Products waiting for review',
-      value: queue.productsPending,
-      urgent: queue.productsPending > 0,
-    },
-    {
-      href: '/sellers',
-      label: 'Active sellers',
-      value: totals.activeSellers,
-      urgent: false,
-    },
-    {
-      href: '/sellers?status=suspended',
-      label: 'Suspended sellers',
-      value: totals.suspendedSellers,
-      urgent: totals.suspendedSellers > 0,
-    },
-    {
-      href: '/catalog?status=active',
-      label: 'Products on sale',
-      value: totals.productsOnSale,
-      urgent: false,
-    },
-  ];
-
   return (
-    <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        {waiting.map((item) => (
-          <Link
-            key={item.label}
-            href={item.href}
-            className="hover:border-foreground/25 rounded-xl border p-4 transition-colors"
-          >
-            <p
-              className={
-                item.urgent
-                  ? 'text-destructive text-2xl font-semibold'
-                  : 'text-2xl font-semibold'
-              }
-            >
-              {item.value}
-            </p>
-            <p className="text-muted-foreground mt-1 text-sm text-pretty">
-              {item.label}
-            </p>
-          </Link>
-        ))}
-      </div>
-
-      <BuyabilityChart buyability={insights.buyability} />
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <ContributionChart contribution={insights.contribution} />
-        <OfferDepthChart offerDepth={insights.offerDepth} />
-      </div>
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      {stats.map((stat) => (
+        <Link
+          key={stat.label}
+          href={stat.href}
+          className="hover:border-foreground/25 rounded-xl border p-4 transition-colors"
+        >
+          <p className="text-2xl font-semibold">{stat.value}</p>
+          <p className="text-muted-foreground mt-1 text-sm text-pretty">
+            {stat.label}
+          </p>
+        </Link>
+      ))}
     </div>
   );
 }
@@ -148,41 +106,40 @@ export default async function OverviewPage() {
     <div className="space-y-10">
       <PageHeader
         title="Admin portal"
-        description="Administrative control over the catalog, sellers, orders, payments, and finance. Authorization is enforced by the Commerce API; this portal only decides what to show."
+        description="Connected to the Commerce API. Catalog, taxonomy, and inventory are live; the sections below marked as waiting have no endpoints yet."
       />
 
       <Suspense fallback={null}>
-        <AdminInsights />
+        <CatalogSummary />
       </Suspense>
 
       <Suspense fallback={null}>
         <ApiStatusCard />
       </Suspense>
 
-      <section className="space-y-4">
+      <section className="space-y-3">
         <h2 className="text-lg font-semibold tracking-tight">Sections</h2>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {SECTIONS.map((section) => (
-            <Card
-              key={section.href}
-              className="hover:border-foreground/20 relative"
-            >
-              <CardHeader>
-                <CardTitle>
-                  <Link
-                    href={section.href}
-                    className="after:absolute after:inset-0"
-                  >
-                    {section.label}
-                  </Link>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="text-muted-foreground text-sm">
-                {section.description}
-              </CardContent>
-            </Card>
+            <li key={section.href}>
+              <Link
+                href={section.href}
+                className="hover:border-foreground/25 flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors"
+              >
+                {section.label}
+                <span
+                  className={
+                    section.live
+                      ? 'text-muted-foreground text-xs'
+                      : 'text-muted-foreground text-xs italic'
+                  }
+                >
+                  {section.live ? 'live' : 'awaiting API'}
+                </span>
+              </Link>
+            </li>
           ))}
-        </div>
+        </ul>
       </section>
     </div>
   );

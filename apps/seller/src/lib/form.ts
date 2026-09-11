@@ -1,4 +1,8 @@
-import { ApiError, ApiUnreachableError } from '@commerce/api-client';
+import {
+  ApiError,
+  ApiUnreachableError,
+  parseApiError,
+} from '@commerce/api-client';
 
 /** Result of a server action, rendered back into the form that submitted it. */
 export type FormState = {
@@ -13,9 +17,9 @@ export const idleFormState: FormState = { status: 'idle' };
 /**
  * Turns a failed request into form state.
  *
- * The API reports validation failures as `field: message` strings, so those
- * are split back out and attached to the field that caused them; anything else
- * becomes a form-level message.
+ * The API and the mock disagree on error shape, so the split between a
+ * form-level message and per-field messages is computed once in
+ * `@commerce/api-client` — this just wires the result into a `FormState`.
  */
 export function toFormState(error: unknown): FormState {
   if (error instanceof ApiUnreachableError) {
@@ -26,26 +30,11 @@ export function toFormState(error: unknown): FormState {
   }
 
   if (error instanceof ApiError) {
-    const raw = error.body?.message;
-    const messages = Array.isArray(raw) ? raw : raw ? [raw] : [error.message];
-    const fieldErrors: Record<string, string[]> = {};
-    const formMessages: string[] = [];
-
-    for (const message of messages) {
-      const match = /^([A-Za-z0-9_.[\]]+):\s*(.+)$/.exec(message);
-      if (match) {
-        const field = match[1]!;
-        (fieldErrors[field] ??= []).push(match[2]!);
-      } else {
-        formMessages.push(message);
-      }
-    }
-
+    const parsed = parseApiError(error.body, error.message);
     return {
       status: 'error',
-      message: formMessages.length > 0 ? formMessages.join(' ') : undefined,
-      fieldErrors:
-        Object.keys(fieldErrors).length > 0 ? fieldErrors : undefined,
+      message: parsed.message,
+      fieldErrors: parsed.fieldErrors,
     };
   }
 

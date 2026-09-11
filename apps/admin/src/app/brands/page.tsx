@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { listBrands } from '@commerce/api-client';
+import { backendListBrands } from '@commerce/api-client';
 
 import { ApiErrorNotice } from '@/components/api-error-notice';
 import { PageHeader } from '@/components/page-header';
@@ -29,7 +29,7 @@ export default async function BrandsPage() {
 
   let brands;
   try {
-    brands = await listBrands(apiClient);
+    brands = await backendListBrands(apiClient);
   } catch (error) {
     return (
       <div className="space-y-6">

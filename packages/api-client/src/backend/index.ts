@@ -1,0 +1,10 @@
+/**
+ * Endpoints as the Commerce API actually exposes them today.
+ *
+ * These speak the backend's own shapes rather than the marketplace contract
+ * the clients were first built against, so the two can be reconciled in one
+ * place instead of inside every page.
+ */
+export * from './auth.ts';
+export * from './catalog.ts';
+export * from './inventory.ts';

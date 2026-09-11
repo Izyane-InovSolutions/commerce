@@ -27,11 +27,10 @@ async function readApiStatus(): Promise<ApiStatus> {
 }
 
 /**
- * Renders live connectivity to the Commerce API.
+ * Live connectivity to the Commerce API.
  *
- * The mock and the real API share an address, so which one answered is read
- * from the health response rather than guessed from the URL. That keeps
- * fixture data from being mistaken for the real thing.
+ * The stand-in mock and the real API serve the same routes, so which one
+ * answered is read from the health response rather than guessed from the URL.
  */
 export async function ApiStatusCard() {
   const status = await readApiStatus();
@@ -56,18 +55,17 @@ export async function ApiStatusCard() {
         {status.reachable ? (
           status.mock ? (
             <p>
-              Answered by the stand-in mock API, serving fixtures from{' '}
-              <code className="font-mono">@commerce/contracts</code>. Every
-              client shares this one dataset. Stop it and start the real API to
-              integrate — no configuration changes.
+              Answered by the stand-in mock, not the NestJS API. Point{' '}
+              <code className="font-mono">NEXT_PUBLIC_API_BASE_URL</code> at the
+              real API to switch over.
             </p>
           ) : (
-            <p>Answered by the Commerce API.</p>
+            <p>Answered by the NestJS Commerce API.</p>
           )
         ) : (
           <p>
-            {status.detail} Start one with{' '}
-            <code className="font-mono">npm run mock:dev</code>.
+            {status.detail} Start it with{' '}
+            <code className="font-mono">npm run api:dev</code>.
           </p>
         )}
       </CardContent>

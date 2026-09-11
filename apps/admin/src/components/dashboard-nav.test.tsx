@@ -1,4 +1,4 @@
-import type { User } from '@commerce/contracts';
+import type { BackendUser } from '@commerce/contracts';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -10,13 +10,10 @@ const { usePathname } = vi.hoisted(() => ({ usePathname: vi.fn() }));
 
 vi.mock('next/navigation', () => ({ usePathname }));
 
-const user: User = {
+const user: BackendUser = {
   id: '11111111-1111-4111-8111-111111111111',
   email: 'someone@commerce.test',
-  name: 'Someone',
-  roles: ['admin'],
-  sellerId: null,
-  createdAt: '2026-01-15T09:00:00.000Z',
+  role: 'ADMIN',
 };
 
 const navigation = navigationFor(user);
