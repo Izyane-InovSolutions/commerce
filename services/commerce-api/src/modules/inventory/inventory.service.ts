@@ -257,6 +257,19 @@ export class InventoryService {
     return this.finalizeReservation(reservation, ReservationStatus.RELEASED);
   }
 
+  // Called by the expiry worker once a reservation's TTL has passed. A
+  // non-ACTIVE reservation here means commit()/release() already won the
+  // race, which is expected, not an error.
+  async expireReservation(reservationId: string): Promise<void> {
+    const reservation = await this.findReservationOrThrow(reservationId);
+
+    if (reservation.status !== ReservationStatus.ACTIVE) {
+      return;
+    }
+
+    await this.finalizeReservation(reservation, ReservationStatus.EXPIRED);
+  }
+
   async commit(reservationId: string): Promise<Reservation> {
     const reservation = await this.findReservationOrThrow(reservationId);
 

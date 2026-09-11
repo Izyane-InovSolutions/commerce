@@ -16,7 +16,7 @@ export function createApiDocument(app: INestApplication): OpenAPIObject {
       .setTitle('Commerce API')
       .setVersion('v1')
       .setDescription(
-        'JSON successes contain data and meta.requestId. Errors contain error and requestId. Guest cart requests may send x-guest-token. Payment provider integration is pending.',
+        'JSON successes contain data and meta.requestId. Errors contain error and requestId. Guest cart requests may send x-guest-token. Unified Payments routes require provider configuration; automatic payment reconciliation awaits the full provider status and webhook contracts.',
       )
       .addBearerAuth()
       .build(),

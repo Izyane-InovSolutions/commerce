@@ -1,6 +1,7 @@
 import { Type, plainToInstance } from 'class-transformer';
 import {
   IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsString,
@@ -8,6 +9,7 @@ import {
   Max,
   Min,
   MinLength,
+  ValidateIf,
   validateSync,
 } from 'class-validator';
 
@@ -62,6 +64,31 @@ class EnvironmentVariables {
   @IsInt()
   @Min(60)
   MEDIA_URL_TTL_SECONDS = 900;
+
+  @IsIn(['pending', 'unified'])
+  PAYMENTS_PROVIDER = 'pending';
+
+  @ValidateIf(
+    (env: EnvironmentVariables) => env.PAYMENTS_PROVIDER === 'unified',
+  )
+  @IsUrl({ protocols: ['https'], require_protocol: true, require_tld: false })
+  UNIFIED_PAYMENTS_BASE_URL?: string;
+
+  @ValidateIf(
+    (env: EnvironmentVariables) => env.PAYMENTS_PROVIDER === 'unified',
+  )
+  @IsString()
+  @IsNotEmpty()
+  UNIFIED_PAYMENTS_API_KEY?: string;
+
+  @IsString()
+  UNIFIED_PAYMENTS_MERCHANT_ID = '';
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1000)
+  @Max(60000)
+  UNIFIED_PAYMENTS_TIMEOUT_MS = 15000;
 }
 
 export function validate(

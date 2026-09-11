@@ -312,6 +312,57 @@ describe('InventoryService', () => {
     });
   });
 
+  describe('expireReservation', () => {
+    it('throws not found for an unknown reservation', async () => {
+      prisma.reservation.findUnique.mockResolvedValue(null);
+
+      await expect(service.expireReservation('missing')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it('is a no-op for a reservation that is no longer ACTIVE', async () => {
+      const reservation = {
+        id: 'res-1',
+        status: ReservationStatus.COMMITTED,
+        quantity: 2,
+        inventoryRecordId: 'rec-1',
+      };
+      prisma.reservation.findUnique.mockResolvedValue(reservation);
+
+      await service.expireReservation('res-1');
+
+      expect(prisma.$executeRaw).not.toHaveBeenCalled();
+      expect(prisma.reservation.update).not.toHaveBeenCalled();
+    });
+
+    it('decrements reserved stock and marks the reservation EXPIRED', async () => {
+      const reservation = {
+        id: 'res-1',
+        status: ReservationStatus.ACTIVE,
+        quantity: 2,
+        inventoryRecordId: 'rec-1',
+      };
+      prisma.reservation.findUnique.mockResolvedValue(reservation);
+      prisma.reservation.update.mockResolvedValue({
+        ...reservation,
+        status: ReservationStatus.EXPIRED,
+      });
+
+      await service.expireReservation('res-1');
+
+      expect(prisma.reservation.update).toHaveBeenCalledWith({
+        where: { id: 'res-1' },
+        data: { status: ReservationStatus.EXPIRED },
+      });
+      expect(prisma.inventoryMovement.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ type: 'RELEASE' }) as object,
+        }),
+      );
+    });
+  });
+
   describe('commit', () => {
     it('rejects committing a non-active, non-committed reservation', async () => {
       prisma.reservation.findUnique.mockResolvedValue({

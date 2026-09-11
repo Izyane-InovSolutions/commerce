@@ -3,6 +3,8 @@ import { PaymentStatus, type Payment, type Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { OrderWithItems, OrdersService } from '../orders/orders.service';
+import type { PaymentDetailsDto } from './dto/payment-details.dto';
+import { PaymentOutcomeUnknownException } from './gateway-errors';
 import {
   PAYMENT_PROVIDER,
   type PaymentProvider,
@@ -21,7 +23,11 @@ const PROVIDER_STATUS_TO_PAYMENT_STATUS: Record<
   CANCELLED: PaymentStatus.CANCELLED,
 };
 
-export type PaymentWithRedirect = Payment & { redirectUrl?: string };
+export type PaymentWithRedirect = Payment & {
+  redirectUrl?: string;
+  gatewayStatus?: string;
+  requiresReconciliation?: boolean;
+};
 
 @Injectable()
 export class PaymentsService {
@@ -33,7 +39,16 @@ export class PaymentsService {
 
   async initializeForOrder(
     order: OrderWithItems,
+    details?: PaymentDetailsDto,
   ): Promise<PaymentWithRedirect> {
+    this.provider.validateInput?.({
+      paymentId: order.id,
+      reference: order.id,
+      amount: order.total,
+      currency: order.currency,
+      idempotencyKey: order.id,
+      details,
+    });
     const payment = await this.prisma.payment.create({
       data: {
         orderId: order.id,
@@ -45,13 +60,17 @@ export class PaymentsService {
       },
     });
 
+    let accepted = false;
     try {
       const result = await this.provider.initialize({
         paymentId: payment.id,
         amount: order.total,
         currency: order.currency,
         idempotencyKey: order.id,
+        reference: order.id,
+        details,
       });
+      accepted = true;
 
       const updated = await this.prisma.payment.update({
         where: { id: payment.id },
@@ -61,8 +80,30 @@ export class PaymentsService {
         },
       });
 
-      return { ...updated, redirectUrl: result.redirectUrl };
+      return {
+        ...updated,
+        redirectUrl: result.redirectUrl,
+        ...(result.gatewayStatus
+          ? {
+              gatewayStatus: result.gatewayStatus,
+              requiresReconciliation: result.gatewayStatus !== 'PENDING',
+            }
+          : {}),
+      };
     } catch (error) {
+      if (accepted || error instanceof PaymentOutcomeUnknownException) {
+        // Never release stock or create a new payment after an ambiguous charge.
+        // Return the existing durable payment ID for subsequent reconciliation.
+        try {
+          const pending = await this.prisma.payment.update({
+            where: { id: payment.id },
+            data: { failureReason: 'Gateway outcome requires reconciliation' },
+          });
+          return { ...pending, requiresReconciliation: true };
+        } catch {
+          return { ...payment, requiresReconciliation: true };
+        }
+      }
       await this.prisma.payment.update({
         where: { id: payment.id },
         data: {
