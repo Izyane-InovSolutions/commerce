@@ -10,10 +10,14 @@ function TestHarness() {
     <div>
       <p data-testid="count">{items.length}</p>
       <p data-testid="quantity-a">
-        {items.find((item) => item.productId === 'a')?.quantity ?? 0}
+        {items.find((item) => item.slug === 'a')?.quantity ?? 0}
       </p>
-      <button onClick={() => addItem('a')}>Add A</button>
-      <button onClick={() => addItem('b')}>Add B</button>
+      <button onClick={() => addItem({ slug: 'a', name: 'A', unitPrice: 10 })}>
+        Add A
+      </button>
+      <button onClick={() => addItem({ slug: 'b', name: 'B', unitPrice: 20 })}>
+        Add B
+      </button>
       <button onClick={() => removeItem('a')}>Remove A</button>
     </div>
   );
@@ -74,13 +78,15 @@ describe('CartProvider / useCart', () => {
     const stored = JSON.parse(
       window.localStorage.getItem('commerce-cart') ?? '[]',
     );
-    expect(stored).toEqual([{ productId: 'a', quantity: 1 }]);
+    expect(stored).toEqual([
+      { slug: 'a', name: 'A', unitPrice: 10, quantity: 1 },
+    ]);
   });
 
   it('hydrates from localStorage on mount', () => {
     window.localStorage.setItem(
       'commerce-cart',
-      JSON.stringify([{ productId: 'a', quantity: 3 }]),
+      JSON.stringify([{ slug: 'a', name: 'A', unitPrice: 10, quantity: 3 }]),
     );
 
     render(

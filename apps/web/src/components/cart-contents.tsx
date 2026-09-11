@@ -34,7 +34,7 @@ export function CartContents() {
     <div className="grid gap-8 lg:grid-cols-[1fr_340px]">
       <ul className="space-y-4">
         {lines.map((line) => (
-          <li key={line.product.id}>
+          <li key={line.slug}>
             <Card>
               <CardContent className="flex items-center gap-4">
                 <div className="flex size-16 shrink-0 items-center justify-center rounded-lg bg-muted">
@@ -44,9 +44,9 @@ export function CartContents() {
                   />
                 </div>
                 <div className="min-w-0 flex-1 space-y-1">
-                  <p className="text-sm font-medium">{line.product.name}</p>
+                  <p className="text-sm font-medium">{line.name}</p>
                   <p className="text-muted-foreground text-sm">
-                    {formatCurrency(line.product.price)} × {line.quantity}
+                    {formatCurrency(line.unitPrice)} × {line.quantity}
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-2">
@@ -56,7 +56,7 @@ export function CartContents() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => removeItem(line.product.id)}
+                    onClick={() => removeItem(line.slug)}
                   >
                     <Trash data-icon="inline-start" />
                     Remove
@@ -74,11 +74,11 @@ export function CartContents() {
           <ul className="space-y-3">
             {lines.map((line) => (
               <li
-                key={line.product.id}
+                key={line.slug}
                 className="flex justify-between gap-3 text-sm"
               >
                 <span className="text-muted-foreground">
-                  {line.product.name} × {line.quantity}
+                  {line.name} × {line.quantity}
                 </span>
                 <span className="font-medium">
                   {formatCurrency(line.lineTotal)}

@@ -1,8 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 
-import { CheckoutForm } from '@/components/checkout-form';
+import { CHECKOUT_FORM_ID, CheckoutForm } from '@/components/checkout-form';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -12,6 +13,7 @@ import { formatCurrency } from '@/lib/currency';
 
 export function CheckoutContent() {
   const { items } = useCart();
+  const [placed, setPlaced] = useState(false);
 
   const lines = resolveCartLines(items);
   const total = getCartTotal(lines);
@@ -30,9 +32,21 @@ export function CheckoutContent() {
     );
   }
 
+  if (placed) {
+    return (
+      <div className="space-y-2 rounded-2xl border border-dashed p-8 text-center">
+        <p className="text-lg font-semibold">Order placed</p>
+        <p className="text-muted-foreground text-sm">
+          This is a demo checkout, so no payment was actually charged. Real
+          payments arrive with Phase 1.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_340px]">
-      <CheckoutForm total={total} />
+      <CheckoutForm onPlaced={() => setPlaced(true)} />
 
       <Card className="h-fit">
         <CardContent className="space-y-4">
@@ -40,11 +54,11 @@ export function CheckoutContent() {
           <ul className="space-y-3">
             {lines.map((line) => (
               <li
-                key={line.product.id}
+                key={line.slug}
                 className="flex justify-between gap-3 text-sm"
               >
                 <span className="text-muted-foreground">
-                  {line.product.name} × {line.quantity}
+                  {line.name} × {line.quantity}
                 </span>
                 <span className="font-medium">
                   {formatCurrency(line.lineTotal)}
@@ -57,6 +71,9 @@ export function CheckoutContent() {
             <span>Total</span>
             <span>{formatCurrency(total)}</span>
           </div>
+          <Button type="submit" form={CHECKOUT_FORM_ID} className="w-full">
+            Pay {formatCurrency(total)}
+          </Button>
         </CardContent>
       </Card>
     </div>

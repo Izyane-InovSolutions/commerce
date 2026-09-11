@@ -2,14 +2,14 @@ import Link from 'next/link';
 import { PackageSearch } from 'lucide-react';
 
 import { Card, CardContent } from '@/components/ui/card';
+import { getDisplayPrice, type Product } from '@/lib/catalog-types';
 import { formatCurrency } from '@/lib/currency';
-import type { Product } from '@/lib/mock-data/products';
 
 export function ProductCard({ product }: { product: Product }) {
-  const onSale = typeof product.compareAtPrice === 'number';
+  const price = getDisplayPrice(product);
 
   return (
-    <Link href={`/products/${product.id}`} className="group block h-full">
+    <Link href={`/products/${product.slug}`} className="group block h-full">
       <Card className="h-full transition-shadow group-hover:shadow-md">
         <CardContent className="space-y-3">
           <div className="flex aspect-square items-center justify-center rounded-lg bg-muted">
@@ -22,16 +22,9 @@ export function ProductCard({ product }: { product: Product }) {
             <p className="text-sm font-medium group-hover:underline">
               {product.name}
             </p>
-            <div className="flex items-baseline gap-2 text-sm">
-              <span className="font-semibold">
-                {formatCurrency(product.price)}
-              </span>
-              {onSale ? (
-                <span className="text-muted-foreground line-through">
-                  {formatCurrency(product.compareAtPrice as number)}
-                </span>
-              ) : null}
-            </div>
+            <p className="text-sm font-semibold">
+              {price !== null ? formatCurrency(price) : 'Currently unavailable'}
+            </p>
           </div>
         </CardContent>
       </Card>
