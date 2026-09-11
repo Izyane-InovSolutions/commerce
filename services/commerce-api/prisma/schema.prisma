@@ -1,0 +1,591 @@
+// Commerce API — Prisma schema
+//
+// Conventions for every model added here (see docs/backend-development.md):
+// - Primary keys are UUIDs: `id String @id @default(uuid()) @db.Uuid`
+// - Timestamps are UTC: `createdAt DateTime @default(now())`,
+//   `updatedAt DateTime @updatedAt`
+// - Monetary amounts are stored as integer minor units (e.g. cents) alongside
+//   an explicit currency column (e.g. `amount Int`, `currency String`) —
+//   never as floating point.
+// - Model names are singular PascalCase; fields are camelCase.
+// - Tables and columns are mapped to plural snake_case via `@@map`/`@map`.
+// - Add optimistic concurrency (`version Int @default(0)`) and soft-delete
+//   (`deletedAt DateTime?`) only where the business actually needs them.
+//
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  SELLER
+  STAFF
+  ADMIN
+}
+
+enum BackgroundJobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  DEAD_LETTER
+}
+
+enum OutboxEventStatus {
+  PENDING
+  PUBLISHED
+  DEAD_LETTER
+}
+
+enum MediaStatus {
+  PENDING_UPLOAD
+  AVAILABLE
+  DELETED
+}
+
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model User {
+  id                  String               @id @default(uuid()) @db.Uuid
+  email               String               @unique
+  passwordHash        String               @map("password_hash")
+  firstName           String?              @map("first_name")
+  lastName            String?              @map("last_name")
+  phone               String?
+  role                Role                 @default(CUSTOMER)
+  isActive            Boolean              @default(true) @map("is_active")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+  sessions            Session[]
+  passwordResetTokens PasswordResetToken[]
+  mediaAssets         MediaAsset[]
+  addresses           Address[]
+  cart                Cart?
+  wishlistItems       WishlistItem[]
+  orders              Order[]
+
+  @@map("users")
+}
+
+// Only one address per user should have isDefault: true — enforced in
+// AddressesService (set new default -> unset the previous one in the same
+// transaction), not a DB constraint.
+model Address {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label         String?
+  recipientName String   @map("recipient_name")
+  phone         String?
+  line1         String
+  line2         String?
+  city          String
+  region        String?
+  postalCode    String   @map("postal_code")
+  country       String   @db.VarChar(2)
+  isDefault     Boolean  @default(false) @map("is_default")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+// A row is a login session backed by a refresh token. Refresh rotates it
+// (the old row is revoked, a new row is created); a revoked token being
+// presented again indicates theft and revokes every session for the user.
+model Session {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String    @unique @map("refresh_token_hash")
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+// No foreign key on actorUserId: audit history must survive the actor
+// (or their account) being deleted later.
+model AuditEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  action      String
+  targetType  String?  @map("target_type")
+  targetId    String?  @map("target_id")
+  metadata    Json?
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([actorUserId])
+  @@index([action])
+  @@map("audit_events")
+}
+
+model CacheEntry {
+  key       String   @id @db.VarChar(255)
+  value     Json
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([expiresAt])
+  @@map("cache_entries")
+}
+
+model BackgroundJob {
+  id          String              @id @default(uuid()) @db.Uuid
+  type        String              @db.VarChar(100)
+  payload     Json
+  status      BackgroundJobStatus @default(PENDING)
+  attempts    Int                 @default(0)
+  maxAttempts Int                 @default(5) @map("max_attempts")
+  runAt       DateTime            @default(now()) @map("run_at")
+  lockedAt    DateTime?           @map("locked_at")
+  lockToken   String?             @unique @map("lock_token") @db.Uuid
+  lastError   String?             @map("last_error") @db.Text
+  completedAt DateTime?           @map("completed_at")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+
+  @@index([status, runAt])
+  @@index([status, lockedAt])
+  @@map("background_jobs")
+}
+
+model OutboxEvent {
+  id            String            @id @default(uuid()) @db.Uuid
+  topic         String            @db.VarChar(100)
+  aggregateType String            @map("aggregate_type") @db.VarChar(100)
+  aggregateId   String            @map("aggregate_id") @db.VarChar(100)
+  payload       Json
+  status        OutboxEventStatus @default(PENDING)
+  attempts      Int               @default(0)
+  maxAttempts   Int               @default(10) @map("max_attempts")
+  availableAt   DateTime          @default(now()) @map("available_at")
+  publishedAt   DateTime?         @map("published_at")
+  lastError     String?           @map("last_error") @db.Text
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+
+  @@index([status, availableAt])
+  @@index([aggregateType, aggregateId])
+  @@map("outbox_events")
+}
+
+model MediaAsset {
+  id               String         @id @default(uuid()) @db.Uuid
+  ownerUserId      String         @map("owner_user_id") @db.Uuid
+  ownerUser        User           @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  storageKey       String         @unique @map("storage_key")
+  originalFileName String         @map("original_file_name")
+  mimeType         String         @map("mime_type") @db.VarChar(100)
+  byteSize         BigInt         @map("byte_size")
+  status           MediaStatus    @default(PENDING_UPLOAD)
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+  deletedAt        DateTime?      @map("deleted_at")
+  productMedia     ProductMedia[]
+
+  @@index([ownerUserId, status])
+  @@map("media_assets")
+}
+
+model Category {
+  id          String     @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String     @unique
+  description String?
+  parentId    String?    @map("parent_id") @db.Uuid
+  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Category[] @relation("CategoryHierarchy")
+  position    Int        @default(0)
+  products    Product[]
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@index([parentId])
+  @@map("categories")
+}
+
+model Brand {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String    @unique
+  description String?
+  products    Product[]
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("brands")
+}
+
+model Attribute {
+  id        String           @id @default(uuid()) @db.Uuid
+  name      String
+  code      String           @unique
+  values    AttributeValue[]
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  @@map("attributes")
+}
+
+model AttributeValue {
+  id          String                         @id @default(uuid()) @db.Uuid
+  attributeId String                         @map("attribute_id") @db.Uuid
+  attribute   Attribute                      @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  value       String
+  variants    ProductVariantAttributeValue[]
+  createdAt   DateTime                       @default(now()) @map("created_at")
+
+  @@unique([attributeId, value])
+  @@map("attribute_values")
+}
+
+model Product {
+  id          String           @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String           @unique
+  description String?
+  brandId     String?          @map("brand_id") @db.Uuid
+  brand       Brand?           @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  categoryId  String?          @map("category_id") @db.Uuid
+  category    Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  status      ProductStatus    @default(DRAFT)
+  variants    ProductVariant[]
+  media       ProductMedia[]
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  @@index([brandId])
+  @@index([categoryId])
+  @@index([status])
+  @@map("products")
+}
+
+model ProductVariant {
+  id               String                         @id @default(uuid()) @db.Uuid
+  productId        String                         @map("product_id") @db.Uuid
+  product          Product                        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  skuCode          String                         @unique @map("sku_code")
+  name             String?
+  status           ProductStatus                  @default(DRAFT)
+  attributeValues  ProductVariantAttributeValue[]
+  offers           Offer[]
+  inventoryRecords InventoryRecord[]
+  createdAt        DateTime                       @default(now()) @map("created_at")
+  updatedAt        DateTime                       @updatedAt @map("updated_at")
+
+  @@index([productId])
+  @@map("product_variants")
+}
+
+model ProductVariantAttributeValue {
+  variantId        String         @map("variant_id") @db.Uuid
+  variant          ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  attributeValueId String         @map("attribute_value_id") @db.Uuid
+  attributeValue   AttributeValue @relation(fields: [attributeValueId], references: [id], onDelete: Cascade)
+
+  @@id([variantId, attributeValueId])
+  @@map("product_variant_attribute_values")
+}
+
+model ProductMedia {
+  id           String     @id @default(uuid()) @db.Uuid
+  productId    String     @map("product_id") @db.Uuid
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  mediaAssetId String     @map("media_asset_id") @db.Uuid
+  mediaAsset   MediaAsset @relation(fields: [mediaAssetId], references: [id], onDelete: Cascade)
+  position     Int        @default(0)
+  isPrimary    Boolean    @default(false) @map("is_primary")
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@unique([productId, mediaAssetId])
+  @@map("product_media")
+}
+
+// sellerId has no foreign key yet: Seller doesn't exist until Phase 3. Null
+// means first-party — the platform's own inventory is represented as an
+// offer too, so retail and marketplace purchases share one model.
+model Offer {
+  id            String         @id @default(uuid()) @db.Uuid
+  variantId     String         @map("variant_id") @db.Uuid
+  variant       ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  sellerId      String?        @map("seller_id") @db.Uuid
+  status        ProductStatus  @default(DRAFT)
+  prices        Price[]
+  cartItems     CartItem[]
+  wishlistItems WishlistItem[]
+  orderItems    OrderItem[]
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  @@index([variantId])
+  @@index([sellerId])
+  @@map("offers")
+}
+
+// The current price for an offer is whichever row has
+// startsAt <= now < (endsAt ?? infinity); most recent startsAt wins on overlap.
+model Price {
+  id        String    @id @default(uuid()) @db.Uuid
+  offerId   String    @map("offer_id") @db.Uuid
+  offer     Offer     @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  amount    Int
+  currency  String    @db.VarChar(3)
+  startsAt  DateTime  @default(now()) @map("starts_at")
+  endsAt    DateTime? @map("ends_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([offerId, startsAt])
+  @@map("prices")
+}
+
+enum InventoryMovementType {
+  RECEIPT
+  ADJUSTMENT
+  RESERVATION
+  RELEASE
+  COMMITMENT
+}
+
+enum ReservationStatus {
+  ACTIVE
+  COMMITTED
+  RELEASED
+  EXPIRED
+}
+
+model Warehouse {
+  id        String            @id @default(uuid()) @db.Uuid
+  name      String
+  code      String            @unique
+  isActive  Boolean           @default(true) @map("is_active")
+  records   InventoryRecord[]
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  @@map("warehouses")
+}
+
+// `available` is never stored — always computed as onHand - reserved.
+model InventoryRecord {
+  id           String              @id @default(uuid()) @db.Uuid
+  warehouseId  String              @map("warehouse_id") @db.Uuid
+  warehouse    Warehouse           @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  variantId    String              @map("variant_id") @db.Uuid
+  variant      ProductVariant      @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  onHand       Int                 @default(0) @map("on_hand")
+  reserved     Int                 @default(0)
+  movements    InventoryMovement[]
+  reservations Reservation[]
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+
+  @@unique([warehouseId, variantId])
+  @@map("inventory_records")
+}
+
+// One row per state change — an audit trail distinct from the live counters
+// on InventoryRecord. referenceId has no FK (same nullable-reference pattern
+// as AuditEvent.actorUserId): Cart/Checkout will populate it in Phase 1.4/1.5.
+model InventoryMovement {
+  id                String                @id @default(uuid()) @db.Uuid
+  inventoryRecordId String                @map("inventory_record_id") @db.Uuid
+  inventoryRecord   InventoryRecord       @relation(fields: [inventoryRecordId], references: [id], onDelete: Cascade)
+  type              InventoryMovementType
+  quantity          Int
+  referenceType     String?               @map("reference_type")
+  referenceId       String?               @map("reference_id")
+  note              String?
+  createdAt         DateTime              @default(now()) @map("created_at")
+
+  @@index([inventoryRecordId])
+  @@map("inventory_movements")
+}
+
+// holderType/holderId are nullable now — Cart/Checkout (Phase 1.4/1.5)
+// populate them; same forward-compatible-nullable pattern as Offer.sellerId.
+model Reservation {
+  id                String            @id @default(uuid()) @db.Uuid
+  inventoryRecordId String            @map("inventory_record_id") @db.Uuid
+  inventoryRecord   InventoryRecord   @relation(fields: [inventoryRecordId], references: [id], onDelete: Cascade)
+  quantity          Int
+  status            ReservationStatus @default(ACTIVE)
+  holderType        String?           @map("holder_type")
+  holderId          String?           @map("holder_id")
+  expiresAt         DateTime          @map("expires_at")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  @@index([inventoryRecordId, status])
+  @@index([status, expiresAt])
+  @@map("reservations")
+}
+
+enum CartStatus {
+  ACTIVE
+  MERGED
+}
+
+// guestToken is a plain opaque random string, not a security credential like
+// a session token — comparable in sensitivity to the cart-id cookie many
+// storefronts use. Exactly one of userId/guestToken is set.
+model Cart {
+  id         String     @id @default(uuid()) @db.Uuid
+  userId     String?    @unique @map("user_id") @db.Uuid
+  user       User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guestToken String?    @unique @map("guest_token")
+  status     CartStatus @default(ACTIVE)
+  items      CartItem[]
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+
+  @@map("carts")
+}
+
+model CartItem {
+  id        String   @id @default(uuid()) @db.Uuid
+  cartId    String   @map("cart_id") @db.Uuid
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  offerId   String   @map("offer_id") @db.Uuid
+  offer     Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  quantity  Int
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([cartId, offerId])
+  @@map("cart_items")
+}
+
+model WishlistItem {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  offerId   String   @map("offer_id") @db.Uuid
+  offer     Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, offerId])
+  @@map("wishlist_items")
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  REQUIRES_ACTION
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+// No shipping/tax modeling yet - total === subtotal for now, but both are
+// stored explicitly so a later ticket can add shipping/tax without a shape
+// change. shippingAddress is a point-in-time AddressSnapshot JSON blob (see
+// src/common/addresses/address-snapshot.ts), not a live FK to Address, so the
+// order survives the customer later editing or deleting that address.
+model Order {
+  id              String      @id @default(uuid()) @db.Uuid
+  userId          String      @map("user_id") @db.Uuid
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status          OrderStatus @default(PENDING_PAYMENT)
+  currency        String      @db.VarChar(3)
+  subtotal        Int
+  total           Int
+  shippingAddress Json        @map("shipping_address")
+  items           OrderItem[]
+  payment         Payment?
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("orders")
+}
+
+// reservationId has no FK - same loose-reference convention as
+// Reservation.holderId/InventoryMovement.referenceId. It's set once
+// InventoryService.reserve() succeeds for this line, so OrdersService can
+// later commit()/release() it by id without a new lookup on InventoryService.
+model OrderItem {
+  id            String   @id @default(uuid()) @db.Uuid
+  orderId       String   @map("order_id") @db.Uuid
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  offerId       String   @map("offer_id") @db.Uuid
+  offer         Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  quantity      Int
+  unitAmount    Int      @map("unit_amount")
+  currency      String   @db.VarChar(3)
+  lineTotal     Int      @map("line_total")
+  reservationId String?  @map("reservation_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+// One payment per order for now - no retry-with-new-payment-row modeling.
+model Payment {
+  id                String         @id @default(uuid()) @db.Uuid
+  orderId           String         @unique @map("order_id") @db.Uuid
+  order             Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider          String
+  providerReference String?        @unique @map("provider_reference")
+  status            PaymentStatus  @default(PENDING)
+  amount            Int
+  currency          String         @db.VarChar(3)
+  idempotencyKey    String         @unique @map("idempotency_key")
+  failureReason     String?        @map("failure_reason")
+  events            PaymentEvent[]
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+
+  @@map("payments")
+}
+
+// providerEventId dedupes webhook deliveries - gateways retry, and this makes
+// handleWebhook() a no-op on a repeat of an event it already recorded.
+model PaymentEvent {
+  id              String        @id @default(uuid()) @db.Uuid
+  paymentId       String        @map("payment_id") @db.Uuid
+  payment         Payment       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  providerEventId String        @unique @map("provider_event_id")
+  type            String
+  status          PaymentStatus
+  payload         Json
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  @@index([paymentId])
+  @@map("payment_events")
+}
