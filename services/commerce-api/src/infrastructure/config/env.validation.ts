@@ -9,6 +9,7 @@ import {
   Max,
   Min,
   MinLength,
+  ValidateIf,
   validateSync,
 } from 'class-validator';
 
@@ -76,6 +77,9 @@ class EnvironmentVariables {
   @IsString()
   UNIFIED_PAYMENTS_MERCHANT_ID?: string;
 
+  @ValidateIf(
+    (_object, value) => value !== undefined && value !== '',
+  )
   @IsOptional()
   @IsUrl({ require_tld: false })
   UNIFIED_PAYMENTS_CALLBACK_URL?: string;
