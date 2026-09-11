@@ -18,6 +18,18 @@ npm run api:dev
 ```
 
 The health endpoint is available at `GET /api/v1/health`.
+Readiness is available at `GET /api/v1/health/ready`, process metrics at
+`GET /api/v1/metrics`, and Swagger UI at `http://localhost:3000/api/docs`.
+
+Apply schema changes locally with a descriptive migration name:
+
+```bash
+npm run prisma:migrate --workspace @commerce/commerce-api -- --name describe_change
+```
+
+The application uses PostgreSQL tables for durable background jobs, outbox
+events, and bounded cache entries. This keeps the local stack limited to
+NestJS, TypeScript, PostgreSQL, and Prisma.
 
 ## Checks
 
@@ -28,6 +40,7 @@ npm run format:check
 npm run lint
 npm test
 npm run build
+npm run test:e2e
 ```
 
 ## Module boundaries

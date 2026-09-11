@@ -5,7 +5,8 @@
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "incremental": true,
-    "module": "commonjs",
+    "isolatedModules": true,
+    "module": "NodeNext",
     "outDir": "./dist",
     "removeComments": true,
     "sourceMap": true

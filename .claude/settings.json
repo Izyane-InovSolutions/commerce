@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -X POST http://localhost:3000/api/v1/auth/register -H \"Content-Type: application/json\" -d '{\"email\":\"smoke-admin2@example.com\",\"password\":\"password123\"}')",
+      "Bash(node -e ' *)"
+    ]
+  }
+}
