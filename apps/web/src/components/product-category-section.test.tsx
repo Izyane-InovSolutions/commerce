@@ -11,6 +11,7 @@ const category: ProductCategory = {
     id: `p-${index}`,
     name: `Product ${index}`,
     price: 10 + index,
+    description: `Description for product ${index}.`,
   })),
 };
 
