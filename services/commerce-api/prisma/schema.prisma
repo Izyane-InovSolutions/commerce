@@ -72,6 +72,9 @@ model Seller {
   description        String?          @db.VarChar(2000)
   offers             Offer[]
   orders             SellerOrder[]
+  ledgerEntries      LedgerEntry[]
+  balance            SellerBalance?
+  payouts            Payout[]
   createdAt          DateTime         @default(now()) @map("created_at")
   updatedAt          DateTime         @updatedAt @map("updated_at")
 
@@ -443,6 +446,7 @@ enum InventoryMovementType {
   RESERVATION
   RELEASE
   COMMITMENT
+  RETURN
 }
 
 enum ReservationStatus {
@@ -570,6 +574,8 @@ enum OrderStatus {
   PENDING_PAYMENT
   PAID
   CANCELLED
+  PARTIALLY_REFUNDED
+  REFUNDED
 }
 
 enum PaymentStatus {
@@ -579,6 +585,22 @@ enum PaymentStatus {
   SUCCEEDED
   FAILED
   CANCELLED
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+enum RefundStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum LedgerEntryType {
+  SALE
+  REFUND
+  PAYOUT
 }
 
 // No shipping/tax modeling yet - total === subtotal for now, but both are
@@ -614,18 +636,20 @@ model Order {
 // a later ticket, and this shape is what makes that possible without another
 // migration.
 model SellerOrder {
-  id        String      @id @default(uuid()) @db.Uuid
-  orderId   String      @map("order_id") @db.Uuid
-  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  sellerId  String?     @map("seller_id") @db.Uuid
-  seller    Seller?     @relation(fields: [sellerId], references: [id], onDelete: Restrict)
-  status    OrderStatus @default(PENDING_PAYMENT)
-  subtotal  Int
-  total     Int
-  currency  String      @db.VarChar(3)
-  items     OrderItem[]
-  createdAt DateTime    @default(now()) @map("created_at")
-  updatedAt DateTime    @updatedAt @map("updated_at")
+  id             String      @id @default(uuid()) @db.Uuid
+  orderId        String      @map("order_id") @db.Uuid
+  order          Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sellerId       String?     @map("seller_id") @db.Uuid
+  seller         Seller?     @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  status         OrderStatus @default(PENDING_PAYMENT)
+  subtotal       Int
+  total          Int
+  refundedAmount Int         @default(0) @map("refunded_amount")
+  currency       String      @db.VarChar(3)
+  items          OrderItem[]
+  refunds        Refund[]
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
 
   @@index([sellerId, status])
   @@map("seller_orders")
@@ -668,14 +692,94 @@ model Payment {
   providerReference String?        @unique @map("provider_reference")
   status            PaymentStatus  @default(PENDING)
   amount            Int
+  refundedAmount    Int            @default(0) @map("refunded_amount")
   currency          String         @db.VarChar(3)
   idempotencyKey    String         @unique @map("idempotency_key")
   failureReason     String?        @map("failure_reason")
   events            PaymentEvent[]
+  refunds           Refund[]
   createdAt         DateTime       @default(now()) @map("created_at")
   updatedAt         DateTime       @updatedAt @map("updated_at")
 
   @@map("payments")
+}
+
+// Every refund is scoped to exactly one SellerOrder, even a "refund the
+// whole order" action creates one Refund row per seller group - the gateway
+// refunds against the parent Payment (it has no seller-order concept), but
+// locally we need to know whose commission/balance to reverse.
+model Refund {
+  id                String       @id @default(uuid()) @db.Uuid
+  paymentId         String       @map("payment_id") @db.Uuid
+  payment           Payment      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  sellerOrderId     String       @map("seller_order_id") @db.Uuid
+  sellerOrder       SellerOrder  @relation(fields: [sellerOrderId], references: [id], onDelete: Cascade)
+  amount            Int
+  currency          String       @db.VarChar(3)
+  reason            String
+  status            RefundStatus @default(PENDING)
+  providerReference String?      @unique @map("provider_reference")
+  idempotencyKey    String       @unique @map("idempotency_key")
+  failureReason     String?      @map("failure_reason")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  @@index([paymentId])
+  @@index([sellerOrderId])
+  @@map("refunds")
+}
+
+// Append-only - never updated or deleted. Only marketplace sellers (a
+// SellerOrder with a non-null sellerId) get entries; the platform's own
+// first-party SellerOrders never do, since that revenue is already the
+// platform's, not commission-split. referenceId has no FK - same
+// loose-reference convention as InventoryMovement.referenceId.
+model LedgerEntry {
+  id               String          @id @default(uuid()) @db.Uuid
+  sellerId         String          @map("seller_id") @db.Uuid
+  seller           Seller          @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  type             LedgerEntryType
+  referenceType    String          @map("reference_type")
+  referenceId      String          @map("reference_id")
+  grossAmount      Int             @map("gross_amount")
+  commissionAmount Int             @map("commission_amount")
+  netAmount        Int             @map("net_amount")
+  currency         String          @db.VarChar(3)
+  description      String?
+  createdAt        DateTime        @default(now()) @map("created_at")
+
+  @@index([sellerId, createdAt])
+  @@map("ledger_entries")
+}
+
+// One row per seller - a materialized running total, always updated in the
+// same transaction as the LedgerEntry that changes it, so it's a derived
+// cache of the ledger rather than an independent source of truth.
+model SellerBalance {
+  sellerId  String   @id @map("seller_id") @db.Uuid
+  seller    Seller   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  balance   Int      @default(0)
+  currency  String   @db.VarChar(3)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("seller_balances")
+}
+
+// Admin-recorded bookkeeping only - "this seller was paid $X externally" -
+// not an integration with a real payout rail (that's a later phase per the
+// README's own phasing).
+model Payout {
+  id        String   @id @default(uuid()) @db.Uuid
+  sellerId  String   @map("seller_id") @db.Uuid
+  seller    Seller   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  amount    Int
+  currency  String   @db.VarChar(3)
+  reference String?
+  note      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([sellerId, createdAt])
+  @@map("payouts")
 }
 
 // providerEventId dedupes webhook deliveries - gateways retry, and this makes

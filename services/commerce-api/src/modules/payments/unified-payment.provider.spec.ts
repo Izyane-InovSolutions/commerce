@@ -207,6 +207,44 @@ describe('UnifiedPaymentProvider', () => {
     );
   });
 
+  it('refund() delegates to the gateway refund endpoint and maps the interface result', async () => {
+    reply({ success: true, data: { ...data, status: 'SUCCEEDED' } });
+
+    await expect(
+      provider.refund('pay_123', 1000, 'Customer request', 'refund-key'),
+    ).resolves.toEqual({
+      providerReference: 'pay_123',
+      status: 'SUCCEEDED',
+    });
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      'https://gateway.example/api/v1/payments/pay_123/refund',
+      expect.objectContaining({
+        body: JSON.stringify({ amount: 10, reason: 'Customer request' }),
+        headers: expect.objectContaining({
+          'Idempotency-Key': 'refund-key',
+        }) as unknown,
+      }),
+    );
+  });
+
+  it('getRefund() reads the gateway payment and maps the interface result', async () => {
+    reply({ success: true, data: { ...data, status: 'PROCESSING' } });
+
+    await expect(provider.getRefund('pay_123')).resolves.toEqual({
+      providerReference: 'pay_123',
+      status: 'PROCESSING',
+    });
+  });
+
+  it('falls back to PENDING for an undocumented refund status rather than inventing a terminal one', async () => {
+    reply({ success: true, data: { ...data, status: 'COMPLETED' } });
+
+    await expect(provider.getRefund('pay_123')).resolves.toEqual({
+      providerReference: 'pay_123',
+      status: 'PENDING',
+    });
+  });
+
   it('maps the documented payment-not-found error', async () => {
     reply({ success: false, error: { code: 'PAYMENT_NOT_FOUND' } }, 404);
     await expect(provider.getDetails('pay_missing')).rejects.toBeInstanceOf(

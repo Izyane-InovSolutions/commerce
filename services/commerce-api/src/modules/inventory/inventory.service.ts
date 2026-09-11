@@ -317,6 +317,41 @@ export class InventoryService {
     });
   }
 
+  // Called when a fully-refunded order line's stock is returned to sellable
+  // inventory. Only a COMMITTED reservation has anything to return - it's a
+  // no-op for anything else, mirroring expireReservation()'s tolerance of an
+  // already-resolved reservation. Only onHand is touched (reserved was
+  // already zeroed by commit()); the Reservation itself stays COMMITTED -
+  // that's still historically accurate, the restock is captured by the
+  // RETURN movement instead of a reservation-state change.
+  async restock(reservationId: string): Promise<void> {
+    const reservation = await this.findReservationOrThrow(reservationId);
+
+    if (reservation.status !== ReservationStatus.COMMITTED) {
+      return;
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`
+        UPDATE inventory_records
+        SET on_hand = on_hand + ${reservation.quantity}, updated_at = now()
+        WHERE id = ${reservation.inventoryRecordId}::uuid
+      `;
+
+      await this.recordMovement(
+        tx,
+        reservation.inventoryRecordId,
+        InventoryMovementType.RETURN,
+        reservation.quantity,
+        undefined,
+        {
+          referenceType: 'reservation',
+          referenceId: reservation.id,
+        },
+      );
+    });
+  }
+
   // Called inline by reserve() before checking availability; also exported
   // for a future worker/cron to call directly once one exists.
   async sweepExpired(inventoryRecordId: string): Promise<void> {

@@ -1735,6 +1735,50 @@ export class FakePrismaService {
       }
       return Promise.resolve({ count });
     },
+    findUnique: ({
+      where,
+    }: {
+      where: { id: string };
+    }): Promise<Record<string, unknown> | null> => {
+      const row = this.sellerOrders.get(where.id);
+      if (!row) return Promise.resolve(null);
+      const items = [...this.orderItems.values()].filter(
+        (item) => item.sellerOrderId === where.id,
+      );
+      return Promise.resolve({ ...row, items });
+    },
+    findMany: ({
+      where,
+    }: {
+      where: { sellerId: string };
+    }): Promise<Record<string, unknown>[]> =>
+      Promise.resolve(
+        [...this.sellerOrders.values()]
+          .filter((row) => row.sellerId === where.sellerId)
+          .map((row) => ({
+            ...row,
+            items: [...this.orderItems.values()].filter(
+              (item) => item.sellerOrderId === row.id,
+            ),
+          })),
+      ),
+    count: ({ where }: { where: { sellerId: string } }): Promise<number> =>
+      Promise.resolve(
+        [...this.sellerOrders.values()].filter(
+          (row) => row.sellerId === where.sellerId,
+        ).length,
+      ),
+    update: ({
+      where,
+      data,
+    }: {
+      where: { id: string };
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const row = this.sellerOrders.get(where.id)!;
+      Object.assign(row, data, { updatedAt: new Date() });
+      return Promise.resolve(row);
+    },
   };
 
   orderItem = {
@@ -1822,5 +1866,134 @@ export class FakePrismaService {
       this.paymentEvents.set(row.id as string, row);
       return Promise.resolve(row);
     },
+  };
+
+  // --- Refunds / financials (Phase 1.9) -------------------------------------
+  private readonly refunds = new Map<string, Record<string, unknown>>();
+  private readonly ledgerEntries = new Map<string, Record<string, unknown>>();
+  private readonly sellerBalances = new Map<string, Record<string, unknown>>();
+  private readonly payoutRows = new Map<string, Record<string, unknown>>();
+
+  refund = {
+    create: ({
+      data,
+    }: {
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const now = new Date();
+      const row = {
+        id: randomUUID(),
+        providerReference: null,
+        failureReason: null,
+        createdAt: now,
+        updatedAt: now,
+        ...data,
+      };
+      this.refunds.set(row.id as string, row);
+      return Promise.resolve(row);
+    },
+    update: ({
+      where,
+      data,
+    }: {
+      where: { id: string };
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const row = this.refunds.get(where.id)!;
+      Object.assign(row, data, { updatedAt: new Date() });
+      return Promise.resolve(row);
+    },
+  };
+
+  ledgerEntry = {
+    create: ({
+      data,
+    }: {
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const row = { id: randomUUID(), createdAt: new Date(), ...data };
+      this.ledgerEntries.set(row.id as string, row);
+      return Promise.resolve(row);
+    },
+    findMany: ({
+      where,
+    }: {
+      where: { sellerId: string };
+    }): Promise<Record<string, unknown>[]> =>
+      Promise.resolve(
+        [...this.ledgerEntries.values()]
+          .filter((row) => row.sellerId === where.sellerId)
+          .sort(
+            (a, b) =>
+              (b.createdAt as Date).getTime() - (a.createdAt as Date).getTime(),
+          ),
+      ),
+    count: ({ where }: { where: { sellerId: string } }): Promise<number> =>
+      Promise.resolve(
+        [...this.ledgerEntries.values()].filter(
+          (row) => row.sellerId === where.sellerId,
+        ).length,
+      ),
+  };
+
+  sellerBalance = {
+    findUnique: ({
+      where,
+    }: {
+      where: { sellerId: string };
+    }): Promise<Record<string, unknown> | null> =>
+      Promise.resolve(this.sellerBalances.get(where.sellerId) ?? null),
+    upsert: ({
+      where,
+      create,
+      update,
+    }: {
+      where: { sellerId: string };
+      create: Record<string, unknown>;
+      update: { balance: { increment: number } };
+    }): Promise<Record<string, unknown>> => {
+      const existing = this.sellerBalances.get(where.sellerId);
+      if (existing) {
+        existing.balance =
+          (existing.balance as number) + update.balance.increment;
+        existing.updatedAt = new Date();
+        return Promise.resolve(existing);
+      }
+      const row = { ...create, updatedAt: new Date() };
+      this.sellerBalances.set(where.sellerId, row);
+      return Promise.resolve(row);
+    },
+    update: ({
+      where,
+      data,
+    }: {
+      where: { sellerId: string };
+      data: { balance: { decrement: number } };
+    }): Promise<Record<string, unknown>> => {
+      const row = this.sellerBalances.get(where.sellerId)!;
+      row.balance = (row.balance as number) - data.balance.decrement;
+      row.updatedAt = new Date();
+      return Promise.resolve(row);
+    },
+  };
+
+  payout = {
+    create: ({
+      data,
+    }: {
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const row = { id: randomUUID(), createdAt: new Date(), ...data };
+      this.payoutRows.set(row.id as string, row);
+      return Promise.resolve(row);
+    },
+    findMany: (): Promise<Record<string, unknown>[]> =>
+      Promise.resolve(
+        [...this.payoutRows.values()].sort(
+          (a, b) =>
+            (b.createdAt as Date).getTime() - (a.createdAt as Date).getTime(),
+        ),
+      ),
+    count: (): Promise<number> => Promise.resolve(this.payoutRows.size),
   };
 }

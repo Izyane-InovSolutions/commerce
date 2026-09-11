@@ -3,6 +3,7 @@ import { OrderStatus } from '@prisma/client';
 
 import { AddressesService } from '../users/addresses/addresses.service';
 import { CartService } from '../cart/cart.service';
+import { LedgerService } from '../financials/ledger.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { PrismaService } from '../../database/prisma.service';
 import { OrdersService } from './orders.service';
@@ -16,7 +17,12 @@ function buildPrisma(): {
     findMany: jest.Mock;
   };
   orderItem: { update: jest.Mock; findUnique: jest.Mock };
-  sellerOrder: { create: jest.Mock; updateMany: jest.Mock };
+  sellerOrder: {
+    create: jest.Mock;
+    updateMany: jest.Mock;
+    findUnique: jest.Mock;
+    update: jest.Mock;
+  };
   $transaction: jest.Mock;
 } {
   const prisma = {
@@ -31,6 +37,8 @@ function buildPrisma(): {
     sellerOrder: {
       create: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
     },
     $transaction: jest.fn(),
   };
@@ -61,8 +69,10 @@ describe('OrdersService', () => {
     reserve: jest.Mock;
     commit: jest.Mock;
     release: jest.Mock;
+    restock: jest.Mock;
   };
   let addressesService: { findOne: jest.Mock };
+  let ledgerService: { recordSale: jest.Mock };
   let service: OrdersService;
 
   const address = {
@@ -84,13 +94,16 @@ describe('OrdersService', () => {
       reserve: jest.fn(),
       commit: jest.fn(),
       release: jest.fn(),
+      restock: jest.fn(),
     };
     addressesService = { findOne: jest.fn().mockResolvedValue(address) };
+    ledgerService = { recordSale: jest.fn().mockResolvedValue(undefined) };
     service = new OrdersService(
       prisma as unknown as PrismaService,
       cartService as unknown as CartService,
       inventoryService as unknown as InventoryService,
       addressesService as unknown as AddressesService,
+      ledgerService as unknown as LedgerService,
     );
   });
 
@@ -316,10 +329,13 @@ describe('OrdersService', () => {
   });
 
   describe('confirmPayment', () => {
-    it('commits every reservation and marks the order and every SellerOrder PAID', async () => {
+    it('commits every reservation, marks the order and every SellerOrder PAID, and records a sale per seller order', async () => {
+      const platformGroup = { id: 'so-platform', sellerId: null, total: 1000 };
+      const sellerGroup = { id: 'so-a', sellerId: 'seller-a', total: 2000 };
       prisma.order.findUnique.mockResolvedValue({
         id: 'order-1',
         items: [{ id: 'item-1', reservationId: 'reservation-1' }],
+        sellerOrders: [platformGroup, sellerGroup],
       });
 
       await service.confirmPayment('order-1');
@@ -333,6 +349,100 @@ describe('OrdersService', () => {
         where: { id: 'order-1' },
         data: { status: OrderStatus.PAID },
       });
+      expect(ledgerService.recordSale).toHaveBeenCalledWith(platformGroup);
+      expect(ledgerService.recordSale).toHaveBeenCalledWith(sellerGroup);
+      expect(ledgerService.recordSale).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('getSellerOrderForPayment', () => {
+    it('throws not found when the seller order does not exist', async () => {
+      prisma.sellerOrder.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.getSellerOrderForPayment('so-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('rejects a seller order that is not paid or partially refunded', async () => {
+      prisma.sellerOrder.findUnique.mockResolvedValue({
+        id: 'so-1',
+        status: OrderStatus.PENDING_PAYMENT,
+      });
+
+      await expect(
+        service.getSellerOrderForPayment('so-1'),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('returns a PAID seller order', async () => {
+      const sellerOrder = { id: 'so-1', status: OrderStatus.PAID };
+      prisma.sellerOrder.findUnique.mockResolvedValue(sellerOrder);
+
+      await expect(service.getSellerOrderForPayment('so-1')).resolves.toBe(
+        sellerOrder,
+      );
+    });
+  });
+
+  describe('applyRefund', () => {
+    it('rejects a refund amount exceeding the remaining refundable balance', async () => {
+      prisma.sellerOrder.findUnique.mockResolvedValue({
+        id: 'so-1',
+        total: 1000,
+        refundedAmount: 900,
+        items: [],
+      });
+
+      await expect(service.applyRefund('so-1', 200)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+    });
+
+    it('marks PARTIALLY_REFUNDED and does not restock when not fully refunded', async () => {
+      prisma.sellerOrder.findUnique.mockResolvedValue({
+        id: 'so-1',
+        total: 1000,
+        refundedAmount: 0,
+        items: [{ id: 'item-1', reservationId: 'reservation-1' }],
+      });
+      prisma.sellerOrder.update.mockResolvedValue({
+        id: 'so-1',
+        status: OrderStatus.PARTIALLY_REFUNDED,
+      });
+
+      await service.applyRefund('so-1', 400);
+
+      expect(prisma.sellerOrder.update).toHaveBeenCalledWith({
+        where: { id: 'so-1' },
+        data: { refundedAmount: 400, status: OrderStatus.PARTIALLY_REFUNDED },
+      });
+      expect(inventoryService.restock).not.toHaveBeenCalled();
+    });
+
+    it('marks REFUNDED and restocks every reserved item once fully refunded', async () => {
+      prisma.sellerOrder.findUnique.mockResolvedValue({
+        id: 'so-1',
+        total: 1000,
+        refundedAmount: 600,
+        items: [
+          { id: 'item-1', reservationId: 'reservation-1' },
+          { id: 'item-2', reservationId: null },
+        ],
+      });
+      prisma.sellerOrder.update.mockResolvedValue({
+        id: 'so-1',
+        status: OrderStatus.REFUNDED,
+      });
+
+      await service.applyRefund('so-1', 400);
+
+      expect(prisma.sellerOrder.update).toHaveBeenCalledWith({
+        where: { id: 'so-1' },
+        data: { refundedAmount: 1000, status: OrderStatus.REFUNDED },
+      });
+      expect(inventoryService.restock).toHaveBeenCalledWith('reservation-1');
+      expect(inventoryService.restock).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -31,10 +31,12 @@ export class PendingPaymentProvider implements PaymentProvider {
   refund(
     providerReference: string,
     amount: number,
+    reason: string,
     idempotencyKey: string,
   ): Promise<ProviderRefundResult> {
     void providerReference;
     void amount;
+    void reason;
     void idempotencyKey;
     return this.unavailable();
   }

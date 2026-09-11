@@ -419,4 +419,43 @@ describe('InventoryService', () => {
       );
     });
   });
+
+  describe('restock', () => {
+    it('is a no-op for a reservation that is not COMMITTED', async () => {
+      prisma.reservation.findUnique.mockResolvedValue({
+        id: 'res-1',
+        status: ReservationStatus.RELEASED,
+        quantity: 2,
+        inventoryRecordId: 'rec-1',
+      });
+
+      await service.restock('res-1');
+
+      expect(prisma.$executeRaw).not.toHaveBeenCalled();
+      expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
+    });
+
+    it('adds the reservation quantity back onto onHand and records a RETURN movement', async () => {
+      prisma.reservation.findUnique.mockResolvedValue({
+        id: 'res-1',
+        status: ReservationStatus.COMMITTED,
+        quantity: 2,
+        inventoryRecordId: 'rec-1',
+      });
+      prisma.$executeRaw.mockResolvedValue(1);
+
+      await service.restock('res-1');
+
+      expect(prisma.$executeRaw).toHaveBeenCalled();
+      expect(prisma.inventoryMovement.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: 'RETURN',
+            quantity: 2,
+          }) as object,
+        }),
+      );
+      expect(prisma.reservation.update).not.toHaveBeenCalled();
+    });
+  });
 });

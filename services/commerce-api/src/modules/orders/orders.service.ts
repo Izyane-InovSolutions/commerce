@@ -17,6 +17,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { AddressesService } from '../users/addresses/addresses.service';
 import { CartLineView } from '../cart/cart.types';
 import { CartService } from '../cart/cart.service';
+import { LedgerService } from '../financials/ledger.service';
 import { InventoryService } from '../inventory/inventory.service';
 
 export type OrderWithItems = Order & {
@@ -33,6 +34,7 @@ export class OrdersService {
     private readonly cartService: CartService,
     private readonly inventoryService: InventoryService,
     private readonly addressesService: AddressesService,
+    private readonly ledgerService: LedgerService,
   ) {}
 
   async createFromCart(
@@ -161,10 +163,80 @@ export class OrdersService {
       data: { status: OrderStatus.PAID },
     });
 
+    for (const sellerOrder of order.sellerOrders) {
+      await this.ledgerService.recordSale(sellerOrder);
+    }
+
     return this.prisma.order.update({
       where: { id: orderId },
       data: { status: OrderStatus.PAID },
     });
+  }
+
+  async getSellerOrderForPayment(sellerOrderId: string): Promise<SellerOrder> {
+    const sellerOrder = await this.prisma.sellerOrder.findUnique({
+      where: { id: sellerOrderId },
+    });
+
+    if (!sellerOrder) {
+      throw new NotFoundException('Seller order not found');
+    }
+
+    if (
+      sellerOrder.status !== OrderStatus.PAID &&
+      sellerOrder.status !== OrderStatus.PARTIALLY_REFUNDED
+    ) {
+      throw new ConflictException(
+        'Only a paid or partially-refunded seller order can be refunded',
+      );
+    }
+
+    return sellerOrder;
+  }
+
+  async applyRefund(
+    sellerOrderId: string,
+    amount: number,
+  ): Promise<SellerOrder> {
+    const sellerOrder = await this.prisma.sellerOrder.findUnique({
+      where: { id: sellerOrderId },
+      include: { items: true },
+    });
+
+    if (!sellerOrder) {
+      throw new NotFoundException('Seller order not found');
+    }
+
+    const remaining = sellerOrder.total - sellerOrder.refundedAmount;
+
+    if (amount > remaining) {
+      throw new ConflictException(
+        'Refund amount exceeds the remaining refundable balance for this seller order',
+      );
+    }
+
+    const refundedAmount = sellerOrder.refundedAmount + amount;
+    const fullyRefunded = refundedAmount >= sellerOrder.total;
+
+    const updated = await this.prisma.sellerOrder.update({
+      where: { id: sellerOrderId },
+      data: {
+        refundedAmount,
+        status: fullyRefunded
+          ? OrderStatus.REFUNDED
+          : OrderStatus.PARTIALLY_REFUNDED,
+      },
+    });
+
+    if (fullyRefunded) {
+      for (const item of sellerOrder.items) {
+        if (item.reservationId) {
+          await this.inventoryService.restock(item.reservationId);
+        }
+      }
+    }
+
+    return updated;
   }
 
   async cancel(orderId: string): Promise<Order> {
