@@ -4,6 +4,7 @@ import { CartService } from '../cart/cart.service';
 import { OrdersService } from '../orders/orders.service';
 import { PaymentsService } from '../payments/payments.service';
 import { CheckoutResult } from './checkout.types';
+import { CreateCheckoutDto } from './dto/create-checkout.dto';
 
 @Injectable()
 export class CheckoutService {
@@ -15,15 +16,25 @@ export class CheckoutService {
 
   async checkout(
     userId: string,
-    shippingAddressId: string,
+    dto: CreateCheckoutDto,
   ): Promise<CheckoutResult> {
     const order = await this.ordersService.createFromCart(
       userId,
-      shippingAddressId,
+      dto.shippingAddressId,
     );
 
     try {
-      const payment = await this.paymentsService.initializeForOrder(order);
+      const payment = await this.paymentsService.initializeForOrder(order, {
+        paymentMethod: dto.paymentMethod,
+        phoneNumber: dto.phoneNumber,
+        provider: dto.provider,
+        card: dto.card,
+        description: `Payment for order ${order.id}`,
+        metadata: {
+          orderId: order.id,
+          channel: 'web',
+        },
+      });
       await this.cartService.clearCart({ userId });
       return { order, payment };
     } catch (error) {
