@@ -13,6 +13,7 @@ import {
 } from '@prisma/client';
 
 import { pickCurrentPrice } from '../../common/catalog/current-price';
+import { OfferReadService } from '../offers/offer-read.service';
 import { PrismaService } from '../../database/prisma.service';
 import { InventoryService } from '../inventory/inventory.service';
 import {
@@ -28,6 +29,7 @@ export class CartService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly inventoryService: InventoryService,
+    private readonly offers:OfferReadService,
   ) {}
 
   async getCartView(identity: CartIdentity): Promise<CartView> {
@@ -49,10 +51,7 @@ export class CartService {
       throw new BadRequestException('quantity must be positive');
     }
 
-    const offer = await this.prisma.offer.findUnique({
-      where: { id: offerId },
-      include: { seller: true },
-    });
+    const offer = await this.offers.find(offerId);
 
     if (!offer || offer.status !== ProductStatus.PUBLISHED) {
       throw new BadRequestException('This offer is not available');
@@ -227,55 +226,25 @@ export class CartService {
   private async buildView(cartId: string): Promise<CartView> {
     const cart = await this.prisma.cart.findUnique({
       where: { id: cartId },
-      include: {
-        items: {
-          include: { offer: { include: { prices: true, seller: true } } },
-        },
-      },
+      include: {items:true},
     });
 
     if (!cart) {
       return this.emptyView();
     }
 
-    const lines: CartLineView[] = await Promise.all(
-      cart.items.map(async (item) => {
-        const currentPrice = pickCurrentPrice(item.offer.prices);
-        // SELLER-stockSource offers have no backing inventory model yet
-        // (that's #33's job) - treat them as always available rather than
-        // checking platform InventoryRecord, which they never use.
-        const isSellerStock =
-          item.offer.stockSource === OfferStockSource.SELLER;
-        const availableQuantity = isSellerStock
-          ? item.quantity
-          : await this.inventoryService.getAvailableQuantity(
-              item.offer.variantId,
-            );
-        const sellerApproved =
-          !item.offer.sellerId ||
-          item.offer.seller?.status === SellerStatus.APPROVED;
-        const isAvailable =
-          sellerApproved &&
-          item.offer.status === ProductStatus.PUBLISHED &&
-          !!currentPrice &&
-          (isSellerStock || availableQuantity >= item.quantity);
-
-        return {
-          id: item.id,
-          offerId: item.offerId,
-          sellerId: item.offer.sellerId,
-          quantity: item.quantity,
-          unitPrice: currentPrice
-            ? { amount: currentPrice.amount, currency: currentPrice.currency }
-            : null,
-          lineTotal:
-            isAvailable && currentPrice
-              ? currentPrice.amount * item.quantity
-              : 0,
-          isAvailable,
-        };
-      }),
-    );
+    const offers=await this.offers.findMany(cart.items.map(item=>item.offerId));
+    const byId=new Map(offers.map(offer=>[offer.id,offer]));
+    const quantities=await this.inventoryService.getAvailableQuantities(offers.filter(offer=>offer.stockSource!==OfferStockSource.SELLER).map(offer=>offer.variantId));
+    const lines:CartLineView[]=cart.items.map(item=>{
+      const offer=byId.get(item.offerId);
+      const currentPrice=pickCurrentPrice(offer?.prices ?? []);
+      const sellerStock=offer?.stockSource===OfferStockSource.SELLER;
+      const availableQuantity=offer ? (quantities.get(offer.variantId) ?? 0) : 0;
+      const sellerApproved=!!offer && (!offer.sellerId || offer.seller?.status===SellerStatus.APPROVED);
+      const isAvailable=sellerApproved && offer?.status===ProductStatus.PUBLISHED && !!currentPrice && (sellerStock || availableQuantity>=item.quantity);
+      return {id:item.id,offerId:item.offerId,sellerId:offer?.sellerId ?? null,quantity:item.quantity,unitPrice:currentPrice ? {amount:currentPrice.amount,currency:currentPrice.currency} : null,lineTotal:isAvailable && currentPrice ? currentPrice.amount*item.quantity : 0,isAvailable};
+    });
 
     const availableLines = lines.filter((line) => line.isAvailable);
     const subtotal = availableLines.reduce(

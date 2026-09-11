@@ -1,3 +1,4 @@
+import { OfferReadService } from '../offers/offer-read.service';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 
@@ -21,8 +22,11 @@ function buildPrisma(): {
     create: jest.Mock;
     updateMany: jest.Mock;
     findUnique: jest.Mock;
+    findUniqueOrThrow: jest.Mock;
+    findMany: jest.Mock;
     update: jest.Mock;
   };
+  $queryRaw: jest.Mock;
   $transaction: jest.Mock;
 } {
   const prisma = {
@@ -38,8 +42,13 @@ function buildPrisma(): {
       create: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn(),
       findUnique: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
+      findMany: jest
+        .fn()
+        .mockResolvedValue([{ status: OrderStatus.PARTIALLY_REFUNDED }]),
       update: jest.fn(),
     },
+    $queryRaw: jest.fn().mockResolvedValue([]),
     $transaction: jest.fn(),
   };
   prisma.$transaction.mockImplementation(
@@ -72,7 +81,7 @@ describe('OrdersService', () => {
     restock: jest.Mock;
   };
   let addressesService: { findOne: jest.Mock };
-  let ledgerService: { recordSale: jest.Mock };
+  let ledgerService: { recordSale: jest.Mock; ensureCurrency: jest.Mock };
   let service: OrdersService;
 
   const address = {
@@ -89,6 +98,9 @@ describe('OrdersService', () => {
 
   beforeEach(() => {
     prisma = buildPrisma();
+    prisma.sellerOrder.findUniqueOrThrow.mockImplementation(
+      (args: unknown) => prisma.sellerOrder.findUnique(args) as unknown,
+    );
     cartService = { getCartView: jest.fn(), clearCart: jest.fn() };
     inventoryService = {
       reserve: jest.fn(),
@@ -97,13 +109,17 @@ describe('OrdersService', () => {
       restock: jest.fn(),
     };
     addressesService = { findOne: jest.fn().mockResolvedValue(address) };
-    ledgerService = { recordSale: jest.fn().mockResolvedValue(undefined) };
+    ledgerService = {
+      recordSale: jest.fn().mockResolvedValue(undefined),
+      ensureCurrency: jest.fn(),
+    };
     service = new OrdersService(
       prisma as unknown as PrismaService,
       cartService as unknown as CartService,
       inventoryService as unknown as InventoryService,
       addressesService as unknown as AddressesService,
       ledgerService as unknown as LedgerService,
+      new OfferReadService(prisma as unknown as PrismaService),
     );
   });
 
@@ -334,13 +350,17 @@ describe('OrdersService', () => {
       const sellerGroup = { id: 'so-a', sellerId: 'seller-a', total: 2000 };
       prisma.order.findUnique.mockResolvedValue({
         id: 'order-1',
+        status: OrderStatus.PENDING_PAYMENT,
         items: [{ id: 'item-1', reservationId: 'reservation-1' }],
         sellerOrders: [platformGroup, sellerGroup],
       });
 
       await service.confirmPayment('order-1');
 
-      expect(inventoryService.commit).toHaveBeenCalledWith('reservation-1');
+      expect(inventoryService.commit).toHaveBeenCalledWith(
+        'reservation-1',
+        prisma,
+      );
       expect(prisma.sellerOrder.updateMany).toHaveBeenCalledWith({
         where: { orderId: 'order-1' },
         data: { status: OrderStatus.PAID },
@@ -349,8 +369,14 @@ describe('OrdersService', () => {
         where: { id: 'order-1' },
         data: { status: OrderStatus.PAID },
       });
-      expect(ledgerService.recordSale).toHaveBeenCalledWith(platformGroup);
-      expect(ledgerService.recordSale).toHaveBeenCalledWith(sellerGroup);
+      expect(ledgerService.recordSale).toHaveBeenCalledWith(
+        platformGroup,
+        prisma,
+      );
+      expect(ledgerService.recordSale).toHaveBeenCalledWith(
+        sellerGroup,
+        prisma,
+      );
       expect(ledgerService.recordSale).toHaveBeenCalledTimes(2);
     });
   });
@@ -364,7 +390,7 @@ describe('OrdersService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('rejects a seller order that is not paid or partially refunded', async () => {
+    it('returns the order state for the locked refund coordinator to validate', async () => {
       prisma.sellerOrder.findUnique.mockResolvedValue({
         id: 'so-1',
         status: OrderStatus.PENDING_PAYMENT,
@@ -372,7 +398,7 @@ describe('OrdersService', () => {
 
       await expect(
         service.getSellerOrderForPayment('so-1'),
-      ).rejects.toBeInstanceOf(ConflictException);
+      ).resolves.toMatchObject({ status: OrderStatus.PENDING_PAYMENT });
     });
 
     it('returns a PAID seller order', async () => {
@@ -389,6 +415,8 @@ describe('OrdersService', () => {
     it('rejects a refund amount exceeding the remaining refundable balance', async () => {
       prisma.sellerOrder.findUnique.mockResolvedValue({
         id: 'so-1',
+        orderId: 'order-1',
+        status: OrderStatus.PAID,
         total: 1000,
         refundedAmount: 900,
         items: [],
@@ -402,6 +430,8 @@ describe('OrdersService', () => {
     it('marks PARTIALLY_REFUNDED and does not restock when not fully refunded', async () => {
       prisma.sellerOrder.findUnique.mockResolvedValue({
         id: 'so-1',
+        orderId: 'order-1',
+        status: OrderStatus.PAID,
         total: 1000,
         refundedAmount: 0,
         items: [{ id: 'item-1', reservationId: 'reservation-1' }],
@@ -423,6 +453,8 @@ describe('OrdersService', () => {
     it('marks REFUNDED and restocks every reserved item once fully refunded', async () => {
       prisma.sellerOrder.findUnique.mockResolvedValue({
         id: 'so-1',
+        orderId: 'order-1',
+        status: OrderStatus.PAID,
         total: 1000,
         refundedAmount: 600,
         items: [
@@ -441,7 +473,10 @@ describe('OrdersService', () => {
         where: { id: 'so-1' },
         data: { refundedAmount: 1000, status: OrderStatus.REFUNDED },
       });
-      expect(inventoryService.restock).toHaveBeenCalledWith('reservation-1');
+      expect(inventoryService.restock).toHaveBeenCalledWith(
+        'reservation-1',
+        prisma,
+      );
       expect(inventoryService.restock).toHaveBeenCalledTimes(1);
     });
   });
@@ -450,12 +485,16 @@ describe('OrdersService', () => {
     it('releases every reservation and marks the order and every SellerOrder CANCELLED', async () => {
       prisma.order.findUnique.mockResolvedValue({
         id: 'order-1',
+        status: OrderStatus.PENDING_PAYMENT,
         items: [{ id: 'item-1', reservationId: 'reservation-1' }],
       });
 
       await service.cancel('order-1');
 
-      expect(inventoryService.release).toHaveBeenCalledWith('reservation-1');
+      expect(inventoryService.release).toHaveBeenCalledWith(
+        'reservation-1',
+        prisma,
+      );
       expect(prisma.sellerOrder.updateMany).toHaveBeenCalledWith({
         where: { orderId: 'order-1' },
         data: { status: OrderStatus.CANCELLED },

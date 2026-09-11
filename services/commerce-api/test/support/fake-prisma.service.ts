@@ -65,6 +65,10 @@ export class FakePrismaService {
     return Promise.all(arg);
   }
 
+  $queryRaw(): Promise<unknown[]> {
+    return Promise.resolve([]);
+  }
+
   // Recognizes the small, fixed set of raw guarded-update queries
   // InventoryService issues, by matching the literal (placeholder-free) SQL
   // text — a full SQL engine isn't needed for four known shapes.
@@ -113,6 +117,15 @@ export class FakePrismaService {
       record.onHand = (record.onHand as number) - qty1;
       record.reserved = (record.reserved as number) - qty2;
       record.updatedAt = new Date();
+      return Promise.resolve(1);
+    }
+
+    if (sql.includes('SET reserved = reserved -')) {
+      const [quantity, id] = [values[0] as number, values[1] as string];
+      const record = this.inventoryRecords.get(id);
+      if (!record || (record.reserved as number) < quantity)
+        return Promise.resolve(0);
+      record.reserved = (record.reserved as number) - quantity;
       return Promise.resolve(1);
     }
 
@@ -274,6 +287,20 @@ export class FakePrismaService {
   };
 
   passwordResetToken = {
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: { id: string; usedAt: null; expiresAt: { gt: Date } };
+      data: { usedAt: Date };
+    }): Promise<{ count: number }> => {
+      const row = this.passwordResetTokens.get(where.id);
+      if (!row || row.usedAt || row.expiresAt <= where.expiresAt.gt)
+        return Promise.resolve({ count: 0 });
+      row.usedAt = data.usedAt;
+      return Promise.resolve({ count: 1 });
+    },
+
     create: ({
       data,
     }: {
@@ -1048,7 +1075,7 @@ export class FakePrismaService {
       where?: {
         id?: { in: string[] };
         warehouseId?: string;
-        variantId?: string;
+        variantId?: string | { in: string[] };
       };
     } = {}): Promise<Record<string, unknown>[]> => {
       let rows = [...this.inventoryRecords.values()];
@@ -1056,8 +1083,14 @@ export class FakePrismaService {
         rows = rows.filter((row) => where.id!.in.includes(row.id as string));
       if (where?.warehouseId)
         rows = rows.filter((row) => row.warehouseId === where.warehouseId);
-      if (where?.variantId)
-        rows = rows.filter((row) => row.variantId === where.variantId);
+      if (where?.variantId) {
+        const variants = where.variantId;
+        rows = rows.filter((row) =>
+          typeof variants === 'string'
+            ? row.variantId === variants
+            : variants.in.includes(row.variantId as string),
+        );
+      }
       return Promise.resolve(rows);
     },
     create: ({
@@ -1100,6 +1133,17 @@ export class FakePrismaService {
   };
 
   inventoryMovement = {
+    findFirst: ({
+      where,
+    }: {
+      where: Record<string, unknown>;
+    }): Promise<Record<string, unknown> | null> =>
+      Promise.resolve(
+        [...this.inventoryMovements.values()].find((row) =>
+          Object.entries(where).every(([key, value]) => row[key] === value),
+        ) ?? null,
+      ),
+
     create: ({
       data,
     }: {
@@ -1689,6 +1733,14 @@ export class FakePrismaService {
   };
 
   sellerOrder = {
+    findUniqueOrThrow: async (args: {
+      where: { id: string };
+    }): Promise<Record<string, unknown>> => {
+      const row = await this.sellerOrder.findUnique(args);
+      if (!row) throw new Error('Missing sellerOrder');
+      return row;
+    },
+
     create: ({
       data,
     }: {
@@ -1802,6 +1854,14 @@ export class FakePrismaService {
   };
 
   payment = {
+    findUniqueOrThrow: async (args: {
+      where: { id?: string; orderId?: string; providerReference?: string };
+    }): Promise<Record<string, unknown>> => {
+      const row = await this.payment.findUnique(args);
+      if (!row) throw new Error('Missing payment');
+      return row;
+    },
+
     create: ({
       data,
     }: {
@@ -1906,6 +1966,17 @@ export class FakePrismaService {
   };
 
   ledgerEntry = {
+    findFirst: ({
+      where,
+    }: {
+      where: Record<string, unknown>;
+    }): Promise<Record<string, unknown> | null> =>
+      Promise.resolve(
+        [...this.ledgerEntries.values()].find((row) =>
+          Object.entries(where).every(([key, value]) => row[key] === value),
+        ) ?? null,
+      ),
+
     create: ({
       data,
     }: {
@@ -1937,6 +2008,16 @@ export class FakePrismaService {
   };
 
   sellerBalance = {
+    findUniqueOrThrow: ({
+      where,
+    }: {
+      where: { sellerId: string };
+    }): Promise<Record<string, unknown>> => {
+      const row = this.sellerBalances.get(where.sellerId);
+      if (!row) return Promise.reject(new Error('Missing balance'));
+      return Promise.resolve(row);
+    },
+
     findUnique: ({
       where,
     }: {
@@ -1950,12 +2031,12 @@ export class FakePrismaService {
     }: {
       where: { sellerId: string };
       create: Record<string, unknown>;
-      update: { balance: { increment: number } };
+      update: { balance?: { increment: number } };
     }): Promise<Record<string, unknown>> => {
       const existing = this.sellerBalances.get(where.sellerId);
       if (existing) {
         existing.balance =
-          (existing.balance as number) + update.balance.increment;
+          (existing.balance as number) + (update.balance?.increment ?? 0);
         existing.updatedAt = new Date();
         return Promise.resolve(existing);
       }
@@ -1968,10 +2049,13 @@ export class FakePrismaService {
       data,
     }: {
       where: { sellerId: string };
-      data: { balance: { decrement: number } };
+      data: { balance: { decrement?: number; increment?: number } };
     }): Promise<Record<string, unknown>> => {
       const row = this.sellerBalances.get(where.sellerId)!;
-      row.balance = (row.balance as number) - data.balance.decrement;
+      row.balance =
+        (row.balance as number) -
+        (data.balance.decrement ?? 0) +
+        (data.balance.increment ?? 0);
       row.updatedAt = new Date();
       return Promise.resolve(row);
     },

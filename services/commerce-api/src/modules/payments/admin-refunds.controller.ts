@@ -18,11 +18,11 @@ import { PaymentsService } from './payments.service';
 @ApiTags('Admin refunds')
 @ApiBearerAuth()
 @Roles(Role.ADMIN)
-@Controller('admin/seller-orders')
+@Controller('admin')
 export class AdminRefundsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
-  @Post(':sellerOrderId/refund')
+  @Post('seller-orders/:sellerOrderId/refund')
   refund(
     @Param('sellerOrderId', ParseUUIDPipe) sellerOrderId: string,
     @Body() dto: RefundPaymentDto,
@@ -38,5 +38,11 @@ export class AdminRefundsController {
       dto.reason,
       key,
     );
+  }
+  @Post('refunds/:refundId/status')
+  reconcile(
+    @Param('refundId', ParseUUIDPipe) refundId: string,
+  ): Promise<Refund> {
+    return this.paymentsService.reconcileRefund(refundId);
   }
 }

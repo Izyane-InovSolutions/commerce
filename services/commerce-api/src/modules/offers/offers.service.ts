@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import type { Offer, Price } from '@prisma/client';
 
+import { ProductReferencesService } from '../products/product-references.service';
 import { PrismaService } from '../../database/prisma.service';
 import { UpdateStatusDto } from '../../common/catalog/dto/update-status.dto';
 import { CreateOfferDto } from './dto/create-offer.dto';
@@ -14,7 +15,7 @@ export type OfferWithPrices = Offer & { prices: Price[] };
 
 @Injectable()
 export class OffersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly products:ProductReferencesService) {}
 
   async findByIdAdmin(id: string): Promise<OfferWithPrices> {
     const offer = await this.prisma.offer.findUnique({
@@ -30,13 +31,7 @@ export class OffersService {
   }
 
   async create(dto: CreateOfferDto): Promise<OfferWithPrices> {
-    const variant = await this.prisma.productVariant.findUnique({
-      where: { id: dto.variantId },
-    });
-
-    if (!variant) {
-      throw new BadRequestException('The referenced variant does not exist');
-    }
+    if(!await this.products.variantExists(dto.variantId)) throw new BadRequestException('The referenced variant does not exist');
 
     // The admin retail creation route always creates first-party offers.
     const offer = await this.prisma.offer.create({

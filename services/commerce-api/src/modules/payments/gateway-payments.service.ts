@@ -3,9 +3,11 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  NotImplementedException,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import type { Payment } from '@prisma/client';
+import { UsersService } from '../users/users.service';
 import { PrismaService } from '../../database/prisma.service';
 import { UnifiedPaymentProvider } from './unified-payment.provider';
 import type {
@@ -30,6 +32,7 @@ export class GatewayPaymentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly gateway: UnifiedPaymentProvider,
+    private readonly users:UsersService,
   ) {}
 
   async get(userId: string, id: string): Promise<PaymentSnapshot> {
@@ -85,16 +88,9 @@ export class GatewayPaymentsService {
         'Refund requires a confirmed payment and an amount within its total',
       );
     await this.audit(adminId, id, 'payment.refund_requested');
-    // Current connectors return OPERATION_NOT_SUPPORTED. Never mark a local
-    // refund completed based on an HTTP 200 or an unrecognized response state.
-    return this.snapshot(
-      payment,
-      await this.gateway.requestRefund(
-        this.reference(payment),
-        dto.amount,
-        dto.reason,
-        `refund:${id}:${idempotencyKey}`,
-      ),
+    void idempotencyKey;
+    throw new NotImplementedException(
+      'Use the seller-order refund endpoint to keep payment, order and ledger records consistent',
     );
   }
 
@@ -138,10 +134,7 @@ export class GatewayPaymentsService {
   }
 
   private async actor(id: string, admin = false): Promise<void> {
-    const user = await this.prisma.user.findUnique({
-      where: { id },
-      select: { role: true, isActive: true },
-    });
+    const user=await this.users.findAccessById(id);
     if (!user?.isActive || (admin && user.role !== Role.ADMIN))
       throw new ForbiddenException('Insufficient payment permissions');
   }

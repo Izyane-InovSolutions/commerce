@@ -1,3 +1,4 @@
+import { OfferReadService, type CommerceOffer } from '../offers/offer-read.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import {
   CartStatus,
@@ -72,17 +73,24 @@ function buildOffer(
 
 describe('CartService', () => {
   let prisma: ReturnType<typeof buildPrisma>;
-  let inventoryService: { getAvailableQuantity: jest.Mock };
+  let inventoryService: { getAvailableQuantities: jest.Mock };
   let service: CartService;
 
   beforeEach(() => {
     prisma = buildPrisma();
     inventoryService = {
-      getAvailableQuantity: jest.fn().mockResolvedValue(10),
+      getAvailableQuantities: jest
+        .fn()
+        .mockImplementation((ids: string[]) =>
+          Promise.resolve(new Map(ids.map((id) => [id, 10]))),
+        ),
     };
     service = new CartService(
       prisma as unknown as PrismaService,
       inventoryService as unknown as InventoryService,
+      {find: prisma.offer.findUnique, findMany: jest.fn().mockImplementation(() =>
+        (prisma.cart.findUnique.mock.results.at(-1)?.value as Promise<{items:Array<{offerId:string;offer:CommerceOffer}>}>).then(result=>result.items.map(item=>({...item.offer,id:item.offerId})))
+      )} as unknown as OfferReadService,
     );
   });
 
@@ -211,7 +219,9 @@ describe('CartService', () => {
     });
 
     it('flags a line unavailable when stock is insufficient, without removing it', async () => {
-      inventoryService.getAvailableQuantity.mockResolvedValue(1);
+      inventoryService.getAvailableQuantities.mockImplementation(
+        (ids: string[]) => Promise.resolve(new Map(ids.map((id) => [id, 1]))),
+      );
       prisma.cart.findFirst.mockResolvedValue({ id: 'cart-1' });
       prisma.cart.findUnique.mockResolvedValue({
         id: 'cart-1',
@@ -304,7 +314,7 @@ describe('CartService', () => {
         isAvailable: true,
         sellerId: 'seller-1',
       });
-      expect(inventoryService.getAvailableQuantity).not.toHaveBeenCalled();
+      expect(inventoryService.getAvailableQuantities).toHaveBeenCalledWith([]);
     });
 
     it('marks a line from a now-suspended seller unavailable', async () => {

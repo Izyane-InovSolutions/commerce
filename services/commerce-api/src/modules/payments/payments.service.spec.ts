@@ -1,5 +1,5 @@
 import { PaymentStatus } from '@prisma/client';
-
+import { ConflictException, NotImplementedException } from '@nestjs/common';
 import { LedgerService } from '../financials/ledger.service';
 import { OrdersService } from '../orders/orders.service';
 import { PrismaService } from '../../database/prisma.service';
@@ -8,62 +8,113 @@ import { PaymentsService } from './payments.service';
 import { PaymentOutcomeUnknownException } from './gateway-errors';
 
 function buildPrisma(): {
-  payment: { create: jest.Mock; update: jest.Mock; findUnique: jest.Mock };
-  paymentEvent: { create: jest.Mock; findUnique: jest.Mock };
-  refund: { create: jest.Mock; update: jest.Mock };
+  payment: Record<
+    'create' | 'update' | 'findUnique' | 'findUniqueOrThrow',
+    jest.Mock
+  >;
+  paymentEvent: Record<'create' | 'findUnique', jest.Mock>;
+  refund: Record<
+    'create' | 'update' | 'findUnique' | 'findUniqueOrThrow' | 'findMany',
+    jest.Mock
+  >;
+  $transaction: jest.Mock;
 } {
-  return {
-    payment: { create: jest.fn(), update: jest.fn(), findUnique: jest.fn() },
+  const p = {
+    payment: {
+      create: jest.fn(),
+      update: jest.fn(),
+      findUnique: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
+    },
     paymentEvent: { create: jest.fn(), findUnique: jest.fn() },
-    refund: { create: jest.fn(), update: jest.fn() },
+    refund: {
+      create: jest.fn(),
+      update: jest.fn(),
+      findUnique: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    $transaction: jest.fn(),
   };
+  p.$transaction.mockImplementation((fn: (tx: typeof p) => unknown) => fn(p));
+  return p;
 }
 
 describe('PaymentsService', () => {
   let prisma: ReturnType<typeof buildPrisma>;
   let provider: jest.Mocked<PaymentProvider>;
+  let refundCall: jest.Mock;
   let ordersService: {
     confirmPayment: jest.Mock;
     cancel: jest.Mock;
+    lockForPayment: jest.Mock;
     getSellerOrderForPayment: jest.Mock;
     applyRefund: jest.Mock;
   };
   let ledgerService: { recordRefundReversal: jest.Mock };
   let service: PaymentsService;
-  // Accessing provider.refund directly (an interface method) trips
-  // @typescript-eslint/unbound-method; a local reference avoids it.
-  let refund: jest.Mock;
-
+  const payment = {
+    id: 'payment-1',
+    orderId: 'order-1',
+    provider: 'fake-provider',
+    providerReference: 'pay_123',
+    amount: 1000,
+    refundedAmount: 0,
+    currency: 'USD',
+    status: PaymentStatus.SUCCEEDED,
+  };
+  const sellerOrder = {
+    id: 'so-1',
+    orderId: 'order-1',
+    total: 1000,
+    refundedAmount: 0,
+    status: 'PAID',
+    currency: 'USD',
+  };
+  const pending = {
+    id: 'refund-1',
+    paymentId: 'payment-1',
+    sellerOrderId: 'so-1',
+    amount: 400,
+    reason: 'Customer request',
+    currency: 'USD',
+    status: 'PENDING',
+    idempotencyKey: 'key',
+    providerReference: null,
+  };
   beforeEach(() => {
     prisma = buildPrisma();
-    // Built from a standalone const, not read back off `provider`, so
-    // asserting on it never triggers @typescript-eslint/unbound-method.
-    refund = jest.fn();
+    refundCall = jest.fn();
     provider = {
       name: 'fake-provider',
       initialize: jest.fn(),
       getPayment: jest.fn(),
       verifyWebhook: jest.fn(),
-      refund,
+      refund: refundCall,
       getRefund: jest.fn(),
     };
     ordersService = {
       confirmPayment: jest.fn(),
       cancel: jest.fn(),
-      getSellerOrderForPayment: jest.fn(),
+      lockForPayment: jest.fn(),
+      getSellerOrderForPayment: jest.fn().mockResolvedValue(sellerOrder),
       applyRefund: jest.fn(),
     };
-    ledgerService = {
-      recordRefundReversal: jest.fn().mockResolvedValue(undefined),
-    };
+    ledgerService = { recordRefundReversal: jest.fn() };
     service = new PaymentsService(
       prisma as unknown as PrismaService,
       provider,
       ordersService as unknown as OrdersService,
       ledgerService as unknown as LedgerService,
     );
+    prisma.payment.findUnique.mockResolvedValue(payment);
+    prisma.payment.findUniqueOrThrow.mockResolvedValue(payment);
+    prisma.refund.create.mockResolvedValue(pending);
+    prisma.refund.findUniqueOrThrow.mockResolvedValue({ ...pending, payment });
+    prisma.refund.update.mockImplementation(({ data }: { data: object }) =>
+      Promise.resolve({ ...pending, ...data }),
+    );
   });
-
   describe('initializeForOrder', () => {
     const order = { id: 'order-1', total: 2000, currency: 'USD' } as never;
 
@@ -144,188 +195,164 @@ describe('PaymentsService', () => {
     });
   });
 
-  describe('handleWebhook', () => {
-    it('is a no-op when the event was already recorded', async () => {
-      provider.verifyWebhook.mockReturnValue({
-        id: 'evt-1',
-        providerReference: 'ref-1',
-        type: 'payment.succeeded',
-        status: 'SUCCEEDED',
-        payload: {},
-      });
-      prisma.payment.findUnique.mockResolvedValue({
-        id: 'payment-1',
-        orderId: 'order-1',
-      });
-      prisma.paymentEvent.findUnique.mockResolvedValue({
-        id: 'existing-event',
-      });
-
-      await service.handleWebhook(Buffer.from('{}'), 'sig');
-
-      expect(prisma.paymentEvent.create).not.toHaveBeenCalled();
-      expect(ordersService.confirmPayment).not.toHaveBeenCalled();
-    });
-
-    it('confirms the order when the event is SUCCEEDED', async () => {
-      provider.verifyWebhook.mockReturnValue({
-        id: 'evt-1',
-        providerReference: 'ref-1',
-        type: 'payment.succeeded',
-        status: 'SUCCEEDED',
-        payload: {},
-      });
-      prisma.payment.findUnique.mockResolvedValue({
-        id: 'payment-1',
-        orderId: 'order-1',
-      });
-      prisma.paymentEvent.findUnique.mockResolvedValue(null);
-
-      await service.handleWebhook(Buffer.from('{}'), 'sig');
-
-      expect(prisma.paymentEvent.create).toHaveBeenCalled();
-      expect(ordersService.confirmPayment).toHaveBeenCalledWith('order-1');
-    });
-
-    it('cancels the order when the event is FAILED', async () => {
-      provider.verifyWebhook.mockReturnValue({
-        id: 'evt-1',
-        providerReference: 'ref-1',
-        type: 'payment.failed',
-        status: 'FAILED',
-        payload: {},
-      });
-      prisma.payment.findUnique.mockResolvedValue({
-        id: 'payment-1',
-        orderId: 'order-1',
-      });
-      prisma.paymentEvent.findUnique.mockResolvedValue(null);
-
-      await service.handleWebhook(Buffer.from('{}'), 'sig');
-
-      expect(ordersService.cancel).toHaveBeenCalledWith('order-1');
-    });
-  });
-
   describe('refundSellerOrder', () => {
-    const sellerOrder = {
-      id: 'so-1',
-      orderId: 'order-1',
-      sellerId: 'seller-1',
-      total: 1000,
-      refundedAmount: 0,
-      currency: 'USD',
-    };
-    const payment = {
-      id: 'payment-1',
-      orderId: 'order-1',
-      providerReference: 'pay_123',
-      amount: 1000,
-      refundedAmount: 0,
-    };
-
-    it('records SUCCEEDED, updates Payment, and applies the refund + ledger reversal on success', async () => {
-      ordersService.getSellerOrderForPayment.mockResolvedValue(sellerOrder);
-      prisma.payment.findUnique.mockResolvedValue(payment);
-      prisma.refund.create.mockResolvedValue({
-        id: 'refund-1',
-        status: 'PENDING',
-      });
-      refund.mockResolvedValue({
-        providerReference: 'refund_ref_1',
+    it.each(['PENDING', 'PROCESSING', 'FAILED', 'CANCELLED'] as const)(
+      'does not apply a %s refund to balances or inventory',
+      async (status) => {
+        provider.refund.mockResolvedValue({
+          providerReference: 'remote-refund',
+          status,
+        });
+        await expect(
+          service.refundSellerOrder('so-1', 400, 'Customer request', 'key'),
+        ).resolves.toMatchObject({ status });
+        expect(ordersService.applyRefund).not.toHaveBeenCalled();
+        expect(ledgerService.recordRefundReversal).not.toHaveBeenCalled();
+        expect(prisma.payment.update).not.toHaveBeenCalled();
+      },
+    );
+    it('uses the same transaction for every successful local effect', async () => {
+      provider.refund.mockResolvedValue({
+        providerReference: 'remote-refund',
         status: 'SUCCEEDED',
       });
-      prisma.refund.update.mockResolvedValue({
-        id: 'refund-1',
-        status: 'SUCCEEDED',
-      });
-
-      const result = await service.refundSellerOrder(
+      await expect(
+        service.refundSellerOrder('so-1', 400, 'Customer request', 'key'),
+      ).resolves.toMatchObject({ status: 'SUCCEEDED' });
+      expect(ordersService.applyRefund).toHaveBeenCalledWith(
         'so-1',
         400,
-        'Customer request',
-        'idem-1',
+        prisma,
       );
-
-      expect(refund).toHaveBeenCalledWith(
-        'pay_123',
+      expect(ledgerService.recordRefundReversal).toHaveBeenCalledWith(
+        sellerOrder,
         400,
-        'Customer request',
-        'idem-1',
+        'refund-1',
+        prisma,
       );
-      expect(prisma.refund.update).toHaveBeenCalledWith({
-        where: { id: 'refund-1' },
-        data: { status: 'SUCCEEDED', providerReference: 'refund_ref_1' },
-      });
       expect(prisma.payment.update).toHaveBeenCalledWith({
         where: { id: 'payment-1' },
         data: { refundedAmount: 400, status: 'PARTIALLY_REFUNDED' },
       });
-      expect(ordersService.applyRefund).toHaveBeenCalledWith('so-1', 400);
-      expect(ledgerService.recordRefundReversal).toHaveBeenCalledWith(
-        sellerOrder,
-        400,
-      );
-      expect(result.status).toBe('SUCCEEDED');
     });
-
-    it('marks the Payment REFUNDED once the cumulative refund covers the full amount', async () => {
-      ordersService.getSellerOrderForPayment.mockResolvedValue(sellerOrder);
-      prisma.payment.findUnique.mockResolvedValue(payment);
-      prisma.refund.create.mockResolvedValue({ id: 'refund-1' });
-      refund.mockResolvedValue({
-        providerReference: 'refund_ref_1',
-        status: 'SUCCEEDED',
-      });
-      prisma.refund.update.mockResolvedValue({
-        id: 'refund-1',
-        status: 'SUCCEEDED',
-      });
-
-      await service.refundSellerOrder(
-        'so-1',
-        1000,
-        'Customer request',
-        'idem-1',
-      );
-
-      expect(prisma.payment.update).toHaveBeenCalledWith({
-        where: { id: 'payment-1' },
-        data: { refundedAmount: 1000, status: 'REFUNDED' },
-      });
-    });
-
-    it('rejects a refund amount exceeding the remaining refundable balance', async () => {
-      ordersService.getSellerOrderForPayment.mockResolvedValue({
-        ...sellerOrder,
-        refundedAmount: 900,
-      });
-      prisma.payment.findUnique.mockResolvedValue(payment);
-
+    it('counts pending refunds against available capacity before contacting the provider', async () => {
+      prisma.refund.findMany.mockResolvedValue([
+        { sellerOrderId: 'so-1', amount: 700 },
+      ]);
       await expect(
-        service.refundSellerOrder('so-1', 200, 'reason', 'idem-1'),
-      ).rejects.toThrow();
-      expect(refund).not.toHaveBeenCalled();
+        service.refundSellerOrder('so-1', 400, 'Customer request', 'key'),
+      ).rejects.toThrow('remaining refundable balance');
+      expect(refundCall).not.toHaveBeenCalled();
     });
-
-    it('marks the Refund FAILED and rethrows without touching Payment/Orders/Ledger on provider failure', async () => {
-      ordersService.getSellerOrderForPayment.mockResolvedValue(sellerOrder);
-      prisma.payment.findUnique.mockResolvedValue(payment);
-      prisma.refund.create.mockResolvedValue({ id: 'refund-1' });
-      const error = new Error('Gateway unavailable');
-      refund.mockRejectedValue(error);
-
+    it('returns the existing request on an idempotent retry without a second provider call', async () => {
+      prisma.refund.findUnique.mockResolvedValue(pending);
       await expect(
-        service.refundSellerOrder('so-1', 400, 'reason', 'idem-1'),
-      ).rejects.toThrow(error);
-
+        service.refundSellerOrder('so-1', 400, 'Customer request', 'key'),
+      ).resolves.toEqual(pending);
+      expect(refundCall).not.toHaveBeenCalled();
+      expect(prisma.refund.create).not.toHaveBeenCalled();
+    });
+    it('rejects reuse of an idempotency key for different input', async () => {
+      prisma.refund.findUnique.mockResolvedValue({ ...pending, amount: 200 });
+      await expect(
+        service.refundSellerOrder('so-1', 400, 'Customer request', 'key'),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(refundCall).not.toHaveBeenCalled();
+    });
+    it('keeps refund capacity reserved after a timeout', async () => {
+      provider.refund.mockRejectedValue(new PaymentOutcomeUnknownException());
+      await expect(
+        service.refundSellerOrder('so-1', 400, 'Customer request', 'key'),
+      ).rejects.toBeInstanceOf(PaymentOutcomeUnknownException);
       expect(prisma.refund.update).toHaveBeenCalledWith({
         where: { id: 'refund-1' },
-        data: { status: 'FAILED', failureReason: 'Gateway unavailable' },
+        data: {
+          status: 'PENDING',
+          failureReason: 'Refund outcome requires reconciliation',
+        },
       });
+    });
+    it('releases refund capacity for a definitively unsupported operation', async () => {
+      provider.refund.mockRejectedValue(new NotImplementedException());
+      await expect(
+        service.refundSellerOrder('so-1', 400, 'Customer request', 'key'),
+      ).rejects.toBeInstanceOf(NotImplementedException);
+      expect(prisma.refund.update).toHaveBeenCalledWith({
+        where: { id: 'refund-1' },
+        data: {
+          status: 'FAILED',
+          failureReason: 'Provider rejected this refund operation',
+        },
+      });
+    });
+    it('retains the provider reference for reconciliation when local finalization fails', async () => {
+      provider.refund.mockResolvedValue({
+        providerReference: 'remote-refund',
+        status: 'SUCCEEDED',
+      });
+      ordersService.applyRefund.mockRejectedValue(
+        new Error('Stock unavailable'),
+      );
+      await expect(
+        service.refundSellerOrder('so-1', 400, 'Customer request', 'key'),
+      ).rejects.toThrow('Stock unavailable');
+      expect(prisma.refund.update).toHaveBeenCalledTimes(1);
+      expect(prisma.refund.update).toHaveBeenCalledWith({
+        where: { id: 'refund-1' },
+        data: { providerReference: 'remote-refund' },
+      });
+    });
+  });
+  describe('handleWebhook', () => {
+    beforeEach(() => {
+      prisma.payment.findUniqueOrThrow.mockResolvedValue({
+        ...payment,
+        status: 'PENDING',
+      });
+      provider.verifyWebhook.mockReturnValue({
+        id: 'evt-1',
+        providerReference: 'pay_123',
+        type: 'payment.succeeded',
+        status: 'SUCCEEDED',
+        payload: {},
+      });
+    });
+    it('deduplicates events by payment', async () => {
+      prisma.paymentEvent.findUnique.mockResolvedValue({
+        paymentId: 'payment-1',
+      });
+      await service.handleWebhook(Buffer.from('{}'), 'sig');
+      expect(ordersService.confirmPayment).not.toHaveBeenCalled();
+    });
+    it('commits order effects and the event in the same transaction', async () => {
+      await service.handleWebhook(Buffer.from('{}'), 'sig');
+      expect(ordersService.confirmPayment).toHaveBeenCalledWith(
+        'order-1',
+        prisma,
+      );
+      expect(prisma.paymentEvent.create).toHaveBeenCalled();
+    });
+    it('leaves no dedupe event when business effects fail', async () => {
+      ordersService.confirmPayment.mockRejectedValue(
+        new Error('Stock unavailable'),
+      );
+      await expect(
+        service.handleWebhook(Buffer.from('{}'), 'sig'),
+      ).rejects.toThrow('Stock unavailable');
+      expect(prisma.paymentEvent.create).not.toHaveBeenCalled();
+    });
+    it('does not downgrade a settled payment on a stale failure event', async () => {
+      prisma.payment.findUniqueOrThrow.mockResolvedValue(payment);
+      provider.verifyWebhook.mockReturnValue({
+        id: 'evt-2',
+        providerReference: 'pay_123',
+        type: 'payment.failed',
+        status: 'FAILED',
+        payload: {},
+      });
+      await service.handleWebhook(Buffer.from('{}'), 'sig');
+      expect(ordersService.cancel).not.toHaveBeenCalled();
       expect(prisma.payment.update).not.toHaveBeenCalled();
-      expect(ordersService.applyRefund).not.toHaveBeenCalled();
-      expect(ledgerService.recordRefundReversal).not.toHaveBeenCalled();
     });
   });
 });

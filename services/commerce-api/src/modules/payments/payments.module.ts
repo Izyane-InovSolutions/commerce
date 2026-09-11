@@ -1,3 +1,4 @@
+import { UsersModule } from '../users/users.module';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -27,7 +28,7 @@ export function resolvePaymentProvider(
 }
 
 @Module({
-  imports: [OrdersModule, FinancialsModule],
+  imports: [UsersModule, OrdersModule, FinancialsModule],
   controllers: [
     PaymentsController,
     GatewayPaymentsController,

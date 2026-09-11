@@ -17,13 +17,18 @@ function buildPrisma(): {
     create: jest.Mock;
     update: jest.Mock;
   };
-  inventoryMovement: { create: jest.Mock; findMany: jest.Mock };
+  inventoryMovement: {
+    create: jest.Mock;
+    findMany: jest.Mock;
+    findFirst: jest.Mock;
+  };
   reservation: {
     findUnique: jest.Mock;
     findMany: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
   };
+  $queryRaw: jest.Mock;
   $executeRaw: jest.Mock;
   $transaction: jest.Mock;
 } {
@@ -35,14 +40,19 @@ function buildPrisma(): {
       create: jest.fn(),
       update: jest.fn(),
     },
-    inventoryMovement: { create: jest.fn(), findMany: jest.fn() },
+    inventoryMovement: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+    },
     reservation: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
     },
-    $executeRaw: jest.fn(),
+    $queryRaw: jest.fn().mockResolvedValue([]),
+    $executeRaw: jest.fn().mockResolvedValue(1),
     $transaction: jest.fn(),
   };
   prisma.$transaction.mockImplementation(
@@ -80,6 +90,48 @@ describe('InventoryService', () => {
 
       await expect(service.getAvailableQuantity('v1')).resolves.toBe(0);
     });
+  });
+
+  it('batches availability across variants and warehouses with one query', async () => {
+    prisma.inventoryRecord.findMany.mockResolvedValue([
+      { variantId: 'v1', onHand: 5, reserved: 1 },
+      { variantId: 'v1', onHand: 8, reserved: 2 },
+      { variantId: 'v2', onHand: 3, reserved: 1 },
+    ]);
+    await expect(
+      service.getAvailableQuantities(['v1', 'v1', 'v2']),
+    ).resolves.toEqual(
+      new Map([
+        ['v1', 10],
+        ['v2', 2],
+      ]),
+    );
+    expect(prisma.inventoryRecord.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.inventoryRecord.findMany).toHaveBeenCalledWith({
+      where: { variantId: { in: ['v1', 'v2'] } },
+      select: { variantId: true, onHand: true, reserved: true },
+    });
+  });
+
+  it('does not expire an active reservation before its deadline', async () => {
+    prisma.reservation.findUnique.mockResolvedValue({
+      id: 'res',
+      status: ReservationStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60000),
+    });
+    await service.expireReservation('res');
+    expect(prisma.reservation.update).not.toHaveBeenCalled();
+  });
+
+  it('does not restock a committed reservation with an existing return movement', async () => {
+    prisma.reservation.findUnique.mockResolvedValue({
+      id: 'res',
+      status: ReservationStatus.COMMITTED,
+      quantity: 2,
+    });
+    prisma.inventoryMovement.findFirst.mockResolvedValue({ id: 'return' });
+    await service.restock('res');
+    expect(prisma.$executeRaw).not.toHaveBeenCalled();
   });
 
   describe('receiveStock', () => {
@@ -173,6 +225,15 @@ describe('InventoryService', () => {
         reserved: 5,
       };
       prisma.inventoryRecord.findMany.mockResolvedValue([record]);
+      prisma.reservation.findUnique.mockImplementation(() =>
+        Promise.resolve({
+          id: 'res-old',
+          status: ReservationStatus.ACTIVE,
+          quantity: 4,
+          inventoryRecordId: 'rec-1',
+          expiresAt: new Date(0),
+        }),
+      );
       prisma.reservation.findMany.mockResolvedValue([]);
 
       await expect(service.reserve('v1', 1)).rejects.toBeInstanceOf(
@@ -181,6 +242,13 @@ describe('InventoryService', () => {
     });
 
     it('sweeps expired reservations before evaluating availability', async () => {
+      prisma.reservation.findUnique.mockResolvedValue({
+        id: 'res-old',
+        status: ReservationStatus.ACTIVE,
+        quantity: 4,
+        inventoryRecordId: 'rec-1',
+        expiresAt: new Date(0),
+      });
       const record = {
         id: 'rec-1',
         warehouseId: 'w1',

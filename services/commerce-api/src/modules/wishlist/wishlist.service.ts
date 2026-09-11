@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { ProductStatus } from '@prisma/client';
 
 import { pickCurrentPrice } from '../../common/catalog/current-price';
+import { OfferReadService } from '../offers/offer-read.service';
 import { PrismaService } from '../../database/prisma.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { WishlistItemView } from './wishlist.types';
@@ -11,44 +12,27 @@ export class WishlistService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly inventoryService: InventoryService,
+    private readonly offers:OfferReadService,
   ) {}
 
   async list(userId: string): Promise<WishlistItemView[]> {
     const items = await this.prisma.wishlistItem.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
-      include: { offer: { include: { prices: true } } },
     });
 
-    return Promise.all(
-      items.map(async (item) => {
-        const currentPrice = pickCurrentPrice(item.offer.prices);
-        const availableQuantity = item.offer.sellerId
-          ? 0
-          : await this.inventoryService.getAvailableQuantity(
-              item.offer.variantId,
-            );
-
-        return {
-          id: item.id,
-          offerId: item.offerId,
-          currentPrice: currentPrice
-            ? { amount: currentPrice.amount, currency: currentPrice.currency }
-            : null,
-          isAvailable:
-            !item.offer.sellerId &&
-            item.offer.status === ProductStatus.PUBLISHED &&
-            !!currentPrice &&
-            availableQuantity > 0,
-        };
-      }),
-    );
+    const offers=await this.offers.findMany(items.map(item=>item.offerId));
+    const byId=new Map(offers.map(offer=>[offer.id,offer]));
+    const quantities=await this.inventoryService.getAvailableQuantities(offers.filter(offer=>!offer.sellerId).map(offer=>offer.variantId));
+    return items.map(item=>{
+      const offer=byId.get(item.offerId);
+      const currentPrice=pickCurrentPrice(offer?.prices ?? []);
+      return {id:item.id,offerId:item.offerId,currentPrice:currentPrice ? {amount:currentPrice.amount,currency:currentPrice.currency} : null,isAvailable:!!offer && !offer.sellerId && offer.status===ProductStatus.PUBLISHED && !!currentPrice && (quantities.get(offer.variantId) ?? 0)>0};
+    });
   }
 
   async add(userId: string, offerId: string): Promise<void> {
-    const offer = await this.prisma.offer.findUnique({
-      where: { id: offerId },
-    });
+    const offer=await this.offers.find(offerId);
 
     if (!offer) {
       throw new BadRequestException('This offer does not exist');

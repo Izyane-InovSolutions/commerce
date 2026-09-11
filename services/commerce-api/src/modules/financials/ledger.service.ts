@@ -5,6 +5,7 @@ import {
   type LedgerEntry,
   type Payout,
   type SellerOrder,
+  type Prisma,
 } from '@prisma/client';
 
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
@@ -30,51 +31,114 @@ export class LedgerService {
     private readonly config: ConfigService,
   ) {}
 
-  // No-op for the platform's own first-party seller orders (sellerId: null)
-  // - that revenue is already the platform's, not commission-split.
-  async recordSale(sellerOrder: SellerOrder): Promise<void> {
-    if (!sellerOrder.sellerId) {
-      return;
-    }
-
-    const commissionAmount = this.applyBps(sellerOrder.total);
-    const netAmount = sellerOrder.total - commissionAmount;
-
-    await this.appendEntry({
-      sellerId: sellerOrder.sellerId,
-      type: LedgerEntryType.SALE,
-      referenceType: 'seller_order',
-      referenceId: sellerOrder.id,
-      grossAmount: sellerOrder.total,
-      commissionAmount,
-      netAmount,
-      currency: sellerOrder.currency,
-      description: `Sale for seller order ${sellerOrder.id}`,
+  // Settlement currency is fixed per seller; checkout claims it before charging.
+  async ensureCurrency(
+    sellerId: string,
+    currency: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.sellerBalance.upsert({
+      where: { sellerId },
+      create: { sellerId, balance: 0, currency },
+      update: {},
     });
+    await tx.$queryRaw`SELECT seller_id FROM seller_balances WHERE seller_id = ${sellerId}::uuid FOR UPDATE`;
+    const balance = await tx.sellerBalance.findUniqueOrThrow({
+      where: { sellerId },
+    });
+    if (balance.currency !== currency)
+      throw new ConflictException(
+        'Seller settlement currency does not match this transaction',
+      );
+  }
+
+  async recordSale(
+    sellerOrder: SellerOrder,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    if (!sellerOrder.sellerId) return;
+    if (!tx)
+      return this.prisma.$transaction((client) =>
+        this.recordSale(sellerOrder, client),
+      );
+    const commissionAmount = this.applyBps(sellerOrder.total);
+    await this.appendEntry(
+      {
+        sellerId: sellerOrder.sellerId,
+        type: LedgerEntryType.SALE,
+        referenceType: 'seller_order',
+        referenceId: sellerOrder.id,
+        grossAmount: sellerOrder.total,
+        commissionAmount,
+        netAmount: sellerOrder.total - commissionAmount,
+        currency: sellerOrder.currency,
+        description: `Sale for seller order ${sellerOrder.id}`,
+      },
+      tx,
+    );
   }
 
   async recordRefundReversal(
     sellerOrder: SellerOrder,
     refundAmount: number,
+    refundId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<void> {
-    if (!sellerOrder.sellerId) {
-      return;
-    }
-
-    const commissionReversal = this.applyBps(refundAmount);
-    const netReversal = refundAmount - commissionReversal;
-
-    await this.appendEntry({
-      sellerId: sellerOrder.sellerId,
-      type: LedgerEntryType.REFUND,
-      referenceType: 'seller_order',
-      referenceId: sellerOrder.id,
-      grossAmount: -refundAmount,
-      commissionAmount: -commissionReversal,
-      netAmount: -netReversal,
-      currency: sellerOrder.currency,
-      description: `Refund reversal for seller order ${sellerOrder.id}`,
+    if (!sellerOrder.sellerId) return;
+    if (!tx)
+      return this.prisma.$transaction((client) =>
+        this.recordRefundReversal(sellerOrder, refundAmount, refundId, client),
+      );
+    await this.ensureCurrency(sellerOrder.sellerId, sellerOrder.currency, tx);
+    const sales = await tx.ledgerEntry.findMany({
+      where: {
+        sellerId: sellerOrder.sellerId,
+        type: LedgerEntryType.SALE,
+        referenceType: 'seller_order',
+        referenceId: sellerOrder.id,
+      },
     });
+    const sale = sales[0];
+    if (
+      !sale ||
+      sales.length !== 1 ||
+      sale.grossAmount !== sellerOrder.total ||
+      sale.currency !== sellerOrder.currency
+    )
+      throw new ConflictException(
+        'Original sale ledger requires reconciliation',
+      );
+    const cumulative = sellerOrder.refundedAmount + refundAmount;
+    if (
+      refundAmount <= 0 ||
+      cumulative > sellerOrder.total ||
+      sellerOrder.total <= 0
+    )
+      throw new ConflictException('Invalid cumulative refund');
+    // Use the original sale commission, with cumulative rounding so a full
+    // refund exactly reverses the sale even across many partial refunds.
+    const proportion = (amount: number): number =>
+      Number(
+        (BigInt(sale.commissionAmount) * BigInt(amount) +
+          BigInt(Math.floor(sellerOrder.total / 2))) /
+          BigInt(sellerOrder.total),
+      );
+    const commissionAmount =
+      proportion(cumulative) - proportion(sellerOrder.refundedAmount);
+    await this.appendEntry(
+      {
+        sellerId: sellerOrder.sellerId,
+        type: LedgerEntryType.REFUND,
+        referenceType: 'refund',
+        referenceId: refundId,
+        grossAmount: -refundAmount,
+        commissionAmount: commissionAmount === 0 ? 0 : -commissionAmount,
+        netAmount: -(refundAmount - commissionAmount),
+        currency: sellerOrder.currency,
+        description: `Refund ${refundId} for seller order ${sellerOrder.id}`,
+      },
+      tx,
+    );
   }
 
   async recordPayout(
@@ -83,23 +147,24 @@ export class LedgerService {
     reference?: string,
     note?: string,
   ): Promise<Payout> {
-    const currentBalance = await this.getBalance(sellerId);
-
-    if (amount > currentBalance.balance) {
-      throw new ConflictException('Payout amount exceeds the seller balance');
-    }
-
+    if (!Number.isSafeInteger(amount) || amount <= 0)
+      throw new ConflictException('Payout amount must be positive minor units');
     return this.prisma.$transaction(async (tx) => {
-      const payout = await tx.payout.create({
-        data: {
-          sellerId,
-          amount,
-          currency: currentBalance.currency,
-          reference,
-          note,
-        },
+      await tx.$queryRaw`SELECT seller_id FROM seller_balances WHERE seller_id = ${sellerId}::uuid FOR UPDATE`;
+      const balance = await tx.sellerBalance.findUnique({
+        where: { sellerId },
       });
-
+      if (!balance || amount > balance.balance)
+        throw new ConflictException('Payout amount exceeds the seller balance');
+      const changed = await tx.sellerBalance.updateMany({
+        where: { sellerId, balance: { gte: amount } },
+        data: { balance: { decrement: amount } },
+      });
+      if (changed.count !== 1)
+        throw new ConflictException('Payout amount exceeds the seller balance');
+      const payout = await tx.payout.create({
+        data: { sellerId, amount, currency: balance.currency, reference, note },
+      });
       await tx.ledgerEntry.create({
         data: {
           sellerId,
@@ -109,16 +174,10 @@ export class LedgerService {
           grossAmount: -amount,
           commissionAmount: 0,
           netAmount: -amount,
-          currency: currentBalance.currency,
+          currency: balance.currency,
           description: `Payout ${payout.id}`,
         },
       });
-
-      await tx.sellerBalance.update({
-        where: { sellerId },
-        data: { balance: { decrement: amount } },
-      });
-
       return payout;
     });
   }
@@ -173,29 +232,34 @@ export class LedgerService {
     return Math.round((amount * bps) / 10000);
   }
 
-  private async appendEntry(data: {
-    sellerId: string;
-    type: LedgerEntryType;
-    referenceType: string;
-    referenceId: string;
-    grossAmount: number;
-    commissionAmount: number;
-    netAmount: number;
-    currency: string;
-    description: string;
-  }): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      await tx.ledgerEntry.create({ data });
-
-      await tx.sellerBalance.upsert({
-        where: { sellerId: data.sellerId },
-        create: {
-          sellerId: data.sellerId,
-          balance: data.netAmount,
-          currency: data.currency,
-        },
-        update: { balance: { increment: data.netAmount } },
-      });
+  private async appendEntry(
+    data: Prisma.LedgerEntryUncheckedCreateInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await this.ensureCurrency(data.sellerId, data.currency, tx);
+    const existing = await tx.ledgerEntry.findFirst({
+      where: {
+        sellerId: data.sellerId,
+        type: data.type,
+        referenceType: data.referenceType,
+        referenceId: data.referenceId,
+      },
+    });
+    if (existing) {
+      if (
+        existing.grossAmount !== data.grossAmount ||
+        existing.netAmount !== data.netAmount ||
+        existing.currency !== data.currency
+      )
+        throw new ConflictException(
+          'Ledger reference already has different amounts',
+        );
+      return;
+    }
+    await tx.ledgerEntry.create({ data });
+    await tx.sellerBalance.update({
+      where: { sellerId: data.sellerId },
+      data: { balance: { increment: data.netAmount } },
     });
   }
 }

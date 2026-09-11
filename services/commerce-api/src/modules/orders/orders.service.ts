@@ -13,6 +13,7 @@ import {
 } from '@prisma/client';
 
 import { toAddressSnapshot } from '../../common/addresses/address-snapshot';
+import { OfferReadService } from '../offers/offer-read.service';
 import { PrismaService } from '../../database/prisma.service';
 import { AddressesService } from '../users/addresses/addresses.service';
 import { CartLineView } from '../cart/cart.types';
@@ -35,6 +36,7 @@ export class OrdersService {
     private readonly inventoryService: InventoryService,
     private readonly addressesService: AddressesService,
     private readonly ledgerService: LedgerService,
+    private readonly offers:OfferReadService,
   ) {}
 
   async createFromCart(
@@ -59,9 +61,7 @@ export class OrdersService {
     );
     const shippingAddress = toAddressSnapshot(address);
 
-    const offers = await this.prisma.offer.findMany({
-      where: { id: { in: cart.items.map((item) => item.offerId) } },
-    });
+    const offers = await this.offers.findMany(cart.items.map(item=>item.offerId));
     const offerById = new Map(offers.map((offer) => [offer.id, offer]));
     const currency = cart.currency ?? 'USD';
     const groups = this.groupBySeller(cart.items);
@@ -78,7 +78,11 @@ export class OrdersService {
         },
       });
 
-      for (const group of groups) {
+      for (const group of [...groups].sort((a, b) =>
+        (a.sellerId ?? '').localeCompare(b.sellerId ?? ''),
+      )) {
+        if (group.sellerId)
+          await this.ledgerService.ensureCurrency(group.sellerId, currency, tx);
         const groupSubtotal = group.items.reduce(
           (sum, item) => sum + item.lineTotal,
           0,
@@ -149,76 +153,93 @@ export class OrdersService {
     return this.findByIdOrThrow(createdOrderId);
   }
 
-  async confirmPayment(orderId: string): Promise<Order> {
-    const order = await this.findByIdOrThrow(orderId);
+  async lockForPayment(
+    orderId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.$queryRaw`SELECT id FROM orders WHERE id = ${orderId}::uuid FOR UPDATE`;
+  }
 
-    for (const item of order.items) {
-      if (item.reservationId) {
-        await this.inventoryService.commit(item.reservationId);
-      }
+  async confirmPayment(
+    orderId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Order> {
+    if (!tx)
+      return this.prisma.$transaction((client) =>
+        this.confirmPayment(orderId, client),
+      );
+    await this.lockForPayment(orderId, tx);
+    const order = await this.findByIdOrThrow(orderId, tx);
+    if (
+      [
+        OrderStatus.PAID,
+        OrderStatus.PARTIALLY_REFUNDED,
+        OrderStatus.REFUNDED,
+      ].includes(order.status as never)
+    )
+      return order;
+    if (order.status !== OrderStatus.PENDING_PAYMENT)
+      throw new ConflictException('Only a pending order can be paid');
+    for (const item of [...order.items].sort((a, b) =>
+      a.id.localeCompare(b.id),
+    )) {
+      if (item.reservationId)
+        await this.inventoryService.commit(item.reservationId, tx);
     }
-
-    await this.prisma.sellerOrder.updateMany({
+    await tx.sellerOrder.updateMany({
       where: { orderId },
       data: { status: OrderStatus.PAID },
     });
-
-    for (const sellerOrder of order.sellerOrders) {
-      await this.ledgerService.recordSale(sellerOrder);
-    }
-
-    return this.prisma.order.update({
+    for (const sellerOrder of [...order.sellerOrders].sort((a, b) =>
+      (a.sellerId ?? '').localeCompare(b.sellerId ?? ''),
+    ))
+      await this.ledgerService.recordSale(sellerOrder, tx);
+    return tx.order.update({
       where: { id: orderId },
       data: { status: OrderStatus.PAID },
     });
   }
 
-  async getSellerOrderForPayment(sellerOrderId: string): Promise<SellerOrder> {
-    const sellerOrder = await this.prisma.sellerOrder.findUnique({
+  async getSellerOrderForPayment(
+    sellerOrderId: string,
+    tx: Prisma.TransactionClient = this.prisma,
+  ): Promise<SellerOrder> {
+    const sellerOrder = await tx.sellerOrder.findUnique({
       where: { id: sellerOrderId },
     });
-
-    if (!sellerOrder) {
-      throw new NotFoundException('Seller order not found');
-    }
-
-    if (
-      sellerOrder.status !== OrderStatus.PAID &&
-      sellerOrder.status !== OrderStatus.PARTIALLY_REFUNDED
-    ) {
-      throw new ConflictException(
-        'Only a paid or partially-refunded seller order can be refunded',
-      );
-    }
-
+    if (!sellerOrder) throw new NotFoundException('Seller order not found');
     return sellerOrder;
   }
 
   async applyRefund(
     sellerOrderId: string,
     amount: number,
+    tx?: Prisma.TransactionClient,
   ): Promise<SellerOrder> {
-    const sellerOrder = await this.prisma.sellerOrder.findUnique({
+    if (!tx)
+      return this.prisma.$transaction((client) =>
+        this.applyRefund(sellerOrderId, amount, client),
+      );
+    const initial = await this.getSellerOrderForPayment(sellerOrderId, tx);
+    await this.lockForPayment(initial.orderId, tx);
+    const sellerOrder = await tx.sellerOrder.findUniqueOrThrow({
       where: { id: sellerOrderId },
       include: { items: true },
     });
-
-    if (!sellerOrder) {
-      throw new NotFoundException('Seller order not found');
-    }
-
-    const remaining = sellerOrder.total - sellerOrder.refundedAmount;
-
-    if (amount > remaining) {
+    if (
+      !Number.isSafeInteger(amount) ||
+      amount <= 0 ||
+      ![OrderStatus.PAID, OrderStatus.PARTIALLY_REFUNDED].includes(
+        sellerOrder.status as never,
+      ) ||
+      amount > sellerOrder.total - sellerOrder.refundedAmount
+    )
       throw new ConflictException(
-        'Refund amount exceeds the remaining refundable balance for this seller order',
+        'Refund exceeds the refundable balance or order is not paid',
       );
-    }
-
     const refundedAmount = sellerOrder.refundedAmount + amount;
-    const fullyRefunded = refundedAmount >= sellerOrder.total;
-
-    const updated = await this.prisma.sellerOrder.update({
+    const fullyRefunded = refundedAmount === sellerOrder.total;
+    const updated = await tx.sellerOrder.update({
       where: { id: sellerOrderId },
       data: {
         refundedAmount,
@@ -227,33 +248,47 @@ export class OrdersService {
           : OrderStatus.PARTIALLY_REFUNDED,
       },
     });
-
     if (fullyRefunded) {
-      for (const item of sellerOrder.items) {
-        if (item.reservationId) {
-          await this.inventoryService.restock(item.reservationId);
-        }
-      }
+      for (const item of [...sellerOrder.items].sort((a, b) =>
+        a.id.localeCompare(b.id),
+      ))
+        if (item.reservationId)
+          await this.inventoryService.restock(item.reservationId, tx);
     }
-
+    const groups = await tx.sellerOrder.findMany({
+      where: { orderId: sellerOrder.orderId },
+    });
+    await tx.order.update({
+      where: { id: sellerOrder.orderId },
+      data: {
+        status: groups.every((group) => group.status === OrderStatus.REFUNDED)
+          ? OrderStatus.REFUNDED
+          : OrderStatus.PARTIALLY_REFUNDED,
+      },
+    });
     return updated;
   }
 
-  async cancel(orderId: string): Promise<Order> {
-    const order = await this.findByIdOrThrow(orderId);
-
-    for (const item of order.items) {
-      if (item.reservationId) {
-        await this.inventoryService.release(item.reservationId);
-      }
-    }
-
-    await this.prisma.sellerOrder.updateMany({
+  async cancel(orderId: string, tx?: Prisma.TransactionClient): Promise<Order> {
+    if (!tx)
+      return this.prisma.$transaction((client) => this.cancel(orderId, client));
+    await this.lockForPayment(orderId, tx);
+    const order = await this.findByIdOrThrow(orderId, tx);
+    if (order.status === OrderStatus.CANCELLED) return order;
+    if (order.status !== OrderStatus.PENDING_PAYMENT)
+      throw new ConflictException(
+        'A paid order must be refunded, not cancelled',
+      );
+    for (const item of [...order.items].sort((a, b) =>
+      a.id.localeCompare(b.id),
+    ))
+      if (item.reservationId)
+        await this.inventoryService.release(item.reservationId, tx);
+    await tx.sellerOrder.updateMany({
       where: { orderId },
       data: { status: OrderStatus.CANCELLED },
     });
-
-    return this.prisma.order.update({
+    return tx.order.update({
       where: { id: orderId },
       data: { status: OrderStatus.CANCELLED },
     });
@@ -324,8 +359,11 @@ export class OrdersService {
     });
   }
 
-  private async findByIdOrThrow(orderId: string): Promise<OrderWithItems> {
-    const order = await this.prisma.order.findUnique({
+  private async findByIdOrThrow(
+    orderId: string,
+    tx: Prisma.TransactionClient = this.prisma,
+  ): Promise<OrderWithItems> {
+    const order = await tx.order.findUnique({
       where: { id: orderId },
       include: { items: true, sellerOrders: { include: { items: true } } },
     });

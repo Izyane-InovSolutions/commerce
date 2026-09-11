@@ -188,41 +188,18 @@ export class UnifiedPaymentProvider implements PaymentProvider {
       'Gateway webhook verification is not documented',
     );
   }
-  async refund(
-    providerReference: string,
-    amount: number,
-    reason: string,
-    idempotencyKey: string,
-  ): Promise<ProviderRefundResult> {
-    const payment = await this.requestRefund(
-      providerReference,
-      amount,
-      reason,
-      idempotencyKey,
+  refund(): Promise<ProviderRefundResult> {
+    return Promise.reject(
+      new NotImplementedException(
+        'Current gateway connectors do not support refunds; a refund result contract is required before enabling them',
+      ),
     );
-    return this.toRefundResult(payment);
   }
 
-  async getRefund(providerReference: string): Promise<ProviderRefundResult> {
-    const payment = await this.getDetails(providerReference);
-    return this.toRefundResult(payment);
-  }
-
-  // Only the documented statuses are trusted locally, matching initialize()'s
-  // "never invent a terminal status" rule - anything else falls back to
-  // PENDING rather than risk reporting a refund as done when it isn't.
-  private toRefundResult(payment: GatewayPayment): ProviderRefundResult {
-    const knownStatuses: ProviderRefundResult['status'][] = [
-      'PENDING',
-      'PROCESSING',
-      'SUCCEEDED',
-      'FAILED',
-      'CANCELLED',
-    ];
-    const status = (knownStatuses as string[]).includes(payment.status)
-      ? (payment.status as ProviderRefundResult['status'])
-      : 'PENDING';
-    return { providerReference: payment.paymentId, status };
+  getRefund(): Promise<ProviderRefundResult> {
+    return Promise.reject(
+      new NotImplementedException('Gateway refund lookup is not documented'),
+    );
   }
 
   private path(id: string): string {

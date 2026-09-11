@@ -1,3 +1,4 @@
+import { OffersModule } from '../offers/offers.module';
 import { Module } from '@nestjs/common';
 
 import { AddressesModule } from '../users/addresses/addresses.module';
@@ -11,7 +12,7 @@ import { SellerOrdersController } from './seller-orders.controller';
 import { SellerOrdersService } from './seller-orders.service';
 
 @Module({
-  imports: [
+  imports: [OffersModule, 
     CartModule,
     InventoryModule,
     AddressesModule,

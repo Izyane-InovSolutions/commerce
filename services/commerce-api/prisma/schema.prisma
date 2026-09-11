@@ -737,7 +737,7 @@ model Refund {
 model LedgerEntry {
   id               String          @id @default(uuid()) @db.Uuid
   sellerId         String          @map("seller_id") @db.Uuid
-  seller           Seller          @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  seller           Seller          @relation(fields: [sellerId], references: [id], onDelete: Restrict)
   type             LedgerEntryType
   referenceType    String          @map("reference_type")
   referenceId      String          @map("reference_id")
@@ -749,6 +749,7 @@ model LedgerEntry {
   createdAt        DateTime        @default(now()) @map("created_at")
 
   @@index([sellerId, createdAt])
+  @@index([sellerId, type, referenceType, referenceId])
   @@map("ledger_entries")
 }
 
@@ -757,7 +758,7 @@ model LedgerEntry {
 // cache of the ledger rather than an independent source of truth.
 model SellerBalance {
   sellerId  String   @id @map("seller_id") @db.Uuid
-  seller    Seller   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  seller    Seller   @relation(fields: [sellerId], references: [id], onDelete: Restrict)
   balance   Int      @default(0)
   currency  String   @db.VarChar(3)
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -771,7 +772,7 @@ model SellerBalance {
 model Payout {
   id        String   @id @default(uuid()) @db.Uuid
   sellerId  String   @map("seller_id") @db.Uuid
-  seller    Seller   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  seller    Seller   @relation(fields: [sellerId], references: [id], onDelete: Restrict)
   amount    Int
   currency  String   @db.VarChar(3)
   reference String?

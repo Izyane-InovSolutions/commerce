@@ -52,6 +52,26 @@ export class InventoryService {
     );
   }
 
+  async getAvailableQuantities(
+    variantIds: string[],
+  ): Promise<Map<string, number>> {
+    const ids = [...new Set(variantIds)];
+    if (!ids.length) return new Map();
+    const records = await this.prisma.inventoryRecord.findMany({
+      where: { variantId: { in: ids } },
+      select: { variantId: true, onHand: true, reserved: true },
+    });
+    const quantities = new Map<string, number>();
+    for (const record of records)
+      quantities.set(
+        record.variantId,
+        (quantities.get(record.variantId) ?? 0) +
+          record.onHand -
+          record.reserved,
+      );
+    return quantities;
+  }
+
   listMovements(inventoryRecordId: string): Promise<InventoryMovement[]> {
     return this.prisma.inventoryMovement.findMany({
       where: { inventoryRecordId },
@@ -247,113 +267,110 @@ export class InventoryService {
     return reservation;
   }
 
-  async release(reservationId: string): Promise<Reservation> {
-    const reservation = await this.findReservationOrThrow(reservationId);
-
-    if (reservation.status !== ReservationStatus.ACTIVE) {
-      return reservation;
-    }
-
-    return this.finalizeReservation(reservation, ReservationStatus.RELEASED);
+  async release(
+    reservationId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Reservation> {
+    if (!tx)
+      return this.prisma.$transaction((client) =>
+        this.release(reservationId, client),
+      );
+    const reservation = await this.lockReservation(reservationId, tx);
+    if (reservation.status !== ReservationStatus.ACTIVE) return reservation;
+    return this.finalizeReservation(
+      reservation,
+      ReservationStatus.RELEASED,
+      tx,
+    );
   }
 
-  // Called by the expiry worker once a reservation's TTL has passed. A
-  // non-ACTIVE reservation here means commit()/release() already won the
-  // race, which is expected, not an error.
   async expireReservation(reservationId: string): Promise<void> {
-    const reservation = await this.findReservationOrThrow(reservationId);
-
-    if (reservation.status !== ReservationStatus.ACTIVE) {
-      return;
-    }
-
-    await this.finalizeReservation(reservation, ReservationStatus.EXPIRED);
+    await this.prisma.$transaction(async (tx) => {
+      const reservation = await this.lockReservation(reservationId, tx);
+      if (
+        reservation.status !== ReservationStatus.ACTIVE ||
+        reservation.expiresAt > new Date()
+      )
+        return;
+      await this.finalizeReservation(
+        reservation,
+        ReservationStatus.EXPIRED,
+        tx,
+      );
+    });
   }
 
-  async commit(reservationId: string): Promise<Reservation> {
-    const reservation = await this.findReservationOrThrow(reservationId);
-
-    if (reservation.status === ReservationStatus.COMMITTED) {
-      return reservation;
-    }
-
+  async commit(
+    reservationId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Reservation> {
+    if (!tx)
+      return this.prisma.$transaction((client) =>
+        this.commit(reservationId, client),
+      );
+    const reservation = await this.lockReservation(reservationId, tx);
+    if (reservation.status === ReservationStatus.COMMITTED) return reservation;
     if (reservation.status !== ReservationStatus.ACTIVE) {
       throw new ConflictException(
         `Cannot commit a reservation with status ${reservation.status}`,
       );
     }
-
-    return this.prisma.$transaction(async (tx) => {
-      const affected = await tx.$executeRaw`
-        UPDATE inventory_records
-        SET on_hand = on_hand - ${reservation.quantity}, reserved = reserved - ${reservation.quantity}, updated_at = now()
-        WHERE id = ${reservation.inventoryRecordId}::uuid AND on_hand >= ${reservation.quantity} AND reserved >= ${reservation.quantity}
-      `;
-
-      if (affected === 0) {
-        throw new ConflictException(
-          'Inventory record state does not allow committing this reservation',
-        );
-      }
-
-      const committed = await tx.reservation.update({
-        where: { id: reservationId },
-        data: { status: ReservationStatus.COMMITTED },
-      });
-
-      await this.recordMovement(
-        tx,
-        reservation.inventoryRecordId,
-        InventoryMovementType.COMMITMENT,
-        reservation.quantity,
-        undefined,
-        {
-          referenceType: 'reservation',
-          referenceId: reservation.id,
-        },
+    const affected = await tx.$executeRaw`
+      UPDATE inventory_records
+      SET on_hand = on_hand - ${reservation.quantity}, reserved = reserved - ${reservation.quantity}, updated_at = now()
+      WHERE id = ${reservation.inventoryRecordId}::uuid AND on_hand >= ${reservation.quantity} AND reserved >= ${reservation.quantity}
+    `;
+    if (affected === 0)
+      throw new ConflictException(
+        'Inventory record state does not allow committing this reservation',
       );
-
-      return committed;
+    const committed = await tx.reservation.update({
+      where: { id: reservationId },
+      data: { status: ReservationStatus.COMMITTED },
     });
+    await this.recordMovement(
+      tx,
+      reservation.inventoryRecordId,
+      InventoryMovementType.COMMITMENT,
+      reservation.quantity,
+      undefined,
+      { referenceType: 'reservation', referenceId: reservation.id },
+    );
+    return committed;
   }
 
-  // Called when a fully-refunded order line's stock is returned to sellable
-  // inventory. Only a COMMITTED reservation has anything to return - it's a
-  // no-op for anything else, mirroring expireReservation()'s tolerance of an
-  // already-resolved reservation. Only onHand is touched (reserved was
-  // already zeroed by commit()); the Reservation itself stays COMMITTED -
-  // that's still historically accurate, the restock is captured by the
-  // RETURN movement instead of a reservation-state change.
-  async restock(reservationId: string): Promise<void> {
-    const reservation = await this.findReservationOrThrow(reservationId);
-
-    if (reservation.status !== ReservationStatus.COMMITTED) {
-      return;
-    }
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`
-        UPDATE inventory_records
-        SET on_hand = on_hand + ${reservation.quantity}, updated_at = now()
-        WHERE id = ${reservation.inventoryRecordId}::uuid
-      `;
-
-      await this.recordMovement(
-        tx,
-        reservation.inventoryRecordId,
-        InventoryMovementType.RETURN,
-        reservation.quantity,
-        undefined,
-        {
-          referenceType: 'reservation',
-          referenceId: reservation.id,
-        },
+  async restock(
+    reservationId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    if (!tx)
+      return this.prisma.$transaction((client) =>
+        this.restock(reservationId, client),
       );
+    const reservation = await this.lockReservation(reservationId, tx);
+    if (reservation.status !== ReservationStatus.COMMITTED) return;
+    const returned = await tx.inventoryMovement.findFirst({
+      where: {
+        type: InventoryMovementType.RETURN,
+        referenceType: 'reservation',
+        referenceId: reservationId,
+      },
     });
+    if (returned) return;
+    await tx.$executeRaw`
+      UPDATE inventory_records SET on_hand = on_hand + ${reservation.quantity}, updated_at = now()
+      WHERE id = ${reservation.inventoryRecordId}::uuid
+    `;
+    await this.recordMovement(
+      tx,
+      reservation.inventoryRecordId,
+      InventoryMovementType.RETURN,
+      reservation.quantity,
+      undefined,
+      { referenceType: 'reservation', referenceId: reservationId },
+    );
   }
 
-  // Called inline by reserve() before checking availability; also exported
-  // for a future worker/cron to call directly once one exists.
   async sweepExpired(inventoryRecordId: string): Promise<void> {
     const expired = await this.prisma.reservation.findMany({
       where: {
@@ -361,11 +378,10 @@ export class InventoryService {
         status: ReservationStatus.ACTIVE,
         expiresAt: { lt: new Date() },
       },
+      orderBy: { id: 'asc' },
     });
-
-    for (const reservation of expired) {
-      await this.finalizeReservation(reservation, ReservationStatus.EXPIRED);
-    }
+    for (const reservation of expired)
+      await this.expireReservation(reservation.id);
   }
 
   private async finalizeReservation(
@@ -373,43 +389,38 @@ export class InventoryService {
     status:
       | typeof ReservationStatus.RELEASED
       | typeof ReservationStatus.EXPIRED,
+    tx: Prisma.TransactionClient,
   ): Promise<Reservation> {
-    return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`
-        UPDATE inventory_records
-        SET reserved = GREATEST(reserved - ${reservation.quantity}, 0), updated_at = now()
-        WHERE id = ${reservation.inventoryRecordId}::uuid
-      `;
-
-      const updated = await tx.reservation.update({
-        where: { id: reservation.id },
-        data: { status },
-      });
-
-      await this.recordMovement(
-        tx,
-        reservation.inventoryRecordId,
-        InventoryMovementType.RELEASE,
-        reservation.quantity,
-        status === ReservationStatus.EXPIRED ? 'expired' : undefined,
-        { referenceType: 'reservation', referenceId: reservation.id },
+    const affected = await tx.$executeRaw`
+      UPDATE inventory_records SET reserved = reserved - ${reservation.quantity}, updated_at = now()
+      WHERE id = ${reservation.inventoryRecordId}::uuid AND reserved >= ${reservation.quantity}
+    `;
+    if (affected === 0)
+      throw new ConflictException(
+        'Inventory reservation counters require reconciliation',
       );
-
-      return updated;
+    const updated = await tx.reservation.update({
+      where: { id: reservation.id },
+      data: { status },
     });
+    await this.recordMovement(
+      tx,
+      reservation.inventoryRecordId,
+      InventoryMovementType.RELEASE,
+      reservation.quantity,
+      status === ReservationStatus.EXPIRED ? 'expired' : undefined,
+      { referenceType: 'reservation', referenceId: reservation.id },
+    );
+    return updated;
   }
 
-  private async findReservationOrThrow(
-    reservationId: string,
+  private async lockReservation(
+    id: string,
+    tx: Prisma.TransactionClient,
   ): Promise<Reservation> {
-    const reservation = await this.prisma.reservation.findUnique({
-      where: { id: reservationId },
-    });
-
-    if (!reservation) {
-      throw new NotFoundException('Reservation not found');
-    }
-
+    await tx.$queryRaw`SELECT id FROM reservations WHERE id = ${id}::uuid FOR UPDATE`;
+    const reservation = await tx.reservation.findUnique({ where: { id } });
+    if (!reservation) throw new NotFoundException('Reservation not found');
     return reservation;
   }
 

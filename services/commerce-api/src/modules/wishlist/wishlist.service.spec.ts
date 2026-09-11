@@ -1,3 +1,4 @@
+import { OfferReadService, type CommerceOffer } from '../offers/offer-read.service';
 import { BadRequestException } from '@nestjs/common';
 import { ProductStatus } from '@prisma/client';
 
@@ -25,15 +26,24 @@ function buildPrisma(): {
 
 describe('WishlistService', () => {
   let prisma: ReturnType<typeof buildPrisma>;
-  let inventoryService: { getAvailableQuantity: jest.Mock };
+  let inventoryService: { getAvailableQuantities: jest.Mock };
   let service: WishlistService;
 
   beforeEach(() => {
     prisma = buildPrisma();
-    inventoryService = { getAvailableQuantity: jest.fn().mockResolvedValue(5) };
+    inventoryService = {
+      getAvailableQuantities: jest
+        .fn()
+        .mockImplementation((ids: string[]) =>
+          Promise.resolve(new Map(ids.map((id) => [id, 5]))),
+        ),
+    };
     service = new WishlistService(
       prisma as unknown as PrismaService,
       inventoryService as unknown as InventoryService,
+      {find: prisma.offer.findUnique, findMany: jest.fn().mockImplementation(() =>
+        (prisma.wishlistItem.findMany.mock.results.at(-1)?.value as Promise<Array<{offerId:string;offer:CommerceOffer}>>).then(result=>result.map(item=>({...item.offer,id:item.offerId})))
+      )} as unknown as OfferReadService,
     );
   });
 
@@ -80,9 +90,12 @@ describe('WishlistService', () => {
 
   describe('list', () => {
     it('flags items unavailable when out of stock or no current price', async () => {
-      inventoryService.getAvailableQuantity
-        .mockResolvedValueOnce(0)
-        .mockResolvedValueOnce(5);
+      inventoryService.getAvailableQuantities.mockResolvedValue(
+        new Map([
+          ['v1', 0],
+          ['v2', 5],
+        ]),
+      );
       prisma.wishlistItem.findMany.mockResolvedValue([
         {
           id: 'wi-1',

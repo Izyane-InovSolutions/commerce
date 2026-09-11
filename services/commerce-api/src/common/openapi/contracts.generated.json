@@ -5081,7 +5081,7 @@
     "AdminRefundsController_refund": {
       "operationId": "AdminRefundsController_refund",
       "tags": [
-        "admin/seller-orders"
+        "admin"
       ],
       "parameters": [
         {
@@ -5160,6 +5160,71 @@
           }
         }
       }
+    },
+    "AdminRefundsController_reconcile": {
+      "operationId": "AdminRefundsController_reconcile",
+      "tags": [
+        "admin"
+      ],
+      "parameters": [
+        {
+          "name": "refundId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/__type14"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: ADMIN."
     },
     "GatewayPaymentsController_get": {
       "operationId": "GatewayPaymentsController_get",
