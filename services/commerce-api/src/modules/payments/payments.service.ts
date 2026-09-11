@@ -5,6 +5,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { OrderWithItems, OrdersService } from '../orders/orders.service';
 import {
   PAYMENT_PROVIDER,
+  type InitializePaymentInput,
   type PaymentProvider,
   type ProviderPaymentResult,
 } from './payment-provider';
@@ -33,6 +34,7 @@ export class PaymentsService {
 
   async initializeForOrder(
     order: OrderWithItems,
+    paymentInput: Omit<InitializePaymentInput, 'paymentId' | 'amount' | 'currency' | 'idempotencyKey' | 'reference'>,
   ): Promise<PaymentWithRedirect> {
     const payment = await this.prisma.payment.create({
       data: {
@@ -47,10 +49,12 @@ export class PaymentsService {
 
     try {
       const result = await this.provider.initialize({
+        ...paymentInput,
         paymentId: payment.id,
         amount: order.total,
         currency: order.currency,
         idempotencyKey: order.id,
+        reference: order.id,
       });
 
       const updated = await this.prisma.payment.update({
