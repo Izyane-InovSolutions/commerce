@@ -46,6 +46,7 @@ export interface PaymentProvider {
   refund(
     providerReference: string,
     amount: number,
+    reason: string,
     idempotencyKey: string,
   ): Promise<ProviderRefundResult>;
   getRefund(providerReference: string): Promise<ProviderRefundResult>;

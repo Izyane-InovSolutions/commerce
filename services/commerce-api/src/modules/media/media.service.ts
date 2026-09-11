@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { MediaAsset, MediaStatus } from '@prisma/client';
+import { MediaAsset, MediaStatus, type Prisma } from '@prisma/client';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 
 import { PrismaService } from '../../database/prisma.service';
@@ -34,6 +34,22 @@ export class MediaService {
     private readonly config: ConfigService,
     @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
   ) {}
+
+  async requireProductAsset(id:string):Promise<void> {
+    const asset=await this.prisma.mediaAsset.findUnique({where:{id}});
+    if(!asset || asset.status!==MediaStatus.AVAILABLE || asset.verificationLocked) throw new BadRequestException('Media asset does not exist or is not available');
+  }
+
+  async lockForProductAttachment(id:string,tx:Prisma.TransactionClient):Promise<void> {
+    const eligible=await tx.mediaAsset.updateMany({where:{id,status:MediaStatus.AVAILABLE,verificationLocked:false},data:{updatedAt:new Date()}});
+    if(eligible.count!==1) throw new BadRequestException('Media is unavailable or reserved for verification');
+  }
+
+  async lockVerificationDocuments(userId:string,ids:string[],tx:Prisma.TransactionClient):Promise<void> {
+    if(!ids.length) throw new BadRequestException('At least one business verification document is required');
+    const locked=await tx.mediaAsset.updateMany({where:{id:{in:ids},ownerUserId:userId,status:MediaStatus.AVAILABLE,deletedAt:null},data:{verificationLocked:true}});
+    if(locked.count!==ids.length) throw new BadRequestException('Documents must be available uploads owned by the applicant');
+  }
 
   async reserve(
     ownerUserId: string,

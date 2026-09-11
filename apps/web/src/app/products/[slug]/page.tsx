@@ -5,17 +5,17 @@ import { PackageSearch } from 'lucide-react';
 import { BackButton } from '@/components/back-button';
 import { ProductCard } from '@/components/product-card';
 import { ProductDetailActions } from '@/components/product-detail-actions';
-import { Badge } from '@/components/ui/badge';
+import { getProductBySlug, listProducts } from '@/lib/catalog';
+import { getDisplayPrice } from '@/lib/catalog-types';
 import { formatCurrency } from '@/lib/currency';
-import { getProductById, getRelatedProducts } from '@/lib/mock-data/products';
 
-type ProductDetailPageProps = PageProps<'/products/[id]'>;
+type ProductDetailPageProps = PageProps<'/products/[slug]'>;
 
 export async function generateMetadata({
   params,
 }: ProductDetailPageProps): Promise<Metadata> {
-  const { id } = await params;
-  const product = getProductById(id);
+  const { slug } = await params;
+  const product = await getProductBySlug(slug);
 
   return { title: product?.name ?? 'Product' };
 }
@@ -23,18 +23,24 @@ export async function generateMetadata({
 export default async function ProductDetailPage({
   params,
 }: ProductDetailPageProps) {
-  const { id } = await params;
-  const product = getProductById(id);
+  const { slug } = await params;
+  const product = await getProductBySlug(slug);
 
   if (!product) {
     notFound();
   }
 
-  const onSale = typeof product.compareAtPrice === 'number';
-  const discountPercent = product.compareAtPrice
-    ? Math.round((1 - product.price / product.compareAtPrice) * 100)
-    : 0;
-  const relatedProducts = getRelatedProducts(product.id);
+  const price = getDisplayPrice(product);
+  const relatedProducts = product.category
+    ? (
+        await listProducts({
+          categorySlug: product.category.slug,
+          limit: 5,
+        })
+      ).products
+        .filter((candidate) => candidate.slug !== product.slug)
+        .slice(0, 4)
+    : [];
 
   return (
     <div className="mx-auto max-w-4xl space-y-12 px-4 py-12">
@@ -50,35 +56,30 @@ export default async function ProductDetailPage({
 
         <div className="space-y-4">
           <div className="space-y-1">
-            <p className="text-sm text-muted-foreground">
-              {product.categoryTitle}
-            </p>
+            {product.category ? (
+              <p className="text-sm text-muted-foreground">
+                {product.category.name}
+              </p>
+            ) : null}
             <h1 className="text-2xl font-semibold tracking-tight text-balance">
               {product.name}
             </h1>
           </div>
 
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-semibold">
-              {formatCurrency(product.price)}
-            </span>
-            {onSale ? (
-              <>
-                <span className="text-muted-foreground line-through">
-                  {formatCurrency(product.compareAtPrice as number)}
-                </span>
-                <Badge variant="destructive">Save {discountPercent}%</Badge>
-              </>
-            ) : null}
-          </div>
-
-          <p className="text-muted-foreground text-pretty">
-            {product.description}
+          <p className="text-2xl font-semibold">
+            {price !== null ? formatCurrency(price) : 'Currently unavailable'}
           </p>
 
+          {product.description ? (
+            <p className="text-muted-foreground text-pretty">
+              {product.description}
+            </p>
+          ) : null}
+
           <ProductDetailActions
-            productId={product.id}
-            productName={product.name}
+            slug={product.slug}
+            name={product.name}
+            unitPrice={price}
           />
         </div>
       </div>

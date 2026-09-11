@@ -1,3 +1,5 @@
+import { ProductReferencesModule } from '../products/product-references.module';
+import { OfferReadService } from './offer-read.service';
 import { Module } from '@nestjs/common';
 
 import { AdminOffersController } from './admin-offers.controller';
@@ -8,13 +10,13 @@ import { SellerOffersController } from './seller-offers.controller';
 import { PublicOffersController } from './public-offers.controller';
 
 @Module({
-  imports: [SellersModule],
+  imports: [ProductReferencesModule, SellersModule],
   controllers: [
     AdminOffersController,
     SellerOffersController,
     PublicOffersController,
   ],
-  providers: [OffersService, MarketplaceOffersService],
-  exports: [OffersService],
+  providers: [OfferReadService, OffersService, MarketplaceOffersService],
+  exports: [OfferReadService, OffersService],
 })
 export class OffersModule {}

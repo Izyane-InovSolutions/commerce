@@ -1,13 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import type { ComponentProps } from 'react';
 
 import { ProductCard } from '@/components/product-card';
+import { Button } from '@/components/ui/button';
+import type { Product } from '@/lib/catalog-types';
 
-type ProductCategory = {
+export type ProductSection = {
+  slug: string;
   title: string;
-  products: ComponentProps<typeof ProductCard>['product'][];
+  products: Product[];
 };
 
 const INITIAL_VISIBLE_COUNT = 4;
@@ -15,7 +17,7 @@ const INITIAL_VISIBLE_COUNT = 4;
 export function ProductCategorySection({
   category,
 }: {
-  category: ProductCategory;
+  category: ProductSection;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -33,14 +35,14 @@ export function ProductCategorySection({
         ))}
       </div>
       {hasMore ? (
-        <button
-          type="button"
-          className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-3 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+        <Button
+          variant="outline"
+          size="sm"
           aria-expanded={expanded}
           onClick={() => setExpanded((value) => !value)}
         >
           {expanded ? 'View less' : 'View more'}
-        </button>
+        </Button>
       ) : null}
     </section>
   );

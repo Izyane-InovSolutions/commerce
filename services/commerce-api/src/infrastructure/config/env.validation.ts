@@ -71,7 +71,11 @@ class EnvironmentVariables {
   @ValidateIf(
     (env: EnvironmentVariables) => env.PAYMENTS_PROVIDER === 'unified',
   )
-  @IsUrl({ protocols: ['https'], require_protocol: true, require_tld: false })
+  @IsUrl({
+    protocols: ['http', 'https'],
+    require_protocol: true,
+    require_tld: false,
+  })
   UNIFIED_PAYMENTS_BASE_URL?: string;
 
   @ValidateIf(
@@ -89,6 +93,14 @@ class EnvironmentVariables {
   @Min(1000)
   @Max(60000)
   UNIFIED_PAYMENTS_TIMEOUT_MS = 15000;
+
+  // Basis points (1/100 of a percent) - 1000 = 10%. Single platform-wide
+  // rate; per-seller/per-category rates aren't needed yet.
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(10000)
+  MARKETPLACE_COMMISSION_BPS = 1000;
 }
 
 export function validate(

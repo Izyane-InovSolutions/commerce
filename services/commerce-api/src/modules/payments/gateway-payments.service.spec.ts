@@ -1,3 +1,4 @@
+import { UsersService } from '../users/users.service';
 import {
   ConflictException,
   ForbiddenException,
@@ -53,6 +54,7 @@ describe('GatewayPaymentsService', () => {
     service = new GatewayPaymentsService(
       prisma as unknown as PrismaService,
       gateway as unknown as UnifiedPaymentProvider,
+      new UsersService(prisma as unknown as PrismaService),
     );
   });
 
@@ -134,12 +136,7 @@ describe('GatewayPaymentsService', () => {
         'request-1',
       ),
     ).rejects.toBeInstanceOf(NotImplementedException);
-    expect(gateway.requestRefund).toHaveBeenCalledWith(
-      'pay_123',
-      100,
-      'Customer request',
-      'refund:local-1:request-1',
-    );
+    expect(gateway.requestRefund).not.toHaveBeenCalled();
     expect(prisma.payment.update).not.toHaveBeenCalled();
   });
 

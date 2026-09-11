@@ -1,18 +1,40 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { ProductCategorySection } from './product-category-section';
-import type { ProductCategory } from '@/lib/mock-data/products';
+import {
+  ProductCategorySection,
+  type ProductSection,
+} from './product-category-section';
+import type { Product } from '@/lib/catalog-types';
 
-const category: ProductCategory = {
-  slug: 'test-category',
-  title: 'Test Category',
-  products: Array.from({ length: 6 }, (_, index) => ({
+function makeProduct(index: number): Product {
+  return {
     id: `p-${index}`,
     name: `Product ${index}`,
-    price: 10 + index,
+    slug: `product-${index}`,
     description: `Description for product ${index}.`,
-  })),
+    category: null,
+    variants: [
+      {
+        id: `v-${index}`,
+        skuCode: `sku-${index}`,
+        name: null,
+        offers: [
+          {
+            id: `o-${index}`,
+            status: 'PUBLISHED',
+            currentPrice: { amount: (10 + index) * 100, currency: 'ZMW' },
+          },
+        ],
+      },
+    ],
+  };
+}
+
+const category: ProductSection = {
+  slug: 'test-category',
+  title: 'Test Category',
+  products: Array.from({ length: 6 }, (_, index) => makeProduct(index)),
 };
 
 describe('ProductCategorySection', () => {

@@ -23,6 +23,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { CartModule } from './modules/cart/cart.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { CheckoutModule } from './modules/checkout/checkout.module';
+import { FinancialsModule } from './modules/financials/financials.module';
 import { HealthModule } from './modules/health/health.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { MediaModule } from './modules/media/media.module';
@@ -63,6 +64,7 @@ import { WorkersModule } from './infrastructure/workers/workers.module';
     CheckoutModule,
     SellersModule,
     WorkersModule,
+    FinancialsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

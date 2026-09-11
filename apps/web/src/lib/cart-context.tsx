@@ -9,15 +9,23 @@ import {
   type ReactNode,
 } from 'react';
 
+/**
+ * A cart line snapshots the product's name and price at add-to-cart time,
+ * keyed by slug. The cart has no server component of its own yet, so there's
+ * nothing to re-fetch this against later; that also keeps the cart and
+ * checkout views simple, synchronous, and independent of the catalog API.
+ */
 export type CartItem = {
-  productId: string;
+  slug: string;
+  name: string;
+  unitPrice: number;
   quantity: number;
 };
 
 type CartContextValue = {
   items: CartItem[];
-  addItem: (productId: string) => void;
-  removeItem: (productId: string) => void;
+  addItem: (item: { slug: string; name: string; unitPrice: number }) => void;
+  removeItem: (slug: string) => void;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -60,23 +68,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const value = useMemo<CartContextValue>(
     () => ({
       items,
-      addItem: (productId) => {
+      addItem: ({ slug, name, unitPrice }) => {
         setItems((current) => {
-          const existing = current.find((item) => item.productId === productId);
+          const existing = current.find((item) => item.slug === slug);
           if (existing) {
             return current.map((item) =>
-              item.productId === productId
+              item.slug === slug
                 ? { ...item, quantity: item.quantity + 1 }
                 : item,
             );
           }
-          return [...current, { productId, quantity: 1 }];
+          return [...current, { slug, name, unitPrice, quantity: 1 }];
         });
       },
-      removeItem: (productId) => {
-        setItems((current) =>
-          current.filter((item) => item.productId !== productId),
-        );
+      removeItem: (slug) => {
+        setItems((current) => current.filter((item) => item.slug !== slug));
       },
     }),
     [items],

@@ -1,25 +1,12 @@
 import type { CartItem } from './cart-context';
-import { getProductById, type Product } from './mock-data/products';
 
-export type CartLine = {
-  product: Product;
-  quantity: number;
-  lineTotal: number;
-};
+export type CartLine = CartItem & { lineTotal: number };
 
 export function resolveCartLines(items: CartItem[]): CartLine[] {
-  return items.flatMap((item) => {
-    const product = getProductById(item.productId);
-    return product
-      ? [
-          {
-            product,
-            quantity: item.quantity,
-            lineTotal: product.price * item.quantity,
-          },
-        ]
-      : [];
-  });
+  return items.map((item) => ({
+    ...item,
+    lineTotal: item.unitPrice * item.quantity,
+  }));
 }
 
 export function getCartTotal(lines: CartLine[]): number {

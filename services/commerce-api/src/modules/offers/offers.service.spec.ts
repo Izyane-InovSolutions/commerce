@@ -1,3 +1,4 @@
+import { ProductReferencesService } from '../products/product-references.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 import { PrismaService } from '../../database/prisma.service';
@@ -27,7 +28,7 @@ describe('OffersService', () => {
       productVariant: { findUnique: jest.fn() },
       price: { create: jest.fn() },
     };
-    service = new OffersService(prisma as unknown as PrismaService);
+    service = new OffersService(prisma as unknown as PrismaService, new ProductReferencesService(prisma as unknown as PrismaService));
   });
 
   describe('create', () => {

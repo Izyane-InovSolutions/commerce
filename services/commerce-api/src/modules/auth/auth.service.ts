@@ -257,16 +257,19 @@ export class AuthService {
 
     const passwordHash = await hashPassword(newPassword);
 
-    await this.prisma.$transaction([
-      this.prisma.user.update({
-        where: { id: record.userId },
-        data: { passwordHash },
-      }),
-      this.prisma.passwordResetToken.update({
-        where: { id: record.id },
+    await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.passwordResetToken.updateMany({
+        where: { id: record.id, usedAt: null, expiresAt: { gt: new Date() } },
         data: { usedAt: new Date() },
-      }),
-    ]);
+      });
+      if (claimed.count !== 1)
+        throw new UnauthorizedException('Invalid or expired reset token');
+      await this.usersService.updatePasswordHash(
+        record.userId,
+        passwordHash,
+        tx,
+      );
+    });
 
     await this.revokeAllSessionsForUser(record.userId);
     await this.auditService.record({

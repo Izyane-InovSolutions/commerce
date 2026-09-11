@@ -1,3 +1,6 @@
+import { ProductReferencesService } from '../products/product-references.service';
+import { UsersService } from '../users/users.service';
+import { ConfigService } from '@nestjs/config';
 import {
   BadRequestException,
   ConflictException,
@@ -43,10 +46,13 @@ describe('SellersService', () => {
     auditEvent: { create: jest.fn() },
     $transaction: jest.fn(),
   };
-  const media = { createDownloadUrl: jest.fn() };
+  const media = new MediaService(prisma as unknown as PrismaService,new ConfigService(),{} as never);
+  jest.spyOn(media,'createDownloadUrl');
   const service = new SellersService(
     prisma as unknown as PrismaService,
-    media as unknown as MediaService,
+    media,
+    new ProductReferencesService(prisma as unknown as PrismaService),
+    new UsersService(prisma as unknown as PrismaService),
   );
 
   beforeEach(() => {

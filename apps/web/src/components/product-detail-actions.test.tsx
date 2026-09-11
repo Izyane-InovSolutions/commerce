@@ -8,7 +8,7 @@ describe('ProductDetailActions', () => {
   it('links the checkout button to the checkout route', () => {
     render(
       <CartProvider>
-        <ProductDetailActions productId="p-1" productName="Test Product" />
+        <ProductDetailActions slug="p-1" name="Test Product" unitPrice={10} />
       </CartProvider>,
     );
 
@@ -21,7 +21,7 @@ describe('ProductDetailActions', () => {
   it('adds the product to the cart and confirms once clicked', () => {
     render(
       <CartProvider>
-        <ProductDetailActions productId="p-1" productName="Test Product" />
+        <ProductDetailActions slug="p-1" name="Test Product" unitPrice={10} />
       </CartProvider>,
     );
 
@@ -37,5 +37,17 @@ describe('ProductDetailActions', () => {
     expect(
       screen.getByText('Test Product added to your cart.'),
     ).toBeInTheDocument();
+  });
+
+  it('disables the button and hides the checkout prompt when unavailable', () => {
+    render(
+      <CartProvider>
+        <ProductDetailActions slug="p-1" name="Test Product" unitPrice={null} />
+      </CartProvider>,
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Currently unavailable' }),
+    ).toBeDisabled();
   });
 });
