@@ -1,11 +1,10 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { CheckoutContent } from './checkout-content';
-import { CartProvider } from '@/lib/cart-context';
-import { getProductById } from '@/lib/mock-data/products';
+import { CartProvider, type CartItem } from '@/lib/cart-context';
 
-function seedCart(items: { productId: string; quantity: number }[]) {
+function seedCart(items: CartItem[]) {
   window.localStorage.setItem('commerce-cart', JSON.stringify(items));
 }
 
@@ -26,7 +25,14 @@ describe('CheckoutContent', () => {
   });
 
   it('shows the order summary and payment form when the cart has items', () => {
-    seedCart([{ productId: 'na-1', quantity: 2 }]);
+    seedCart([
+      {
+        slug: 'aria-wireless-earbuds',
+        name: 'Aria Wireless Earbuds',
+        unitPrice: 79,
+        quantity: 2,
+      },
+    ]);
 
     render(
       <CartProvider>
@@ -34,13 +40,68 @@ describe('CheckoutContent', () => {
       </CartProvider>,
     );
 
-    const product = getProductById('na-1')!;
-    const total = product.price * 2;
-
     expect(screen.getByText('Payment method')).toBeInTheDocument();
-    expect(screen.getByText(`${product.name} × 2`)).toBeInTheDocument();
+    expect(screen.getByText('Aria Wireless Earbuds × 2')).toBeInTheDocument();
+    // total = 79 * 2 = 158
+    expect(screen.getByRole('button', { name: /158/ })).toBeInTheDocument();
+  });
+
+  it('renders the pay button after the order summary, not inside the form fields', () => {
+    seedCart([
+      {
+        slug: 'aria-wireless-earbuds',
+        name: 'Aria Wireless Earbuds',
+        unitPrice: 79,
+        quantity: 1,
+      },
+    ]);
+
+    render(
+      <CartProvider>
+        <CheckoutContent />
+      </CartProvider>,
+    );
+
+    const summaryHeading = screen.getByText('Order summary');
+    const payButton = screen.getByRole('button', { name: /Pay/ });
+
     expect(
-      screen.getByRole('button', { name: new RegExp(String(total)) }),
-    ).toBeInTheDocument();
+      summaryHeading.compareDocumentPosition(payButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('places the order when the relocated pay button is submitted', () => {
+    seedCart([
+      {
+        slug: 'aria-wireless-earbuds',
+        name: 'Aria Wireless Earbuds',
+        unitPrice: 79,
+        quantity: 1,
+      },
+    ]);
+
+    render(
+      <CartProvider>
+        <CheckoutContent />
+      </CartProvider>,
+    );
+
+    fireEvent.change(screen.getByLabelText('Name on card'), {
+      target: { value: 'Jane Mwanza' },
+    });
+    fireEvent.change(screen.getByLabelText('Card number'), {
+      target: { value: '4242424242424242' },
+    });
+    fireEvent.change(screen.getByLabelText('Expiry'), {
+      target: { value: '1230' },
+    });
+    fireEvent.change(screen.getByLabelText('CVC'), {
+      target: { value: '123' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Pay/ }));
+
+    expect(screen.getByText('Order placed')).toBeInTheDocument();
   });
 });

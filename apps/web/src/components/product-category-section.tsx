@@ -4,14 +4,20 @@ import { useState } from 'react';
 
 import { ProductCard } from '@/components/product-card';
 import { Button } from '@/components/ui/button';
-import type { ProductCategory } from '@/lib/mock-data/products';
+import type { Product } from '@/lib/catalog-types';
+
+export type ProductSection = {
+  slug: string;
+  title: string;
+  products: Product[];
+};
 
 const INITIAL_VISIBLE_COUNT = 4;
 
 export function ProductCategorySection({
   category,
 }: {
-  category: ProductCategory;
+  category: ProductSection;
 }) {
   const [expanded, setExpanded] = useState(false);
 

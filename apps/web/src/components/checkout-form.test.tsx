@@ -1,11 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { CheckoutForm } from './checkout-form';
 
 describe('CheckoutForm', () => {
   it('shows card fields by default', () => {
-    render(<CheckoutForm total={100} />);
+    render(<CheckoutForm onPlaced={vi.fn()} />);
 
     expect(screen.getByLabelText('Name on card')).toBeInTheDocument();
     expect(
@@ -14,7 +14,7 @@ describe('CheckoutForm', () => {
   });
 
   it('switches to mobile money fields when selected', () => {
-    render(<CheckoutForm total={100} />);
+    render(<CheckoutForm onPlaced={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('radio', { name: 'Mobile Money' }));
 
@@ -22,24 +22,41 @@ describe('CheckoutForm', () => {
     expect(screen.queryByLabelText('Name on card')).not.toBeInTheDocument();
   });
 
-  it('confirms the order once submitted', () => {
-    render(<CheckoutForm total={100} />);
+  it('formats the card number into groups of 4 and caps it at 16 digits', () => {
+    render(<CheckoutForm onPlaced={vi.fn()} />);
 
-    fireEvent.change(screen.getByLabelText('Name on card'), {
-      target: { value: 'Jane Mwanza' },
-    });
-    fireEvent.change(screen.getByLabelText('Card number'), {
-      target: { value: '4242 4242 4242 4242' },
-    });
-    fireEvent.change(screen.getByLabelText('Expiry'), {
-      target: { value: '12/30' },
-    });
-    fireEvent.change(screen.getByLabelText('CVC'), {
-      target: { value: '123' },
-    });
+    const input = screen.getByLabelText('Card number');
+    fireEvent.change(input, { target: { value: '4242424242424242999' } });
 
-    fireEvent.click(screen.getByRole('button', { name: /Pay/ }));
+    expect(input).toHaveValue('4242 4242 4242 4242');
+  });
 
-    expect(screen.getByText('Order placed')).toBeInTheDocument();
+  it('auto-inserts the slash and clamps an invalid month in the expiry field', () => {
+    render(<CheckoutForm onPlaced={vi.fn()} />);
+
+    const input = screen.getByLabelText('Expiry');
+    fireEvent.change(input, { target: { value: '13' } });
+
+    expect(input).toHaveValue('12/');
+  });
+
+  it('caps the CVC at 3 digits', () => {
+    render(<CheckoutForm onPlaced={vi.fn()} />);
+
+    const input = screen.getByLabelText('CVC');
+    fireEvent.change(input, { target: { value: '12345' } });
+
+    expect(input).toHaveValue('123');
+  });
+
+  it('formats the mobile money number as 0XX XXX XXXX', () => {
+    render(<CheckoutForm onPlaced={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Mobile Money' }));
+
+    const input = screen.getByLabelText('Mobile money number');
+    fireEvent.change(input, { target: { value: '0971234567' } });
+
+    expect(input).toHaveValue('097 123 4567');
   });
 });

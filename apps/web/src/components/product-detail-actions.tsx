@@ -7,11 +7,14 @@ import { Button } from '@/components/ui/button';
 import { useCart } from '@/lib/cart-context';
 
 export function ProductDetailActions({
-  productId,
-  productName,
+  slug,
+  name,
+  unitPrice,
 }: {
-  productId: string;
-  productName: string;
+  slug: string;
+  name: string;
+  /** Null when the product has no sellable offer right now. */
+  unitPrice: number | null;
 }) {
   const { addItem } = useCart();
   const [added, setAdded] = useState(false);
@@ -20,12 +23,20 @@ export function ProductDetailActions({
     <div className="space-y-2">
       <div className="flex flex-wrap gap-3">
         <Button
+          disabled={unitPrice === null}
           onClick={() => {
-            addItem(productId);
+            if (unitPrice === null) {
+              return;
+            }
+            addItem({ slug, name, unitPrice });
             setAdded(true);
           }}
         >
-          {added ? 'Added to cart' : 'Add to Cart'}
+          {unitPrice === null
+            ? 'Currently unavailable'
+            : added
+              ? 'Added to cart'
+              : 'Add to Cart'}
         </Button>
         <Button variant="outline" asChild>
           <Link href="/checkout">Checkout</Link>
@@ -33,7 +44,7 @@ export function ProductDetailActions({
       </div>
       {added ? (
         <p className="text-sm text-muted-foreground" role="status">
-          {productName} added to your cart.
+          {name} added to your cart.
         </p>
       ) : null}
     </div>

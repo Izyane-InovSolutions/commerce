@@ -2,37 +2,36 @@
 
 import { useState, type FormEvent } from 'react';
 
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { formatCurrency } from '@/lib/currency';
+import {
+  formatCardNumber,
+  formatCvc,
+  formatExpiry,
+  formatZambianPhone,
+} from '@/lib/input-format';
 
 type PaymentMethod = 'card' | 'mobile-money';
 
-export function CheckoutForm({ total }: { total: number }) {
+/** Shared with the submit button, which lives outside this form in the DOM
+ * (below the order summary) but submits it via the `form` attribute. */
+export const CHECKOUT_FORM_ID = 'checkout-form';
+
+export function CheckoutForm({ onPlaced }: { onPlaced: () => void }) {
   const [method, setMethod] = useState<PaymentMethod>('card');
-  const [placed, setPlaced] = useState(false);
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvc, setCardCvc] = useState('');
+  const [momoPhone, setMomoPhone] = useState('');
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setPlaced(true);
-  }
-
-  if (placed) {
-    return (
-      <div className="space-y-2 rounded-2xl border border-dashed p-8 text-center">
-        <p className="text-lg font-semibold">Order placed</p>
-        <p className="text-muted-foreground text-sm">
-          This is a demo checkout, so no payment was actually charged. Real
-          payments arrive with Phase 1.
-        </p>
-      </div>
-    );
+    onPlaced();
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form id={CHECKOUT_FORM_ID} onSubmit={handleSubmit} className="space-y-6">
       <fieldset className="space-y-3">
         <legend className="text-sm font-medium">Payment method</legend>
         <RadioGroup
@@ -61,6 +60,7 @@ export function CheckoutForm({ total }: { total: number }) {
             <Input
               id="card-name"
               name="cardName"
+              autoComplete="cc-name"
               placeholder="Jane Mwanza"
               required
             />
@@ -71,7 +71,15 @@ export function CheckoutForm({ total }: { total: number }) {
               id="card-number"
               name="cardNumber"
               inputMode="numeric"
+              autoComplete="cc-number"
               placeholder="4242 4242 4242 4242"
+              pattern="\d{4} \d{4} \d{4} \d{4}"
+              title="16 digits"
+              maxLength={19}
+              value={cardNumber}
+              onChange={(event) =>
+                setCardNumber(formatCardNumber(event.target.value))
+              }
               required
             />
           </div>
@@ -80,7 +88,18 @@ export function CheckoutForm({ total }: { total: number }) {
             <Input
               id="card-expiry"
               name="cardExpiry"
+              inputMode="numeric"
+              autoComplete="cc-exp"
               placeholder="MM/YY"
+              pattern="\d{2}/\d{2}"
+              title="MM/YY"
+              maxLength={5}
+              value={cardExpiry}
+              onChange={(event) =>
+                setCardExpiry((previous) =>
+                  formatExpiry(event.target.value, previous),
+                )
+              }
               required
             />
           </div>
@@ -90,7 +109,13 @@ export function CheckoutForm({ total }: { total: number }) {
               id="card-cvc"
               name="cardCvc"
               inputMode="numeric"
+              autoComplete="cc-csc"
               placeholder="123"
+              pattern="\d{3}"
+              title="3 digits"
+              maxLength={3}
+              value={cardCvc}
+              onChange={(event) => setCardCvc(formatCvc(event.target.value))}
               required
             />
           </div>
@@ -116,16 +141,20 @@ export function CheckoutForm({ total }: { total: number }) {
               id="momo-phone"
               name="momoPhone"
               type="tel"
+              inputMode="numeric"
               placeholder="097 123 4567"
+              pattern="0\d{2} \d{3} \d{4}"
+              title="10 digits, starting with 0"
+              maxLength={12}
+              value={momoPhone}
+              onChange={(event) =>
+                setMomoPhone(formatZambianPhone(event.target.value))
+              }
               required
             />
           </div>
         </div>
       )}
-
-      <Button type="submit" className="w-full sm:w-auto">
-        Pay {formatCurrency(total)}
-      </Button>
     </form>
   );
 }
