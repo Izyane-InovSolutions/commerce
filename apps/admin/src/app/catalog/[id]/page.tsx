@@ -14,6 +14,7 @@ import { ApiErrorNotice } from '@/components/api-error-notice';
 import { OfferControls } from '@/components/offer-controls';
 import { PageHeader } from '@/components/page-header';
 import { ProductForm } from '@/components/product-form';
+import { ProductImages } from '@/components/product-images';
 import { StatusBadge } from '@/components/status-badge';
 import { StatusControl } from '@/components/status-control';
 import { VariantAddForm } from '@/components/variant-add-form';
@@ -35,6 +36,11 @@ import {
   setStatusAction,
   updateProductAction,
 } from '../actions';
+import {
+  removeProductImageAction,
+  setPrimaryImageAction,
+  uploadProductImageAction,
+} from '../media-actions';
 
 export async function generateMetadata({
   params,
@@ -110,6 +116,24 @@ export default async function ProductPage({
         categories={categories}
         product={product}
       />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Images</CardTitle>
+          <CardDescription>
+            The primary image is the one the storefront leads with. JPEG, PNG,
+            and WebP up to 10MB.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ProductImages
+            media={product.media}
+            upload={uploadProductImageAction.bind(null, product.id)}
+            setPrimary={setPrimaryImageAction.bind(null, product.id)}
+            remove={removeProductImageAction.bind(null, product.id)}
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

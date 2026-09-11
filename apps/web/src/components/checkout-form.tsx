@@ -10,13 +10,16 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import type { Address } from '@/lib/commerce-types';
 import { idleFormState, type FormState } from '@/lib/form';
 import {
+  availablePaymentMethods,
+  unavailableReason,
+  type PaymentMethod,
+} from '@/lib/payment-methods';
+import {
   formatCardNumber,
   formatCvc,
   formatExpiry,
   formatZambianPhone,
 } from '@/lib/input-format';
-
-type PaymentMethod = 'card' | 'mobile-money';
 
 /** Shared with the submit button, which lives outside this form in the DOM
  * (below the order summary) but submits it via the `form` attribute. */
@@ -32,13 +35,19 @@ export const CHECKOUT_FORM_ID = 'checkout-form';
  */
 export function CheckoutForm({
   addresses,
+  currency,
   placeOrder,
 }: {
   addresses: Address[];
+  /** The order's currency, which decides how it can be paid for. */
+  currency: string;
   placeOrder: (state: FormState, formData: FormData) => Promise<FormState>;
 }) {
+  const available = availablePaymentMethods(currency);
   const [state, formAction] = useActionState(placeOrder, idleFormState);
-  const [method, setMethod] = useState<PaymentMethod>('mobile-money');
+  const [method, setMethod] = useState<PaymentMethod>(
+    available[0] ?? 'mobile-money',
+  );
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvc, setCardCvc] = useState('');
@@ -98,19 +107,34 @@ export function CheckoutForm({
           value={method}
           onValueChange={(value) => setMethod(value as PaymentMethod)}
         >
-          <div className="border-input flex items-center gap-3 rounded-lg border px-3 py-2.5">
-            <RadioGroupItem value="mobile-money" id="payment-mobile-money" />
-            <Label htmlFor="payment-mobile-money" className="flex-1">
-              Mobile Money
-            </Label>
-          </div>
-          <div className="border-input flex items-center gap-3 rounded-lg border px-3 py-2.5">
-            <RadioGroupItem value="card" id="payment-card" />
-            <Label htmlFor="payment-card" className="flex-1">
-              Card
-            </Label>
-          </div>
+          {available.includes('mobile-money') ? (
+            <div className="border-input flex items-center gap-3 rounded-lg border px-3 py-2.5">
+              <RadioGroupItem value="mobile-money" id="payment-mobile-money" />
+              <Label htmlFor="payment-mobile-money" className="flex-1">
+                Mobile Money
+              </Label>
+            </div>
+          ) : null}
+          {available.includes('card') ? (
+            <div className="border-input flex items-center gap-3 rounded-lg border px-3 py-2.5">
+              <RadioGroupItem value="card" id="payment-card" />
+              <Label htmlFor="payment-card" className="flex-1">
+                Card
+              </Label>
+            </div>
+          ) : null}
         </RadioGroup>
+
+        {available.includes('card') ? null : (
+          <p className="text-muted-foreground text-xs text-pretty">
+            {unavailableReason('card', currency)}
+          </p>
+        )}
+        {available.includes('mobile-money') ? null : (
+          <p className="text-muted-foreground text-xs text-pretty">
+            {unavailableReason('mobile-money', currency)}
+          </p>
+        )}
       </fieldset>
 
       {method === 'card' ? (
@@ -188,8 +212,10 @@ export function CheckoutForm({
               id="momo-provider"
               name="momoProvider"
               className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border bg-transparent px-2.5 text-sm outline-none focus-visible:ring-3"
-              required
             >
+              {/* The gateway reads the network off the number and says to set
+                  this only to override it, so the default leaves it alone. */}
+              <option value="">Detect from my number</option>
               <option value="MTN">MTN Money</option>
               <option value="AIRTEL">Airtel Money</option>
             </select>

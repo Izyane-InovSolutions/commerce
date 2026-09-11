@@ -4,6 +4,7 @@ import {
   IsIn,
   IsInt,
   IsNotEmpty,
+  IsOptional,
   IsString,
   IsUrl,
   Max,
@@ -65,6 +66,13 @@ class EnvironmentVariables {
   @Min(60)
   MEDIA_URL_TTL_SECONDS = 900;
 
+  // Product image URLs are embedded in catalog responses that clients cache,
+  // so they outlive the general TTL above.
+  @Type(() => Number)
+  @IsInt()
+  @Min(60)
+  MEDIA_PUBLIC_URL_TTL_SECONDS = 86_400;
+
   @IsIn(['pending', 'unified'])
   PAYMENTS_PROVIDER = 'pending';
 
@@ -87,6 +95,16 @@ class EnvironmentVariables {
 
   @IsString()
   UNIFIED_PAYMENTS_MERCHANT_ID = '';
+
+  // Optional, and only honoured once the gateway's webhook signing scheme is
+  // known — see UnifiedPaymentProvider.callbackUrl.
+  @IsOptional()
+  @IsUrl({
+    protocols: ['http', 'https'],
+    require_protocol: true,
+    require_tld: false,
+  })
+  UNIFIED_PAYMENTS_CALLBACK_URL?: string;
 
   @Type(() => Number)
   @IsInt()

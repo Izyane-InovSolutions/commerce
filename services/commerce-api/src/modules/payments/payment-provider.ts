@@ -8,6 +8,10 @@ export type InitializePaymentInput = {
   currency: string;
   idempotencyKey: string;
   reference?: string;
+  /** Free text the gateway shows on statements and receipts. */
+  description?: string;
+  /** Echoed back unmodified, so it is where reconciliation keys belong. */
+  metadata?: Record<string, string>;
   details?: PaymentDetailsDto;
 };
 

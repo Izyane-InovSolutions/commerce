@@ -5,7 +5,8 @@ import { CHECKOUT_FORM_ID, CheckoutForm } from '@/components/checkout-form';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import type { Address, CartView, PublicOffer } from '@/lib/commerce-types';
+import type { OfferLabel } from '@/lib/cart';
+import type { Address, CartView } from '@/lib/commerce-types';
 import { formatMinor } from '@/lib/currency';
 import type { FormState } from '@/lib/form';
 
@@ -17,13 +18,13 @@ import type { FormState } from '@/lib/form';
  */
 export function CheckoutContent({
   cart,
-  offers,
+  labels,
   addresses,
   placeOrder,
   createAddress,
 }: {
   cart: CartView;
-  offers: Map<string, PublicOffer>;
+  labels: Map<string, OfferLabel>;
   addresses: Address[];
   placeOrder: (state: FormState, formData: FormData) => Promise<FormState>;
   createAddress: (state: FormState, formData: FormData) => Promise<FormState>;
@@ -42,6 +43,8 @@ export function CheckoutContent({
     );
   }
 
+  const currency = cart.currency ?? 'ZMW';
+
   if (addresses.length === 0) {
     return (
       <div className="max-w-xl space-y-4">
@@ -57,11 +60,13 @@ export function CheckoutContent({
     );
   }
 
-  const currency = cart.currency ?? 'ZMW';
-
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_340px]">
-      <CheckoutForm addresses={addresses} placeOrder={placeOrder} />
+      <CheckoutForm
+        addresses={addresses}
+        currency={currency}
+        placeOrder={placeOrder}
+      />
 
       <Card className="h-fit">
         <CardContent className="space-y-4">
@@ -70,8 +75,7 @@ export function CheckoutContent({
             {cart.items.map((line) => (
               <li key={line.id} className="flex justify-between gap-3 text-sm">
                 <span className="text-muted-foreground">
-                  {offers.get(line.offerId)?.listingTitle ?? 'Item'} ×{' '}
-                  {line.quantity}
+                  {labels.get(line.offerId)?.name ?? 'Item'} × {line.quantity}
                 </span>
                 <span className="font-medium">
                   {formatMinor(line.lineTotal, currency)}

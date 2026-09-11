@@ -1,11 +1,12 @@
 import Link from 'next/link';
-import { PackageSearch } from 'lucide-react';
 
 import { CartLineControls } from '@/components/cart-line-controls';
+import { ProductImage } from '@/components/product-image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import type { CartView, PublicOffer } from '@/lib/commerce-types';
+import type { OfferLabel } from '@/lib/cart';
+import type { CartView } from '@/lib/commerce-types';
 import { formatMinor } from '@/lib/currency';
 
 import { removeCartItemAction, updateCartItemAction } from '@/app/cart/actions';
@@ -13,16 +14,16 @@ import { removeCartItemAction, updateCartItemAction } from '@/app/cart/actions';
 /**
  * The cart as the API holds it.
  *
- * A line names only the offer it holds, so titles come from `offers` — read
+ * A line names only the offer it holds, so names come from `labels` — resolved
  * separately. A line whose offer could not be read still shows: the quantity
  * and what it costs are on the line itself.
  */
 export function CartContents({
   cart,
-  offers,
+  labels,
 }: {
   cart: CartView;
-  offers: Map<string, PublicOffer>;
+  labels: Map<string, OfferLabel>;
 }) {
   if (cart.items.length === 0) {
     return (
@@ -45,24 +46,34 @@ export function CartContents({
     <div className="grid gap-8 lg:grid-cols-[1fr_340px]">
       <ul className="space-y-4">
         {cart.items.map((line) => {
-          const offer = offers.get(line.offerId);
-          const name =
-            offer?.listingTitle ??
-            (offer ? 'Catalog item' : 'Unavailable item');
+          const label = labels.get(line.offerId);
+          const name = label?.name ?? 'Item';
 
           return (
             <li key={line.id}>
               <Card>
                 <CardContent className="flex items-center gap-4">
-                  <div className="bg-muted flex size-16 shrink-0 items-center justify-center rounded-lg">
-                    <PackageSearch
-                      className="text-muted-foreground size-6"
-                      aria-hidden="true"
-                    />
-                  </div>
+                  <ProductImage
+                    src={label?.imageUrl ?? null}
+                    alt={name}
+                    sizes="64px"
+                    className="size-16 shrink-0 rounded-lg"
+                    iconClassName="size-6"
+                  />
                   <div className="min-w-0 flex-1 space-y-2">
                     <div>
-                      <p className="text-sm font-medium">{name}</p>
+                      <p className="text-sm font-medium">
+                        {label?.slug ? (
+                          <Link
+                            href={`/products/${label.slug}`}
+                            className="hover:underline"
+                          >
+                            {name}
+                          </Link>
+                        ) : (
+                          name
+                        )}
+                      </p>
                       <p className="text-muted-foreground text-sm">
                         {line.unitPrice
                           ? `${formatMinor(line.unitPrice.amount, line.unitPrice.currency)} each`
@@ -97,8 +108,7 @@ export function CartContents({
             {cart.items.map((line) => (
               <li key={line.id} className="flex justify-between gap-3 text-sm">
                 <span className="text-muted-foreground">
-                  {offers.get(line.offerId)?.listingTitle ?? 'Item'} ×{' '}
-                  {line.quantity}
+                  {labels.get(line.offerId)?.name ?? 'Item'} × {line.quantity}
                 </span>
                 <span className="font-medium">
                   {formatMinor(line.lineTotal, currency)}

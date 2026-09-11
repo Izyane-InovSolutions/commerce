@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { ApiErrorNotice } from '@/components/api-error-notice';
 import { CheckoutContent } from '@/components/checkout-content';
 import { Button } from '@/components/ui/button';
-import { describeOffers, getCart } from '@/lib/cart';
+import { getCart, labelOffers } from '@/lib/cart';
 import { listAddresses } from '@/lib/orders';
 import { getCurrentUser } from '@/lib/session';
 
@@ -34,12 +34,12 @@ export default async function CheckoutPage() {
   }
 
   let cart;
-  let offers;
+  let labels;
   let addresses;
 
   try {
     [cart, addresses] = await Promise.all([getCart(), listAddresses()]);
-    offers = await describeOffers(cart.items.map((line) => line.offerId));
+    labels = await labelOffers(cart.items.map((line) => line.offerId));
   } catch (error) {
     return (
       <div className="mx-auto max-w-5xl space-y-4 px-4 py-12">
@@ -60,7 +60,7 @@ export default async function CheckoutPage() {
       <div className="mt-8">
         <CheckoutContent
           cart={cart}
-          offers={offers}
+          labels={labels}
           addresses={addresses}
           placeOrder={placeOrderAction}
           createAddress={createAddressAction}

@@ -35,20 +35,54 @@ export class MediaService {
     @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
   ) {}
 
-  async requireProductAsset(id:string):Promise<void> {
-    const asset=await this.prisma.mediaAsset.findUnique({where:{id}});
-    if(!asset || asset.status!==MediaStatus.AVAILABLE || asset.verificationLocked) throw new BadRequestException('Media asset does not exist or is not available');
+  async requireProductAsset(id: string): Promise<void> {
+    const asset = await this.prisma.mediaAsset.findUnique({ where: { id } });
+    if (
+      !asset ||
+      asset.status !== MediaStatus.AVAILABLE ||
+      asset.verificationLocked
+    )
+      throw new BadRequestException(
+        'Media asset does not exist or is not available',
+      );
   }
 
-  async lockForProductAttachment(id:string,tx:Prisma.TransactionClient):Promise<void> {
-    const eligible=await tx.mediaAsset.updateMany({where:{id,status:MediaStatus.AVAILABLE,verificationLocked:false},data:{updatedAt:new Date()}});
-    if(eligible.count!==1) throw new BadRequestException('Media is unavailable or reserved for verification');
+  async lockForProductAttachment(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const eligible = await tx.mediaAsset.updateMany({
+      where: { id, status: MediaStatus.AVAILABLE, verificationLocked: false },
+      data: { updatedAt: new Date() },
+    });
+    if (eligible.count !== 1)
+      throw new BadRequestException(
+        'Media is unavailable or reserved for verification',
+      );
   }
 
-  async lockVerificationDocuments(userId:string,ids:string[],tx:Prisma.TransactionClient):Promise<void> {
-    if(!ids.length) throw new BadRequestException('At least one business verification document is required');
-    const locked=await tx.mediaAsset.updateMany({where:{id:{in:ids},ownerUserId:userId,status:MediaStatus.AVAILABLE,deletedAt:null},data:{verificationLocked:true}});
-    if(locked.count!==ids.length) throw new BadRequestException('Documents must be available uploads owned by the applicant');
+  async lockVerificationDocuments(
+    userId: string,
+    ids: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    if (!ids.length)
+      throw new BadRequestException(
+        'At least one business verification document is required',
+      );
+    const locked = await tx.mediaAsset.updateMany({
+      where: {
+        id: { in: ids },
+        ownerUserId: userId,
+        status: MediaStatus.AVAILABLE,
+        deletedAt: null,
+      },
+      data: { verificationLocked: true },
+    });
+    if (locked.count !== ids.length)
+      throw new BadRequestException(
+        'Documents must be available uploads owned by the applicant',
+      );
   }
 
   async reserve(
@@ -165,8 +199,32 @@ export class MediaService {
     return asset;
   }
 
-  private sign(action: 'upload' | 'download', id: string): SignedMediaUrl {
-    const ttl = this.config.get<number>('MEDIA_URL_TTL_SECONDS', 900);
+  /**
+   * A download URL for media attached to a product.
+   *
+   * Unlike createDownloadUrl this does not check ownership: a product image
+   * is public by the time it is on a product, and the shopper asking for it
+   * is not the administrator who uploaded it.
+   *
+   * It is signed for much longer, because these URLs are embedded in catalog
+   * responses that clients cache. A short-lived one would still be inside a
+   * cached page after it had expired, leaving broken images behind.
+   */
+  createProductDownloadUrl(id: string): SignedMediaUrl {
+    return this.sign(
+      'download',
+      id,
+      this.config.get<number>('MEDIA_PUBLIC_URL_TTL_SECONDS', 86_400),
+    );
+  }
+
+  private sign(
+    action: 'upload' | 'download',
+    id: string,
+    ttlSeconds?: number,
+  ): SignedMediaUrl {
+    const ttl =
+      ttlSeconds ?? this.config.get<number>('MEDIA_URL_TTL_SECONDS', 900);
     const expires = String(Math.floor(Date.now() / 1000) + ttl);
     const signature = this.signature(action, id, expires);
     const operation = action === 'upload' ? 'content' : 'download';

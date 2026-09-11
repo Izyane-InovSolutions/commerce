@@ -5,11 +5,21 @@ import {
   backendListProducts,
   backendListWarehouses,
 } from '@commerce/api-client';
+import type { BackendAdminProduct } from '@commerce/contracts';
 
 import { ApiErrorNotice } from '@/components/api-error-notice';
 import { EmptyState } from '@/components/empty-state';
 import { PageHeader } from '@/components/page-header';
+import { ReceiveStockForm } from '@/components/receive-stock-form';
 import { StockMoveForm } from '@/components/stock-move-form';
+import { WarehouseForm } from '@/components/warehouse-form';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -21,7 +31,11 @@ import {
 import { apiClient } from '@/lib/api';
 import { requireAdmin } from '@/lib/session';
 
-import { moveStockAction } from './actions';
+import {
+  createWarehouseAction,
+  moveStockAction,
+  receiveStockAction,
+} from './actions';
 
 export const metadata: Metadata = { title: 'Inventory' };
 
@@ -48,37 +62,94 @@ export default async function InventoryPage() {
   }
 
   // Stock records carry no product or SKU names, so the labels are joined in
-  // from the catalog. A failure here costs the names, not the numbers.
-  const variantNames = new Map<string, { sku: string; product: string }>();
+  // from the catalog. A failure here costs the names, not the numbers — and
+  // with them the variant picker, which is why the receive form is hidden
+  // rather than shown empty when this read fails.
+  let products: BackendAdminProduct[] = [];
   try {
-    const products = await backendListProducts(apiClient);
-    for (const product of products) {
-      for (const variant of product.variants) {
-        variantNames.set(variant.id, {
-          sku: variant.skuCode,
-          product: product.name,
-        });
-      }
-    }
+    products = await backendListProducts(apiClient);
   } catch {
-    // Left unlabelled below.
+    products = [];
+  }
+
+  const variantNames = new Map<string, { sku: string; product: string }>();
+  for (const product of products) {
+    for (const variant of product.variants) {
+      variantNames.set(variant.id, {
+        sku: variant.skuCode,
+        product: product.name,
+      });
+    }
   }
 
   const warehouseNames = new Map(
     warehouses.map((warehouse) => [warehouse.id, warehouse.name]),
   );
 
+  const variantOptions = [...variantNames.entries()].map(([id, named]) => ({
+    value: id,
+    label: `${named.product} — ${named.sku}`,
+  }));
+
+  const warehouseOptions = warehouses.map((warehouse) => ({
+    value: warehouse.id,
+    label: `${warehouse.name} (${warehouse.code})`,
+  }));
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title="Inventory"
         description="Available is derived by the API as on-hand less reserved. Receiving and adjusting are recorded as movements, so every change stays auditable."
       />
 
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            {warehouses.length === 0
+              ? 'No warehouses yet'
+              : `${warehouses.length} ${warehouses.length === 1 ? 'warehouse' : 'warehouses'}`}
+          </CardTitle>
+          <CardDescription>
+            {warehouses.length === 0
+              ? 'Stock is held per warehouse, so nothing can be received until one exists.'
+              : warehouses
+                  .map((warehouse) => `${warehouse.name} (${warehouse.code})`)
+                  .join(', ')}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <WarehouseForm action={createWarehouseAction} />
+        </CardContent>
+      </Card>
+
+      {warehouses.length > 0 && variantOptions.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Receive stock</CardTitle>
+            <CardDescription>
+              Use this the first time a variant is stocked anywhere. Once it has
+              a record, the row below is the quicker way to move it.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ReceiveStockForm
+              warehouses={warehouseOptions}
+              variants={variantOptions}
+              action={receiveStockAction}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
+
       {records.length === 0 ? (
         <EmptyState
           title="No stock records"
-          description="A record opens the first time stock is received for a variant at a warehouse."
+          description={
+            warehouses.length === 0
+              ? 'Create a warehouse first, then receive stock into it.'
+              : 'Receive stock for a variant above to open its first record.'
+          }
         />
       ) : (
         <div className="overflow-x-auto rounded-xl border">

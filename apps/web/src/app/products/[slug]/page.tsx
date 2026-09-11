@@ -1,13 +1,17 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { PackageSearch } from 'lucide-react';
 
 import { BackButton } from '@/components/back-button';
 import { ProductCard } from '@/components/product-card';
+import { ProductImage } from '@/components/product-image';
 import { ProductDetailActions } from '@/components/product-detail-actions';
 import { addToCartAction } from '@/app/cart/actions';
 import { getProductBySlug, listProducts } from '@/lib/catalog';
-import { getDisplayPrice, getPrimaryOffer } from '@/lib/catalog-types';
+import {
+  getDisplayPrice,
+  getPrimaryImage,
+  getPrimaryOffer,
+} from '@/lib/catalog-types';
 import { formatCurrency } from '@/lib/currency';
 
 type ProductDetailPageProps = PageProps<'/products/[slug]'>;
@@ -49,12 +53,13 @@ export default async function ProductDetailPage({
       <BackButton />
 
       <div className="grid gap-8 sm:grid-cols-2">
-        <div className="flex aspect-square items-center justify-center rounded-2xl bg-muted">
-          <PackageSearch
-            className="size-16 text-muted-foreground"
-            aria-hidden="true"
-          />
-        </div>
+        <ProductImage
+          src={getPrimaryImage(product)?.url ?? null}
+          alt={product.name}
+          sizes="(min-width: 640px) 50vw, 100vw"
+          className="aspect-square rounded-2xl"
+          iconClassName="size-16"
+        />
 
         <div className="space-y-4">
           <div className="space-y-1">

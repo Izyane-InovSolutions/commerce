@@ -1,6 +1,8 @@
 import { ApiError } from '@commerce/api-client';
 
 import { apiClient } from './api';
+import { listProducts } from './catalog';
+import { getPrimaryImage } from './catalog-types';
 import type { SuccessEnvelope } from './catalog-types';
 import type { AddItemResponse, CartView, PublicOffer } from './commerce-types';
 import {
@@ -100,37 +102,109 @@ export async function mergeGuestCart(): Promise<void> {
 }
 
 /**
- * Puts names and prices on cart lines.
+ * A name for something the API only identified by offer id.
  *
- * A line carries an offer id and nothing else, so each one is read back from
- * the public offer endpoint. A line whose offer cannot be read still renders
- * — it just shows the quantity and what was charged for it.
+ * The slug comes with it where it is known, so a cart or order line can link
+ * back to the product it came from.
  */
-export async function describeOffers(
-  offerIds: string[],
-): Promise<Map<string, PublicOffer>> {
-  const unique = [...new Set(offerIds)];
+export type OfferLabel = {
+  name: string;
+  slug: string | null;
+  imageUrl: string | null;
+};
 
-  const offers = await Promise.all(
-    unique.map(async (offerId) => {
-      try {
-        const response = await apiClient.get<SuccessEnvelope<PublicOffer>>(
-          `/catalog/offers/${offerId}`,
-          { next: { revalidate: 60 } },
-        );
-        return response.data;
-      } catch (error) {
-        if (error instanceof ApiError) {
-          return null;
-        }
-        throw error;
-      }
-    }),
-  );
+const UNKNOWN_OFFER: OfferLabel = {
+  name: 'Item no longer listed',
+  slug: null,
+  imageUrl: null,
+};
+
+/** One page of the catalog is enough to name what a cart usually holds. */
+const CATALOG_INDEX_LIMIT = 100;
+
+async function readPublicOffer(offerId: string): Promise<PublicOffer | null> {
+  try {
+    const response = await apiClient.get<SuccessEnvelope<PublicOffer>>(
+      `/catalog/offers/${offerId}`,
+      { next: { revalidate: 60 } },
+    );
+    return response.data;
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Names cart, wishlist, and order lines.
+ *
+ * Every one of them carries an offer id and nothing else, and the offer only
+ * carries `listingTitle` — which a seller sets and the platform's own offers
+ * leave null. So for a first-party offer the name has to come from the
+ * catalog, indexed by variant, since the API exposes no way to go from an
+ * offer or variant back to its product directly.
+ *
+ * That index is one page deep: a line pointing at a product beyond the first
+ * hundred falls back to a generic label rather than costing a second round of
+ * requests. Widening it means paging the catalog, or an endpoint that returns
+ * a product for a variant.
+ */
+export async function labelOffers(
+  offerIds: string[],
+): Promise<Map<string, OfferLabel>> {
+  const unique = [...new Set(offerIds)];
+  if (unique.length === 0) {
+    return new Map();
+  }
+
+  const offers = await Promise.all(unique.map(readPublicOffer));
+
+  // Worth the read whenever a line resolved at all: it is where both the
+  // first-party names and every thumbnail come from.
+  const byVariant = offers.some((offer) => offer !== null)
+    ? await indexCatalogByVariant()
+    : new Map<string, OfferLabel>();
 
   return new Map(
-    offers
-      .filter((offer): offer is PublicOffer => offer !== null)
-      .map((offer) => [offer.id, offer]),
+    unique.map((offerId, index) => {
+      const offer = offers[index];
+      if (!offer) {
+        return [offerId, UNKNOWN_OFFER];
+      }
+
+      const fromCatalog = byVariant.get(offer.variantId);
+      return [
+        offerId,
+        {
+          name: offer.listingTitle ?? fromCatalog?.name ?? 'Catalog item',
+          slug: fromCatalog?.slug ?? null,
+          imageUrl: fromCatalog?.imageUrl ?? null,
+        },
+      ];
+    }),
   );
+}
+
+async function indexCatalogByVariant(): Promise<Map<string, OfferLabel>> {
+  const index = new Map<string, OfferLabel>();
+
+  try {
+    const { products } = await listProducts({ limit: CATALOG_INDEX_LIMIT });
+    for (const product of products) {
+      const image = getPrimaryImage(product);
+      for (const variant of product.variants) {
+        index.set(variant.id, {
+          name: product.name,
+          slug: product.slug,
+          imageUrl: image?.url ?? null,
+        });
+      }
+    }
+  } catch {
+    // Names are a convenience; a failure here costs labels, not the page.
+  }
+
+  return index;
 }

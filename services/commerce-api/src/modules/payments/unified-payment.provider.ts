@@ -2,6 +2,7 @@ import {
   BadGatewayException,
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
   NotImplementedException,
   ServiceUnavailableException,
@@ -43,6 +44,7 @@ function record(value: unknown): value is Record<string, unknown> {
 @Injectable()
 export class UnifiedPaymentProvider implements PaymentProvider {
   readonly name = 'unified';
+  private readonly logger = new Logger(UnifiedPaymentProvider.name);
   constructor(private readonly config: ConfigService) {}
 
   async initialize(
@@ -51,6 +53,10 @@ export class UnifiedPaymentProvider implements PaymentProvider {
     this.validateInput(input);
     const details = input.details!;
     const merchantId = this.config.get<string>('UNIFIED_PAYMENTS_MERCHANT_ID');
+    // Every optional field is omitted rather than sent empty: the gateway
+    // documents them as droppable, and an absent key is unambiguous where a
+    // blank string is not.
+    const callbackUrl = this.callbackUrl();
     const body = {
       amount: input.amount / 100,
       currency: input.currency,
@@ -63,6 +69,11 @@ export class UnifiedPaymentProvider implements PaymentProvider {
             ...(details.provider ? { provider: details.provider } : {}),
           }
         : { card: details.card }),
+      ...(input.description ? { description: input.description } : {}),
+      ...(callbackUrl ? { callbackUrl } : {}),
+      ...(input.metadata && Object.keys(input.metadata).length
+        ? { metadata: input.metadata }
+        : {}),
     };
     const payment = this.payment(
       await this.request(
@@ -232,6 +243,31 @@ export class UnifiedPaymentProvider implements PaymentProvider {
     };
   }
 
+  /**
+   * Where the gateway should report status changes.
+   *
+   * Off unless configured, and deliberately so: this API can receive a
+   * callback but cannot yet verify one — the gateway's signing scheme is not
+   * in its documentation — so `PaymentsController` rejects every unsigned
+   * delivery. Publishing a callback URL before that is settled would only
+   * invite traffic that is guaranteed to be refused.
+   */
+  private callbackUrl(): string | undefined {
+    const configured = this.config.get<string>('UNIFIED_PAYMENTS_CALLBACK_URL');
+    if (!configured) {
+      return undefined;
+    }
+
+    try {
+      const url = new URL(configured);
+      return url.protocol === 'https:' || url.protocol === 'http:'
+        ? url.toString()
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   private connection(): { base: string; key: string } {
     const key = this.config.get<string>('UNIFIED_PAYMENTS_API_KEY');
     const base = this.config.get<string>('UNIFIED_PAYMENTS_BASE_URL');
@@ -328,6 +364,14 @@ export class UnifiedPaymentProvider implements PaymentProvider {
       !('data' in envelope)
     )
       throw new PaymentOutcomeUnknownException();
+
+    // The gateway asks for this when reporting a problem with a specific
+    // call, so it is worth having in our own logs rather than only theirs.
+    if (typeof envelope.correlationId === 'string')
+      this.logger.log(
+        `${method} ${path} correlationId=${envelope.correlationId}`,
+      );
+
     return envelope.data;
   }
 }

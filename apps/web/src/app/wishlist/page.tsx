@@ -1,12 +1,12 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { PackageSearch } from 'lucide-react';
 
 import { ApiErrorNotice } from '@/components/api-error-notice';
+import { ProductImage } from '@/components/product-image';
 import { WishlistItemActions } from '@/components/wishlist-item-actions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { describeOffers } from '@/lib/cart';
+import { labelOffers } from '@/lib/cart';
 import { formatMinor } from '@/lib/currency';
 import { getCurrentUser } from '@/lib/session';
 import { listWishlist } from '@/lib/wishlist';
@@ -39,10 +39,10 @@ export default async function WishlistPage() {
   }
 
   let items;
-  let offers;
+  let labels;
   try {
     items = await listWishlist();
-    offers = await describeOffers(items.map((item) => item.offerId));
+    labels = await labelOffers(items.map((item) => item.offerId));
   } catch (error) {
     return (
       <div className="mx-auto max-w-4xl space-y-4 px-4 py-12">
@@ -69,21 +69,22 @@ export default async function WishlistPage() {
       ) : (
         <ul className="space-y-4">
           {items.map((item) => {
-            const offer = offers.get(item.offerId);
+            const label = labels.get(item.offerId);
 
             return (
               <li key={item.id}>
                 <Card>
                   <CardContent className="flex items-center gap-4">
-                    <div className="bg-muted flex size-16 shrink-0 items-center justify-center rounded-lg">
-                      <PackageSearch
-                        className="text-muted-foreground size-6"
-                        aria-hidden="true"
-                      />
-                    </div>
+                    <ProductImage
+                      src={label?.imageUrl ?? null}
+                      alt={label?.name ?? 'Saved item'}
+                      sizes="64px"
+                      className="size-16 shrink-0 rounded-lg"
+                      iconClassName="size-6"
+                    />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium">
-                        {offer?.listingTitle ?? 'Saved item'}
+                        {label?.name ?? 'Saved item'}
                       </p>
                       <p className="text-muted-foreground text-sm">
                         {item.currentPrice

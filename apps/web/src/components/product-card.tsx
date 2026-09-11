@@ -1,8 +1,12 @@
 import Link from 'next/link';
-import { PackageSearch } from 'lucide-react';
 
+import { ProductImage } from '@/components/product-image';
 import { Card, CardContent } from '@/components/ui/card';
-import { getDisplayPrice, type Product } from '@/lib/catalog-types';
+import {
+  getDisplayPrice,
+  getPrimaryImage,
+  type Product,
+} from '@/lib/catalog-types';
 import { formatCurrency } from '@/lib/currency';
 
 export function ProductCard({ product }: { product: Product }) {
@@ -12,12 +16,12 @@ export function ProductCard({ product }: { product: Product }) {
     <Link href={`/products/${product.slug}`} className="group block h-full">
       <Card className="h-full transition-shadow group-hover:shadow-md">
         <CardContent className="space-y-3">
-          <div className="flex aspect-square items-center justify-center rounded-lg bg-muted">
-            <PackageSearch
-              className="size-8 text-muted-foreground"
-              aria-hidden="true"
-            />
-          </div>
+          <ProductImage
+            src={getPrimaryImage(product)?.url ?? null}
+            alt={product.name}
+            sizes="(min-width: 1024px) 25vw, 50vw"
+            className="aspect-square rounded-lg"
+          />
           <div className="space-y-1">
             <p className="text-sm font-medium group-hover:underline">
               {product.name}

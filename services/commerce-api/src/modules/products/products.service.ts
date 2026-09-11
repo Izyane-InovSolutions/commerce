@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  MediaStatus,
   ProductStatus,
   type Prisma,
   type ProductVariant,
@@ -27,18 +28,36 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
 import { UpdateStatusDto } from '../../common/catalog/dto/update-status.dto';
 import {
+  ProductRowWithRelations,
   ProductWithRelations,
   PublicProduct,
   VariantWithRelations,
 } from './products.types';
 
+/**
+ * What a catalog response carries about an attached asset.
+ *
+ * A select rather than an include: the full row holds `byteSize`, a BigInt
+ * that JSON.stringify throws on — which used to take down every admin product
+ * read as soon as one product had an image — along with storage details that
+ * are the media module's business, not the catalog's.
+ */
+const PRODUCT_MEDIA_ASSET_SELECT = {
+  id: true,
+  mimeType: true,
+  originalFileName: true,
+  status: true,
+} as const;
+
+const PRODUCT_MEDIA_INCLUDE = {
+  orderBy: { position: 'asc' as const },
+  include: { mediaAsset: { select: PRODUCT_MEDIA_ASSET_SELECT } },
+} as const;
+
 const PRODUCT_DETAIL_INCLUDE = {
   brand: true,
   category: true,
-  media: {
-    orderBy: { position: 'asc' as const },
-    include: { mediaAsset: true },
-  },
+  media: PRODUCT_MEDIA_INCLUDE,
   variants: {
     include: {
       attributeValues: {
@@ -51,7 +70,10 @@ const PRODUCT_DETAIL_INCLUDE = {
 
 @Injectable()
 export class ProductsService {
-  constructor(private readonly prisma: PrismaService, private readonly media:MediaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly media: MediaService,
+  ) {}
 
   async findPublished(
     query: ProductQueryDto,
@@ -68,10 +90,7 @@ export class ProductsService {
         include: {
           brand: true,
           category: true,
-          media: {
-            orderBy: { position: 'asc' },
-            include: { mediaAsset: true },
-          },
+          media: PRODUCT_MEDIA_INCLUDE,
           variants: {
             where: { status: ProductStatus.PUBLISHED },
             include: {
@@ -103,7 +122,7 @@ export class ProductsService {
       include: {
         brand: true,
         category: true,
-        media: { orderBy: { position: 'asc' }, include: { mediaAsset: true } },
+        media: PRODUCT_MEDIA_INCLUDE,
         variants: {
           where: { status: ProductStatus.PUBLISHED },
           include: {
@@ -126,11 +145,13 @@ export class ProductsService {
     return this.toPublicProduct(product);
   }
 
-  findAllAdmin(): Promise<ProductWithRelations[]> {
-    return this.prisma.product.findMany({
+  async findAllAdmin(): Promise<ProductWithRelations[]> {
+    const products = await this.prisma.product.findMany({
       include: PRODUCT_DETAIL_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
+
+    return products.map((product) => this.withMediaUrls(product));
   }
 
   async findByIdAdmin(id: string): Promise<ProductWithRelations> {
@@ -143,7 +164,29 @@ export class ProductsService {
       throw new NotFoundException('Product not found');
     }
 
-    return product;
+    return this.withMediaUrls(product);
+  }
+
+  /**
+   * Signs each attached image so an administrator can actually see it.
+   *
+   * The media module's own download URL is owner-only, which would mean only
+   * whoever uploaded an image could view it — no use in a portal several
+   * people share.
+   */
+  private withMediaUrls(
+    product: ProductRowWithRelations,
+  ): ProductWithRelations {
+    return {
+      ...product,
+      media: product.media.map((media) => ({
+        ...media,
+        url:
+          media.mediaAsset.status === MediaStatus.AVAILABLE
+            ? this.media.createProductDownloadUrl(media.mediaAssetId).url
+            : null,
+      })),
+    };
   }
 
   async create(dto: CreateProductDto): Promise<ProductWithRelations> {
@@ -291,7 +334,7 @@ export class ProductsService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
-        await this.media.lockForProductAttachment(dto.mediaAssetId,tx);
+        await this.media.lockForProductAttachment(dto.mediaAssetId, tx);
         if (dto.isPrimary) {
           await tx.productMedia.updateMany({
             where: { productId },
@@ -438,7 +481,7 @@ export class ProductsService {
     return orderBy.length > 0 ? orderBy : [{ createdAt: 'desc' }];
   }
 
-  private toPublicProduct(product: ProductWithRelations): PublicProduct {
+  private toPublicProduct(product: ProductRowWithRelations): PublicProduct {
     return {
       id: product.id,
       name: product.name,
@@ -447,12 +490,18 @@ export class ProductsService {
       status: product.status,
       brand: product.brand,
       category: product.category,
-      media: product.media.map((media) => ({
-        id: media.id,
-        mediaAssetId: media.mediaAssetId,
-        position: media.position,
-        isPrimary: media.isPrimary,
-      })),
+      // An asset that is still uploading, or has been deleted, has nothing to
+      // serve — listing it would only produce a broken image.
+      media: product.media
+        .filter((media) => media.mediaAsset.status === MediaStatus.AVAILABLE)
+        .map((media) => ({
+          id: media.id,
+          mediaAssetId: media.mediaAssetId,
+          position: media.position,
+          isPrimary: media.isPrimary,
+          mimeType: media.mediaAsset.mimeType,
+          url: this.media.createProductDownloadUrl(media.mediaAssetId).url,
+        })),
       variants: product.variants.map((variant) => ({
         id: variant.id,
         skuCode: variant.skuCode,

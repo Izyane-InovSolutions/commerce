@@ -83,6 +83,10 @@ export class PaymentsService {
         currency: order.currency,
         idempotencyKey: order.id,
         reference: order.id,
+        description: `Order ${order.id}`,
+        // Echoed back untouched, so a gateway record can be traced to both
+        // sides of this system without going through the reference alone.
+        metadata: { orderId: order.id, paymentId: payment.id },
         details,
       });
       accepted = true;

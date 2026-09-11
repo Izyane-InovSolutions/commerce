@@ -10,7 +10,11 @@ export type QueryValue = string | number | boolean | null | undefined;
 export type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 
 export type ApiRequestOptions = {
-  /** Serialised as JSON. Omit for requests without a body. */
+  /**
+   * Serialised as JSON, unless it is `FormData` — which is sent as-is so the
+   * browser or runtime can set its own multipart boundary. Omit for requests
+   * without a body.
+   */
   body?: unknown;
   /** Appended as a query string; `null` and `undefined` entries are dropped. */
   query?: Record<string, QueryValue>;
@@ -122,7 +126,12 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       ...headers,
     };
 
-    if (body !== undefined) {
+    // FormData carries its own content type, including a boundary only the
+    // runtime knows; setting one here would make the body unparseable.
+    const isFormData =
+      typeof FormData !== 'undefined' && body instanceof FormData;
+
+    if (body !== undefined && !isFormData) {
       requestHeaders['content-type'] = 'application/json';
     }
 
@@ -135,7 +144,12 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       response = await fetch(buildUrl(baseUrl, path, query), {
         method,
         headers: requestHeaders,
-        body: body === undefined ? undefined : JSON.stringify(body),
+        body:
+          body === undefined
+            ? undefined
+            : isFormData
+              ? (body as FormData)
+              : JSON.stringify(body),
         signal,
         cache,
         next,

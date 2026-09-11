@@ -2,7 +2,11 @@
 
 import { revalidatePath } from 'next/cache';
 
-import { backendAdjustStock, backendReceiveStock } from '@commerce/api-client';
+import {
+  backendAdjustStock,
+  backendCreateWarehouse,
+  backendReceiveStock,
+} from '@commerce/api-client';
 
 import { apiClient } from '@/lib/api';
 import { toFormState, type FormState } from '@/lib/form';
@@ -41,4 +45,74 @@ export async function moveStockAction(
 
   revalidatePath('/inventory');
   return { status: 'idle', message: 'Stock updated.' };
+}
+
+/**
+ * Opens a warehouse.
+ *
+ * Stock cannot exist without one: an inventory record is keyed by variant and
+ * warehouse, so the first warehouse is what makes receiving possible at all.
+ */
+export async function createWarehouseAction(
+  _state: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  try {
+    await backendCreateWarehouse(apiClient, {
+      name: String(formData.get('name') ?? '').trim(),
+      code: String(formData.get('code') ?? '')
+        .trim()
+        .toUpperCase(),
+    });
+  } catch (error) {
+    return toFormState(error);
+  }
+
+  revalidatePath('/inventory');
+  return { status: 'idle', message: 'Warehouse created.' };
+}
+
+/**
+ * Receives stock for a variant that has no record yet.
+ *
+ * The per-row form can only move stock that already exists, which leaves the
+ * first receipt for any variant with nowhere to happen — this is that first
+ * receipt. The API creates the record on the way in.
+ */
+export async function receiveStockAction(
+  _state: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const quantity = Number(formData.get('quantity'));
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    return {
+      status: 'error',
+      message: 'Check the form and try again.',
+      fieldErrors: { quantity: ['Enter a whole number above zero.'] },
+    };
+  }
+
+  const warehouseId = String(formData.get('warehouseId') ?? '');
+  const variantId = String(formData.get('variantId') ?? '');
+
+  if (warehouseId === '' || variantId === '') {
+    return {
+      status: 'error',
+      message: 'Choose both a warehouse and a variant.',
+    };
+  }
+
+  try {
+    await backendReceiveStock(apiClient, {
+      warehouseId,
+      variantId,
+      quantity,
+      note: String(formData.get('note') ?? '') || undefined,
+    });
+  } catch (error) {
+    return toFormState(error);
+  }
+
+  revalidatePath('/inventory');
+  return { status: 'idle', message: 'Stock received.' };
 }

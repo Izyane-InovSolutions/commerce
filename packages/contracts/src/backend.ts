@@ -151,6 +151,109 @@ export const backendAdminVariantSchema = backendVariantSchema.extend({
 });
 export type BackendAdminVariant = z.infer<typeof backendAdminVariantSchema>;
 
+/* ---- media ---- */
+
+/** What the API accepts as an upload. Anything else is rejected on reserve. */
+export const backendMediaTypes = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'application/pdf',
+] as const;
+export const backendMediaTypeSchema = z.enum(backendMediaTypes);
+export type BackendMediaType = z.infer<typeof backendMediaTypeSchema>;
+
+export const backendMediaStatuses = [
+  'PENDING_UPLOAD',
+  'AVAILABLE',
+  'DELETED',
+] as const;
+export const backendMediaStatusSchema = z.enum(backendMediaStatuses);
+export type BackendMediaStatus = z.infer<typeof backendMediaStatusSchema>;
+
+/**
+ * A reservation, made before any bytes are sent.
+ *
+ * `byteSize` is checked against the file that follows, so it has to be the
+ * real length rather than an estimate.
+ */
+export const backendReserveUploadSchema = z.object({
+  fileName: z.string().trim().min(1).max(255),
+  mimeType: backendMediaTypeSchema,
+  byteSize: z.int().min(1),
+});
+export type BackendReserveUploadInput = z.input<
+  typeof backendReserveUploadSchema
+>;
+
+/** A signed, time-limited URL, relative to the API's own origin. */
+export const backendSignedUrlSchema = z.object({
+  url: z.string(),
+  expiresAt: z.iso.datetime(),
+});
+export type BackendSignedUrl = z.infer<typeof backendSignedUrlSchema>;
+
+export const backendMediaAssetSchema = z.object({
+  id: z.uuid(),
+  originalFileName: z.string(),
+  mimeType: z.string(),
+  status: backendMediaStatusSchema,
+});
+export type BackendMediaAsset = z.infer<typeof backendMediaAssetSchema>;
+
+export const backendMediaUploadSchema = z.object({
+  asset: backendMediaAssetSchema,
+  upload: backendSignedUrlSchema,
+});
+export type BackendMediaUpload = z.infer<typeof backendMediaUploadSchema>;
+
+/** An image on a product, as the admin catalog returns it. */
+export const backendProductMediaSchema = z.object({
+  id: z.uuid(),
+  productId: z.uuid(),
+  mediaAssetId: z.uuid(),
+  position: z.int(),
+  isPrimary: z.boolean(),
+  createdAt: z.iso.datetime(),
+  mediaAsset: backendMediaAssetSchema,
+  /** Signed and relative to the API's origin; null until the bytes land. */
+  url: z.string().nullable(),
+});
+export type BackendProductMedia = z.infer<typeof backendProductMediaSchema>;
+
+/**
+ * An image as the *public* catalog returns it: already signed, so a client
+ * can render it without asking the media module for anything.
+ */
+export const backendPublicProductMediaSchema = z.object({
+  id: z.uuid(),
+  mediaAssetId: z.uuid(),
+  position: z.int(),
+  isPrimary: z.boolean(),
+  mimeType: z.string(),
+  url: z.string(),
+});
+export type BackendPublicProductMedia = z.infer<
+  typeof backendPublicProductMediaSchema
+>;
+
+/**
+ * The image to lead with: whichever is marked primary, else the first by
+ * position. Null when the product has no usable image.
+ */
+export function pickPrimaryMedia(
+  media: BackendPublicProductMedia[],
+): BackendPublicProductMedia | null {
+  if (media.length === 0) {
+    return null;
+  }
+
+  const ordered = [...media].sort(
+    (left, right) => left.position - right.position,
+  );
+  return ordered.find((entry) => entry.isPrimary) ?? ordered[0] ?? null;
+}
+
 export const backendProductSchema = z.object({
   id: z.uuid(),
   name: z.string(),
@@ -159,11 +262,15 @@ export const backendProductSchema = z.object({
   status: backendProductStatusSchema,
   brand: backendBrandSchema.nullable(),
   category: backendCategorySchema.nullable(),
+  /** Only assets that are uploaded and available; see `backendMediaStatuses`. */
+  media: z.array(backendPublicProductMediaSchema).default([]),
   variants: z.array(backendVariantSchema).default([]),
 });
 export type BackendProduct = z.infer<typeof backendProductSchema>;
 
 export const backendAdminProductSchema = backendProductSchema.extend({
+  /** The admin read carries the asset itself, including ones still uploading. */
+  media: z.array(backendProductMediaSchema).default([]),
   variants: z.array(backendAdminVariantSchema).default([]),
 });
 export type BackendAdminProduct = z.infer<typeof backendAdminProductSchema>;

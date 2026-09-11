@@ -164,6 +164,48 @@ describe('UnifiedPaymentProvider', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('sends the optional fields the gateway documents, and omits the rest', async () => {
+    await provider.initialize({
+      ...input,
+      description: 'Order 10001',
+      metadata: { orderId: '10001' },
+    });
+
+    expect(fetchMock.mock.calls[0]?.[1]?.body).toBe(
+      JSON.stringify({
+        amount: 123.45,
+        currency: 'ZMW',
+        reference: 'order-1',
+        merchantId: 'KAUSA',
+        paymentMethod: 'MOBILE_MONEY',
+        phoneNumber: '0970000000',
+        provider: 'AIRTEL',
+        description: 'Order 10001',
+        metadata: { orderId: '10001' },
+      }),
+    );
+  });
+
+  it('publishes a callback URL only once one is configured', async () => {
+    const configured = new UnifiedPaymentProvider(
+      new ConfigService({
+        PAYMENTS_PROVIDER: 'unified',
+        UNIFIED_PAYMENTS_BASE_URL: 'https://gateway.example',
+        UNIFIED_PAYMENTS_API_KEY: 'test-only-key',
+        UNIFIED_PAYMENTS_CALLBACK_URL: 'https://shop.example/payments/webhook',
+      }),
+    );
+
+    await configured.initialize(input);
+    expect(fetchMock.mock.calls[0]?.[1]?.body).toContain(
+      '"callbackUrl":"https://shop.example/payments/webhook"',
+    );
+
+    // The default provider has none, so nothing is advertised.
+    await provider.initialize(input);
+    expect(fetchMock.mock.calls[1]?.[1]?.body).not.toContain('callbackUrl');
+  });
+
   it('does not infer local success from an undocumented status', async () => {
     reply({ success: true, data: { ...data, status: 'COMPLETED' } });
     await expect(provider.initialize(input)).resolves.toMatchObject({

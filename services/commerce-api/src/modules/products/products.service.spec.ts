@@ -86,7 +86,14 @@ describe('ProductsService', () => {
 
   beforeEach(() => {
     prisma = buildPrisma();
-    service = new ProductsService(prisma as unknown as PrismaService, new MediaService(prisma as unknown as PrismaService,new ConfigService(),{} as never));
+    service = new ProductsService(
+      prisma as unknown as PrismaService,
+      new MediaService(
+        prisma as unknown as PrismaService,
+        new ConfigService(),
+        {} as never,
+      ),
+    );
   });
 
   describe('findPublished', () => {
@@ -189,7 +196,7 @@ describe('ProductsService', () => {
 
   describe('addVariant', () => {
     it('creates the variant and its attribute-value links in one transaction', async () => {
-      prisma.product.findUnique.mockResolvedValue({ id: 'p1' });
+      prisma.product.findUnique.mockResolvedValue({ id: 'p1', media: [] });
       prisma.productVariant.create.mockResolvedValue({
         id: 'v1',
         productId: 'p1',
@@ -216,7 +223,7 @@ describe('ProductsService', () => {
     });
 
     it('maps a duplicate SKU code to a conflict', async () => {
-      prisma.product.findUnique.mockResolvedValue({ id: 'p1' });
+      prisma.product.findUnique.mockResolvedValue({ id: 'p1', media: [] });
       prisma.$transaction.mockRejectedValue({ code: 'P2002' });
 
       await expect(
@@ -227,7 +234,7 @@ describe('ProductsService', () => {
 
   describe('attachMedia', () => {
     it('rejects when the media asset does not exist', async () => {
-      prisma.product.findUnique.mockResolvedValue({ id: 'p1' });
+      prisma.product.findUnique.mockResolvedValue({ id: 'p1', media: [] });
       prisma.mediaAsset.findUnique.mockResolvedValue(null);
 
       await expect(
@@ -236,7 +243,7 @@ describe('ProductsService', () => {
     });
 
     it('rejects when the media asset is not yet available', async () => {
-      prisma.product.findUnique.mockResolvedValue({ id: 'p1' });
+      prisma.product.findUnique.mockResolvedValue({ id: 'p1', media: [] });
       prisma.mediaAsset.findUnique.mockResolvedValue({
         id: 'm1',
         status: 'PENDING_UPLOAD',
