@@ -21,6 +21,14 @@ describe('PaymentsService', () => {
   let ordersService: { confirmPayment: jest.Mock; cancel: jest.Mock };
   let service: PaymentsService;
 
+  const paymentInput = {
+    paymentMethod: 'MOBILE_MONEY' as const,
+    phoneNumber: '0977123456',
+    provider: 'AIRTEL' as const,
+    description: 'Payment for order-1',
+    metadata: { orderId: 'order-1', channel: 'web' },
+  };
+
   beforeEach(() => {
     prisma = buildPrisma();
     provider = {
@@ -54,8 +62,19 @@ describe('PaymentsService', () => {
         status: PaymentStatus.PENDING,
       });
 
-      const result = await service.initializeForOrder(order);
+      const result = await service.initializeForOrder(order, paymentInput);
 
+      expect(provider.initialize).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paymentId: 'payment-1',
+          amount: 2000,
+          currency: 'USD',
+          idempotencyKey: 'order-1',
+          reference: 'order-1',
+          paymentMethod: 'MOBILE_MONEY',
+          phoneNumber: '0977123456',
+        }),
+      );
       expect(prisma.payment.update).toHaveBeenCalledWith({
         where: { id: 'payment-1' },
         data: { providerReference: 'ref-1', status: PaymentStatus.PENDING },
@@ -66,19 +85,18 @@ describe('PaymentsService', () => {
     it('marks the payment FAILED and rethrows on provider failure', async () => {
       prisma.payment.create.mockResolvedValue({ id: 'payment-1' });
       provider.initialize.mockRejectedValue(
-        new Error('Payment integration is awaiting the external provider API'),
+        new Error('Unified Payments rejected the payment request'),
       );
 
-      await expect(service.initializeForOrder(order)).rejects.toThrow(
-        'awaiting the external provider API',
-      );
+      await expect(
+        service.initializeForOrder(order, paymentInput),
+      ).rejects.toThrow('Unified Payments rejected the payment request');
 
       expect(prisma.payment.update).toHaveBeenCalledWith({
         where: { id: 'payment-1' },
         data: {
           status: PaymentStatus.FAILED,
-          failureReason:
-            'Payment integration is awaiting the external provider API',
+          failureReason: 'Unified Payments rejected the payment request',
         },
       });
     });
@@ -107,7 +125,7 @@ describe('PaymentsService', () => {
       expect(ordersService.confirmPayment).not.toHaveBeenCalled();
     });
 
-    it('confirms the order when the event is SUCCEEDED', async () => {
+    it('confirms the order when an event is SUCCEEDED', async () => {
       provider.verifyWebhook.mockReturnValue({
         id: 'evt-1',
         providerReference: 'ref-1',
@@ -127,7 +145,7 @@ describe('PaymentsService', () => {
       expect(ordersService.confirmPayment).toHaveBeenCalledWith('order-1');
     });
 
-    it('cancels the order when the event is FAILED', async () => {
+    it('cancels the order when an event is FAILED', async () => {
       provider.verifyWebhook.mockReturnValue({
         id: 'evt-1',
         providerReference: 'ref-1',
