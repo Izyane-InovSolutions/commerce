@@ -15,6 +15,10 @@ export class CheckoutController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateCheckoutDto,
   ): Promise<CheckoutResult> {
-    return this.checkoutService.checkout(user.id, dto.shippingAddressId);
+    return this.checkoutService.checkout(
+      user.id,
+      dto.shippingAddressId,
+      dto.paymentDetails,
+    );
   }
 }
