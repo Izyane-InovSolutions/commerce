@@ -1,4 +1,3 @@
-// @ts-nocheck
 import Image from 'next/image';
 
 import heroImage from '@/assets/hero1.png';
@@ -67,7 +66,6 @@ export default function HomePage() {
                 <span>Excellent customer service</span>
               </li>
             </ul>
-            
           </div>
           <Image
             src={heroImage}

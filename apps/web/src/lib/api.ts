@@ -1,7 +1,7 @@
 import { createApiClient } from '@commerce/api-client';
 
 import { env } from './env';
-import { readSessionToken } from './session-cookie';
+import { readAccessToken } from './session-cookie';
 
 /**
  * Storefront client for the Commerce API.
@@ -13,7 +13,7 @@ import { readSessionToken } from './session-cookie';
 export const apiClient = createApiClient({
   baseUrl: env.apiBaseUrl,
   getAuthHeaders: async (): Promise<Record<string, string>> => {
-    const token = await readSessionToken();
+    const token = await readAccessToken();
     return token ? { authorization: `Bearer ${token}` } : {};
   },
 });

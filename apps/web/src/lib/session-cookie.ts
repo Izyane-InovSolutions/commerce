@@ -7,35 +7,61 @@ import { cookies } from 'next/headers';
  * on localhost shares one cookie jar. Each app therefore needs its own cookie
  * name — otherwise signing into the storefront could overwrite a session in
  * the admin or seller portal, or vice versa.
- *
- * Keep this unique per app even once the portals have their own hostnames: a
- * shared parent domain would reintroduce exactly the same clash.
  */
 export const SESSION_COOKIE = 'commerce_web_session';
 
+type StoredSession = {
+  accessToken: string;
+  refreshToken: string;
+};
+
+async function readSession(): Promise<StoredSession | undefined> {
+  const raw = (await cookies()).get(SESSION_COOKIE)?.value;
+  if (!raw) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(raw) as StoredSession;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function readAccessToken(): Promise<string | undefined> {
+  return (await readSession())?.accessToken;
+}
+
+export async function readRefreshToken(): Promise<string | undefined> {
+  return (await readSession())?.refreshToken;
+}
+
 /**
- * The session token, read from an httpOnly cookie.
+ * Persists both tokens from a login/register response.
  *
- * Kept apart from the API client so reading it cannot pull the client into a
- * circular import, and so nothing on the client side can reach the token.
+ * The cookie's own lifetime is capped to the access token's, not the longer-
+ * lived refresh token's: this app doesn't yet refresh access tokens in the
+ * background, so keeping the cookie around past that point would just leave
+ * a session that looks present but silently fails every request.
  */
-export async function readSessionToken(): Promise<string | undefined> {
-  return (await cookies()).get(SESSION_COOKIE)?.value;
-}
-
-export async function writeSessionToken(
-  token: string,
-  expiresAt: string,
+export async function writeSession(
+  accessToken: string,
+  refreshToken: string,
+  accessTokenTtlSeconds: number,
 ): Promise<void> {
-  (await cookies()).set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-    expires: new Date(expiresAt),
-  });
+  (await cookies()).set(
+    SESSION_COOKIE,
+    JSON.stringify({ accessToken, refreshToken }),
+    {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: accessTokenTtlSeconds,
+    },
+  );
 }
 
-export async function clearSessionToken(): Promise<void> {
+export async function clearSession(): Promise<void> {
   (await cookies()).delete(SESSION_COOKIE);
 }
