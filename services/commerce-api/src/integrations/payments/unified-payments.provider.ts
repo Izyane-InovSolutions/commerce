@@ -42,6 +42,13 @@ export class UnifiedPaymentsProvider implements PaymentProvider {
     const apiKey = this.config.getOrThrow<string>('UNIFIED_PAYMENTS_API_KEY');
     const merchantId = this.config.get<string>('UNIFIED_PAYMENTS_MERCHANT_ID');
     const callbackUrl = this.config.get<string>('UNIFIED_PAYMENTS_CALLBACK_URL');
+    const nodeEnv = this.config.get<string>('NODE_ENV', 'development');
+
+    if (nodeEnv === 'production' && !baseUrl.startsWith('https://')) {
+      throw new BadGatewayException(
+        'Unified Payments must use HTTPS in production',
+      );
+    }
 
     const body: Record<string, unknown> = {
       ...(merchantId ? { merchantId } : {}),
@@ -73,12 +80,15 @@ export class UnifiedPaymentsProvider implements PaymentProvider {
       body.card = input.card;
     }
 
-    const response = await this.request(baseUrl, apiKey, input.idempotencyKey, body);
+    const response = await this.request(
+      baseUrl,
+      apiKey,
+      input.idempotencyKey,
+      body,
+    );
 
     if (!response.success || !response.data) {
-      throw new BadGatewayException(
-        this.formatGatewayError(response),
-      );
+      throw new BadGatewayException(this.formatGatewayError(response));
     }
 
     const status = STATUS_MAP[response.data.status];
@@ -132,16 +142,19 @@ export class UnifiedPaymentsProvider implements PaymentProvider {
     const timeout = setTimeout(() => controller.abort(), 15_000);
 
     try {
-      const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/v1/payments`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': apiKey,
-          'Idempotency-Key': idempotencyKey,
+      const response = await fetch(
+        `${baseUrl.replace(/\/$/, '')}/api/v1/payments`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': apiKey,
+            'Idempotency-Key': idempotencyKey,
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
         },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
+      );
 
       const payload = (await response.json()) as UnifiedPaymentsResponse;
 
@@ -167,14 +180,19 @@ export class UnifiedPaymentsProvider implements PaymentProvider {
 
   private formatGatewayError(response: UnifiedPaymentsResponse): string {
     const details = response.error?.details
-      ?.map((detail) => `${detail.field ?? 'request'}: ${detail.message ?? 'invalid'}`)
+      ?.map(
+        (detail) =>
+          `${detail.field ?? 'request'}: ${detail.message ?? 'invalid'}`,
+      )
       .join('; ');
 
     return [
       response.error?.code,
       response.error?.message,
       details,
-      response.correlationId ? `correlationId=${response.correlationId}` : undefined,
+      response.correlationId
+        ? `correlationId=${response.correlationId}`
+        : undefined,
     ]
       .filter(Boolean)
       .join(' - ') || 'Unified Payments rejected the payment request';
