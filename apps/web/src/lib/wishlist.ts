@@ -1,5 +1,6 @@
 import { apiClient } from './api';
 import type { SuccessEnvelope } from './catalog-types';
+import { readCurrency } from './currency-cookie';
 import type { WishlistItemView } from './commerce-types';
 
 /**
@@ -11,7 +12,7 @@ import type { WishlistItemView } from './commerce-types';
 export async function listWishlist(): Promise<WishlistItemView[]> {
   const response = await apiClient.get<SuccessEnvelope<WishlistItemView[]>>(
     '/wishlist',
-    { cache: 'no-store' },
+    { query: { currency: await readCurrency() }, cache: 'no-store' },
   );
   return response.data;
 }

@@ -89,7 +89,10 @@ export type BackendBrand = z.infer<typeof backendBrandSchema>;
 export const backendOfferSchema = z.object({
   id: z.uuid(),
   status: backendProductStatusSchema,
+  /** Resolved in the requested currency; null when it has no price in it. */
   currentPrice: backendMoneySchema.nullable(),
+  /** Every currency this offer currently carries a price in. */
+  currencies: z.array(z.string()).default([]),
 });
 export type BackendOffer = z.infer<typeof backendOfferSchema>;
 
@@ -118,23 +121,66 @@ export const backendAdminOfferSchema = z.object({
 export type BackendAdminOffer = z.infer<typeof backendAdminOfferSchema>;
 
 /**
- * The price in force, mirroring how the API resolves it: the most recently
- * started price whose window covers now.
+ * The currencies the platform prices and settles in.
+ *
+ * Mirrors `SUPPORTED_CURRENCIES` in the API. The gateway routes on currency —
+ * mobile money settles in ZMW, its card connector in USD or GBP — so an offer
+ * is only sellable in a currency it carries a price for.
+ */
+export const backendCurrencies = ['ZMW', 'USD', 'GBP'] as const;
+export const backendCurrencySchema = z.enum(backendCurrencies);
+export type BackendCurrency = z.infer<typeof backendCurrencySchema>;
+
+export const defaultBackendCurrency: BackendCurrency = 'ZMW';
+
+function isCurrent(price: BackendPrice, at: Date): boolean {
+  const starts = new Date(price.startsAt);
+  const ends = price.endsAt === null ? null : new Date(price.endsAt);
+  return starts <= at && (ends === null || ends > at);
+}
+
+function newestFirst(left: BackendPrice, right: BackendPrice): number {
+  return new Date(right.startsAt).getTime() - new Date(left.startsAt).getTime();
+}
+
+/**
+ * The price in force for one currency, mirroring how the API resolves it.
+ *
+ * Currency is required: an offer may carry prices in several currencies at
+ * once, and choosing between them by start date alone would hand back
+ * whichever was edited last rather than the one asked for.
  */
 export function pickCurrentPrice(
   prices: BackendPrice[],
+  currency: string,
   at: Date = new Date(),
 ): BackendPrice | undefined {
   return prices
-    .filter((price) => {
-      const starts = new Date(price.startsAt);
-      const ends = price.endsAt === null ? null : new Date(price.endsAt);
-      return starts <= at && (ends === null || ends > at);
-    })
-    .sort(
-      (left, right) =>
-        new Date(right.startsAt).getTime() - new Date(left.startsAt).getTime(),
-    )[0];
+    .filter((price) => price.currency === currency && isCurrent(price, at))
+    .sort(newestFirst)[0];
+}
+
+/**
+ * The price in force in every currency the offer is priced in.
+ *
+ * For callers asking "is this priced at all?" rather than "what does it cost
+ * in Kwacha?" — a listing needs one currency to have a price, not a
+ * particular one.
+ */
+export function currentPrices(
+  prices: BackendPrice[],
+  at: Date = new Date(),
+): BackendPrice[] {
+  const byCurrency = new Map<string, BackendPrice>();
+
+  for (const price of prices.filter((price) => isCurrent(price, at))) {
+    const held = byCurrency.get(price.currency);
+    if (!held || newestFirst(price, held) < 0) {
+      byCurrency.set(price.currency, price);
+    }
+  }
+
+  return [...byCurrency.values()];
 }
 
 export const backendVariantSchema = z.object({

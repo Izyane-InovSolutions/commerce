@@ -136,7 +136,11 @@ describe('ProductsService', () => {
       ]);
       prisma.product.count.mockResolvedValue(1);
 
-      const result = await service.findPublished({ page: 1, limit: 20 });
+      const result = await service.findPublished({
+        page: 1,
+        limit: 20,
+        currency: 'USD',
+      });
 
       expect(prisma.product.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -157,6 +161,7 @@ describe('ProductsService', () => {
       prisma.product.count.mockResolvedValue(0);
 
       await service.findPublished({
+        currency: 'USD',
         page: 1,
         limit: 20,
         categorySlug: 'shoes',
@@ -179,7 +184,7 @@ describe('ProductsService', () => {
       prisma.product.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.findPublishedBySlug('missing'),
+        service.findPublishedBySlug('missing', 'USD'),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
   });

@@ -18,8 +18,13 @@ export type Category = {
 export type ProductOffer = {
   id: string;
   status: string;
-  /** `amount` is minor units (ngwee); null when the variant has no first-party offer yet. */
+  /**
+   * `amount` is in the currency's minor units. Null when the offer carries no
+   * price in the currency being browsed — which is not the same as having no
+   * price at all; `currencies` says which ones it does have.
+   */
   currentPrice: { amount: number; currency: string } | null;
+  currencies: string[];
 };
 
 export type ProductVariant = {
@@ -66,18 +71,45 @@ export type ProductListPage = {
 };
 
 /**
- * The product's display price, in whole Kwacha (not ngwee), from its first
- * variant's first first-party offer. Null when nothing is currently sellable
- * — every product/variant page treats that as "unavailable", not a $0 price.
+ * The product's display price — amount in minor units, with its currency —
+ * from its first variant's first priced offer. Null when the product carries
+ * no price in the currency being browsed, which every page treats as "not
+ * available in this currency" rather than as a zero price.
  *
  * Deliberately kept in this types-only module rather than `catalog.ts`: it's
  * a pure function used by client components (e.g. `ProductCard`), and
  * `catalog.ts` pulls in the server-only `apiClient` (via `next/headers`),
  * which cannot be part of a client bundle.
  */
-export function getDisplayPrice(product: Product): number | null {
-  const amount = getPrimaryOffer(product)?.currentPrice?.amount;
-  return typeof amount === 'number' ? amount / 100 : null;
+export function getDisplayPrice(
+  product: Product,
+): { amount: number; currency: string } | null {
+  return getPrimaryOffer(product)?.currentPrice ?? null;
+}
+
+/**
+ * Currencies this product is priced in but is not being shown in.
+ *
+ * Lets a listing say "sold in ZMW" rather than "currently unavailable" when
+ * the only thing missing is a price in the currency being browsed.
+ */
+export function getOtherCurrencies(
+  product: Product,
+  currency: string,
+): string[] {
+  const found = new Set<string>();
+
+  for (const variant of product.variants) {
+    for (const offer of variant.offers) {
+      for (const code of offer.currencies) {
+        if (code !== currency) {
+          found.add(code);
+        }
+      }
+    }
+  }
+
+  return [...found].sort();
 }
 
 /**

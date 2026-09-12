@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
@@ -21,6 +22,7 @@ import {
 } from '../../common/auth/guest-token.decorator';
 import { OptionalAuth } from '../../common/auth/optional-auth.decorator';
 import { OptionalCurrentUser } from '../../common/auth/optional-current-user.decorator';
+import { CurrencyQueryDto } from '../../common/catalog/dto/currency-query.dto';
 import { AddItemDto } from './dto/add-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { CartService } from './cart.service';
@@ -34,9 +36,13 @@ export class CartController {
   @Get()
   getCart(
     @OptionalCurrentUser() user: AuthenticatedUser | undefined,
+    @Query() query: CurrencyQueryDto,
     @GuestToken() guestToken?: string,
   ): Promise<CartView> {
-    return this.cartService.getCartView(this.identity(user, guestToken));
+    return this.cartService.getCartView(
+      this.identity(user, guestToken),
+      query.currency,
+    );
   }
 
   @OptionalAuth()
@@ -45,12 +51,14 @@ export class CartController {
     @OptionalCurrentUser() user: AuthenticatedUser | undefined,
     @GuestToken() guestToken: string | undefined,
     @Body() dto: AddItemDto,
+    @Query() query: CurrencyQueryDto,
     @Res({ passthrough: true }) response: Response,
   ): Promise<AddItemResponse> {
     const result = await this.cartService.addItem(
       this.identity(user, guestToken),
       dto.offerId,
       dto.quantity,
+      query.currency,
     );
 
     if (result.guestToken) {
@@ -67,11 +75,13 @@ export class CartController {
     @GuestToken() guestToken: string | undefined,
     @Param('itemId', ParseUUIDPipe) itemId: string,
     @Body() dto: UpdateItemDto,
+    @Query() query: CurrencyQueryDto,
   ): Promise<CartView> {
     return this.cartService.updateItemQuantity(
       this.identity(user, guestToken),
       itemId,
       dto.quantity,
+      query.currency,
     );
   }
 
@@ -81,8 +91,13 @@ export class CartController {
     @OptionalCurrentUser() user: AuthenticatedUser | undefined,
     @GuestToken() guestToken: string | undefined,
     @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Query() query: CurrencyQueryDto,
   ): Promise<CartView> {
-    return this.cartService.removeItem(this.identity(user, guestToken), itemId);
+    return this.cartService.removeItem(
+      this.identity(user, guestToken),
+      itemId,
+      query.currency,
+    );
   }
 
   // Not @OptionalAuth() — merging requires a real, authenticated user.
@@ -90,9 +105,10 @@ export class CartController {
   @HttpCode(HttpStatus.OK)
   merge(
     @CurrentUser() user: AuthenticatedUser,
+    @Query() query: CurrencyQueryDto,
     @GuestToken() guestToken?: string,
   ): Promise<CartView> {
-    return this.cartService.mergeGuestCart(user.id, guestToken);
+    return this.cartService.mergeGuestCart(user.id, guestToken, query.currency);
   }
 
   private identity(

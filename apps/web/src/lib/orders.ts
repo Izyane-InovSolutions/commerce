@@ -38,11 +38,19 @@ export async function createAddress(
 export async function checkout(
   shippingAddressId: string,
   idempotencyKey: string,
+  currency: string,
   paymentDetails?: Record<string, unknown>,
 ): Promise<CheckoutResult> {
   const response = await apiClient.post<SuccessEnvelope<CheckoutResult>>(
     '/checkout',
-    { body: { shippingAddressId, paymentDetails }, idempotencyKey },
+    {
+      // The currency travels with the order rather than being read from the
+      // cookie server-side, so the order is priced at what the shopper was
+      // looking at when they confirmed — not at whatever they switched to
+      // in another tab while the request was in flight.
+      body: { shippingAddressId, currency, paymentDetails },
+      idempotencyKey,
+    },
   );
   return response.data;
 }

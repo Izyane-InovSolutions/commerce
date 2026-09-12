@@ -80,8 +80,10 @@ export function CartContents({
                           : 'No current price'}
                       </p>
                       {line.isAvailable ? null : (
-                        <p className="text-destructive text-xs">
-                          Not available right now — remove it to check out.
+                        <p className="text-destructive text-xs text-pretty">
+                          {line.unitPrice === null && line.currencies.length > 0
+                            ? `Not sold in ${currency} — priced in ${line.currencies.join(' and ')}. Switch currency, or remove it to check out.`
+                            : 'Not available right now — remove it to check out.'}
                         </p>
                       )}
                     </div>

@@ -1,5 +1,6 @@
 import {
   IsEnum,
+  IsIn,
   IsInt,
   IsString,
   IsUUID,
@@ -9,6 +10,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+import { SUPPORTED_CURRENCIES } from '../../../common/catalog/current-price';
 import {
   OfferCondition,
   OfferFulfillmentMode,
@@ -69,6 +71,6 @@ export class SellerOfferPriceDto {
   @Max(2147483647)
   amount!: number;
 
-  @Matches(/^[A-Z]{3}$/)
+  @IsIn(SUPPORTED_CURRENCIES)
   currency!: string;
 }

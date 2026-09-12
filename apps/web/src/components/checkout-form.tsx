@@ -63,6 +63,7 @@ export function CheckoutForm({
   return (
     <form id={CHECKOUT_FORM_ID} action={formAction} className="space-y-6">
       <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+      <input type="hidden" name="currency" value={currency} />
       <input type="hidden" name="paymentMethod" value={method} />
 
       <fieldset className="space-y-3">

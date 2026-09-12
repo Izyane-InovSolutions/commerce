@@ -9,7 +9,10 @@ import type { Offer, Price, Seller } from '@prisma/client';
 import { ProductReferencesService } from '../products/product-references.service';
 import { PrismaService } from '../../database/prisma.service';
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
-import { pickCurrentPrice } from '../../common/catalog/current-price';
+import {
+  currentPrices,
+  pickCurrentPrice,
+} from '../../common/catalog/current-price';
 import { SellersService } from '../sellers/sellers.service';
 import {
   StorefrontsService,
@@ -33,7 +36,10 @@ export type ComparableOffer = {
   condition: Offer['condition'];
   stockSource: Offer['stockSource'];
   fulfillmentMode: Offer['fulfillmentMode'];
-  currentPrice: { amount: number; currency: string };
+  /** Null only from the by-id lookup, which does not filter on currency. */
+  currentPrice: { amount: number; currency: string } | null;
+  /** Every currency this offer currently carries a price in. */
+  currencies: string[];
   checkoutSupported: boolean;
 };
 export type OfferPage<T> = {
@@ -54,7 +60,7 @@ export class MarketplaceOffersService {
     private readonly prisma: PrismaService,
     private readonly sellers: SellersService,
     private readonly storefronts: StorefrontsService,
-    private readonly products:ProductReferencesService,
+    private readonly products: ProductReferencesService,
   ) {}
 
   async create(
@@ -179,31 +185,78 @@ export class MarketplaceOffersService {
   async compare(
     variantId: string,
     query: PaginationQueryDto,
+    currency: string,
   ): Promise<OfferPage<ComparableOffer>> {
     await this.products.requirePublishedVariant(variantId);
-    return this.publicPage({ variantId }, query);
+    return this.publicPage({ variantId }, query, currency);
   }
 
   async storefrontOffers(
     slug: string,
     query: PaginationQueryDto,
+    currency: string,
   ): Promise<OfferPage<ComparableOffer>> {
     const storefront = await this.storefronts.findPublic(slug);
-    return this.publicPage({ sellerId: storefront.id }, query);
+    return this.publicPage({ sellerId: storefront.id }, query, currency);
   }
 
-  async findPublic(id: string): Promise<ComparableOffer> {
-    const page = await this.publicPage({ id }, { page: 1, limit: 1 });
-    if (!page.items[0]) throw new NotFoundException('Offer not found');
-    return page.items[0];
+  /**
+   * One offer, looked up by id.
+   *
+   * Unlike the comparison views this does not filter on currency: it answers
+   * "what is this offer?", and a client resolving a cart or order line needs
+   * it back even when the line is priced in a currency the shopper is not
+   * browsing in. The price is resolved in the requested currency and is null
+   * when there is none, with `currencies` saying what it does carry.
+   */
+  async findPublic(id: string, currency: string): Promise<ComparableOffer> {
+    const offer = await this.prisma.offer.findFirst({
+      where: {
+        id,
+        status: ProductStatus.PUBLISHED,
+        variant: {
+          status: ProductStatus.PUBLISHED,
+          product: { status: ProductStatus.PUBLISHED },
+        },
+      },
+      include: {
+        seller: { select: PUBLIC_STOREFRONT_SELECT },
+        ...withPrices,
+      },
+    });
+    if (!offer) throw new NotFoundException('Offer not found');
+
+    const price = pickCurrentPrice(offer.prices, currency);
+    return {
+      id: offer.id,
+      variantId: offer.variantId,
+      listingTitle: offer.listingTitle,
+      seller: offer.seller,
+      isFirstParty: offer.sellerId === null,
+      condition: offer.condition,
+      stockSource: offer.stockSource,
+      fulfillmentMode: offer.fulfillmentMode,
+      currentPrice: price
+        ? { amount: price.amount, currency: price.currency }
+        : null,
+      currencies: currentPrices(offer.prices)
+        .map((each) => each.currency)
+        .sort(),
+      checkoutSupported: offer.sellerId === null,
+    };
   }
 
   private async publicPage(
     filter: Prisma.OfferWhereInput,
     query: PaginationQueryDto,
+    currency: string,
   ): Promise<OfferPage<ComparableOffer>> {
     const now = new Date();
+    // Narrowed by currency as well as by window, so an offer priced only in
+    // another currency is absent from the comparison rather than listed at a
+    // number the shopper cannot pay.
     const currentPrice: Prisma.PriceWhereInput = {
+      currency,
       startsAt: { lte: now },
       OR: [{ endsAt: null }, { endsAt: { gt: now } }],
     };
@@ -261,6 +314,7 @@ export class MarketplaceOffersService {
           amount: price.amount,
           currency: price.currency,
         },
+        currencies: [price.currency],
         checkoutSupported: offer.sellerId === null,
       };
     });
@@ -281,8 +335,10 @@ export class MarketplaceOffersService {
         'Seller SKU and listing title are required',
       );
     await this.products.requirePublishedVariant(offer.variantId, tx);
-    const price = pickCurrentPrice(offer.prices);
-    if (!price || price.amount <= 0)
+    const priced = currentPrices(offer.prices).filter(
+      (price) => price.amount > 0,
+    );
+    if (!priced.length)
       throw new BadRequestException('A current positive price is required');
   }
 

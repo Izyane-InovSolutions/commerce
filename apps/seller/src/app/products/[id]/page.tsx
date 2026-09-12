@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 
 import { ApiError, backendGetSellerOffer } from '@commerce/api-client';
-import { pickCurrentPrice } from '@commerce/contracts';
+import { backendCurrencies, currentPrices } from '@commerce/contracts';
 
 import { ApiErrorNotice } from '@/components/api-error-notice';
 import { OfferForm } from '@/components/offer-form';
@@ -98,8 +98,16 @@ export default async function OfferPage({
     );
   }
 
-  const current = pickCurrentPrice(offer.prices);
-  const currency = current?.currency ?? DEFAULT_CURRENCY;
+  const active = currentPrices(offer.prices).sort((left, right) =>
+    left.currency.localeCompare(right.currency),
+  );
+  // The price form defaults to a currency the listing is not priced in yet,
+  // so the obvious next action is adding the missing one rather than
+  // overwriting what is already there.
+  const missing = backendCurrencies.find(
+    (code: string) => !active.some((price) => price.currency === code),
+  );
+  const currency = missing ?? active[0]?.currency ?? DEFAULT_CURRENCY;
 
   return (
     <div className="space-y-8">
@@ -115,8 +123,10 @@ export default async function OfferPage({
       <PageHeader
         title={offer.listingTitle ?? 'Untitled listing'}
         description={
-          current
-            ? `Selling at ${formatMinor(current.amount, current.currency)}.`
+          active.length > 0
+            ? `Selling at ${active
+                .map((price) => formatMinor(price.amount, price.currency))
+                .join(' · ')}.`
             : 'No price set — this listing cannot sell until it has one.'
         }
         action={<StatusBadge status={offer.status.toLowerCase()} />}

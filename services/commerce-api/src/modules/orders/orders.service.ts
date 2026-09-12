@@ -36,14 +36,15 @@ export class OrdersService {
     private readonly inventoryService: InventoryService,
     private readonly addressesService: AddressesService,
     private readonly ledgerService: LedgerService,
-    private readonly offers:OfferReadService,
+    private readonly offers: OfferReadService,
   ) {}
 
   async createFromCart(
     userId: string,
     shippingAddressId: string,
+    currency: string,
   ): Promise<OrderWithItems> {
-    const cart = await this.cartService.getCartView({ userId });
+    const cart = await this.cartService.getCartView({ userId }, currency);
 
     if (cart.items.length === 0) {
       throw new ConflictException('Cart is empty');
@@ -61,9 +62,10 @@ export class OrdersService {
     );
     const shippingAddress = toAddressSnapshot(address);
 
-    const offers = await this.offers.findMany(cart.items.map(item=>item.offerId));
+    const offers = await this.offers.findMany(
+      cart.items.map((item) => item.offerId),
+    );
     const offerById = new Map(offers.map((offer) => [offer.id, offer]));
-    const currency = cart.currency ?? 'USD';
     const groups = this.groupBySeller(cart.items);
 
     const createdOrderId = await this.prisma.$transaction(async (tx) => {

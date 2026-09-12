@@ -10,7 +10,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { idleFormState, type FormState } from '@/lib/form';
 
-type OfferSummary = { id: string; status: string; price: string | null };
+type OfferSummary = {
+  id: string;
+  status: string;
+  /** One formatted price per currency the offer is currently priced in. */
+  prices: string[];
+};
 
 /**
  * The offers on one variant.
@@ -102,7 +107,11 @@ function OfferRow({
     <div className="bg-muted/40 space-y-2 rounded-lg p-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm">
-          <span className="font-medium">{offer.price ?? 'No price yet'}</span>
+          <span className="font-medium">
+            {offer.prices.length > 0
+              ? offer.prices.join(' · ')
+              : 'No price yet'}
+          </span>
           <span className="text-muted-foreground"> · offer</span>
         </p>
         <StatusControl

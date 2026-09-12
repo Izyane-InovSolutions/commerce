@@ -1,10 +1,15 @@
 import Link from 'next/link';
 import { ShoppingCart, User } from 'lucide-react';
 
+import { setCurrencyAction } from '@/app/currency-actions';
+import { CurrencySwitcher } from '@/components/currency-switcher';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { readCurrency } from '@/lib/currency-cookie';
 
-export function SiteHeader() {
+export async function SiteHeader() {
+  const currency = await readCurrency();
+
   return (
     <header className="border-b">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-4 py-3">
@@ -28,6 +33,7 @@ export function SiteHeader() {
         </form>
 
         <nav className="ml-auto flex items-center gap-1">
+          <CurrencySwitcher currency={currency} action={setCurrencyAction} />
           <Button variant="ghost" size="sm" asChild>
             <Link href="/account">
               <User data-icon="inline-start" />

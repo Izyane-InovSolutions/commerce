@@ -1,6 +1,7 @@
 import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Public } from '../../common/auth/public.decorator';
+import { CurrencyQueryDto } from '../../common/catalog/dto/currency-query.dto';
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
 import { MarketplaceOffersService } from './marketplace-offers.service';
 import type { ComparableOffer, OfferPage } from './marketplace-offers.service';
@@ -14,18 +15,23 @@ export class PublicOffersController {
   compare(
     @Param('id', ParseUUIDPipe) id: string,
     @Query() query: PaginationQueryDto,
+    @Query() currency: CurrencyQueryDto,
   ): Promise<OfferPage<ComparableOffer>> {
-    return this.offers.compare(id, query);
+    return this.offers.compare(id, query, currency.currency);
   }
   @Get('catalog/offers/:id')
-  find(@Param('id', ParseUUIDPipe) id: string): Promise<ComparableOffer> {
-    return this.offers.findPublic(id);
+  find(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() currency: CurrencyQueryDto,
+  ): Promise<ComparableOffer> {
+    return this.offers.findPublic(id, currency.currency);
   }
   @Get('storefronts/:slug/offers')
   storefront(
     @Param('slug') slug: string,
     @Query() query: PaginationQueryDto,
+    @Query() currency: CurrencyQueryDto,
   ): Promise<OfferPage<ComparableOffer>> {
-    return this.offers.storefrontOffers(slug, query);
+    return this.offers.storefrontOffers(slug, query, currency.currency);
   }
 }

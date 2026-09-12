@@ -7,7 +7,7 @@ import {
   getPrimaryImage,
   type Product,
 } from '@/lib/catalog-types';
-import { formatCurrency } from '@/lib/currency';
+import { formatMinor } from '@/lib/currency';
 
 export function ProductCard({ product }: { product: Product }) {
   const price = getDisplayPrice(product);
@@ -27,7 +27,9 @@ export function ProductCard({ product }: { product: Product }) {
               {product.name}
             </p>
             <p className="text-sm font-semibold">
-              {price !== null ? formatCurrency(price) : 'Currently unavailable'}
+              {price !== null
+                ? formatMinor(price.amount, price.currency)
+                : 'Not sold in this currency'}
             </p>
           </div>
         </CardContent>

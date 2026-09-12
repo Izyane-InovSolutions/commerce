@@ -24,7 +24,7 @@ describe('CheckoutService', () => {
     ordersService.createFromCart.mockResolvedValue({ id: 'order-1' });
     paymentsService.initializeForOrder.mockResolvedValue({ id: 'payment-1' });
 
-    const result = await service.checkout('user-1', 'addr-1');
+    const result = await service.checkout('user-1', 'addr-1', 'USD');
 
     expect(cartService.clearCart).toHaveBeenCalledWith({ userId: 'user-1' });
     expect(ordersService.cancel).not.toHaveBeenCalled();
@@ -41,7 +41,9 @@ describe('CheckoutService', () => {
     );
     paymentsService.initializeForOrder.mockRejectedValue(error);
 
-    await expect(service.checkout('user-1', 'addr-1')).rejects.toThrow(error);
+    await expect(service.checkout('user-1', 'addr-1', 'USD')).rejects.toThrow(
+      error,
+    );
 
     expect(ordersService.cancel).toHaveBeenCalledWith('order-1');
     expect(cartService.clearCart).not.toHaveBeenCalled();
@@ -51,7 +53,7 @@ describe('CheckoutService', () => {
     ordersService.createFromCart.mockResolvedValue({ id: 'order-1' });
     paymentsService.initializeForOrder.mockResolvedValue({ id: 'payment-1' });
     cartService.clearCart.mockRejectedValue(new Error('Database unavailable'));
-    await expect(service.checkout('user-1', 'addr-1')).rejects.toThrow(
+    await expect(service.checkout('user-1', 'addr-1', 'USD')).rejects.toThrow(
       'Database unavailable',
     );
     expect(ordersService.cancel).not.toHaveBeenCalled();
