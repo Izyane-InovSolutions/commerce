@@ -415,6 +415,7 @@ model Offer {
   cartItems       CartItem[]
   wishlistItems   WishlistItem[]
   orderItems      OrderItem[]
+  inventoryRecord InventoryRecord?
   createdAt       DateTime             @default(now()) @map("created_at")
   updatedAt       DateTime             @updatedAt @map("updated_at")
 
@@ -471,18 +472,22 @@ model Warehouse {
 // `available` is never stored — always computed as onHand - reserved.
 model InventoryRecord {
   id           String              @id @default(uuid()) @db.Uuid
-  warehouseId  String              @map("warehouse_id") @db.Uuid
-  warehouse    Warehouse           @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  warehouseId  String?             @map("warehouse_id") @db.Uuid
+  warehouse    Warehouse?          @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  offerId      String?             @unique @map("offer_id") @db.Uuid
+  offer        Offer?              @relation(fields: [offerId], references: [id], onDelete: Cascade)
   variantId    String              @map("variant_id") @db.Uuid
   variant      ProductVariant      @relation(fields: [variantId], references: [id], onDelete: Cascade)
   onHand       Int                 @default(0) @map("on_hand")
   reserved     Int                 @default(0)
+  version      Int                 @default(0)
   movements    InventoryMovement[]
   reservations Reservation[]
   createdAt    DateTime            @default(now()) @map("created_at")
   updatedAt    DateTime            @updatedAt @map("updated_at")
 
   @@unique([warehouseId, variantId])
+  @@index([offerId, createdAt])
   @@map("inventory_records")
 }
 

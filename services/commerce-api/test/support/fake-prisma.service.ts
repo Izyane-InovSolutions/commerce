@@ -1057,11 +1057,18 @@ export class FakePrismaService {
     }: {
       where: {
         id?: string;
+        offerId?: string;
         warehouseId_variantId?: { warehouseId: string; variantId: string };
       };
     }): Promise<Record<string, unknown> | null> => {
       if (where.id)
         return Promise.resolve(this.inventoryRecords.get(where.id) ?? null);
+      if (where.offerId) {
+        const row = [...this.inventoryRecords.values()].find(
+          (record) => record.offerId === where.offerId,
+        );
+        return Promise.resolve(row ?? null);
+      }
       const { warehouseId, variantId } = where.warehouseId_variantId!;
       const row = [...this.inventoryRecords.values()].find(
         (r) => r.warehouseId === warehouseId && r.variantId === variantId,
@@ -1071,6 +1078,7 @@ export class FakePrismaService {
     findUniqueOrThrow: async (args: {
       where: {
         id?: string;
+        offerId?: string;
         warehouseId_variantId?: { warehouseId: string; variantId: string };
       };
     }): Promise<Record<string, unknown>> => {
@@ -1084,6 +1092,7 @@ export class FakePrismaService {
       where?: {
         id?: { in: string[] };
         warehouseId?: string;
+        offerId?: string | null | { in: string[] };
         variantId?: string | { in: string[] };
       };
     } = {}): Promise<Record<string, unknown>[]> => {
@@ -1092,6 +1101,14 @@ export class FakePrismaService {
         rows = rows.filter((row) => where.id!.in.includes(row.id as string));
       if (where?.warehouseId)
         rows = rows.filter((row) => row.warehouseId === where.warehouseId);
+      if (typeof where?.offerId === 'string')
+        rows = rows.filter((row) => row.offerId === where.offerId);
+      if (where?.offerId === null) rows = rows.filter((row) => !row.offerId);
+      const offerIds = where?.offerId;
+      if (offerIds && typeof offerIds === 'object')
+        rows = rows.filter((row) =>
+          offerIds.in.includes(row.offerId as string),
+        );
       if (where?.variantId) {
         const variants = where.variantId;
         rows = rows.filter((row) =>
@@ -1105,13 +1122,16 @@ export class FakePrismaService {
     create: ({
       data,
     }: {
-      data: { warehouseId: string; variantId: string };
+      data: { warehouseId?: string; offerId?: string; variantId: string };
     }): Promise<Record<string, unknown>> => {
       const now = new Date();
       const row = {
         id: randomUUID(),
         onHand: 0,
         reserved: 0,
+        version: 0,
+        warehouseId: null,
+        offerId: null,
         createdAt: now,
         updatedAt: now,
         ...data,
@@ -1138,6 +1158,29 @@ export class FakePrismaService {
       }
       Object.assign(row, increments, { updatedAt: new Date() });
       return Promise.resolve(row);
+    },
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: { id: string; version?: number; reserved?: { lte: number } };
+      data: Record<string, unknown>;
+    }): Promise<{ count: number }> => {
+      const row = this.inventoryRecords.get(where.id);
+      if (
+        !row ||
+        (where.version !== undefined && row.version !== where.version) ||
+        (where.reserved && (row.reserved as number) > where.reserved.lte)
+      )
+        return Promise.resolve({ count: 0 });
+      for (const [key, value] of Object.entries(data)) {
+        if (value && typeof value === 'object' && 'increment' in value)
+          row[key] =
+            (row[key] as number) + (value as { increment: number }).increment;
+        else row[key] = value;
+      }
+      row.updatedAt = new Date();
+      return Promise.resolve({ count: 1 });
     },
   };
 

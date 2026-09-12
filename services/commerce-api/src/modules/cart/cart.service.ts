@@ -237,17 +237,26 @@ export class CartService {
       cart.items.map((item) => item.offerId),
     );
     const byId = new Map(offers.map((offer) => [offer.id, offer]));
-    const quantities = await this.inventoryService.getAvailableQuantities(
-      offers
-        .filter((offer) => offer.stockSource !== OfferStockSource.SELLER)
-        .map((offer) => offer.variantId),
-    );
+    const [quantities, sellerQuantities] = await Promise.all([
+      this.inventoryService.getAvailableQuantities(
+        offers
+          .filter((offer) => offer.stockSource !== OfferStockSource.SELLER)
+          .map((offer) => offer.variantId),
+      ),
+      this.inventoryService.getAvailableOfferQuantities(
+        offers
+          .filter((offer) => offer.stockSource === OfferStockSource.SELLER)
+          .map((offer) => offer.id),
+      ),
+    ]);
     const lines: CartLineView[] = cart.items.map((item) => {
       const offer = byId.get(item.offerId);
       const currentPrice = pickCurrentPrice(offer?.prices ?? []);
       const sellerStock = offer?.stockSource === OfferStockSource.SELLER;
       const availableQuantity = offer
-        ? (quantities.get(offer.variantId) ?? 0)
+        ? sellerStock
+          ? (sellerQuantities.get(offer.id) ?? 0)
+          : (quantities.get(offer.variantId) ?? 0)
         : 0;
       const sellerApproved =
         !!offer &&
@@ -256,7 +265,7 @@ export class CartService {
         sellerApproved &&
         offer?.status === ProductStatus.PUBLISHED &&
         !!currentPrice &&
-        (sellerStock || availableQuantity >= item.quantity);
+        availableQuantity >= item.quantity;
       return {
         id: item.id,
         offerId: item.offerId,

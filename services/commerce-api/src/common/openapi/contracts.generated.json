@@ -3231,6 +3231,275 @@
       },
       "description": "Required role: STAFF or ADMIN."
     },
+    "SellerInventoryController_list": {
+      "operationId": "SellerInventoryController_list",
+      "tags": [
+        "sellers/me/inventory"
+      ],
+      "parameters": [],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SellerInventoryView"
+                    }
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: SELLER."
+    },
+    "SellerInventoryController_set": {
+      "operationId": "SellerInventoryController_set",
+      "tags": [
+        "sellers/me/inventory"
+      ],
+      "parameters": [
+        {
+          "name": "offerId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/SellerInventoryView"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: SELLER.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputSetSellerInventoryDto"
+            }
+          }
+        }
+      }
+    },
+    "SellerInventoryController_bulk": {
+      "operationId": "SellerInventoryController_bulk",
+      "tags": [
+        "sellers/me/inventory"
+      ],
+      "parameters": [],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SellerInventoryView"
+                    }
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: SELLER.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputBulkSellerInventoryDto"
+            }
+          }
+        }
+      }
+    },
+    "SellerInventoryController_movements": {
+      "operationId": "SellerInventoryController_movements",
+      "tags": [
+        "sellers/me/inventory"
+      ],
+      "parameters": [
+        {
+          "name": "offerId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/__type9"
+                    }
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: SELLER."
+    },
     "AdminWarehousesController_findAll": {
       "operationId": "AdminWarehousesController_findAll",
       "tags": [
@@ -9576,8 +9845,13 @@
           "type": "string",
           "format": "date-time"
         },
+        "offerId": {
+          "type": "string",
+          "nullable": true
+        },
         "warehouseId": {
-          "type": "string"
+          "type": "string",
+          "nullable": true
         },
         "variantId": {
           "type": "string"
@@ -9588,6 +9862,9 @@
         "reserved": {
           "type": "number"
         },
+        "version": {
+          "type": "number"
+        },
         "available": {
           "type": "number"
         }
@@ -9596,10 +9873,12 @@
         "id",
         "createdAt",
         "updatedAt",
+        "offerId",
         "warehouseId",
         "variantId",
         "onHand",
         "reserved",
+        "version",
         "available"
       ]
     },
@@ -9765,6 +10044,128 @@
         "holderId",
         "expiresAt"
       ]
+    },
+    "SellerInventoryView": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "nullable": true
+        },
+        "offerId": {
+          "type": "string"
+        },
+        "variantId": {
+          "type": "string"
+        },
+        "sellerSku": {
+          "type": "string",
+          "nullable": true
+        },
+        "listingTitle": {
+          "type": "string",
+          "nullable": true
+        },
+        "onHand": {
+          "type": "number"
+        },
+        "reserved": {
+          "type": "number"
+        },
+        "available": {
+          "type": "number"
+        },
+        "version": {
+          "type": "number"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        }
+      },
+      "required": [
+        "id",
+        "offerId",
+        "variantId",
+        "sellerSku",
+        "listingTitle",
+        "onHand",
+        "reserved",
+        "available",
+        "version",
+        "updatedAt"
+      ]
+    },
+    "InputSetSellerInventoryDto": {
+      "type": "object",
+      "properties": {
+        "quantity": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "note": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 500
+        }
+      },
+      "required": [
+        "quantity",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "InputBulkSellerInventoryDto": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/InputBulkSellerInventoryItemDto"
+          },
+          "minItems": 1,
+          "maxItems": 100
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "InputBulkSellerInventoryItemDto": {
+      "type": "object",
+      "properties": {
+        "offerId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "note": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 500
+        }
+      },
+      "required": [
+        "offerId",
+        "quantity",
+        "version"
+      ],
+      "additionalProperties": false
     },
     "__type11": {
       "type": "object",
@@ -9984,6 +10385,9 @@
         "variantId": {
           "type": "string"
         },
+        "version": {
+          "type": "number"
+        },
         "sellerSku": {
           "type": "string",
           "nullable": true
@@ -10014,9 +10418,6 @@
             "PLATFORM"
           ]
         },
-        "version": {
-          "type": "number"
-        },
         "prices": {
           "type": "array",
           "items": {
@@ -10031,12 +10432,12 @@
         "status",
         "sellerId",
         "variantId",
+        "version",
         "sellerSku",
         "listingTitle",
         "condition",
         "stockSource",
         "fulfillmentMode",
-        "version",
         "prices"
       ]
     },
@@ -10327,6 +10728,9 @@
         "variantId": {
           "type": "string"
         },
+        "version": {
+          "type": "number"
+        },
         "sellerSku": {
           "type": "string",
           "nullable": true
@@ -10357,9 +10761,6 @@
             "PLATFORM"
           ]
         },
-        "version": {
-          "type": "number"
-        },
         "prices": {
           "type": "array",
           "items": {
@@ -10374,12 +10775,12 @@
         "status",
         "sellerId",
         "variantId",
+        "version",
         "sellerSku",
         "listingTitle",
         "condition",
         "stockSource",
         "fulfillmentMode",
-        "version",
         "prices"
       ]
     },
@@ -11085,6 +11486,9 @@
         "variantId": {
           "type": "string"
         },
+        "version": {
+          "type": "number"
+        },
         "sellerSku": {
           "type": "string",
           "nullable": true
@@ -11115,9 +11519,6 @@
             "PLATFORM"
           ]
         },
-        "version": {
-          "type": "number"
-        },
         "prices": {
           "type": "array",
           "items": {
@@ -11132,12 +11533,12 @@
         "status",
         "sellerId",
         "variantId",
+        "version",
         "sellerSku",
         "listingTitle",
         "condition",
         "stockSource",
         "fulfillmentMode",
-        "version",
         "prices"
       ]
     },
@@ -11797,11 +12198,11 @@
             "SUSPENDED"
           ]
         },
-        "ownerUserId": {
-          "type": "string"
-        },
         "version": {
           "type": "number"
+        },
+        "ownerUserId": {
+          "type": "string"
         },
         "businessName": {
           "type": "string"
@@ -11852,8 +12253,8 @@
         "updatedAt",
         "description",
         "status",
-        "ownerUserId",
         "version",
+        "ownerUserId",
         "businessName",
         "registrationNumber",
         "country",

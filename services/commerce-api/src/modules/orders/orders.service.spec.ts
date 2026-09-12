@@ -76,6 +76,7 @@ describe('OrdersService', () => {
   let cartService: { getCartView: jest.Mock; clearCart: jest.Mock };
   let inventoryService: {
     reserve: jest.Mock;
+    reserveOffer: jest.Mock;
     commit: jest.Mock;
     release: jest.Mock;
     restock: jest.Mock;
@@ -104,6 +105,7 @@ describe('OrdersService', () => {
     cartService = { getCartView: jest.fn(), clearCart: jest.fn() };
     inventoryService = {
       reserve: jest.fn(),
+      reserveOffer: jest.fn().mockResolvedValue({ id: 'seller-reservation' }),
       commit: jest.fn(),
       release: jest.fn(),
       restock: jest.fn(),
@@ -276,12 +278,15 @@ describe('OrdersService', () => {
       const order = await service.createFromCart('user-1', 'addr-1');
 
       expect(prisma.sellerOrder.create).toHaveBeenCalledTimes(3);
-      // Only the PLATFORM-stockSource item is reserved - SELLER-stockSource
-      // items have no backing inventory model yet (#33).
       expect(inventoryService.reserve).toHaveBeenCalledTimes(1);
       expect(inventoryService.reserve).toHaveBeenCalledWith('variant-1', 1, {
         holderType: 'order_item',
         holderId: 'item-1',
+      });
+      expect(inventoryService.reserveOffer).toHaveBeenCalledTimes(2);
+      expect(inventoryService.reserveOffer).toHaveBeenCalledWith('offer-2', 1, {
+        holderType: 'order_item',
+        holderId: 'item-2',
       });
       expect(order.sellerOrders).toHaveLength(3);
     });

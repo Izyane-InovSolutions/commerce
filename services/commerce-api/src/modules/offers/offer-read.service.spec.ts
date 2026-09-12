@@ -26,4 +26,16 @@ describe('OfferReadService', () => {
     await expect(service.findMany([])).resolves.toEqual([]);
     expect(offer.findMany).not.toHaveBeenCalled();
   });
+
+  it('scopes seller inventory reads to seller-stock offers', async () => {
+    offer.findMany.mockResolvedValue([]);
+
+    await service.findSellerOffers('seller-1');
+
+    expect(offer.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { sellerId: 'seller-1', stockSource: 'SELLER' },
+      }),
+    );
+  });
 });

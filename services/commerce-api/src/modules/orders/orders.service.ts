@@ -126,21 +126,19 @@ export class OrdersService {
         throw new ConflictException('Offer is no longer available');
       }
 
-      // SELLER-stockSource offers have no backing inventory model yet
-      // (#33's job) - nothing to reserve, so leave reservationId unset.
-      if (offer.stockSource !== OfferStockSource.PLATFORM) {
-        continue;
-      }
-
       try {
-        const reservation = await this.inventoryService.reserve(
-          offer.variantId,
-          item.quantity,
-          {
-            holderType: 'order_item',
-            holderId: item.id,
-          },
-        );
+        const reservation =
+          offer.stockSource === OfferStockSource.SELLER
+            ? await this.inventoryService.reserveOffer(
+                offer.id,
+                item.quantity,
+                { holderType: 'order_item', holderId: item.id },
+              )
+            : await this.inventoryService.reserve(
+                offer.variantId,
+                item.quantity,
+                { holderType: 'order_item', holderId: item.id },
+              );
         await this.prisma.orderItem.update({
           where: { id: item.id },
           data: { reservationId: reservation.id },

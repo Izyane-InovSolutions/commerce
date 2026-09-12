@@ -76,13 +76,21 @@ function buildOffer(
 
 describe('CartService', () => {
   let prisma: ReturnType<typeof buildPrisma>;
-  let inventoryService: { getAvailableQuantities: jest.Mock };
+  let inventoryService: {
+    getAvailableQuantities: jest.Mock;
+    getAvailableOfferQuantities: jest.Mock;
+  };
   let service: CartService;
 
   beforeEach(() => {
     prisma = buildPrisma();
     inventoryService = {
       getAvailableQuantities: jest
+        .fn()
+        .mockImplementation((ids: string[]) =>
+          Promise.resolve(new Map(ids.map((id) => [id, 10]))),
+        ),
+      getAvailableOfferQuantities: jest
         .fn()
         .mockImplementation((ids: string[]) =>
           Promise.resolve(new Map(ids.map((id) => [id, 10]))),
@@ -302,7 +310,7 @@ describe('CartService', () => {
       expect(view.currency).toBe('USD');
     });
 
-    it('marks a SELLER-stockSource line available without checking platform inventory', async () => {
+    it('uses offer-scoped inventory for a SELLER-stockSource line', async () => {
       prisma.cart.findFirst.mockResolvedValue({ id: 'cart-1' });
       prisma.cart.findUnique.mockResolvedValue({
         id: 'cart-1',
@@ -327,6 +335,9 @@ describe('CartService', () => {
         sellerId: 'seller-1',
       });
       expect(inventoryService.getAvailableQuantities).toHaveBeenCalledWith([]);
+      expect(inventoryService.getAvailableOfferQuantities).toHaveBeenCalledWith(
+        ['offer-1'],
+      );
     });
 
     it('marks a line from a now-suspended seller unavailable', async () => {

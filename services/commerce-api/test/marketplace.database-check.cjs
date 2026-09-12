@@ -10,6 +10,7 @@ const { AppModule } = require('../dist/app.module');
 const { PrismaService } = require('../dist/database/prisma.service');
 const { MarketplaceOffersService } = require('../dist/modules/offers/marketplace-offers.service');
 const { SellersService } = require('../dist/modules/sellers/sellers.service');
+const { InventoryService } = require('../dist/modules/inventory/inventory.service');
 
 async function run() {
   const app = await NestFactory.create(AppModule, { logger: false });
@@ -19,6 +20,7 @@ async function run() {
   const prisma = app.get(PrismaService);
   const offers = app.get(MarketplaceOffersService);
   const sellers = app.get(SellersService);
+  const inventory = app.get(InventoryService);
   const jwt = app.get(JwtService);
   const userIds = [randomUUID(), randomUUID(), randomUUID()];
   const sellerIds = [randomUUID(), randomUUID()];
@@ -58,6 +60,32 @@ async function run() {
     await request(server).patch(`/api/v1/sellers/me/offers/${offer.id}/status`).auth(auth(0), { type: 'bearer' }).send({ version: 0, status: 'PUBLISHED' }).expect(400);
     offer = await offers.price(userIds[0], offer.id, { version: 0, amount: 2500, currency: 'USD' });
     offer = await offers.status(userIds[0], offer.id, { version: offer.version, status: 'PUBLISHED' });
+    const emptyInventory = (await request(server).get('/api/v1/sellers/me/inventory').auth(auth(0), { type: 'bearer' }).expect(200)).body.data;
+    assert.deepEqual(emptyInventory.find(item => item.offerId === offer.id), {
+      id: null,
+      offerId: offer.id,
+      variantId,
+      sellerSku: body.sellerSku,
+      listingTitle: body.listingTitle,
+      onHand: 0,
+      reserved: 0,
+      available: 0,
+      version: 0,
+      updatedAt: null,
+    });
+    await request(server).put(`/api/v1/sellers/me/inventory/${offer.id}`).auth(auth(1), { type: 'bearer' }).send({ quantity: 5, version: 0 }).expect(404);
+    let sellerInventory = (await request(server).put(`/api/v1/sellers/me/inventory/${offer.id}`).auth(auth(0), { type: 'bearer' }).send({ quantity: 5, version: 0, note: 'Initial count' }).expect(200)).body.data;
+    assert.equal(sellerInventory.available, 5);
+    sellerInventory = (await request(server).patch('/api/v1/sellers/me/inventory/bulk').auth(auth(0), { type: 'bearer' }).send({ items: [{ offerId: offer.id, quantity: 8, version: sellerInventory.version }] }).expect(200)).body.data[0];
+    assert.equal(sellerInventory.onHand, 8);
+    const movements = (await request(server).get(`/api/v1/sellers/me/inventory/${offer.id}/movements`).auth(auth(0), { type: 'bearer' }).expect(200)).body.data;
+    assert.deepEqual(movements.map(item => item.quantity).sort((a, b) => a - b), [3, 5]);
+    const reservations = await Promise.allSettled([
+      inventory.reserveOffer(offer.id, 6, { ttlSeconds: 60 }),
+      inventory.reserveOffer(offer.id, 6, { ttlSeconds: 60 }),
+    ]);
+    assert.equal(reservations.filter(item => item.status === 'fulfilled').length, 1);
+    await inventory.release(reservations.find(item => item.status === 'fulfilled').value.id);
     const comparison = (await request(server).get(`/api/v1/catalog/variants/${variantId}/offers`).expect(200)).body.data;
     assert.equal(comparison.total, 2);
     assert.equal(comparison.items.find(item => item.id === offer.id).checkoutSupported, true);
@@ -66,7 +94,7 @@ async function run() {
     const catalogue = (await request(server).get(`/api/v1/catalog/products/product-${productId}`).expect(200)).body.data;
     assert.deepEqual(catalogue.variants[0].offers.map(item => item.id), [retailId]);
     await request(server).post('/api/v1/cart/items').auth(auth(0), { type: 'bearer' }).send({ offerId: offer.id, quantity: 1 }).expect(201);
-    assert.equal(await prisma.reservation.count({ where: { inventoryRecord: { variantId } } }), 0);
+    assert.equal(await prisma.reservation.count({ where: { inventoryRecord: { variantId }, status: 'ACTIVE' } }), 0);
     await request(server).patch(`/api/v1/admin/catalog/offers/${offer.id}/status`).auth(auth(2), { type: 'bearer' }).send({ status: 'PUBLISHED' }).expect(400);
     await request(server).patch(`/api/v1/admin/catalog/products/${productId}`).auth(auth(0), { type: 'bearer' }).send({ name: 'Hijacked' }).expect(403);
 
@@ -94,7 +122,7 @@ async function run() {
     offer = await offers.status(userIds[0], offer.id, { version: offer.version, status: 'ARCHIVED' });
     await assert.rejects(() => offers.status(userIds[0], offer.id, { version: offer.version, status: 'PUBLISHED' }), { status: 409 });
     assert.ok(await prisma.auditEvent.count({ where: { targetId: offer.id, action: 'offer.status_changed' } }) >= 3);
-    console.log('Marketplace database/HTTP checks passed: storefront uniqueness/privacy, approval, ownership, publishing, price races, public comparison, suspension, archive, retail isolation.');
+    console.log('Marketplace database/HTTP checks passed: storefront privacy, offer ownership/publishing, seller inventory, bulk audit history, concurrent reservations, suspension, archive, and retail isolation.');
   } finally {
     await prisma.offer.deleteMany({ where: { variantId } });
     await prisma.warehouse.deleteMany({ where: { id: warehouseId } });

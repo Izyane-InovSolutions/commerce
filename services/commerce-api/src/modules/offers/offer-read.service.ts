@@ -11,6 +11,8 @@ const snapshot = {
   sellerId: true,
   status: true,
   stockSource: true,
+  sellerSku: true,
+  listingTitle: true,
   prices: true,
   seller: { select: { status: true } },
 } satisfies Prisma.OfferSelect;
@@ -33,6 +35,17 @@ export class OfferReadService {
     return tx.offer.findMany({
       where: { id: { in: [...new Set(ids)] } },
       select: snapshot,
+    });
+  }
+
+  findSellerOffers(
+    sellerId: string,
+    tx: Prisma.TransactionClient = this.prisma,
+  ): Promise<CommerceOffer[]> {
+    return tx.offer.findMany({
+      where: { sellerId, stockSource: 'SELLER' },
+      select: snapshot,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
   }
 }

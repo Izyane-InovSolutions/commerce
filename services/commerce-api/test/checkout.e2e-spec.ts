@@ -275,6 +275,13 @@ describe('Checkout (e2e)', () => {
     await prisma.price.create({
       data: { offerId: sellerOffer.id, amount: 3000, currency: 'USD' },
     });
+    await prisma.inventoryRecord.create({
+      data: {
+        offerId: sellerOffer.id,
+        variantId,
+        onHand: 5,
+      },
+    });
 
     const userHeaders = await registerCustomer(
       'multi-seller-buyer@example.com',
@@ -332,5 +339,9 @@ describe('Checkout (e2e)', () => {
         (group) => group.status === 'PAID',
       ),
     ).toBe(true);
+    const sellerInventory = await prisma.inventoryRecord.findUnique({
+      where: { offerId: sellerOffer.id },
+    });
+    expect(sellerInventory).toMatchObject({ onHand: 4, reserved: 0 });
   });
 });

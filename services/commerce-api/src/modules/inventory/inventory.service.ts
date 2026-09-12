@@ -35,7 +35,7 @@ export class InventoryService {
     filter: { warehouseId?: string; variantId?: string } = {},
   ): Promise<InventoryRecordView[]> {
     const records = await this.prisma.inventoryRecord.findMany({
-      where: filter,
+      where: { ...filter, offerId: null },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -44,7 +44,7 @@ export class InventoryService {
 
   async getAvailableQuantity(variantId: string): Promise<number> {
     const records = await this.prisma.inventoryRecord.findMany({
-      where: { variantId },
+      where: { variantId, offerId: null },
     });
     return records.reduce(
       (sum, record) => sum + (record.onHand - record.reserved),
@@ -58,7 +58,7 @@ export class InventoryService {
     const ids = [...new Set(variantIds)];
     if (!ids.length) return new Map();
     const records = await this.prisma.inventoryRecord.findMany({
-      where: { variantId: { in: ids } },
+      where: { variantId: { in: ids }, offerId: null },
       select: { variantId: true, onHand: true, reserved: true },
     });
     const quantities = new Map<string, number>();
@@ -70,6 +70,24 @@ export class InventoryService {
           record.reserved,
       );
     return quantities;
+  }
+
+  async getAvailableOfferQuantities(
+    offerIds: string[],
+  ): Promise<Map<string, number>> {
+    const ids = [...new Set(offerIds)];
+    if (!ids.length) return new Map();
+    const records = await this.prisma.inventoryRecord.findMany({
+      where: { offerId: { in: ids } },
+      select: { offerId: true, onHand: true, reserved: true },
+    });
+    return new Map(
+      records.flatMap((record) =>
+        record.offerId
+          ? [[record.offerId, record.onHand - record.reserved] as const]
+          : [],
+      ),
+    );
   }
 
   listMovements(inventoryRecordId: string): Promise<InventoryMovement[]> {
@@ -194,6 +212,7 @@ export class InventoryService {
     const candidates = await this.prisma.inventoryRecord.findMany({
       where: {
         variantId,
+        offerId: null,
         ...(options.warehouseId ? { warehouseId: options.warehouseId } : {}),
       },
     });
@@ -219,9 +238,16 @@ export class InventoryService {
       throw new ConflictException('Insufficient available stock');
     }
 
+    return this.claimRecord(target, quantity, options);
+  }
+
+  private async claimRecord(
+    target: InventoryRecord,
+    quantity: number,
+    options: ReserveOptions,
+  ): Promise<Reservation> {
     const ttlSeconds = options.ttlSeconds ?? DEFAULT_RESERVATION_TTL_SECONDS;
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
-
     const reservation = await this.prisma.$transaction(async (tx) => {
       const affected = await tx.$executeRaw`
         UPDATE inventory_records
@@ -265,6 +291,92 @@ export class InventoryService {
     });
 
     return reservation;
+  }
+
+  async reserveOffer(
+    offerId: string,
+    quantity: number,
+    options: ReserveOptions = {},
+  ): Promise<Reservation> {
+    if (quantity <= 0)
+      throw new BadRequestException('quantity must be positive');
+    const record = await this.prisma.inventoryRecord.findUnique({
+      where: { offerId },
+    });
+    if (!record)
+      throw new NotFoundException('No inventory record exists for this offer');
+    await this.sweepExpired(record.id);
+    const refreshed = await this.prisma.inventoryRecord.findUniqueOrThrow({
+      where: { id: record.id },
+    });
+    if (refreshed.onHand - refreshed.reserved < quantity)
+      throw new ConflictException('Insufficient available stock');
+    return this.claimRecord(refreshed, quantity, options);
+  }
+
+  async setOfferQuantity(
+    offerId: string,
+    variantId: string,
+    quantity: number,
+    version: number,
+    actorUserId: string,
+    note?: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<InventoryRecord> {
+    if (!tx)
+      return this.prisma.$transaction((client) =>
+        this.setOfferQuantity(
+          offerId,
+          variantId,
+          quantity,
+          version,
+          actorUserId,
+          note,
+          client,
+        ),
+      );
+    let record = await tx.inventoryRecord.findUnique({ where: { offerId } });
+    let created = false;
+    if (!record) {
+      if (version !== 0)
+        throw new ConflictException('Inventory changed; reload and try again');
+      record = await tx.inventoryRecord.create({
+        data: { offerId, variantId },
+      });
+      created = true;
+    }
+    const delta = quantity - record.onHand;
+    if (delta === 0) {
+      if (record.version !== version)
+        throw new ConflictException('Inventory changed; reload and try again');
+      if (created)
+        await this.recordMovement(
+          tx,
+          record.id,
+          InventoryMovementType.ADJUSTMENT,
+          0,
+          note,
+          { referenceType: 'seller_user', referenceId: actorUserId },
+        );
+      return record;
+    }
+    const updated = await tx.inventoryRecord.updateMany({
+      where: { id: record.id, version, reserved: { lte: quantity } },
+      data: { onHand: quantity, version: { increment: 1 } },
+    });
+    if (updated.count !== 1)
+      throw new ConflictException(
+        'Inventory changed or quantity is below reserved stock',
+      );
+    await this.recordMovement(
+      tx,
+      record.id,
+      InventoryMovementType.ADJUSTMENT,
+      delta,
+      note,
+      { referenceType: 'seller_user', referenceId: actorUserId },
+    );
+    return tx.inventoryRecord.findUniqueOrThrow({ where: { id: record.id } });
   }
 
   async release(
