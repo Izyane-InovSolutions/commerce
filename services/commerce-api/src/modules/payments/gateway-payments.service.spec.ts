@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { GatewayPaymentsService } from './gateway-payments.service';
+import { PaymentsService } from './payments.service';
 import { UnifiedPaymentProvider } from './unified-payment.provider';
 import { GatewayPaymentQueryDto } from './dto/gateway-payment.dto';
 
@@ -40,6 +41,9 @@ describe('GatewayPaymentsService', () => {
     requestRefund: jest.fn(),
     listPayments: jest.fn(),
   };
+  // Reconciliation itself is covered by PaymentsService's own tests; here it
+  // only matters that the status route hands the outcome over.
+  const payments = { applyProviderResult: jest.fn() };
   let service: GatewayPaymentsService;
   beforeEach(() => {
     jest.resetAllMocks();
@@ -51,9 +55,13 @@ describe('GatewayPaymentsService', () => {
     prisma.payment.findUnique.mockResolvedValue(payment);
     gateway.getDetails.mockResolvedValue(remote);
     gateway.checkStatus.mockResolvedValue(remote);
+    payments.applyProviderResult.mockImplementation(
+      (current: unknown) => current,
+    );
     service = new GatewayPaymentsService(
       prisma as unknown as PrismaService,
       gateway as unknown as UnifiedPaymentProvider,
+      payments as unknown as PaymentsService,
       new UsersService(prisma as unknown as PrismaService),
     );
   });

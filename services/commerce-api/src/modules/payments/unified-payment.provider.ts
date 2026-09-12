@@ -27,7 +27,30 @@ export type GatewayPayment = {
   amount: number;
   currency: string;
   reference: string;
+  failureCode?: string;
+  failureMessage?: string;
+  completedAt?: string;
+  expiresAt?: string;
 };
+
+/**
+ * Gateway statuses this system is willing to act on.
+ *
+ * Only SUCCESS is here, and only because it was observed on a real payment —
+ * the gateway's documentation lists no status enum at all. Anything else maps
+ * to PENDING below rather than being guessed at: reading an unknown string as
+ * a failure would cancel an order that may yet be paid, and reading one as a
+ * success would release goods for nothing.
+ */
+const GATEWAY_STATUS: Record<string, ProviderPaymentResult['status']> = {
+  SUCCESS: 'SUCCEEDED',
+};
+
+export function toProviderStatus(
+  gatewayStatus: string,
+): ProviderPaymentResult['status'] {
+  return GATEWAY_STATUS[gatewayStatus] ?? 'PENDING';
+}
 export type GatewayPaymentPage = {
   content: GatewayPayment[];
   page: number;
@@ -39,6 +62,13 @@ export type GatewayPaymentPage = {
 };
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Keeps an optional string field only when it carries something. */
+function text(value: unknown, key: string): Record<string, string> {
+  return typeof value === 'string' && value.trim() !== ''
+    ? { [key]: value }
+    : {};
 }
 
 @Injectable()
@@ -89,11 +119,12 @@ export class UnifiedPaymentProvider implements PaymentProvider {
       Math.round(payment.amount * 100) !== input.amount
     )
       throw new PaymentOutcomeUnknownException();
-    // Only PENDING is documented. Preserve external statuses for reconciliation
-    // without inventing terminal status mappings that could release inventory.
+    // A mobile money charge is normally still pending here — the subscriber
+    // has yet to approve it — but a gateway that settles inline is honoured
+    // rather than left to a later reconciliation.
     return {
       providerReference: payment.paymentId,
-      status: 'PENDING',
+      status: toProviderStatus(payment.status),
       gatewayStatus: payment.status,
     };
   }
@@ -128,12 +159,20 @@ export class UnifiedPaymentProvider implements PaymentProvider {
     }
   }
 
+  /**
+   * The gateway's own view of a payment.
+   *
+   * Reads rather than checks: `GET /payments/{id}` has no side effects, where
+   * the status route is a POST the gateway may treat as an action.
+   */
   async getPayment(id: string): Promise<ProviderPaymentResult> {
     const payment = await this.getDetails(id);
     return {
       providerReference: payment.paymentId,
-      status: 'PENDING',
+      status: toProviderStatus(payment.status),
       gatewayStatus: payment.status,
+      failureCode: payment.failureCode,
+      failureMessage: payment.failureMessage,
     };
   }
   async getDetails(id: string): Promise<GatewayPayment> {
@@ -240,6 +279,12 @@ export class UnifiedPaymentProvider implements PaymentProvider {
       amount: value.amount,
       currency: value.currency,
       reference: value.reference,
+      // Optional and only kept when the gateway sends a usable string, so a
+      // malformed extra field never fails an otherwise valid payment.
+      ...text(value.failureCode, 'failureCode'),
+      ...text(value.failureMessage, 'failureMessage'),
+      ...text(value.completedAt, 'completedAt'),
+      ...text(value.expiresAt, 'expiresAt'),
     };
   }
 

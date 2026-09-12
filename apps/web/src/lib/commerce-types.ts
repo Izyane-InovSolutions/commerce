@@ -78,9 +78,27 @@ export type OrderItem = {
   lineTotal: number;
 };
 
+export type PaymentStatus =
+  | 'PENDING'
+  | 'REQUIRES_ACTION'
+  | 'PROCESSING'
+  | 'SUCCEEDED'
+  | 'FAILED'
+  | 'CANCELLED'
+  | 'PARTIALLY_REFUNDED'
+  | 'REFUNDED';
+
+/** What the customer is told about the payment behind their order. */
+export type OrderPayment = {
+  id: string;
+  status: PaymentStatus;
+  failureReason: string | null;
+};
+
 export type Order = {
   id: string;
   status: OrderStatus;
+  payment?: OrderPayment | null;
   currency: string;
   subtotal: number;
   total: number;

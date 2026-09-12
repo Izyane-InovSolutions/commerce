@@ -44,6 +44,7 @@ describe('PaymentsService', () => {
   let prisma: ReturnType<typeof buildPrisma>;
   let provider: jest.Mocked<PaymentProvider>;
   let refundCall: jest.Mock;
+  let getPaymentCall: jest.Mock;
   let ordersService: {
     confirmPayment: jest.Mock;
     cancel: jest.Mock;
@@ -85,10 +86,11 @@ describe('PaymentsService', () => {
   beforeEach(() => {
     prisma = buildPrisma();
     refundCall = jest.fn();
+    getPaymentCall = jest.fn();
     provider = {
       name: 'fake-provider',
       initialize: jest.fn(),
-      getPayment: jest.fn(),
+      getPayment: getPaymentCall,
       verifyWebhook: jest.fn(),
       refund: refundCall,
       getRefund: jest.fn(),
@@ -353,6 +355,90 @@ describe('PaymentsService', () => {
       await service.handleWebhook(Buffer.from('{}'), 'sig');
       expect(ordersService.cancel).not.toHaveBeenCalled();
       expect(prisma.payment.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reconcile', () => {
+    const unsettled = {
+      ...payment,
+      status: PaymentStatus.PENDING,
+      failureReason: null,
+    };
+
+    beforeEach(() => {
+      prisma.payment.findUniqueOrThrow.mockResolvedValue(unsettled);
+      prisma.payment.findUnique.mockResolvedValue(unsettled);
+      prisma.paymentEvent.findUnique.mockResolvedValue(null);
+    });
+
+    // The case that left a paid order stuck: the gateway had settled it and
+    // nothing here acted on that.
+    it('settles the order when the gateway reports a success', async () => {
+      getPaymentCall.mockResolvedValue({
+        providerReference: 'pay_123',
+        status: 'SUCCEEDED',
+        gatewayStatus: 'SUCCESS',
+      });
+
+      await service.reconcile('payment-1');
+
+      expect(ordersService.confirmPayment).toHaveBeenCalledWith(
+        'order-1',
+        expect.anything(),
+      );
+      expect(prisma.payment.update).toHaveBeenCalledWith({
+        where: { id: 'payment-1' },
+        data: { status: PaymentStatus.SUCCEEDED, failureReason: null },
+      });
+    });
+
+    it('keeps the failure detail the gateway gives for a failed payment', async () => {
+      getPaymentCall.mockResolvedValue({
+        providerReference: 'pay_123',
+        status: 'FAILED',
+        gatewayStatus: 'FAILED',
+        failureCode: 'INSUFFICIENT_FUNDS',
+        failureMessage: 'Balance too low',
+      });
+
+      await service.reconcile('payment-1');
+
+      expect(ordersService.cancel).toHaveBeenCalledWith(
+        'order-1',
+        expect.anything(),
+      );
+      expect(prisma.payment.update).toHaveBeenCalledWith({
+        where: { id: 'payment-1' },
+        data: {
+          status: PaymentStatus.FAILED,
+          failureReason: 'INSUFFICIENT_FUNDS: Balance too low',
+        },
+      });
+    });
+
+    // An unrecognised status must never be read as an outcome: the gateway
+    // documents no enum, so guessing would either release goods for nothing
+    // or cancel an order that is about to be paid.
+    it('changes nothing when the gateway status is not one it knows', async () => {
+      getPaymentCall.mockResolvedValue({
+        providerReference: 'pay_123',
+        status: 'PENDING',
+        gatewayStatus: 'AWAITING_SUBSCRIBER',
+      });
+
+      await service.reconcile('payment-1');
+
+      expect(ordersService.confirmPayment).not.toHaveBeenCalled();
+      expect(ordersService.cancel).not.toHaveBeenCalled();
+      expect(prisma.payment.update).not.toHaveBeenCalled();
+    });
+
+    it('does not ask the gateway about a payment that has already settled', async () => {
+      prisma.payment.findUniqueOrThrow.mockResolvedValue(payment);
+
+      await service.reconcile('payment-1');
+
+      expect(getPaymentCall).not.toHaveBeenCalled();
     });
   });
 });

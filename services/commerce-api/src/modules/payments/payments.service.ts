@@ -23,6 +23,7 @@ import {
   type PaymentProvider,
   type ProviderPaymentResult,
   type ProviderRefundResult,
+  type VerifiedPaymentEvent,
 } from './payment-provider';
 
 const PROVIDER_STATUS_TO_PAYMENT_STATUS: Record<
@@ -36,6 +37,36 @@ const PROVIDER_STATUS_TO_PAYMENT_STATUS: Record<
   FAILED: PaymentStatus.FAILED,
   CANCELLED: PaymentStatus.CANCELLED,
 };
+
+/** States a payment can still move out of, and so is worth reconciling. */
+const PENDING_STATUSES = [
+  PaymentStatus.PENDING,
+  PaymentStatus.REQUIRES_ACTION,
+  PaymentStatus.PROCESSING,
+];
+
+/**
+ * A human-readable reason, kept only for outcomes that have one.
+ *
+ * The gateway sends `failureCode`/`failureMessage` alongside a failed
+ * payment; `Payment.failureReason` has always existed to hold exactly that
+ * and was previously never filled in.
+ */
+function failureReason(
+  event: VerifiedPaymentEvent,
+  status: PaymentStatus,
+): string | null {
+  if (status !== PaymentStatus.FAILED && status !== PaymentStatus.CANCELLED) {
+    return null;
+  }
+
+  const { failureCode, failureMessage } = event.payload;
+  const parts = [failureCode, failureMessage].filter(
+    (part): part is string => typeof part === 'string' && part.trim() !== '',
+  );
+
+  return parts.length > 0 ? parts.join(': ') : null;
+}
 
 export type PaymentWithRedirect = Payment & {
   redirectUrl?: string;
@@ -138,7 +169,74 @@ export class PaymentsService {
   }
 
   async handleWebhook(rawBody: Buffer, signature: string): Promise<void> {
-    const event = this.provider.verifyWebhook(rawBody, signature);
+    await this.applyEvent(this.provider.verifyWebhook(rawBody, signature));
+  }
+
+  /**
+   * Brings a payment into line with what the gateway says about it.
+   *
+   * This exists because the gateway's callback cannot be trusted yet — its
+   * signing scheme is undocumented, so `handleWebhook` rejects every delivery
+   * — and without it a payment the customer has already made stays PENDING
+   * here for ever, with the stock still reserved and the sale unrecorded.
+   *
+   * Only a terminal outcome is applied. An unrecognised gateway status maps
+   * to PENDING and is left alone rather than guessed at, so reconciling
+   * repeatedly is safe and never invents a settlement.
+   */
+  async reconcile(paymentId: string): Promise<Payment> {
+    const payment = await this.prisma.payment.findUniqueOrThrow({
+      where: { id: paymentId },
+    });
+
+    if (!this.isReconcilable(payment)) {
+      return payment;
+    }
+
+    const result = await this.provider.getPayment(payment.providerReference!);
+    return this.applyProviderResult(payment, result);
+  }
+
+  /**
+   * Applies an outcome the caller has already read from the gateway.
+   *
+   * Lets the status route settle a payment with the one call it already
+   * makes, rather than asking the gateway the same question twice.
+   */
+  async applyProviderResult(
+    payment: Payment,
+    result: ProviderPaymentResult,
+  ): Promise<Payment> {
+    if (!this.isReconcilable(payment) || result.status === 'PENDING') {
+      return payment;
+    }
+
+    await this.applyEvent({
+      // Stable per payment and outcome, so the dedupe on paymentEvent makes a
+      // repeated reconciliation a no-op rather than a second set of effects.
+      id: `reconcile:${payment.providerReference}:${result.gatewayStatus ?? result.status}`,
+      providerReference: payment.providerReference!,
+      type: 'payment.reconciled',
+      status: result.status,
+      payload: {
+        gatewayStatus: result.gatewayStatus ?? null,
+        failureCode: result.failureCode ?? null,
+        failureMessage: result.failureMessage ?? null,
+      },
+    });
+
+    return this.prisma.payment.findUniqueOrThrow({ where: { id: payment.id } });
+  }
+
+  private isReconcilable(payment: Payment): boolean {
+    return (
+      payment.provider === this.provider.name &&
+      payment.providerReference !== null &&
+      PENDING_STATUSES.includes(payment.status as never)
+    );
+  }
+
+  private async applyEvent(event: VerifiedPaymentEvent): Promise<void> {
     const initial = await this.prisma.payment.findUnique({
       where: { providerReference: event.providerReference },
     });
@@ -180,7 +278,7 @@ export class PaymentsService {
           await this.ordersService.cancel(payment.orderId, tx);
         await tx.payment.update({
           where: { id: payment.id },
-          data: { status },
+          data: { status, failureReason: failureReason(event, status) },
         });
       } else if (rejected && status === PaymentStatus.SUCCEEDED) {
         throw new ConflictException(
