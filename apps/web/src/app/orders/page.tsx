@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { ApiErrorNotice } from '@/components/api-error-notice';
+import { OrderStatusPoller } from '@/components/order-status-poller';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -82,9 +83,17 @@ export default async function OrdersPage({
     );
   }
 
+  // Something is still waiting on a payment made elsewhere, so keep asking.
+  const awaitingPayment = orders.some(
+    (order) => order.status === 'PENDING_PAYMENT',
+  );
+
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-12">
-      <h1 className="text-2xl font-semibold tracking-tight">Orders</h1>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight">Orders</h1>
+        {awaitingPayment ? <OrderStatusPoller /> : null}
+      </div>
 
       {justPlaced ? (
         <div

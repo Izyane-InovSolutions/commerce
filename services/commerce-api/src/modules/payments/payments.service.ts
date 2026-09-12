@@ -117,18 +117,28 @@ export class PaymentsService {
         description: `Order ${order.id}`,
         // Echoed back untouched, so a gateway record can be traced to both
         // sides of this system without going through the reference alone.
-        metadata: { orderId: order.id, paymentId: payment.id },
+        // `channel` is where the payment was started; only the storefront
+        // does so today, but a gateway record outlives that being true.
+        metadata: {
+          orderId: order.id,
+          paymentId: payment.id,
+          channel: 'web',
+        },
         details,
       });
       accepted = true;
 
-      const updated = await this.prisma.payment.update({
+      // A card charge settles inline, so `initialize` can come back already
+      // successful. Recording only the status here left the order at
+      // PENDING_PAYMENT with its stock still reserved and no sale recorded,
+      // and nothing later would fix it — reconciliation skips a payment that
+      // already looks settled. Applying the outcome the same way a webhook
+      // would is what makes the synchronous and asynchronous paths agree.
+      const referenced = await this.prisma.payment.update({
         where: { id: payment.id },
-        data: {
-          providerReference: result.providerReference,
-          status: PROVIDER_STATUS_TO_PAYMENT_STATUS[result.status],
-        },
+        data: { providerReference: result.providerReference },
       });
+      const updated = await this.applyProviderResult(referenced, result);
 
       return {
         ...updated,
@@ -189,11 +199,23 @@ export class PaymentsService {
       where: { id: paymentId },
     });
 
-    if (!this.isReconcilable(payment)) {
+    if (payment.provider !== this.provider.name || !payment.providerReference) {
       return payment;
     }
 
-    const result = await this.provider.getPayment(payment.providerReference!);
+    // A payment recorded as settled whose order never advanced needs no
+    // gateway call — only the local effects it missed. Left over from
+    // checkouts that settled inline before that path applied its outcome.
+    if (payment.status === PaymentStatus.SUCCEEDED) {
+      await this.ordersService.confirmPayment(payment.orderId);
+      return payment;
+    }
+
+    if (!PENDING_STATUSES.includes(payment.status as never)) {
+      return payment;
+    }
+
+    const result = await this.provider.getPayment(payment.providerReference);
     return this.applyProviderResult(payment, result);
   }
 
@@ -212,9 +234,10 @@ export class PaymentsService {
     }
 
     await this.applyEvent({
-      // Stable per payment and outcome, so the dedupe on paymentEvent makes a
-      // repeated reconciliation a no-op rather than a second set of effects.
-      id: `reconcile:${payment.providerReference}:${result.gatewayStatus ?? result.status}`,
+      // Stable per payment and outcome, and shared with checkout, so the
+      // dedupe on paymentEvent makes re-applying the same outcome a no-op
+      // rather than a second set of effects.
+      id: `gateway:${payment.providerReference}:${result.gatewayStatus ?? result.status}`,
       providerReference: payment.providerReference!,
       type: 'payment.reconciled',
       status: result.status,

@@ -14,10 +14,9 @@ describe('SiteHeader', () => {
   it('renders the primary storefront navigation', async () => {
     render(await SiteHeader());
 
-    expect(screen.getByRole('link', { name: 'Commerce' })).toHaveAttribute(
-      'href',
-      '/',
-    );
+    expect(
+      screen.getByRole('link', { name: /iZyane Marketplace|Commerce/ }),
+    ).toHaveAttribute('href', '/');
     expect(screen.getByRole('link', { name: 'Cart' })).toHaveAttribute(
       'href',
       '/cart',

@@ -138,6 +138,39 @@ describe('PaymentsService', () => {
       expect(ordersService.cancel).not.toHaveBeenCalled();
     });
 
+    // A card charge settles inline, so the order has to advance at checkout;
+    // nothing reconciles it later, because the payment already looks settled.
+    it('settles the order when the gateway approves the charge inline', async () => {
+      const created = {
+        id: 'payment-1',
+        orderId: 'order-1',
+        provider: 'fake-provider',
+        status: PaymentStatus.PENDING,
+        providerReference: null,
+      };
+      const referenced = { ...created, providerReference: 'pay_123' };
+      prisma.payment.create.mockResolvedValue(created);
+      prisma.payment.update.mockResolvedValue(referenced);
+      prisma.payment.findUnique.mockResolvedValue(referenced);
+      prisma.payment.findUniqueOrThrow
+        .mockResolvedValueOnce(referenced)
+        .mockResolvedValue({ ...referenced, status: PaymentStatus.SUCCEEDED });
+      prisma.paymentEvent.findUnique.mockResolvedValue(null);
+      provider.initialize.mockResolvedValue({
+        providerReference: 'pay_123',
+        status: 'SUCCEEDED',
+        gatewayStatus: 'SUCCESS',
+      });
+
+      const result = await service.initializeForOrder(order);
+
+      expect(ordersService.confirmPayment).toHaveBeenCalledWith(
+        'order-1',
+        expect.anything(),
+      );
+      expect(result.status).toBe(PaymentStatus.SUCCEEDED);
+    });
+
     it('does not report a declined charge when saving an accepted payment fails', async () => {
       const pending = { id: 'payment-1', status: PaymentStatus.PENDING };
       prisma.payment.create.mockResolvedValue(pending);
@@ -171,7 +204,7 @@ describe('PaymentsService', () => {
 
       expect(prisma.payment.update).toHaveBeenCalledWith({
         where: { id: 'payment-1' },
-        data: { providerReference: 'ref-1', status: PaymentStatus.PENDING },
+        data: { providerReference: 'ref-1' },
       });
       expect(result.redirectUrl).toBe('https://gateway.example/pay');
     });
@@ -431,6 +464,20 @@ describe('PaymentsService', () => {
       expect(ordersService.confirmPayment).not.toHaveBeenCalled();
       expect(ordersService.cancel).not.toHaveBeenCalled();
       expect(prisma.payment.update).not.toHaveBeenCalled();
+    });
+
+    // Orders left behind by a checkout that settled inline before that path
+    // applied its outcome; the fix converges rather than needing a migration.
+    it('advances an order whose payment already settled, without calling the gateway', async () => {
+      prisma.payment.findUniqueOrThrow.mockResolvedValue({
+        ...unsettled,
+        status: PaymentStatus.SUCCEEDED,
+      });
+
+      await service.reconcile('payment-1');
+
+      expect(ordersService.confirmPayment).toHaveBeenCalledWith('order-1');
+      expect(getPaymentCall).not.toHaveBeenCalled();
     });
 
     it('does not ask the gateway about a payment that has already settled', async () => {

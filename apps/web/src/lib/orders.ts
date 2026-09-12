@@ -11,8 +11,15 @@ export async function listOrders(): Promise<Order[]> {
   return response.data;
 }
 
-/** Payment states that can still move, and so are worth asking about. */
-const UNSETTLED = ['PENDING', 'REQUIRES_ACTION', 'PROCESSING'];
+/** Payment states that have not reached the order yet. */
+const UNAPPLIED = [
+  'PENDING',
+  'REQUIRES_ACTION',
+  'PROCESSING',
+  // A card charge settles inline, so a payment can read SUCCEEDED while its
+  // order is still waiting. That needs applying too, not just watching.
+  'SUCCEEDED',
+];
 
 /**
  * Brings orders into line with what the payment gateway says.
@@ -33,7 +40,7 @@ export async function reconcileOrderPayments(
     (order) =>
       order.status === 'PENDING_PAYMENT' &&
       order.payment &&
-      UNSETTLED.includes(order.payment.status),
+      UNAPPLIED.includes(order.payment.status),
   );
 
   if (pending.length === 0) {
