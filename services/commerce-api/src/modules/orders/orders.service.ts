@@ -7,6 +7,7 @@ import {
   OfferStockSource,
   OrderStatus,
   type Order,
+  type PaymentStatus,
   type OrderItem,
   type Prisma,
   type SellerOrder,
@@ -24,7 +25,22 @@ import { InventoryService } from '../inventory/inventory.service';
 export type OrderWithItems = Order & {
   items: OrderItem[];
   sellerOrders: (SellerOrder & { items: OrderItem[] })[];
+  /**
+   * Present on a customer's own reads so a client can tell an order awaiting
+   * approval from one whose payment failed, and can ask for that payment to
+   * be reconciled. Null until checkout has created one.
+   */
+  payment?: {
+    id: string;
+    status: PaymentStatus;
+    failureReason: string | null;
+  } | null;
 };
+
+/** What a customer is shown about the payment behind their order. */
+const CUSTOMER_PAYMENT_SELECT = {
+  select: { id: true, status: true, failureReason: true },
+} as const;
 
 type SellerGroup = { sellerId: string | null; items: CartLineView[] };
 
@@ -299,7 +315,11 @@ export class OrdersService {
   listOwn(userId: string): Promise<OrderWithItems[]> {
     return this.prisma.order.findMany({
       where: { userId },
-      include: { items: true, sellerOrders: { include: { items: true } } },
+      include: {
+        items: true,
+        sellerOrders: { include: { items: true } },
+        payment: CUSTOMER_PAYMENT_SELECT,
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -367,7 +387,11 @@ export class OrdersService {
   ): Promise<OrderWithItems> {
     const order = await tx.order.findUnique({
       where: { id: orderId },
-      include: { items: true, sellerOrders: { include: { items: true } } },
+      include: {
+        items: true,
+        sellerOrders: { include: { items: true } },
+        payment: CUSTOMER_PAYMENT_SELECT,
+      },
     });
 
     if (!order) {

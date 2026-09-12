@@ -9,7 +9,11 @@ import { Role } from '@prisma/client';
 import type { Payment } from '@prisma/client';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../../database/prisma.service';
-import { UnifiedPaymentProvider } from './unified-payment.provider';
+import { PaymentsService } from './payments.service';
+import {
+  toProviderStatus,
+  UnifiedPaymentProvider,
+} from './unified-payment.provider';
 import type {
   GatewayPayment,
   GatewayPaymentPage,
@@ -32,7 +36,8 @@ export class GatewayPaymentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly gateway: UnifiedPaymentProvider,
-    private readonly users:UsersService,
+    private readonly payments: PaymentsService,
+    private readonly users: UsersService,
   ) {}
 
   async get(userId: string, id: string): Promise<PaymentSnapshot> {
@@ -43,12 +48,25 @@ export class GatewayPaymentsService {
     );
   }
 
+  /**
+   * Asks the gateway where a payment stands, and acts on the answer.
+   *
+   * Reading without applying is what left a paid order sitting at
+   * PENDING_PAYMENT: the gateway had settled it and nothing here noticed. A
+   * status the platform does not recognise still changes nothing.
+   */
   async status(userId: string, id: string): Promise<PaymentSnapshot> {
     const payment = await this.own(userId, id);
-    return this.snapshot(
-      payment,
-      await this.gateway.checkStatus(this.reference(payment)),
-    );
+    const gateway = await this.gateway.checkStatus(this.reference(payment));
+    const reconciled = await this.payments.applyProviderResult(payment, {
+      providerReference: gateway.paymentId,
+      status: toProviderStatus(gateway.status),
+      gatewayStatus: gateway.status,
+      failureCode: gateway.failureCode,
+      failureMessage: gateway.failureMessage,
+    });
+
+    return this.snapshot(reconciled, gateway);
   }
 
   async cancel(
@@ -123,18 +141,22 @@ export class GatewayPaymentsService {
       throw new ConflictException(
         'Gateway payment does not match the local order',
       );
+    // Flags the cases a person has to look at: a gateway status this
+    // platform has no mapping for, or a settlement that did not take locally.
+    const mapped = toProviderStatus(gateway.status);
     return {
       id: payment.id,
       orderId: payment.orderId,
       localStatus: payment.status,
       gateway,
       requiresReconciliation:
-        gateway.status !== 'PENDING' || payment.status !== 'PENDING',
+        (mapped === 'PENDING' && gateway.status !== 'PENDING') ||
+        (mapped === 'SUCCEEDED' && payment.status !== 'SUCCEEDED'),
     };
   }
 
   private async actor(id: string, admin = false): Promise<void> {
-    const user=await this.users.findAccessById(id);
+    const user = await this.users.findAccessById(id);
     if (!user?.isActive || (admin && user.role !== Role.ADMIN))
       throw new ForbiddenException('Insufficient payment permissions');
   }

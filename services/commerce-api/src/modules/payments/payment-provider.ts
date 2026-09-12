@@ -17,6 +17,9 @@ export type InitializePaymentInput = {
 
 export type ProviderPaymentResult = {
   providerReference: string;
+  /** Set only once the gateway reports a payment as failed. */
+  failureCode?: string;
+  failureMessage?: string;
   status:
     | 'PENDING'
     | 'REQUIRES_ACTION'

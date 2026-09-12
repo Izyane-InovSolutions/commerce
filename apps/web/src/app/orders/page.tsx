@@ -8,7 +8,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { labelOffers } from '@/lib/cart';
 import { formatMinor } from '@/lib/currency';
-import { listOrders } from '@/lib/orders';
+import type { Order } from '@/lib/commerce-types';
+import { listOrders, reconcileOrderPayments } from '@/lib/orders';
 import { getCurrentUser } from '@/lib/session';
 
 export const metadata: Metadata = {
@@ -22,6 +23,18 @@ const STATUS_LABELS: Record<string, string> = {
   PARTIALLY_REFUNDED: 'Partially refunded',
   REFUNDED: 'Refunded',
 };
+
+/** Says why an order is still waiting, when the payment explains it. */
+function paymentNote(order: Order): string | null {
+  if (order.payment?.failureReason) {
+    return order.payment.failureReason;
+  }
+
+  return order.status === 'PENDING_PAYMENT' &&
+    order.payment?.status === 'PENDING'
+    ? 'Approve the prompt on your phone to complete this order.'
+    : null;
+}
 
 export default async function OrdersPage({
   searchParams,
@@ -49,6 +62,14 @@ export default async function OrdersPage({
   let labels;
   try {
     orders = await listOrders();
+
+    // A payment the customer has already approved settles at the gateway
+    // within seconds, and nothing pushes that back to us — so ask, then read
+    // again if anything moved.
+    if (await reconcileOrderPayments(orders)) {
+      orders = await listOrders();
+    }
+
     labels = await labelOffers(
       orders.flatMap((order) => order.items.map((item) => item.offerId)),
     );
@@ -117,6 +138,12 @@ export default async function OrdersPage({
                       {STATUS_LABELS[order.status] ?? order.status}
                     </Badge>
                   </div>
+
+                  {paymentNote(order) ? (
+                    <p className="text-muted-foreground text-xs text-pretty">
+                      {paymentNote(order)}
+                    </p>
+                  ) : null}
 
                   <ul className="space-y-2">
                     {order.items.map((item) => (
