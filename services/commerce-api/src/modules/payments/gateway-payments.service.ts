@@ -36,6 +36,7 @@ export class GatewayPaymentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly gateway: UnifiedPaymentProvider,
+    private readonly payments: PaymentsService,
     private readonly users: UsersService,
   ) {}
 

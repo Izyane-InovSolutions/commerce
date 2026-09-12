@@ -29,13 +29,21 @@ function buildPrisma(): {
 
 describe('WishlistService', () => {
   let prisma: ReturnType<typeof buildPrisma>;
-  let inventoryService: { getAvailableQuantities: jest.Mock };
+  let inventoryService: {
+    getAvailableQuantities: jest.Mock;
+    getAvailableOfferQuantities: jest.Mock;
+  };
   let service: WishlistService;
 
   beforeEach(() => {
     prisma = buildPrisma();
     inventoryService = {
       getAvailableQuantities: jest
+        .fn()
+        .mockImplementation((ids: string[]) =>
+          Promise.resolve(new Map(ids.map((id) => [id, 5]))),
+        ),
+      getAvailableOfferQuantities: jest
         .fn()
         .mockImplementation((ids: string[]) =>
           Promise.resolve(new Map(ids.map((id) => [id, 5]))),

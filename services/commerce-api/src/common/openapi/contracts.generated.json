@@ -2613,7 +2613,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type8"
+                    "$ref": "#/components/schemas/__type9"
                   },
                   "meta": {
                     "type": "object",
@@ -3206,7 +3206,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type9"
+                      "$ref": "#/components/schemas/__type10"
                     }
                   },
                   "meta": {
@@ -3274,7 +3274,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type10"
+                      "$ref": "#/components/schemas/__type11"
                     }
                   },
                   "meta": {
@@ -3543,7 +3543,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type9"
+                      "$ref": "#/components/schemas/__type10"
                     }
                   },
                   "meta": {
@@ -3601,7 +3601,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type11"
+                      "$ref": "#/components/schemas/__type12"
                     }
                   },
                   "meta": {
@@ -3667,7 +3667,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type11"
+                    "$ref": "#/components/schemas/__type12"
                   },
                   "meta": {
                     "type": "object",
@@ -3722,7 +3722,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type11"
+                    "$ref": "#/components/schemas/__type12"
                   },
                   "meta": {
                     "type": "object",
@@ -3797,7 +3797,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type11"
+                    "$ref": "#/components/schemas/__type12"
                   },
                   "meta": {
                     "type": "object",
@@ -5443,7 +5443,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/SellerOrderWithItems"
+                    "$ref": "#/components/schemas/SellerOrderWithItems2"
                   },
                   "meta": {
                     "type": "object",
@@ -5515,7 +5515,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type14"
+                    "$ref": "#/components/schemas/__type15"
                   },
                   "meta": {
                     "type": "object",
@@ -5590,7 +5590,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type14"
+                    "$ref": "#/components/schemas/__type15"
                   },
                   "meta": {
                     "type": "object",
@@ -7249,7 +7249,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type19"
+                    "$ref": "#/components/schemas/__type20"
                   },
                   "meta": {
                     "type": "object",
@@ -7975,7 +7975,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type21"
+                      "$ref": "#/components/schemas/__type22"
                     }
                   },
                   "meta": {
@@ -8040,7 +8040,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type21"
+                    "$ref": "#/components/schemas/__type22"
                   },
                   "meta": {
                     "type": "object",
@@ -8094,7 +8094,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type21"
+                    "$ref": "#/components/schemas/__type22"
                   },
                   "meta": {
                     "type": "object",
@@ -8168,7 +8168,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type21"
+                    "$ref": "#/components/schemas/__type22"
                   },
                   "meta": {
                     "type": "object",
@@ -8279,7 +8279,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type21"
+                    "$ref": "#/components/schemas/__type22"
                   },
                   "meta": {
                     "type": "object",
@@ -9524,6 +9524,9 @@
         "subtotal": {
           "type": "number"
         },
+        "shippingAmount": {
+          "type": "number"
+        },
         "total": {
           "type": "number"
         },
@@ -9540,8 +9543,17 @@
         "sellerOrders": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/Object"
+            "$ref": "#/components/schemas/SellerOrderWithItems"
           }
+        },
+        "payment": {
+          "type": "object",
+          "allOf": [
+            {
+              "$ref": "#/components/schemas/__type7"
+            }
+          ],
+          "nullable": true
         }
       },
       "required": [
@@ -9552,6 +9564,7 @@
         "status",
         "currency",
         "subtotal",
+        "shippingAmount",
         "total",
         "shippingAddress",
         "items",
@@ -9578,6 +9591,10 @@
           "type": "string",
           "nullable": true
         },
+        "shippingGroupId": {
+          "type": "string",
+          "nullable": true
+        },
         "offerId": {
           "type": "string"
         },
@@ -9601,6 +9618,7 @@
         "currency",
         "orderId",
         "sellerOrderId",
+        "shippingGroupId",
         "offerId",
         "quantity",
         "unitAmount",
@@ -9608,7 +9626,7 @@
         "reservationId"
       ]
     },
-    "Object": {
+    "SellerOrderWithItems": {
       "type": "object",
       "properties": {
         "id": {
@@ -9638,6 +9656,9 @@
         "subtotal": {
           "type": "number"
         },
+        "shippingAmount": {
+          "type": "number"
+        },
         "total": {
           "type": "number"
         },
@@ -9656,6 +9677,12 @@
           "items": {
             "$ref": "#/components/schemas/__type6"
           }
+        },
+        "shippingGroups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/ShippingGroupWithItems"
+          }
         }
       },
       "required": [
@@ -9665,11 +9692,106 @@
         "status",
         "currency",
         "subtotal",
+        "shippingAmount",
         "total",
         "orderId",
         "sellerId",
         "refundedAmount",
+        "items",
+        "shippingGroups"
+      ]
+    },
+    "ShippingGroupWithItems": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "subtotal": {
+          "type": "number"
+        },
+        "shippingAmount": {
+          "type": "number"
+        },
+        "total": {
+          "type": "number"
+        },
+        "orderId": {
+          "type": "string"
+        },
+        "sellerOrderId": {
+          "type": "string"
+        },
+        "fulfillmentMode": {
+          "type": "string",
+          "enum": [
+            "SELLER",
+            "PLATFORM"
+          ]
+        },
+        "serviceLevel": {
+          "type": "string"
+        },
+        "rateCode": {
+          "type": "string"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/__type6"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "currency",
+        "subtotal",
+        "shippingAmount",
+        "total",
+        "orderId",
+        "sellerOrderId",
+        "fulfillmentMode",
+        "serviceLevel",
+        "rateCode",
         "items"
+      ]
+    },
+    "__type7": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "CANCELLED",
+            "PARTIALLY_REFUNDED",
+            "REFUNDED",
+            "PENDING",
+            "REQUIRES_ACTION",
+            "PROCESSING",
+            "SUCCEEDED",
+            "FAILED"
+          ]
+        },
+        "failureReason": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "failureReason"
       ]
     },
     "PaymentWithRedirect": {
@@ -9794,7 +9916,7 @@
         "items": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type7"
+            "$ref": "#/components/schemas/__type8"
           }
         },
         "total": {
@@ -9814,7 +9936,7 @@
         "limit"
       ]
     },
-    "__type7": {
+    "__type8": {
       "type": "object",
       "properties": {
         "id": {
@@ -9896,7 +10018,7 @@
       ],
       "additionalProperties": false
     },
-    "__type8": {
+    "__type9": {
       "type": "object",
       "properties": {
         "id": {
@@ -9940,7 +10062,7 @@
         "items": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type8"
+            "$ref": "#/components/schemas/__type9"
           }
         },
         "total": {
@@ -10004,10 +10126,10 @@
       "type": "object",
       "properties": {},
       "additionalProperties": {
-        "$ref": "#/components/schemas/Object2"
+        "$ref": "#/components/schemas/Object"
       }
     },
-    "Object2": {
+    "Object": {
       "type": "object",
       "properties": {
         "status": {
@@ -10027,7 +10149,7 @@
       "type": "object",
       "properties": {},
       "additionalProperties": {
-        "$ref": "#/components/schemas/Object2"
+        "$ref": "#/components/schemas/Object"
       }
     },
     "InventoryRecordView": {
@@ -10139,7 +10261,7 @@
       ],
       "additionalProperties": false
     },
-    "__type9": {
+    "__type10": {
       "type": "object",
       "properties": {
         "id": {
@@ -10190,7 +10312,7 @@
         "inventoryRecordId"
       ]
     },
-    "__type10": {
+    "__type11": {
       "type": "object",
       "properties": {
         "id": {
@@ -10366,7 +10488,7 @@
       ],
       "additionalProperties": false
     },
-    "__type11": {
+    "__type12": {
       "type": "object",
       "properties": {
         "name": {
@@ -10581,6 +10703,13 @@
           "type": "string",
           "nullable": true
         },
+        "fulfillmentMode": {
+          "type": "string",
+          "enum": [
+            "SELLER",
+            "PLATFORM"
+          ]
+        },
         "variantId": {
           "type": "string"
         },
@@ -10610,17 +10739,10 @@
             "PLATFORM"
           ]
         },
-        "fulfillmentMode": {
-          "type": "string",
-          "enum": [
-            "SELLER",
-            "PLATFORM"
-          ]
-        },
         "prices": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type12"
+            "$ref": "#/components/schemas/__type13"
           }
         }
       },
@@ -10630,17 +10752,17 @@
         "updatedAt",
         "status",
         "sellerId",
+        "fulfillmentMode",
         "variantId",
         "version",
         "sellerSku",
         "listingTitle",
         "condition",
         "stockSource",
-        "fulfillmentMode",
         "prices"
       ]
     },
-    "__type12": {
+    "__type13": {
       "type": "object",
       "properties": {
         "id": {
@@ -10818,7 +10940,7 @@
           "type": "object",
           "allOf": [
             {
-              "$ref": "#/components/schemas/__type13"
+              "$ref": "#/components/schemas/__type14"
             }
           ],
           "nullable": true
@@ -10873,7 +10995,7 @@
         "description"
       ]
     },
-    "__type13": {
+    "__type14": {
       "type": "object",
       "properties": {
         "amount": {
@@ -10940,6 +11062,13 @@
           "type": "string",
           "nullable": true
         },
+        "fulfillmentMode": {
+          "type": "string",
+          "enum": [
+            "SELLER",
+            "PLATFORM"
+          ]
+        },
         "variantId": {
           "type": "string"
         },
@@ -10969,17 +11098,10 @@
             "PLATFORM"
           ]
         },
-        "fulfillmentMode": {
-          "type": "string",
-          "enum": [
-            "SELLER",
-            "PLATFORM"
-          ]
-        },
         "prices": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type12"
+            "$ref": "#/components/schemas/__type13"
           }
         }
       },
@@ -10989,13 +11111,13 @@
         "updatedAt",
         "status",
         "sellerId",
+        "fulfillmentMode",
         "variantId",
         "version",
         "sellerSku",
         "listingTitle",
         "condition",
         "stockSource",
-        "fulfillmentMode",
         "prices"
       ]
     },
@@ -11139,11 +11261,7 @@
         },
         "currency": {
           "type": "string",
-          "enum": [
-            "ZMW",
-            "USD",
-            "GBP"
-          ]
+          "pattern": "^[A-Z]{3}$"
         }
       },
       "required": [
@@ -11159,7 +11277,7 @@
         "items": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/SellerOrderWithItems"
+            "$ref": "#/components/schemas/SellerOrderWithItems2"
           }
         },
         "total": {
@@ -11179,7 +11297,7 @@
         "limit"
       ]
     },
-    "SellerOrderWithItems": {
+    "SellerOrderWithItems2": {
       "type": "object",
       "properties": {
         "id": {
@@ -11209,6 +11327,9 @@
         "subtotal": {
           "type": "number"
         },
+        "shippingAmount": {
+          "type": "number"
+        },
         "total": {
           "type": "number"
         },
@@ -11227,6 +11348,12 @@
           "items": {
             "$ref": "#/components/schemas/__type6"
           }
+        },
+        "shippingGroups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Object2"
+          }
         }
       },
       "required": [
@@ -11236,10 +11363,75 @@
         "status",
         "currency",
         "subtotal",
+        "shippingAmount",
         "total",
         "orderId",
         "sellerId",
         "refundedAmount",
+        "items",
+        "shippingGroups"
+      ]
+    },
+    "Object2": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "subtotal": {
+          "type": "number"
+        },
+        "shippingAmount": {
+          "type": "number"
+        },
+        "total": {
+          "type": "number"
+        },
+        "orderId": {
+          "type": "string"
+        },
+        "sellerOrderId": {
+          "type": "string"
+        },
+        "fulfillmentMode": {
+          "type": "string",
+          "enum": [
+            "SELLER",
+            "PLATFORM"
+          ]
+        },
+        "serviceLevel": {
+          "type": "string"
+        },
+        "rateCode": {
+          "type": "string"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/__type6"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "currency",
+        "subtotal",
+        "shippingAmount",
+        "total",
+        "orderId",
+        "sellerOrderId",
+        "fulfillmentMode",
+        "serviceLevel",
+        "rateCode",
         "items"
       ]
     },
@@ -11264,7 +11456,7 @@
       ],
       "additionalProperties": false
     },
-    "__type14": {
+    "__type15": {
       "type": "object",
       "properties": {
         "id": {
@@ -11383,6 +11575,18 @@
           "type": "string"
         },
         "reference": {
+          "type": "string"
+        },
+        "failureCode": {
+          "type": "string"
+        },
+        "failureMessage": {
+          "type": "string"
+        },
+        "completedAt": {
+          "type": "string"
+        },
+        "expiresAt": {
           "type": "string"
         }
       },
@@ -11702,6 +11906,13 @@
           "type": "string",
           "nullable": true
         },
+        "fulfillmentMode": {
+          "type": "string",
+          "enum": [
+            "SELLER",
+            "PLATFORM"
+          ]
+        },
         "variantId": {
           "type": "string"
         },
@@ -11731,17 +11942,10 @@
             "PLATFORM"
           ]
         },
-        "fulfillmentMode": {
-          "type": "string",
-          "enum": [
-            "SELLER",
-            "PLATFORM"
-          ]
-        },
         "prices": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type12"
+            "$ref": "#/components/schemas/__type13"
           }
         }
       },
@@ -11751,13 +11955,13 @@
         "updatedAt",
         "status",
         "sellerId",
+        "fulfillmentMode",
         "variantId",
         "version",
         "sellerSku",
         "listingTitle",
         "condition",
         "stockSource",
-        "fulfillmentMode",
         "prices"
       ]
     },
@@ -12054,7 +12258,7 @@
           }
         },
         "meta": {
-          "$ref": "#/components/schemas/__type18"
+          "$ref": "#/components/schemas/__type19"
         }
       },
       "required": [
@@ -12107,7 +12311,7 @@
         "media": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type15"
+            "$ref": "#/components/schemas/__type16"
           }
         },
         "variants": {
@@ -12129,7 +12333,7 @@
         "variants"
       ]
     },
-    "__type15": {
+    "__type16": {
       "type": "object",
       "properties": {
         "id": {
@@ -12184,7 +12388,7 @@
         "attributes": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type16"
+            "$ref": "#/components/schemas/__type17"
           }
         },
         "offers": {
@@ -12203,7 +12407,7 @@
         "offers"
       ]
     },
-    "__type16": {
+    "__type17": {
       "type": "object",
       "properties": {
         "attributeId": {
@@ -12244,7 +12448,7 @@
           "type": "object",
           "allOf": [
             {
-              "$ref": "#/components/schemas/__type17"
+              "$ref": "#/components/schemas/__type18"
             }
           ],
           "nullable": true
@@ -12263,7 +12467,7 @@
         "currencies"
       ]
     },
-    "__type17": {
+    "__type18": {
       "type": "object",
       "properties": {
         "amount": {
@@ -12278,7 +12482,7 @@
         "currency"
       ]
     },
-    "__type18": {
+    "__type19": {
       "type": "object",
       "properties": {
         "page": {
@@ -12326,7 +12530,7 @@
       },
       "additionalProperties": false
     },
-    "__type19": {
+    "__type20": {
       "type": "object",
       "properties": {
         "items": {
@@ -12458,7 +12662,7 @@
         "documents": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type20"
+            "$ref": "#/components/schemas/__type21"
           }
         }
       },
@@ -12483,7 +12687,7 @@
         "documents"
       ]
     },
-    "__type20": {
+    "__type21": {
       "type": "object",
       "properties": {
         "mediaAssetId": {
@@ -12632,7 +12836,7 @@
         "version"
       ]
     },
-    "__type21": {
+    "__type22": {
       "type": "object",
       "properties": {
         "id": {
@@ -12872,7 +13076,7 @@
           "type": "object",
           "allOf": [
             {
-              "$ref": "#/components/schemas/__type22"
+              "$ref": "#/components/schemas/__type23"
             }
           ],
           "nullable": true
@@ -12888,7 +13092,7 @@
         "isAvailable"
       ]
     },
-    "__type22": {
+    "__type23": {
       "type": "object",
       "properties": {
         "amount": {

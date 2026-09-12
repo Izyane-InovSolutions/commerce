@@ -11,6 +11,7 @@ import {
   type OrderItem,
   type Prisma,
   type SellerOrder,
+  type ShippingGroup,
 } from '@prisma/client';
 
 import { toAddressSnapshot } from '../../common/addresses/address-snapshot';
@@ -21,10 +22,22 @@ import { CartLineView } from '../cart/cart.types';
 import { CartService } from '../cart/cart.service';
 import { LedgerService } from '../financials/ledger.service';
 import { InventoryService } from '../inventory/inventory.service';
+import type { CommerceOffer } from '../offers/offer-read.service';
+import {
+  ShippingService,
+  type ShippingLine,
+  type ShippingQuoteGroup,
+} from '../shipping/shipping.service';
+
+export type ShippingGroupWithItems = ShippingGroup & { items: OrderItem[] };
+export type SellerOrderWithItems = SellerOrder & {
+  items: OrderItem[];
+  shippingGroups: ShippingGroupWithItems[];
+};
 
 export type OrderWithItems = Order & {
   items: OrderItem[];
-  sellerOrders: (SellerOrder & { items: OrderItem[] })[];
+  sellerOrders: SellerOrderWithItems[];
   /**
    * Present on a customer's own reads so a client can tell an order awaiting
    * approval from one whose payment failed, and can ask for that payment to
@@ -42,7 +55,13 @@ const CUSTOMER_PAYMENT_SELECT = {
   select: { id: true, status: true, failureReason: true },
 } as const;
 
-type SellerGroup = { sellerId: string | null; items: CartLineView[] };
+type SellerGroup = { sellerId: string | null; items: ShippingLine[] };
+type QuotedSellerGroup = SellerGroup & {
+  shippingGroups: ShippingQuoteGroup[];
+  subtotal: number;
+  shippingAmount: number;
+  total: number;
+};
 
 @Injectable()
 export class OrdersService {
@@ -53,6 +72,7 @@ export class OrdersService {
     private readonly addressesService: AddressesService,
     private readonly ledgerService: LedgerService,
     private readonly offers: OfferReadService,
+    private readonly shippingService: ShippingService,
   ) {}
 
   async createFromCart(
@@ -82,7 +102,37 @@ export class OrdersService {
       cart.items.map((item) => item.offerId),
     );
     const offerById = new Map(offers.map((offer) => [offer.id, offer]));
-    const groups = this.groupBySeller(cart.items);
+    const groups = this.groupBySeller(cart.items, offerById);
+    const quotedGroups: QuotedSellerGroup[] = [];
+    for (const group of [...groups].sort((left, right) =>
+      (left.sellerId ?? '').localeCompare(right.sellerId ?? ''),
+    )) {
+      const shippingGroups = await this.shippingService.quoteSellerGroups(
+        group.sellerId,
+        group.items,
+        shippingAddress.country,
+        currency,
+      );
+      const subtotal = shippingGroups.reduce(
+        (sum, shippingGroup) => sum + shippingGroup.subtotal,
+        0,
+      );
+      const shippingAmount = shippingGroups.reduce(
+        (sum, shippingGroup) => sum + shippingGroup.shippingAmount,
+        0,
+      );
+      quotedGroups.push({
+        ...group,
+        shippingGroups,
+        subtotal,
+        shippingAmount,
+        total: subtotal + shippingAmount,
+      });
+    }
+    const shippingAmount = quotedGroups.reduce(
+      (sum, group) => sum + group.shippingAmount,
+      0,
+    );
 
     const createdOrderId = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.create({
@@ -91,41 +141,52 @@ export class OrdersService {
           status: OrderStatus.PENDING_PAYMENT,
           currency,
           subtotal: cart.subtotal,
-          total: cart.subtotal,
+          shippingAmount,
+          total: cart.subtotal + shippingAmount,
           shippingAddress: shippingAddress as unknown as Prisma.InputJsonValue,
         },
       });
 
-      for (const group of [...groups].sort((a, b) =>
-        (a.sellerId ?? '').localeCompare(b.sellerId ?? ''),
-      )) {
+      for (const group of quotedGroups) {
         if (group.sellerId)
           await this.ledgerService.ensureCurrency(group.sellerId, currency, tx);
-        const groupSubtotal = group.items.reduce(
-          (sum, item) => sum + item.lineTotal,
-          0,
-        );
-
-        await tx.sellerOrder.create({
+        const sellerOrder = await tx.sellerOrder.create({
           data: {
             orderId: order.id,
             sellerId: group.sellerId,
             status: OrderStatus.PENDING_PAYMENT,
             currency,
-            subtotal: groupSubtotal,
-            total: groupSubtotal,
-            items: {
-              create: group.items.map((item) => ({
-                orderId: order.id,
-                offerId: item.offerId,
-                quantity: item.quantity,
-                unitAmount: item.unitPrice?.amount ?? 0,
-                currency: item.unitPrice?.currency ?? currency,
-                lineTotal: item.lineTotal,
-              })),
-            },
+            subtotal: group.subtotal,
+            shippingAmount: group.shippingAmount,
+            total: group.total,
           },
         });
+        for (const shippingGroup of group.shippingGroups) {
+          await tx.shippingGroup.create({
+            data: {
+              orderId: order.id,
+              sellerOrderId: sellerOrder.id,
+              fulfillmentMode: shippingGroup.fulfillmentMode,
+              serviceLevel: shippingGroup.serviceLevel,
+              rateCode: shippingGroup.rateCode,
+              subtotal: shippingGroup.subtotal,
+              shippingAmount: shippingGroup.shippingAmount,
+              total: shippingGroup.total,
+              currency: shippingGroup.currency,
+              items: {
+                create: shippingGroup.items.map((item) => ({
+                  orderId: order.id,
+                  sellerOrderId: sellerOrder.id,
+                  offerId: item.offerId,
+                  quantity: item.quantity,
+                  unitAmount: item.unitPrice?.amount ?? 0,
+                  currency: item.unitPrice?.currency ?? currency,
+                  lineTotal: item.lineTotal,
+                })),
+              },
+            },
+          });
+        }
       }
 
       return order.id;
@@ -315,7 +376,9 @@ export class OrdersService {
       where: { userId },
       include: {
         items: true,
-        sellerOrders: { include: { items: true } },
+        sellerOrders: {
+          include: { items: true, shippingGroups: { include: { items: true } } },
+        },
         payment: CUSTOMER_PAYMENT_SELECT,
       },
       orderBy: { createdAt: 'desc' },
@@ -335,16 +398,28 @@ export class OrdersService {
   // sellerId: null is the platform/first-party group - every order gets at
   // least one group, even a purely first-party one, so callers never have to
   // branch on whether splitting happened.
-  private groupBySeller(items: CartLineView[]): SellerGroup[] {
-    const groups = new Map<string | null, CartLineView[]>();
+  private groupBySeller(
+    items: CartLineView[],
+    offerById: Map<string, CommerceOffer>,
+  ): SellerGroup[] {
+    const groups = new Map<string | null, ShippingLine[]>();
 
     for (const item of items) {
-      const existing = groups.get(item.sellerId);
+      const offer = offerById.get(item.offerId);
+      if (!offer || offer.sellerId !== item.sellerId)
+        throw new ConflictException(
+          'Offer ownership changed; reload the cart before checking out',
+        );
+      const shippingLine = {
+        ...item,
+        fulfillmentMode: offer.fulfillmentMode,
+      };
+      const existing = groups.get(offer.sellerId);
 
       if (existing) {
-        existing.push(item);
+        existing.push(shippingLine);
       } else {
-        groups.set(item.sellerId, [item]);
+        groups.set(offer.sellerId, [shippingLine]);
       }
     }
 
@@ -387,7 +462,9 @@ export class OrdersService {
       where: { id: orderId },
       include: {
         items: true,
-        sellerOrders: { include: { items: true } },
+        sellerOrders: {
+          include: { items: true, shippingGroups: { include: { items: true } } },
+        },
         payment: CUSTOMER_PAYMENT_SELECT,
       },
     });

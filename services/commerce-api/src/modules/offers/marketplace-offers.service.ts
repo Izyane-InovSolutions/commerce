@@ -60,7 +60,7 @@ export class MarketplaceOffersService {
     private readonly prisma: PrismaService,
     private readonly sellers: SellersService,
     private readonly storefronts: StorefrontsService,
-    private readonly products:ProductReferencesService,
+    private readonly products: ProductReferencesService,
   ) {}
 
   async create(
@@ -242,7 +242,7 @@ export class MarketplaceOffersService {
       currencies: currentPrices(offer.prices)
         .map((each) => each.currency)
         .sort(),
-      checkoutSupported: offer.sellerId === null,
+      checkoutSupported: true,
     };
   }
 
@@ -314,7 +314,8 @@ export class MarketplaceOffersService {
           amount: price.amount,
           currency: price.currency,
         },
-        checkoutSupported: offer.sellerId === null,
+        currencies: [price.currency],
+        checkoutSupported: true,
       };
     });
     return { items, total, page: query.page, limit: query.limit };

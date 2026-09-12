@@ -11,6 +11,7 @@ const snapshot = {
   sellerId: true,
   status: true,
   stockSource: true,
+  fulfillmentMode: true,
   sellerSku: true,
   listingTitle: true,
   prices: true,

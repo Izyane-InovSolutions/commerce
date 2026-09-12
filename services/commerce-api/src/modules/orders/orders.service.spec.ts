@@ -7,6 +7,7 @@ import { CartService } from '../cart/cart.service';
 import { LedgerService } from '../financials/ledger.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { PrismaService } from '../../database/prisma.service';
+import { ShippingService } from '../shipping/shipping.service';
 import { OrdersService } from './orders.service';
 
 function buildPrisma(): {
@@ -26,9 +27,11 @@ function buildPrisma(): {
     findMany: jest.Mock;
     update: jest.Mock;
   };
+  shippingGroup: { create: jest.Mock };
   $queryRaw: jest.Mock;
   $transaction: jest.Mock;
 } {
+  let sellerOrderSequence = 0;
   const prisma = {
     offer: { findMany: jest.fn() },
     order: {
@@ -39,7 +42,11 @@ function buildPrisma(): {
     },
     orderItem: { update: jest.fn(), findUnique: jest.fn() },
     sellerOrder: {
-      create: jest.fn().mockResolvedValue({}),
+      create: jest
+        .fn()
+        .mockImplementation(() =>
+          Promise.resolve({ id: `seller-order-${++sellerOrderSequence}` }),
+        ),
       updateMany: jest.fn(),
       findUnique: jest.fn(),
       findUniqueOrThrow: jest.fn(),
@@ -48,6 +55,7 @@ function buildPrisma(): {
         .mockResolvedValue([{ status: OrderStatus.PARTIALLY_REFUNDED }]),
       update: jest.fn(),
     },
+    shippingGroup: { create: jest.fn().mockResolvedValue({}) },
     $queryRaw: jest.fn().mockResolvedValue([]),
     $transaction: jest.fn(),
   };
@@ -83,6 +91,7 @@ describe('OrdersService', () => {
   };
   let addressesService: { findOne: jest.Mock };
   let ledgerService: { recordSale: jest.Mock; ensureCurrency: jest.Mock };
+  let shippingService: { quoteSellerGroups: jest.Mock };
   let service: OrdersService;
 
   const address = {
@@ -115,6 +124,44 @@ describe('OrdersService', () => {
       recordSale: jest.fn().mockResolvedValue(undefined),
       ensureCurrency: jest.fn(),
     };
+    shippingService = {
+      quoteSellerGroups: jest.fn().mockImplementation(
+        (
+          _sellerId: string | null,
+          items: Array<{
+            fulfillmentMode: string;
+            lineTotal: number;
+          }>,
+          _country: string,
+          currency: string,
+        ) => {
+          const byMode = new Map<string, typeof items>();
+          for (const item of items) {
+            const held = byMode.get(item.fulfillmentMode) ?? [];
+            held.push(item);
+            byMode.set(item.fulfillmentMode, held);
+          }
+          return Promise.resolve(
+            [...byMode].map(([fulfillmentMode, groupedItems]) => {
+              const subtotal = groupedItems.reduce(
+                (sum, item) => sum + item.lineTotal,
+                0,
+              );
+              return {
+                fulfillmentMode,
+                serviceLevel: 'STANDARD',
+                rateCode: 'FREE_STANDARD_V1',
+                subtotal,
+                shippingAmount: 0,
+                total: subtotal,
+                currency,
+                items: groupedItems,
+              };
+            }),
+          );
+        },
+      ),
+    };
     service = new OrdersService(
       prisma as unknown as PrismaService,
       cartService as unknown as CartService,
@@ -122,6 +169,7 @@ describe('OrdersService', () => {
       addressesService as unknown as AddressesService,
       ledgerService as unknown as LedgerService,
       new OfferReadService(prisma as unknown as PrismaService),
+      shippingService as unknown as ShippingService,
     );
   });
 
@@ -162,10 +210,23 @@ describe('OrdersService', () => {
           variantId: 'variant-1',
           sellerId: null,
           stockSource: 'PLATFORM',
+          fulfillmentMode: 'PLATFORM',
         },
       ]);
       prisma.order.create.mockResolvedValue({ id: 'order-1' });
       inventoryService.reserve.mockResolvedValue({ id: 'reservation-1' });
+      shippingService.quoteSellerGroups.mockResolvedValueOnce([
+        {
+          fulfillmentMode: 'PLATFORM',
+          serviceLevel: 'STANDARD',
+          rateCode: 'PLATFORM_STANDARD',
+          subtotal: 2000,
+          shippingAmount: 300,
+          total: 2300,
+          currency: 'USD',
+          items: [cartLine()],
+        },
+      ]);
       prisma.order.findUnique.mockResolvedValue({
         id: 'order-1',
         items: [
@@ -187,6 +248,28 @@ describe('OrdersService', () => {
 
       const order = await service.createFromCart('user-1', 'addr-1', 'USD');
 
+      expect(prisma.order.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          subtotal: 2000,
+          shippingAmount: 300,
+          total: 2300,
+        }) as unknown,
+      });
+      expect(prisma.sellerOrder.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          subtotal: 2000,
+          shippingAmount: 300,
+          total: 2300,
+        }) as unknown,
+      });
+      expect(prisma.shippingGroup.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          subtotal: 2000,
+          shippingAmount: 300,
+          total: 2300,
+          rateCode: 'PLATFORM_STANDARD',
+        }) as unknown,
+      });
       expect(inventoryService.reserve).toHaveBeenCalledWith('variant-1', 2, {
         holderType: 'order_item',
         holderId: 'item-1',
@@ -230,18 +313,21 @@ describe('OrdersService', () => {
           variantId: 'variant-1',
           sellerId: null,
           stockSource: 'PLATFORM',
+          fulfillmentMode: 'PLATFORM',
         },
         {
           id: 'offer-2',
           variantId: 'variant-2',
           sellerId: 'seller-a',
           stockSource: 'SELLER',
+          fulfillmentMode: 'SELLER',
         },
         {
           id: 'offer-3',
           variantId: 'variant-3',
           sellerId: 'seller-b',
           stockSource: 'SELLER',
+          fulfillmentMode: 'SELLER',
         },
       ]);
       prisma.order.create.mockResolvedValue({ id: 'order-1' });
@@ -306,12 +392,14 @@ describe('OrdersService', () => {
           variantId: 'variant-1',
           sellerId: null,
           stockSource: 'PLATFORM',
+          fulfillmentMode: 'PLATFORM',
         },
         {
           id: 'offer-2',
           variantId: 'variant-2',
           sellerId: null,
           stockSource: 'PLATFORM',
+          fulfillmentMode: 'PLATFORM',
         },
       ]);
       prisma.order.create.mockResolvedValue({ id: 'order-1' });

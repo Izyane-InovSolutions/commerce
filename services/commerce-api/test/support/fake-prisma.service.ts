@@ -945,6 +945,7 @@ export class FakePrismaService {
         status: ProductStatus.DRAFT,
         // Mirrors the schema's @default(PLATFORM)/@default(NEW) - offers
         // created without an explicit sellerId are first-party.
+        sellerId: null,
         condition: 'NEW',
         stockSource: 'PLATFORM',
         fulfillmentMode: 'PLATFORM',
@@ -1700,6 +1701,7 @@ export class FakePrismaService {
   private readonly orders = new Map<string, Record<string, unknown>>();
   private readonly orderItems = new Map<string, Record<string, unknown>>();
   private readonly sellerOrders = new Map<string, Record<string, unknown>>();
+  private readonly shippingGroups = new Map<string, Record<string, unknown>>();
   private readonly payments = new Map<string, Record<string, unknown>>();
   private readonly paymentEvents = new Map<string, Record<string, unknown>>();
 
@@ -1716,6 +1718,14 @@ export class FakePrismaService {
         items: [...this.orderItems.values()].filter(
           (item) => item.sellerOrderId === sellerOrder.id,
         ),
+        shippingGroups: [...this.shippingGroups.values()]
+          .filter((group) => group.sellerOrderId === sellerOrder.id)
+          .map((group) => ({
+            ...group,
+            items: [...this.orderItems.values()].filter(
+              (item) => item.shippingGroupId === group.id,
+            ),
+          })),
       }));
     return { ...order, items, sellerOrders };
   }
@@ -1849,7 +1859,15 @@ export class FakePrismaService {
       const items = [...this.orderItems.values()].filter(
         (item) => item.sellerOrderId === where.id,
       );
-      return Promise.resolve({ ...row, items });
+      const shippingGroups = [...this.shippingGroups.values()]
+        .filter((group) => group.sellerOrderId === where.id)
+        .map((group) => ({
+          ...group,
+          items: [...this.orderItems.values()].filter(
+            (item) => item.shippingGroupId === group.id,
+          ),
+        }));
+      return Promise.resolve({ ...row, items, shippingGroups });
     },
     findMany: ({
       where,
@@ -1864,6 +1882,14 @@ export class FakePrismaService {
             items: [...this.orderItems.values()].filter(
               (item) => item.sellerOrderId === row.id,
             ),
+            shippingGroups: [...this.shippingGroups.values()]
+              .filter((group) => group.sellerOrderId === row.id)
+              .map((group) => ({
+                ...group,
+                items: [...this.orderItems.values()].filter(
+                  (item) => item.shippingGroupId === group.id,
+                ),
+              })),
           })),
       ),
     count: ({ where }: { where: { sellerId: string } }): Promise<number> =>
@@ -1882,6 +1908,41 @@ export class FakePrismaService {
       const row = this.sellerOrders.get(where.id)!;
       Object.assign(row, data, { updatedAt: new Date() });
       return Promise.resolve(row);
+    },
+  };
+
+  shippingGroup = {
+    create: ({
+      data,
+    }: {
+      data: Record<string, unknown> & {
+        items?: { create: Record<string, unknown>[] };
+      };
+    }): Promise<Record<string, unknown>> => {
+      const now = new Date();
+      const { items, ...groupData } = data;
+      const row = {
+        id: randomUUID(),
+        createdAt: now,
+        ...groupData,
+      };
+      this.shippingGroups.set(row.id as string, row);
+      for (const itemData of items?.create ?? []) {
+        const itemRow = {
+          id: randomUUID(),
+          shippingGroupId: row.id,
+          reservationId: null,
+          createdAt: now,
+          ...itemData,
+        };
+        this.orderItems.set(itemRow.id as string, itemRow);
+      }
+      return Promise.resolve({
+        ...row,
+        items: [...this.orderItems.values()].filter(
+          (item) => item.shippingGroupId === row.id,
+        ),
+      });
     },
   };
 
