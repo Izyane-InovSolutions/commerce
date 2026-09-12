@@ -1,4 +1,7 @@
-import { OfferReadService, type CommerceOffer } from '../offers/offer-read.service';
+import {
+  OfferReadService,
+  type CommerceOffer,
+} from '../offers/offer-read.service';
 import { BadRequestException } from '@nestjs/common';
 import { ProductStatus } from '@prisma/client';
 
@@ -41,9 +44,21 @@ describe('WishlistService', () => {
     service = new WishlistService(
       prisma as unknown as PrismaService,
       inventoryService as unknown as InventoryService,
-      {find: prisma.offer.findUnique, findMany: jest.fn().mockImplementation(() =>
-        (prisma.wishlistItem.findMany.mock.results.at(-1)?.value as Promise<Array<{offerId:string;offer:CommerceOffer}>>).then(result=>result.map(item=>({...item.offer,id:item.offerId})))
-      )} as unknown as OfferReadService,
+      {
+        find: prisma.offer.findUnique,
+        findMany: jest
+          .fn()
+          .mockImplementation(() =>
+            (
+              prisma.wishlistItem.findMany.mock.results.at(-1)
+                ?.value as Promise<
+                Array<{ offerId: string; offer: CommerceOffer }>
+              >
+            ).then((result) =>
+              result.map((item) => ({ ...item.offer, id: item.offerId })),
+            ),
+          ),
+      } as unknown as OfferReadService,
     );
   });
 
@@ -124,7 +139,7 @@ describe('WishlistService', () => {
         },
       ]);
 
-      const items = await service.list('user-1');
+      const items = await service.list('user-1', 'USD');
 
       expect(items[0]).toMatchObject({ isAvailable: false });
       expect(items[1]).toMatchObject({

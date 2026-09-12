@@ -596,6 +596,21 @@
       ],
       "parameters": [
         {
+          "name": "currency",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "ZMW",
+              "USD",
+              "GBP"
+            ],
+            "default": "ZMW"
+          }
+        },
+        {
           "name": "x-guest-token",
           "in": "header",
           "required": false,
@@ -665,6 +680,21 @@
           "required": false,
           "schema": {
             "type": "string"
+          }
+        },
+        {
+          "name": "currency",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "ZMW",
+              "USD",
+              "GBP"
+            ],
+            "default": "ZMW"
           }
         }
       ],
@@ -757,6 +787,21 @@
             "type": "string",
             "format": "uuid"
           }
+        },
+        {
+          "name": "currency",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "ZMW",
+              "USD",
+              "GBP"
+            ],
+            "default": "ZMW"
+          }
         }
       ],
       "security": [
@@ -840,6 +885,21 @@
             "type": "string",
             "format": "uuid"
           }
+        },
+        {
+          "name": "currency",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "ZMW",
+              "USD",
+              "GBP"
+            ],
+            "default": "ZMW"
+          }
         }
       ],
       "security": [
@@ -897,6 +957,21 @@
         "cart"
       ],
       "parameters": [
+        {
+          "name": "currency",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "ZMW",
+              "USD",
+              "GBP"
+            ],
+            "default": "ZMW"
+          }
+        },
         {
           "name": "x-guest-token",
           "in": "header",
@@ -4199,6 +4274,21 @@
             "maximum": 100,
             "default": 20
           }
+        },
+        {
+          "name": "currency",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "ZMW",
+              "USD",
+              "GBP"
+            ],
+            "default": "ZMW"
+          }
         }
       ],
       "security": [],
@@ -4258,6 +4348,21 @@
           "schema": {
             "type": "string",
             "format": "uuid"
+          }
+        },
+        {
+          "name": "currency",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "ZMW",
+              "USD",
+              "GBP"
+            ],
+            "default": "ZMW"
           }
         }
       ],
@@ -4340,6 +4445,21 @@
             "minimum": 1,
             "maximum": 100,
             "default": 20
+          }
+        },
+        {
+          "name": "currency",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "ZMW",
+              "USD",
+              "GBP"
+            ],
+            "default": "ZMW"
           }
         }
       ],
@@ -6616,6 +6736,21 @@
           "explode": true
         },
         {
+          "name": "currency",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "ZMW",
+              "USD",
+              "GBP"
+            ],
+            "default": "ZMW"
+          }
+        },
+        {
           "name": "q",
           "in": "query",
           "required": false,
@@ -6714,6 +6849,21 @@
           "required": true,
           "schema": {
             "type": "string"
+          }
+        },
+        {
+          "name": "currency",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "ZMW",
+              "USD",
+              "GBP"
+            ],
+            "default": "ZMW"
           }
         }
       ],
@@ -6824,7 +6974,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type20"
+                    "$ref": "#/components/schemas/__type19"
                   },
                   "meta": {
                     "type": "object",
@@ -7550,7 +7700,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type22"
+                      "$ref": "#/components/schemas/__type21"
                     }
                   },
                   "meta": {
@@ -7615,7 +7765,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type22"
+                    "$ref": "#/components/schemas/__type21"
                   },
                   "meta": {
                     "type": "object",
@@ -7669,7 +7819,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type22"
+                    "$ref": "#/components/schemas/__type21"
                   },
                   "meta": {
                     "type": "object",
@@ -7743,7 +7893,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type22"
+                    "$ref": "#/components/schemas/__type21"
                   },
                   "meta": {
                     "type": "object",
@@ -7854,7 +8004,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type22"
+                    "$ref": "#/components/schemas/__type21"
                   },
                   "meta": {
                     "type": "object",
@@ -8007,7 +8157,23 @@
       "tags": [
         "wishlist"
       ],
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "currency",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "ZMW",
+              "USD",
+              "GBP"
+            ],
+            "default": "ZMW"
+          }
+        }
+      ],
       "security": [
         {
           "bearer": []
@@ -8403,6 +8569,22 @@
         "expiresAt"
       ]
     },
+    "InputCurrencyQueryDto": {
+      "type": "object",
+      "properties": {
+        "currency": {
+          "type": "string",
+          "nullable": true,
+          "enum": [
+            "ZMW",
+            "USD",
+            "GBP"
+          ],
+          "default": "ZMW"
+        }
+      },
+      "additionalProperties": false
+    },
     "CartView": {
       "type": "object",
       "properties": {
@@ -8461,6 +8643,12 @@
         },
         "isAvailable": {
           "type": "boolean"
+        },
+        "currencies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": [
@@ -8470,7 +8658,8 @@
         "quantity",
         "unitPrice",
         "lineTotal",
-        "isAvailable"
+        "isAvailable",
+        "currencies"
       ]
     },
     "__type": {
@@ -8867,6 +9056,16 @@
         "shippingAddressId": {
           "type": "string",
           "format": "uuid"
+        },
+        "currency": {
+          "type": "string",
+          "nullable": true,
+          "enum": [
+            "ZMW",
+            "USD",
+            "GBP"
+          ],
+          "default": "ZMW"
         },
         "paymentDetails": {
           "$ref": "#/components/schemas/InputPaymentDetailsDto",
@@ -10112,8 +10311,11 @@
         },
         "currency": {
           "type": "string",
-          "minLength": 3,
-          "maxLength": 3
+          "enum": [
+            "ZMW",
+            "USD",
+            "GBP"
+          ]
         },
         "startsAt": {
           "type": "string",
@@ -10206,7 +10408,19 @@
           ]
         },
         "currentPrice": {
-          "$ref": "#/components/schemas/__type13"
+          "type": "object",
+          "allOf": [
+            {
+              "$ref": "#/components/schemas/__type13"
+            }
+          ],
+          "nullable": true
+        },
+        "currencies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "checkoutSupported": {
           "type": "boolean"
@@ -10222,6 +10436,7 @@
         "stockSource",
         "fulfillmentMode",
         "currentPrice",
+        "currencies",
         "checkoutSupported"
       ]
     },
@@ -10517,7 +10732,11 @@
         },
         "currency": {
           "type": "string",
-          "pattern": "^[A-Z]{3}$"
+          "enum": [
+            "ZMW",
+            "USD",
+            "GBP"
+          ]
         }
       },
       "required": [
@@ -10876,11 +11095,29 @@
           "type": "string",
           "format": "date-time"
         },
+        "brand": {
+          "type": "object",
+          "allOf": [
+            {
+              "$ref": "#/components/schemas/__type4"
+            }
+          ],
+          "nullable": true
+        },
         "slug": {
           "type": "string"
         },
         "description": {
           "type": "string",
+          "nullable": true
+        },
+        "category": {
+          "type": "object",
+          "allOf": [
+            {
+              "$ref": "#/components/schemas/__type5"
+            }
+          ],
           "nullable": true
         },
         "status": {
@@ -10899,24 +11136,6 @@
           "type": "string",
           "nullable": true
         },
-        "brand": {
-          "type": "object",
-          "allOf": [
-            {
-              "$ref": "#/components/schemas/__type4"
-            }
-          ],
-          "nullable": true
-        },
-        "category": {
-          "type": "object",
-          "allOf": [
-            {
-              "$ref": "#/components/schemas/__type5"
-            }
-          ],
-          "nullable": true
-        },
         "variants": {
           "type": "array",
           "items": {
@@ -10926,7 +11145,7 @@
         "media": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/ProductMediaWithAsset"
+            "$ref": "#/components/schemas/AdminProductMedia"
           }
         }
       },
@@ -10935,13 +11154,13 @@
         "id",
         "createdAt",
         "updatedAt",
+        "brand",
         "slug",
         "description",
+        "category",
         "status",
         "brandId",
         "categoryId",
-        "brand",
-        "category",
         "variants",
         "media"
       ]
@@ -11135,7 +11354,7 @@
         "prices"
       ]
     },
-    "ProductMediaWithAsset": {
+    "AdminProductMedia": {
       "type": "object",
       "properties": {
         "id": {
@@ -11158,7 +11377,11 @@
           "type": "boolean"
         },
         "mediaAsset": {
-          "$ref": "#/components/schemas/__type15"
+          "$ref": "#/components/schemas/ProductMediaAsset"
+        },
+        "url": {
+          "type": "string",
+          "nullable": true
         }
       },
       "required": [
@@ -11168,22 +11391,21 @@
         "productId",
         "mediaAssetId",
         "isPrimary",
-        "mediaAsset"
+        "mediaAsset",
+        "url"
       ]
     },
-    "__type15": {
+    "ProductMediaAsset": {
       "type": "object",
       "properties": {
         "id": {
           "type": "string"
         },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
+        "mimeType": {
+          "type": "string"
         },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time"
+        "originalFileName": {
+          "type": "string"
         },
         "status": {
           "type": "string",
@@ -11192,45 +11414,13 @@
             "AVAILABLE",
             "DELETED"
           ]
-        },
-        "ownerUserId": {
-          "type": "string"
-        },
-        "storageKey": {
-          "type": "string"
-        },
-        "originalFileName": {
-          "type": "string"
-        },
-        "mimeType": {
-          "type": "string"
-        },
-        "byteSize": {
-          "type": "integer",
-          "format": "int64",
-          "description": "64-bit integer; serialization depends on the endpoint."
-        },
-        "deletedAt": {
-          "type": "string",
-          "format": "date-time",
-          "nullable": true
-        },
-        "verificationLocked": {
-          "type": "boolean"
         }
       },
       "required": [
         "id",
-        "createdAt",
-        "updatedAt",
-        "status",
-        "ownerUserId",
-        "storageKey",
-        "originalFileName",
         "mimeType",
-        "byteSize",
-        "deletedAt",
-        "verificationLocked"
+        "originalFileName",
+        "status"
       ]
     },
     "InputCreateProductDto": {
@@ -11414,6 +11604,16 @@
           ],
           "nullable": true
         },
+        "currency": {
+          "type": "string",
+          "nullable": true,
+          "enum": [
+            "ZMW",
+            "USD",
+            "GBP"
+          ],
+          "default": "ZMW"
+        },
         "q": {
           "type": "string",
           "nullable": true
@@ -11447,7 +11647,7 @@
           }
         },
         "meta": {
-          "$ref": "#/components/schemas/__type19"
+          "$ref": "#/components/schemas/__type18"
         }
       },
       "required": [
@@ -11500,7 +11700,7 @@
         "media": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type16"
+            "$ref": "#/components/schemas/__type15"
           }
         },
         "variants": {
@@ -11522,7 +11722,7 @@
         "variants"
       ]
     },
-    "__type16": {
+    "__type15": {
       "type": "object",
       "properties": {
         "id": {
@@ -11536,13 +11736,21 @@
         },
         "isPrimary": {
           "type": "boolean"
+        },
+        "mimeType": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
         }
       },
       "required": [
         "id",
         "mediaAssetId",
         "position",
-        "isPrimary"
+        "isPrimary",
+        "mimeType",
+        "url"
       ]
     },
     "PublicVariant": {
@@ -11569,7 +11777,7 @@
         "attributes": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type17"
+            "$ref": "#/components/schemas/__type16"
           }
         },
         "offers": {
@@ -11588,7 +11796,7 @@
         "offers"
       ]
     },
-    "__type17": {
+    "__type16": {
       "type": "object",
       "properties": {
         "attributeId": {
@@ -11629,19 +11837,26 @@
           "type": "object",
           "allOf": [
             {
-              "$ref": "#/components/schemas/__type18"
+              "$ref": "#/components/schemas/__type17"
             }
           ],
           "nullable": true
+        },
+        "currencies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": [
         "id",
         "status",
-        "currentPrice"
+        "currentPrice",
+        "currencies"
       ]
     },
-    "__type18": {
+    "__type17": {
       "type": "object",
       "properties": {
         "amount": {
@@ -11656,7 +11871,7 @@
         "currency"
       ]
     },
-    "__type19": {
+    "__type18": {
       "type": "object",
       "properties": {
         "page": {
@@ -11704,7 +11919,7 @@
       },
       "additionalProperties": false
     },
-    "__type20": {
+    "__type19": {
       "type": "object",
       "properties": {
         "items": {
@@ -11836,7 +12051,7 @@
         "documents": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type21"
+            "$ref": "#/components/schemas/__type20"
           }
         }
       },
@@ -11861,7 +12076,7 @@
         "documents"
       ]
     },
-    "__type21": {
+    "__type20": {
       "type": "object",
       "properties": {
         "mediaAssetId": {
@@ -12010,7 +12225,7 @@
         "version"
       ]
     },
-    "__type22": {
+    "__type21": {
       "type": "object",
       "properties": {
         "id": {
@@ -12250,7 +12465,7 @@
           "type": "object",
           "allOf": [
             {
-              "$ref": "#/components/schemas/__type23"
+              "$ref": "#/components/schemas/__type22"
             }
           ],
           "nullable": true
@@ -12266,7 +12481,7 @@
         "isAvailable"
       ]
     },
-    "__type23": {
+    "__type22": {
       "type": "object",
       "properties": {
         "amount": {

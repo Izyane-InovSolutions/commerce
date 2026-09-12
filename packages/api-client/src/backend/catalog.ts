@@ -88,6 +88,8 @@ export type BackendProductQuery = {
   q?: string;
   categorySlug?: string;
   brandSlug?: string;
+  /** Which currency prices come back resolved in. Defaults to ZMW. */
+  currency?: string;
 };
 
 /**
@@ -123,8 +125,12 @@ export function backendListPublicProducts(
 export function backendGetPublicProduct(
   client: ApiClient,
   slug: string,
+  currency?: string,
 ): Promise<BackendProduct> {
-  return client.get(`/catalog/products/${slug}`, { cache: 'no-store' });
+  return client.get(`/catalog/products/${slug}`, {
+    query: { currency },
+    cache: 'no-store',
+  });
 }
 
 export function backendCreateProduct(

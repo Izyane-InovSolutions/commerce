@@ -5,7 +5,7 @@ import { Plus } from 'lucide-react';
 import { backendListSellerOffers } from '@commerce/api-client';
 import {
   backendProductStatuses,
-  pickCurrentPrice,
+  currentPrices,
   type BackendProductStatus,
 } from '@commerce/contracts';
 
@@ -160,7 +160,12 @@ export default async function ProductsPage({
             </TableHeader>
             <TableBody>
               {visible.map((offer) => {
-                const price = pickCurrentPrice(offer.prices);
+                // A listing can be priced in several currencies at once, so
+                // every price in force is shown rather than whichever was
+                // entered last.
+                const prices = currentPrices(offer.prices).sort((left, right) =>
+                  left.currency.localeCompare(right.currency),
+                );
 
                 return (
                   <TableRow key={offer.id}>
@@ -180,8 +185,12 @@ export default async function ProductsPage({
                         offer.condition.slice(1).toLowerCase()}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {price ? (
-                        formatMinor(price.amount, price.currency)
+                      {prices.length > 0 ? (
+                        prices
+                          .map((price) =>
+                            formatMinor(price.amount, price.currency),
+                          )
+                          .join(' · ')
                       ) : (
                         <span className="text-muted-foreground">No price</span>
                       )}

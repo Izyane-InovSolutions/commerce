@@ -4,6 +4,7 @@ import { apiClient } from './api';
 import { listProducts } from './catalog';
 import { getPrimaryImage } from './catalog-types';
 import type { SuccessEnvelope } from './catalog-types';
+import { readCurrency } from './currency-cookie';
 import type { AddItemResponse, CartView, PublicOffer } from './commerce-types';
 import {
   GUEST_TOKEN_HEADER,
@@ -25,8 +26,20 @@ async function guestHeaders(): Promise<Record<string, string>> {
   return token ? { [GUEST_TOKEN_HEADER]: token } : {};
 }
 
+/**
+ * Every cart call names the currency it wants the cart priced in.
+ *
+ * The cart itself stores only offers and quantities — the money is resolved
+ * per request — so the shopper switching currency re-prices what they already
+ * have rather than needing a new cart.
+ */
+async function currencyQuery(): Promise<{ currency: string }> {
+  return { currency: await readCurrency() };
+}
+
 export async function getCart(): Promise<CartView> {
   const response = await apiClient.get<SuccessEnvelope<CartView>>('/cart', {
+    query: await currencyQuery(),
     headers: await guestHeaders(),
     cache: 'no-store',
   });
@@ -48,6 +61,7 @@ export async function addToCart(
     '/cart/items',
     {
       body: { offerId, quantity },
+      query: await currencyQuery(),
       headers: await guestHeaders(),
     },
   );
@@ -66,7 +80,11 @@ export async function updateCartItem(
 ): Promise<CartView> {
   const response = await apiClient.patch<SuccessEnvelope<CartView>>(
     `/cart/items/${itemId}`,
-    { body: { quantity }, headers: await guestHeaders() },
+    {
+      body: { quantity },
+      query: await currencyQuery(),
+      headers: await guestHeaders(),
+    },
   );
   return response.data;
 }
@@ -74,7 +92,7 @@ export async function updateCartItem(
 export async function removeCartItem(itemId: string): Promise<CartView> {
   const response = await apiClient.delete<SuccessEnvelope<CartView>>(
     `/cart/items/${itemId}`,
-    { headers: await guestHeaders() },
+    { query: await currencyQuery(), headers: await guestHeaders() },
   );
   return response.data;
 }
@@ -94,6 +112,7 @@ export async function mergeGuestCart(): Promise<void> {
 
   try {
     await apiClient.post('/cart/merge', {
+      query: await currencyQuery(),
       headers: { [GUEST_TOKEN_HEADER]: token },
     });
   } catch {
@@ -122,11 +141,14 @@ const UNKNOWN_OFFER: OfferLabel = {
 /** One page of the catalog is enough to name what a cart usually holds. */
 const CATALOG_INDEX_LIMIT = 100;
 
-async function readPublicOffer(offerId: string): Promise<PublicOffer | null> {
+async function readPublicOffer(
+  offerId: string,
+  currency: string,
+): Promise<PublicOffer | null> {
   try {
     const response = await apiClient.get<SuccessEnvelope<PublicOffer>>(
       `/catalog/offers/${offerId}`,
-      { next: { revalidate: 60 } },
+      { query: { currency }, next: { revalidate: 60 } },
     );
     return response.data;
   } catch (error) {
@@ -159,7 +181,10 @@ export async function labelOffers(
     return new Map();
   }
 
-  const offers = await Promise.all(unique.map(readPublicOffer));
+  const currency = await readCurrency();
+  const offers = await Promise.all(
+    unique.map((offerId) => readPublicOffer(offerId, currency)),
+  );
 
   // Worth the read whenever a line resolved at all: it is where both the
   // first-party names and every thumbnail come from.

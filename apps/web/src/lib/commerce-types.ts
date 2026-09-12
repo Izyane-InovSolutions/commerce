@@ -14,8 +14,13 @@ export type CartLineView = {
   quantity: number;
   unitPrice: { amount: number; currency: string } | null;
   lineTotal: number;
-  /** False once the offer stops being sellable — unpublished, or out of stock. */
+  /**
+   * False once the line cannot be bought as it stands — unpublished, out of
+   * stock, or not priced in the currency being browsed.
+   */
   isAvailable: boolean;
+  /** Every currency this line's offer currently carries a price in. */
+  currencies: string[];
 };
 
 export type CartView = {
@@ -52,7 +57,8 @@ export type PublicOffer = {
   seller: { slug: string; displayName: string | null } | null;
   isFirstParty: boolean;
   condition: 'NEW' | 'USED' | 'REFURBISHED';
-  currentPrice: { amount: number; currency: string };
+  currentPrice: { amount: number; currency: string } | null;
+  currencies: string[];
   checkoutSupported: boolean;
 };
 

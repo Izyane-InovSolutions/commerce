@@ -8,7 +8,7 @@ import {
   backendListProducts,
 } from '@commerce/api-client';
 
-import { pickCurrentPrice } from '@commerce/contracts';
+import { currentPrices } from '@commerce/contracts';
 
 import { ApiStatusCard } from '@/components/api-status-card';
 import { PageHeader } from '@/components/page-header';
@@ -47,9 +47,9 @@ async function CatalogSummary() {
 
     const variants = products.flatMap((product) => product.variants);
     const priced = variants.filter((variant) =>
-      variant.offers.some(
-        (offer) => pickCurrentPrice(offer.prices) !== undefined,
-      ),
+      // Priced in any currency counts; a variant sold only in pounds is
+      // still priced.
+      variant.offers.some((offer) => currentPrices(offer.prices).length > 0),
     );
 
     stats = [

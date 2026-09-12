@@ -9,10 +9,12 @@ import { addToCartAction } from '@/app/cart/actions';
 import { getProductBySlug, listProducts } from '@/lib/catalog';
 import {
   getDisplayPrice,
+  getOtherCurrencies,
   getPrimaryImage,
   getPrimaryOffer,
 } from '@/lib/catalog-types';
-import { formatCurrency } from '@/lib/currency';
+import { formatMinor } from '@/lib/currency';
+import { readCurrency } from '@/lib/currency-cookie';
 
 type ProductDetailPageProps = PageProps<'/products/[slug]'>;
 
@@ -35,8 +37,10 @@ export default async function ProductDetailPage({
     notFound();
   }
 
+  const currency = await readCurrency();
   const price = getDisplayPrice(product);
   const offer = getPrimaryOffer(product);
+  const elsewhere = getOtherCurrencies(product, currency);
   const relatedProducts = product.category
     ? (
         await listProducts({
@@ -73,9 +77,19 @@ export default async function ProductDetailPage({
             </h1>
           </div>
 
-          <p className="text-2xl font-semibold">
-            {price !== null ? formatCurrency(price) : 'Currently unavailable'}
-          </p>
+          <div className="space-y-1">
+            <p className="text-2xl font-semibold">
+              {price !== null
+                ? formatMinor(price.amount, price.currency)
+                : `Not sold in ${currency}`}
+            </p>
+            {price === null && elsewhere.length > 0 ? (
+              <p className="text-muted-foreground text-sm text-pretty">
+                Priced in {elsewhere.join(' and ')} — switch currency in the
+                header to buy it.
+              </p>
+            ) : null}
+          </div>
 
           {product.description ? (
             <p className="text-muted-foreground text-pretty">

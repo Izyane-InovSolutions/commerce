@@ -12,7 +12,10 @@ import {
   type CartItem,
 } from '@prisma/client';
 
-import { pickCurrentPrice } from '../../common/catalog/current-price';
+import {
+  currentPrices,
+  pickCurrentPrice,
+} from '../../common/catalog/current-price';
 import { OfferReadService } from '../offers/offer-read.service';
 import { PrismaService } from '../../database/prisma.service';
 import { InventoryService } from '../inventory/inventory.service';
@@ -29,23 +32,27 @@ export class CartService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly inventoryService: InventoryService,
-    private readonly offers:OfferReadService,
+    private readonly offers: OfferReadService,
   ) {}
 
-  async getCartView(identity: CartIdentity): Promise<CartView> {
+  async getCartView(
+    identity: CartIdentity,
+    currency: string,
+  ): Promise<CartView> {
     const cart = await this.findCart(identity);
 
     if (!cart) {
-      return this.emptyView();
+      return this.emptyView(currency);
     }
 
-    return this.buildView(cart.id);
+    return this.buildView(cart.id, currency);
   }
 
   async addItem(
     identity: CartIdentity,
     offerId: string,
     quantity: number,
+    currency: string,
   ): Promise<AddItemResult> {
     if (quantity <= 0) {
       throw new BadRequestException('quantity must be positive');
@@ -70,13 +77,17 @@ export class CartService {
       update: { quantity: { increment: quantity } },
     });
 
-    return { view: await this.buildView(cart.id), guestToken: newGuestToken };
+    return {
+      view: await this.buildView(cart.id, currency),
+      guestToken: newGuestToken,
+    };
   }
 
   async updateItemQuantity(
     identity: CartIdentity,
     itemId: string,
     quantity: number,
+    currency: string,
   ): Promise<CartView> {
     if (quantity <= 0) {
       throw new BadRequestException(
@@ -92,16 +103,20 @@ export class CartService {
       data: { quantity },
     });
 
-    return this.buildView(cart.id);
+    return this.buildView(cart.id, currency);
   }
 
-  async removeItem(identity: CartIdentity, itemId: string): Promise<CartView> {
+  async removeItem(
+    identity: CartIdentity,
+    itemId: string,
+    currency: string,
+  ): Promise<CartView> {
     const cart = await this.findCartOrThrow(identity);
     await this.findItemOrThrow(cart.id, itemId);
 
     await this.prisma.cartItem.delete({ where: { id: itemId } });
 
-    return this.buildView(cart.id);
+    return this.buildView(cart.id, currency);
   }
 
   async clearCart(identity: CartIdentity): Promise<void> {
@@ -117,9 +132,10 @@ export class CartService {
   async mergeGuestCart(
     userId: string,
     guestToken: string | undefined,
+    currency: string,
   ): Promise<CartView> {
     if (!guestToken) {
-      return this.getCartView({ userId });
+      return this.getCartView({ userId }, currency);
     }
 
     const guestCart = await this.prisma.cart.findUnique({
@@ -128,7 +144,7 @@ export class CartService {
     });
 
     if (!guestCart || guestCart.status !== CartStatus.ACTIVE) {
-      return this.getCartView({ userId });
+      return this.getCartView({ userId }, currency);
     }
 
     const { cart: userCart } = await this.getOrCreateCart({ userId });
@@ -154,7 +170,7 @@ export class CartService {
       });
     });
 
-    return this.buildView(userCart.id);
+    return this.buildView(userCart.id, currency);
   }
 
   private async getOrCreateCart(
@@ -223,40 +239,70 @@ export class CartService {
     return item;
   }
 
-  private async buildView(cartId: string): Promise<CartView> {
+  private async buildView(cartId: string, currency: string): Promise<CartView> {
     const cart = await this.prisma.cart.findUnique({
       where: { id: cartId },
-      include: {items:true},
+      include: { items: true },
     });
 
     if (!cart) {
-      return this.emptyView();
+      return this.emptyView(currency);
     }
 
-    const offers=await this.offers.findMany(cart.items.map(item=>item.offerId));
-    const byId=new Map(offers.map(offer=>[offer.id,offer]));
-    const quantities=await this.inventoryService.getAvailableQuantities(offers.filter(offer=>offer.stockSource!==OfferStockSource.SELLER).map(offer=>offer.variantId));
-    const lines:CartLineView[]=cart.items.map(item=>{
-      const offer=byId.get(item.offerId);
-      const currentPrice=pickCurrentPrice(offer?.prices ?? []);
-      const sellerStock=offer?.stockSource===OfferStockSource.SELLER;
-      const availableQuantity=offer ? (quantities.get(offer.variantId) ?? 0) : 0;
-      const sellerApproved=!!offer && (!offer.sellerId || offer.seller?.status===SellerStatus.APPROVED);
-      const isAvailable=sellerApproved && offer?.status===ProductStatus.PUBLISHED && !!currentPrice && (sellerStock || availableQuantity>=item.quantity);
-      return {id:item.id,offerId:item.offerId,sellerId:offer?.sellerId ?? null,quantity:item.quantity,unitPrice:currentPrice ? {amount:currentPrice.amount,currency:currentPrice.currency} : null,lineTotal:isAvailable && currentPrice ? currentPrice.amount*item.quantity : 0,isAvailable};
+    const offers = await this.offers.findMany(
+      cart.items.map((item) => item.offerId),
+    );
+    const byId = new Map(offers.map((offer) => [offer.id, offer]));
+    const quantities = await this.inventoryService.getAvailableQuantities(
+      offers
+        .filter((offer) => offer.stockSource !== OfferStockSource.SELLER)
+        .map((offer) => offer.variantId),
+    );
+    const lines: CartLineView[] = cart.items.map((item) => {
+      const offer = byId.get(item.offerId);
+      const currentPrice = pickCurrentPrice(offer?.prices ?? [], currency);
+      const sellerStock = offer?.stockSource === OfferStockSource.SELLER;
+      const availableQuantity = offer
+        ? (quantities.get(offer.variantId) ?? 0)
+        : 0;
+      const sellerApproved =
+        !!offer &&
+        (!offer.sellerId || offer.seller?.status === SellerStatus.APPROVED);
+      const isAvailable =
+        sellerApproved &&
+        offer?.status === ProductStatus.PUBLISHED &&
+        !!currentPrice &&
+        (sellerStock || availableQuantity >= item.quantity);
+      return {
+        id: item.id,
+        offerId: item.offerId,
+        sellerId: offer?.sellerId ?? null,
+        quantity: item.quantity,
+        unitPrice: currentPrice
+          ? { amount: currentPrice.amount, currency: currentPrice.currency }
+          : null,
+        lineTotal:
+          isAvailable && currentPrice ? currentPrice.amount * item.quantity : 0,
+        isAvailable,
+        // What it is priced in, so a client can tell "we stopped selling this"
+        // apart from "we don't sell this in the currency you are browsing".
+        currencies: currentPrices(offer?.prices ?? [])
+          .map((price) => price.currency)
+          .sort(),
+      };
     });
 
-    const availableLines = lines.filter((line) => line.isAvailable);
-    const subtotal = availableLines.reduce(
-      (sum, line) => sum + line.lineTotal,
-      0,
-    );
-    const currency = availableLines[0]?.unitPrice?.currency ?? null;
+    const subtotal = lines
+      .filter((line) => line.isAvailable)
+      .reduce((sum, line) => sum + line.lineTotal, 0);
 
+    // The cart is denominated in what the shopper is browsing in, not in
+    // whatever the first line happens to carry — otherwise a cart holding
+    // nothing priced in their currency would report someone else's.
     return { id: cart.id, items: lines, subtotal, currency };
   }
 
-  private emptyView(): CartView {
-    return { id: null, items: [], subtotal: 0, currency: null };
+  private emptyView(currency: string): CartView {
+    return { id: null, items: [], subtotal: 0, currency };
   }
 }

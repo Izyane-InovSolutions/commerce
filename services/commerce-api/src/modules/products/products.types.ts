@@ -65,7 +65,10 @@ export type ProductWithRelations = Omit<ProductRowWithRelations, 'media'> & {
 export type PublicOffer = {
   id: string;
   status: Offer['status'];
+  /** Resolved in the requested currency; null when it has no price in it. */
   currentPrice: { amount: number; currency: string } | null;
+  /** Every currency this offer currently carries a price in. */
+  currencies: string[];
 };
 
 export type PublicVariant = {

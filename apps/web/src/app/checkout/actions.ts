@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
+import { readCurrency } from '@/lib/currency-cookie';
 import { checkout, createAddress, listAddresses } from '@/lib/orders';
 import type { Address } from '@/lib/commerce-types';
 import { toFormState, type FormState } from '@/lib/form';
@@ -115,6 +116,7 @@ export async function placeOrderAction(
     const result = await checkout(
       shippingAddressId,
       idempotencyKey,
+      String(formData.get('currency') ?? '') || (await readCurrency()),
       paymentDetails(formData, address, user.email),
     );
 

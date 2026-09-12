@@ -1,4 +1,7 @@
-import { OfferReadService, type CommerceOffer } from '../offers/offer-read.service';
+import {
+  OfferReadService,
+  type CommerceOffer,
+} from '../offers/offer-read.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import {
   CartStatus,
@@ -88,9 +91,20 @@ describe('CartService', () => {
     service = new CartService(
       prisma as unknown as PrismaService,
       inventoryService as unknown as InventoryService,
-      {find: prisma.offer.findUnique, findMany: jest.fn().mockImplementation(() =>
-        (prisma.cart.findUnique.mock.results.at(-1)?.value as Promise<{items:Array<{offerId:string;offer:CommerceOffer}>}>).then(result=>result.items.map(item=>({...item.offer,id:item.offerId})))
-      )} as unknown as OfferReadService,
+      {
+        find: prisma.offer.findUnique,
+        findMany: jest
+          .fn()
+          .mockImplementation(() =>
+            (
+              prisma.cart.findUnique.mock.results.at(-1)?.value as Promise<{
+                items: Array<{ offerId: string; offer: CommerceOffer }>;
+              }>
+            ).then((result) =>
+              result.items.map((item) => ({ ...item.offer, id: item.offerId })),
+            ),
+          ),
+      } as unknown as OfferReadService,
     );
   });
 
@@ -107,7 +121,7 @@ describe('CartService', () => {
       prisma.cart.findUnique.mockResolvedValue({ id: 'cart-1', items: [] });
 
       await expect(
-        service.addItem({ userId: 'user-1' }, 'offer-1', 1),
+        service.addItem({ userId: 'user-1' }, 'offer-1', 1, 'USD'),
       ).resolves.toBeDefined();
 
       expect(prisma.cartItem.upsert).toHaveBeenCalled();
@@ -121,16 +135,16 @@ describe('CartService', () => {
         }),
       );
 
-      await expect(service.addItem({}, 'offer-1', 1)).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(
+        service.addItem({}, 'offer-1', 1, 'USD'),
+      ).rejects.toBeInstanceOf(BadRequestException);
       expect(prisma.cartItem.upsert).not.toHaveBeenCalled();
     });
 
     it('rejects a non-positive quantity', async () => {
-      await expect(service.addItem({}, 'offer-1', 0)).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(
+        service.addItem({}, 'offer-1', 0, 'USD'),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('rejects adding an offer that is not published', async () => {
@@ -138,9 +152,9 @@ describe('CartService', () => {
         buildOffer({ status: ProductStatus.DRAFT }),
       );
 
-      await expect(service.addItem({}, 'offer-1', 1)).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(
+        service.addItem({}, 'offer-1', 1, 'USD'),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('creates a guest cart and returns its token when the guest has no cart yet', async () => {
@@ -166,7 +180,7 @@ describe('CartService', () => {
         guestToken: 'guest-token',
       });
 
-      const result = await service.addItem({}, 'offer-1', 1);
+      const result = await service.addItem({}, 'offer-1', 1, 'USD');
 
       expect(prisma.cart.create).toHaveBeenCalledWith({
         data: { guestToken: expect.any(String) as string },
@@ -193,7 +207,7 @@ describe('CartService', () => {
         ],
       });
 
-      await service.addItem({ userId: 'user-1' }, 'offer-1', 3);
+      await service.addItem({ userId: 'user-1' }, 'offer-1', 3, 'USD');
 
       expect(prisma.cartItem.upsert).toHaveBeenCalledWith({
         where: { cartId_offerId: { cartId: 'cart-1', offerId: 'offer-1' } },
@@ -207,13 +221,15 @@ describe('CartService', () => {
     it('returns an empty view without creating a cart when none exists', async () => {
       prisma.cart.findFirst.mockResolvedValue(null);
 
-      const view = await service.getCartView({ userId: 'user-1' });
+      const view = await service.getCartView({ userId: 'user-1' }, 'USD');
 
+      // An empty cart still reports the currency it was asked for, so a
+      // storefront knows what it is displaying before anything is in it.
       expect(view).toEqual({
         id: null,
         items: [],
         subtotal: 0,
-        currency: null,
+        currency: 'USD',
       });
       expect(prisma.cart.create).not.toHaveBeenCalled();
     });
@@ -235,7 +251,7 @@ describe('CartService', () => {
         ],
       });
 
-      const view = await service.getCartView({ userId: 'user-1' });
+      const view = await service.getCartView({ userId: 'user-1' }, 'USD');
 
       expect(view.items).toHaveLength(1);
       expect(view.items[0]).toMatchObject({ isAvailable: false, lineTotal: 0 });
@@ -256,7 +272,7 @@ describe('CartService', () => {
         ],
       });
 
-      const view = await service.getCartView({ userId: 'user-1' });
+      const view = await service.getCartView({ userId: 'user-1' }, 'USD');
 
       expect(view.items[0]).toMatchObject({
         isAvailable: false,
@@ -284,7 +300,7 @@ describe('CartService', () => {
         ],
       });
 
-      const view = await service.getCartView({ userId: 'user-1' });
+      const view = await service.getCartView({ userId: 'user-1' }, 'USD');
 
       expect(view.subtotal).toBe(2000);
       expect(view.currency).toBe('USD');
@@ -308,7 +324,7 @@ describe('CartService', () => {
         ],
       });
 
-      const view = await service.getCartView({ userId: 'user-1' });
+      const view = await service.getCartView({ userId: 'user-1' }, 'USD');
 
       expect(view.items[0]).toMatchObject({
         isAvailable: true,
@@ -335,7 +351,7 @@ describe('CartService', () => {
         ],
       });
 
-      const view = await service.getCartView({ userId: 'user-1' });
+      const view = await service.getCartView({ userId: 'user-1' }, 'USD');
 
       expect(view.items[0]).toMatchObject({ isAvailable: false });
     });
@@ -346,7 +362,7 @@ describe('CartService', () => {
       prisma.cart.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.updateItemQuantity({ userId: 'user-1' }, 'item-1', 2),
+        service.updateItemQuantity({ userId: 'user-1' }, 'item-1', 2, 'USD'),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
@@ -358,7 +374,7 @@ describe('CartService', () => {
       });
 
       await expect(
-        service.removeItem({ userId: 'user-1' }, 'item-1'),
+        service.removeItem({ userId: 'user-1' }, 'item-1', 'USD'),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
@@ -367,7 +383,7 @@ describe('CartService', () => {
     it('is a no-op when no guest token is provided', async () => {
       prisma.cart.findFirst.mockResolvedValue(null);
 
-      await service.mergeGuestCart('user-1', undefined);
+      await service.mergeGuestCart('user-1', undefined, 'USD');
 
       expect(prisma.cart.findUnique).not.toHaveBeenCalled();
     });
@@ -385,7 +401,7 @@ describe('CartService', () => {
         userId: 'user-1',
       });
 
-      await service.mergeGuestCart('user-1', 'guest-token');
+      await service.mergeGuestCart('user-1', 'guest-token', 'USD');
 
       expect(prisma.cartItem.upsert).toHaveBeenCalledWith({
         where: { cartId_offerId: { cartId: 'user-cart', offerId: 'offer-1' } },
@@ -402,7 +418,7 @@ describe('CartService', () => {
       prisma.cart.findUnique.mockResolvedValueOnce(null);
       prisma.cart.findFirst.mockResolvedValue(null);
 
-      await service.mergeGuestCart('user-1', 'unknown-token');
+      await service.mergeGuestCart('user-1', 'unknown-token', 'USD');
 
       expect(prisma.cartItem.upsert).not.toHaveBeenCalled();
     });

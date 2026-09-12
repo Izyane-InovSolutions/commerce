@@ -25,6 +25,7 @@ function makeProduct(index: number): Product {
             id: `o-${index}`,
             status: 'PUBLISHED',
             currentPrice: { amount: (10 + index) * 100, currency: 'ZMW' },
+            currencies: ['ZMW'],
           },
         ],
       },

@@ -8,10 +8,12 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
 } from '@nestjs/common';
 
 import type { AuthenticatedUser } from '../../common/auth/authenticated-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
+import { CurrencyQueryDto } from '../../common/catalog/dto/currency-query.dto';
 import { AddWishlistItemDto } from './dto/add-wishlist-item.dto';
 import { WishlistService } from './wishlist.service';
 import { WishlistItemView } from './wishlist.types';
@@ -21,8 +23,11 @@ export class WishlistController {
   constructor(private readonly wishlistService: WishlistService) {}
 
   @Get()
-  list(@CurrentUser() user: AuthenticatedUser): Promise<WishlistItemView[]> {
-    return this.wishlistService.list(user.id);
+  list(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: CurrencyQueryDto,
+  ): Promise<WishlistItemView[]> {
+    return this.wishlistService.list(user.id, query.currency);
   }
 
   @Post()

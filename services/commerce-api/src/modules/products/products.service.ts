@@ -18,7 +18,10 @@ import {
 import { parseSort } from '../../common/pagination/sort.dto';
 import { MediaService } from '../media/media.service';
 import { PrismaService } from '../../database/prisma.service';
-import { pickCurrentPrice } from '../../common/catalog/current-price';
+import {
+  currentPrices,
+  pickCurrentPrice,
+} from '../../common/catalog/current-price';
 import { AttachMediaDto } from './dto/attach-media.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { CreateVariantDto } from './dto/create-variant.dto';
@@ -109,14 +112,17 @@ export class ProductsService {
     ]);
 
     return paginatedResult(
-      products.map((product) => this.toPublicProduct(product)),
+      products.map((product) => this.toPublicProduct(product, query.currency)),
       query.page,
       query.limit,
       total,
     );
   }
 
-  async findPublishedBySlug(slug: string): Promise<PublicProduct> {
+  async findPublishedBySlug(
+    slug: string,
+    currency: string,
+  ): Promise<PublicProduct> {
     const product = await this.prisma.product.findFirst({
       where: { slug, status: ProductStatus.PUBLISHED },
       include: {
@@ -142,7 +148,7 @@ export class ProductsService {
       throw new NotFoundException('Product not found');
     }
 
-    return this.toPublicProduct(product);
+    return this.toPublicProduct(product, currency);
   }
 
   async findAllAdmin(): Promise<ProductWithRelations[]> {
@@ -481,7 +487,10 @@ export class ProductsService {
     return orderBy.length > 0 ? orderBy : [{ createdAt: 'desc' }];
   }
 
-  private toPublicProduct(product: ProductRowWithRelations): PublicProduct {
+  private toPublicProduct(
+    product: ProductRowWithRelations,
+    currency: string,
+  ): PublicProduct {
     return {
       id: product.id,
       name: product.name,
@@ -514,13 +523,18 @@ export class ProductsService {
           value: entry.attributeValue.value,
         })),
         offers: variant.offers.map((offer) => {
-          const currentPrice = pickCurrentPrice(offer.prices);
+          const currentPrice = pickCurrentPrice(offer.prices, currency);
           return {
             id: offer.id,
             status: offer.status,
             currentPrice: currentPrice
               ? { amount: currentPrice.amount, currency: currentPrice.currency }
               : null,
+            // What the offer *is* priced in, so a client can tell "we don't
+            // sell this" apart from "we don't sell this in your currency".
+            currencies: currentPrices(offer.prices)
+              .map((price) => price.currency)
+              .sort(),
           };
         }),
       })),

@@ -8,7 +8,7 @@ import {
   backendListCategories,
 } from '@commerce/api-client';
 
-import { pickCurrentPrice } from '@commerce/contracts';
+import { currentPrices } from '@commerce/contracts';
 
 import { ApiErrorNotice } from '@/components/api-error-notice';
 import { OfferControls } from '@/components/offer-controls';
@@ -175,18 +175,21 @@ export default async function ProductPage({
                   productId={product.id}
                   variantId={variant.id}
                   variantLabel={variant.skuCode}
-                  offers={variant.offers.map((offer) => {
-                    // The admin read returns the whole price history, so the
-                    // one in force is resolved the same way the API does.
-                    const price = pickCurrentPrice(offer.prices);
-                    return {
-                      id: offer.id,
-                      status: offer.status,
-                      price: price
-                        ? formatMinor(price.amount, price.currency)
-                        : null,
-                    };
-                  })}
+                  offers={variant.offers.map((offer) => ({
+                    id: offer.id,
+                    status: offer.status,
+                    // The admin read returns the whole price history, and an
+                    // offer can be priced in several currencies at once, so
+                    // every one currently in force is listed rather than
+                    // whichever was added last.
+                    prices: currentPrices(offer.prices)
+                      .sort((left, right) =>
+                        left.currency.localeCompare(right.currency),
+                      )
+                      .map((price) =>
+                        formatMinor(price.amount, price.currency),
+                      ),
+                  }))}
                   createOffer={createOfferAction.bind(
                     null,
                     product.id,
