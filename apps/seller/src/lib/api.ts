@@ -1,19 +1,21 @@
 import { createApiClient } from '@commerce/api-client';
 
 import { env } from './env';
-import { readSessionToken } from './session-cookie';
+import { readAccessToken } from './session-cookie';
 
 /**
  * The portal's client for the Commerce API.
  *
- * Credentials are attached here from the session cookie, so no caller has to
- * know about them and the token never reaches the browser. Authorization
- * itself is enforced by the API — the portal only decides what to show.
+ * `envelope` is on because the API wraps every response in
+ * `{ data, meta: { requestId } }`; unwrapping here keeps that detail out of
+ * every page. The bearer token comes from the session cookie, so it never
+ * reaches the browser and no caller has to pass it.
  */
 export const apiClient = createApiClient({
   baseUrl: env.apiBaseUrl,
+  envelope: true,
   getAuthHeaders: async (): Promise<Record<string, string>> => {
-    const token = await readSessionToken();
+    const token = await readAccessToken();
     return token ? { authorization: `Bearer ${token}` } : {};
   },
 });

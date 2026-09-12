@@ -11,6 +11,7 @@ const TONES: Record<
   pending: 'secondary',
   inactive: 'outline',
   archived: 'outline',
+  rejected: 'destructive',
   suspended: 'destructive',
 };
 

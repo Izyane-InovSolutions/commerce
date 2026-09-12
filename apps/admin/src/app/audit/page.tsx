@@ -1,16 +1,21 @@
 import type { Metadata } from 'next';
 
-import { SectionPlaceholder } from '@/components/section-placeholder';
+import { AwaitingBackend } from '@/components/awaiting-backend';
+import { requireAdmin } from '@/lib/session';
 
-export const metadata: Metadata = {
-  title: 'Audit',
-};
+export const metadata: Metadata = { title: 'Audit' };
 
-export default function AuditPage() {
+export default async function AuditPage() {
+  await requireAdmin();
+
   return (
-    <SectionPlaceholder
-      title="Audit"
-      description="Audit events raised by privileged actions."
+    <AwaitingBackend
+      title={'Audit'}
+      description={'Events raised by privileged actions.'}
+      needs={['GET /admin/audit-events']}
+      note={
+        'Audit rows are being written — the module exists but is not imported into AppModule, so nothing is exposed over HTTP.'
+      }
     />
   );
 }

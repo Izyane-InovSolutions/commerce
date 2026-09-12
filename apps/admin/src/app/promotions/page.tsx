@@ -1,16 +1,18 @@
 import type { Metadata } from 'next';
 
-import { SectionPlaceholder } from '@/components/section-placeholder';
+import { AwaitingBackend } from '@/components/awaiting-backend';
+import { requireAdmin } from '@/lib/session';
 
-export const metadata: Metadata = {
-  title: 'Promotions',
-};
+export const metadata: Metadata = { title: 'Promotions' };
 
-export default function PromotionsPage() {
+export default async function PromotionsPage() {
+  await requireAdmin();
+
   return (
-    <SectionPlaceholder
-      title="Promotions"
-      description="Campaigns, coupons, and curated collections."
+    <AwaitingBackend
+      title={'Promotions'}
+      description={'Campaigns, coupons, and collections.'}
+      needs={['GET /admin/promotions']}
     />
   );
 }

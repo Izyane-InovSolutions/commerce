@@ -2,7 +2,11 @@
 
 import { revalidatePath } from 'next/cache';
 
-import { createBrand, deleteBrand, updateBrand } from '@commerce/api-client';
+import {
+  backendCreateBrand,
+  backendDeleteBrand,
+  backendUpdateBrand,
+} from '@commerce/api-client';
 
 import { apiClient } from '@/lib/api';
 import { toFormState, type FormState } from '@/lib/form';
@@ -17,7 +21,7 @@ export async function createBrandAction(
   formData: FormData,
 ): Promise<FormState> {
   try {
-    await createBrand(apiClient, {
+    await backendCreateBrand(apiClient, {
       name: String(formData.get('name') ?? '').trim(),
       slug: String(formData.get('slug') ?? '').trim(),
     });
@@ -35,7 +39,7 @@ export async function updateBrandAction(
   formData: FormData,
 ): Promise<FormState> {
   try {
-    await updateBrand(apiClient, brandId, {
+    await backendUpdateBrand(apiClient, brandId, {
       name: String(formData.get('name') ?? '').trim(),
       slug: String(formData.get('slug') ?? '').trim(),
     });
@@ -49,7 +53,7 @@ export async function updateBrandAction(
 
 export async function deleteBrandAction(brandId: string): Promise<FormState> {
   try {
-    await deleteBrand(apiClient, brandId);
+    await backendDeleteBrand(apiClient, brandId);
   } catch (error) {
     return toFormState(error);
   }

@@ -3,67 +3,61 @@
 import { revalidatePath } from 'next/cache';
 
 import {
-  approveSellerApplication,
-  reinstateSeller,
-  rejectSellerApplication,
-  suspendSeller,
+  backendApproveSeller,
+  backendRejectSeller,
+  backendSuspendSeller,
 } from '@commerce/api-client';
 
 import { apiClient } from '@/lib/api';
 import { toFormState, type FormState } from '@/lib/form';
 
-function revalidateSellers(): void {
-  revalidatePath('/sellers');
-  revalidatePath('/');
+const REVIEWERS = {
+  approve: backendApproveSeller,
+  reject: backendRejectSeller,
+  suspend: backendSuspendSeller,
+} as const;
+
+type Decision = keyof typeof REVIEWERS;
+
+const CONFIRMATIONS: Record<Decision, string> = {
+  approve: 'Seller approved.',
+  reject: 'Seller rejected.',
+  suspend: 'Seller suspended.',
+};
+
+function isDecision(value: string): value is Decision {
+  return value in REVIEWERS;
 }
 
-export async function approveApplicationAction(
-  applicationId: string,
-): Promise<FormState> {
-  try {
-    await approveSellerApplication(apiClient, applicationId);
-  } catch (error) {
-    return toFormState(error);
-  }
-
-  revalidateSellers();
-  return { status: 'idle', message: 'Seller approved.' };
-}
-
-export async function rejectApplicationAction(
-  applicationId: string,
+/**
+ * Approve, reject, or suspend a seller.
+ *
+ * All three are one review call under three paths, so which button was
+ * pressed arrives as a form value rather than as three near-identical
+ * actions. The version is the one the page rendered: the API rejects a stale
+ * one, which is what stops two administrators from each deciding against a
+ * different view of the same seller.
+ */
+export async function reviewSellerAction(
+  sellerId: string,
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const decision = String(formData.get('decision') ?? '');
+  if (!isDecision(decision)) {
+    return { status: 'error', message: 'Choose a decision.' };
+  }
+
   try {
-    await rejectSellerApplication(
-      apiClient,
-      applicationId,
-      String(formData.get('reason') ?? '').trim(),
-    );
+    await REVIEWERS[decision](apiClient, sellerId, {
+      version: Number(formData.get('version')),
+      reason: String(formData.get('reason') ?? '').trim(),
+    });
   } catch (error) {
     return toFormState(error);
   }
 
-  revalidateSellers();
-  return { status: 'idle', message: 'Application rejected.' };
-}
-
-export async function setSellerStatusAction(
-  sellerId: string,
-  suspend: boolean,
-): Promise<FormState> {
-  try {
-    await (suspend
-      ? suspendSeller(apiClient, sellerId)
-      : reinstateSeller(apiClient, sellerId));
-  } catch (error) {
-    return toFormState(error);
-  }
-
-  revalidateSellers();
-  return {
-    status: 'idle',
-    message: suspend ? 'Seller suspended.' : 'Seller reinstated.',
-  };
+  revalidatePath('/sellers');
+  revalidatePath(`/sellers/${sellerId}`);
+  return { status: 'idle', message: CONFIRMATIONS[decision] };
 }

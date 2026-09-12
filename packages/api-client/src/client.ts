@@ -10,7 +10,11 @@ export type QueryValue = string | number | boolean | null | undefined;
 export type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 
 export type ApiRequestOptions = {
-  /** Serialised as JSON. Omit for requests without a body. */
+  /**
+   * Serialised as JSON, unless it is `FormData` — which is sent as-is so the
+   * browser or runtime can set its own multipart boundary. Omit for requests
+   * without a body.
+   */
   body?: unknown;
   /** Appended as a query string; `null` and `undefined` entries are dropped. */
   query?: Record<string, QueryValue>;
@@ -31,6 +35,13 @@ export type ApiClientOptions = {
   /** Base URL of the Commerce API, including the `/api/v1` prefix. */
   baseUrl: string;
   /**
+   * Unwrap the `{ data, meta }` envelope the Commerce API wraps every
+   * response in, so callers receive the payload itself.
+   *
+   * Off by default because the stand-in mock returns payloads directly.
+   */
+  envelope?: boolean;
+  /**
    * Resolves headers to attach to every request, such as an `authorization`
    * header. Called per request so a rotated token is always picked up.
    */
@@ -41,6 +52,8 @@ export type ApiClientOptions = {
 
 export type ApiClient = {
   readonly baseUrl: string;
+  /** True when responses from this client are unwrapped from an envelope. */
+  readonly envelope: boolean;
   request<T>(
     method: HttpMethod,
     path: string,
@@ -113,7 +126,12 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       ...headers,
     };
 
-    if (body !== undefined) {
+    // FormData carries its own content type, including a boundary only the
+    // runtime knows; setting one here would make the body unparseable.
+    const isFormData =
+      typeof FormData !== 'undefined' && body instanceof FormData;
+
+    if (body !== undefined && !isFormData) {
       requestHeaders['content-type'] = 'application/json';
     }
 
@@ -126,7 +144,12 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       response = await fetch(buildUrl(baseUrl, path, query), {
         method,
         headers: requestHeaders,
-        body: body === undefined ? undefined : JSON.stringify(body),
+        body:
+          body === undefined
+            ? undefined
+            : isFormData
+              ? (body as FormData)
+              : JSON.stringify(body),
         signal,
         cache,
         next,
@@ -155,11 +178,31 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       );
     }
 
-    return payload as T;
+    return unwrap(payload) as T;
+  }
+
+  /**
+   * Strips the response envelope.
+   *
+   * Only an object carrying exactly `data` and `meta` is treated as one, so a
+   * paginated body — which is itself `{ data, meta }` — is returned intact
+   * after the outer layer comes off.
+   */
+  function unwrap(payload: unknown): unknown {
+    if (!options.envelope || payload === null || typeof payload !== 'object') {
+      return payload;
+    }
+
+    const keys = Object.keys(payload);
+    const enveloped =
+      keys.length === 2 && keys.includes('data') && keys.includes('meta');
+
+    return enveloped ? (payload as { data: unknown }).data : payload;
   }
 
   return {
     baseUrl,
+    envelope: options.envelope === true,
     request,
     get: (path, requestOptions) => request('GET', path, requestOptions),
     post: (path, requestOptions) => request('POST', path, requestOptions),

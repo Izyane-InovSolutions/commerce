@@ -1,21 +1,18 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { ArrowLeft } from 'lucide-react';
 
-import {
-  ApiError,
-  getProduct,
-  listBrands,
-  listCategories,
-  listInventory,
-} from '@commerce/api-client';
+import { ApiError, backendGetSellerOffer } from '@commerce/api-client';
+import { pickCurrentPrice } from '@commerce/contracts';
 
 import { ApiErrorNotice } from '@/components/api-error-notice';
+import { OfferForm } from '@/components/offer-form';
+import { OfferPriceForm } from '@/components/offer-price-form';
+import { OfferStatusControl } from '@/components/offer-status-control';
 import { PageHeader } from '@/components/page-header';
-import { ProductForm } from '@/components/product-form';
+import { SellerGateNotice } from '@/components/seller-gate-notice';
 import { StatusBadge } from '@/components/status-badge';
-import { StockAdjuster } from '@/components/stock-adjuster';
-import { SubmitDraft } from '@/components/submit-draft';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -24,151 +21,184 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { apiClient } from '@/lib/api';
-import { requireSeller } from '@/lib/session';
+import { formatMinor } from '@/lib/money';
+import { getSellerAccount } from '@/lib/seller';
+import { requireUser } from '@/lib/session';
 
 import {
-  adjustStockAction,
-  submitDraftAction,
-  updateProductAction,
+  addOfferPriceAction,
+  setOfferStatusAction,
+  updateOfferAction,
 } from '../actions';
+
+const DEFAULT_CURRENCY = 'ZMW';
 
 export async function generateMetadata({
   params,
 }: PageProps<'/products/[id]'>): Promise<Metadata> {
   const { id } = await params;
   try {
-    return { title: (await getProduct(apiClient, id)).name };
+    const offer = await backendGetSellerOffer(apiClient, id);
+    return { title: offer.listingTitle ?? 'Listing' };
   } catch {
-    return { title: 'Product' };
+    return { title: 'Listing' };
   }
 }
 
-export default async function SellerProductPage({
+function formatDate(value: string): string {
+  return new Date(value).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+export default async function OfferPage({
   params,
 }: PageProps<'/products/[id]'>) {
-  const user = await requireSeller();
+  await requireUser();
+  const account = await getSellerAccount();
   const { id } = await params;
 
-  let product;
-  let brands;
-  let categories;
-  let stock;
+  if (account.state !== 'approved') {
+    return (
+      <SellerGateNotice
+        title="Listing"
+        description="One of the products you sell."
+        account={account}
+      />
+    );
+  }
+
+  let offer;
   try {
-    [product, brands, categories, stock] = await Promise.all([
-      getProduct(apiClient, id),
-      listBrands(apiClient),
-      listCategories(apiClient),
-      listInventory(apiClient, { pageSize: 100 }),
-    ]);
+    offer = await backendGetSellerOffer(apiClient, id);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
       notFound();
     }
-    return <ApiErrorNotice error={error} />;
+
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Listing"
+          description="One of the products you sell."
+        />
+        <ApiErrorNotice error={error} />
+      </div>
+    );
   }
 
-  if (product.submittedBySellerId !== user.sellerId) {
-    notFound();
-  }
-
-  const editable = ['draft', 'pending', 'rejected'].includes(product.status);
-  const myStock = stock.items.filter((level) => level.productId === product.id);
+  const current = pickCurrentPrice(offer.prices);
+  const currency = current?.currency ?? DEFAULT_CURRENCY;
 
   return (
     <div className="space-y-8">
+      <div>
+        <Button variant="ghost" size="sm" asChild>
+          <Link href="/products">
+            <ArrowLeft data-icon="inline-start" />
+            All listings
+          </Link>
+        </Button>
+      </div>
+
       <PageHeader
-        title={product.name}
+        title={offer.listingTitle ?? 'Untitled listing'}
         description={
-          editable
-            ? 'Your submission. Edits to a rejected product send it back for review.'
-            : 'This product is live, so the platform manages the record now. Your price and stock are still yours.'
+          current
+            ? `Selling at ${formatMinor(current.amount, current.currency)}.`
+            : 'No price set — this listing cannot sell until it has one.'
         }
-        action={<StatusBadge status={product.status} />}
+        action={<StatusBadge status={offer.status.toLowerCase()} />}
       />
-
-      {product.status === 'rejected' && product.rejectionReason ? (
-        <div
-          role="alert"
-          className="border-destructive/40 bg-destructive/10 max-w-2xl space-y-1 rounded-xl border px-4 py-3"
-        >
-          <p className="text-destructive text-sm font-medium">
-            An administrator turned this down.
-          </p>
-          <p className="text-sm">{product.rejectionReason}</p>
-          <p className="text-muted-foreground text-sm">
-            Address it below and resubmit.
-          </p>
-        </div>
-      ) : null}
-
-      {product.status === 'draft' ? (
-        <SubmitDraft action={submitDraftAction.bind(null, product.id)} />
-      ) : null}
-
-      {editable ? (
-        <ProductForm
-          action={updateProductAction.bind(null, product.id)}
-          brands={brands}
-          categories={categories}
-          product={product}
-        />
-      ) : (
-        <Card className="max-w-2xl">
-          <CardHeader>
-            <CardTitle>Live product</CardTitle>
-            <CardDescription>
-              Ask an administrator to change the product record. To stop selling
-              it, deactivate your offer.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline" asChild>
-              <Link href="/products">Back to products</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      )}
 
       <Card>
         <CardHeader>
-          <CardTitle>Your stock</CardTitle>
+          <CardTitle>Availability</CardTitle>
           <CardDescription>
-            What you hold yourself. Available is on hand less what is reserved
-            against open orders.
+            Publishing puts this in front of customers, as long as the
+            platform&apos;s own product and variant are published too.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {myStock.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              No stock records yet. They open once the product has SKUs.
-            </p>
-          ) : (
-            myStock.map((level) => (
-              <div
-                key={`${level.skuId}-${level.locationId}`}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
-              >
-                <div>
-                  <p className="font-mono text-xs">{level.skuCode}</p>
-                  <p className="text-sm">
-                    <span className="font-medium">{level.available}</span>{' '}
-                    available
-                    <span className="text-muted-foreground">
-                      {' '}
-                      · {level.onHand} on hand · {level.reserved} reserved
-                    </span>
-                  </p>
-                </div>
-                <StockAdjuster
-                  skuId={level.skuId}
-                  locationId={level.locationId}
-                  label={`${level.skuCode} stock`}
-                  action={adjustStockAction}
-                />
-              </div>
-            ))
+        <CardContent>
+          <OfferStatusControl
+            current={offer.status}
+            version={offer.version}
+            action={setOfferStatusAction.bind(null, offer.id)}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Price</CardTitle>
+          <CardDescription>
+            A new price takes effect immediately. The previous one is kept, so
+            the listing carries its whole history.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <OfferPriceForm
+            version={offer.version}
+            currency={currency}
+            action={addOfferPriceAction.bind(null, offer.id)}
+          />
+
+          {offer.prices.length === 0 ? null : (
+            <div className="overflow-x-auto rounded-xl border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>From</TableHead>
+                    <TableHead>Until</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {offer.prices.map((price) => (
+                    <TableRow key={price.id}>
+                      <TableCell className="text-muted-foreground">
+                        {formatDate(price.startsAt)}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {price.endsAt ? formatDate(price.endsAt) : '—'}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatMinor(price.amount, price.currency)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Listing details</CardTitle>
+          <CardDescription>
+            How this appears to customers, and who holds and ships the stock.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <OfferForm
+            action={updateOfferAction.bind(null, offer.id)}
+            version={offer.version}
+            defaults={offer}
+            submitLabel="Save listing"
+          />
         </CardContent>
       </Card>
     </div>

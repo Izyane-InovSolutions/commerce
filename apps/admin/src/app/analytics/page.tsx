@@ -1,16 +1,21 @@
 import type { Metadata } from 'next';
 
-import { SectionPlaceholder } from '@/components/section-placeholder';
+import { AwaitingBackend } from '@/components/awaiting-backend';
+import { requireAdmin } from '@/lib/session';
 
-export const metadata: Metadata = {
-  title: 'Analytics',
-};
+export const metadata: Metadata = { title: 'Analytics' };
 
-export default function AnalyticsPage() {
+export default async function AnalyticsPage() {
+  await requireAdmin();
+
   return (
-    <SectionPlaceholder
-      title="Analytics"
-      description="Trading, catalog, and marketplace reporting."
+    <AwaitingBackend
+      title={'Analytics'}
+      description={'Trading and marketplace reporting.'}
+      needs={['GET /admin/insights']}
+      note={
+        'The dashboard shows what can be counted from the catalog and inventory endpoints today.'
+      }
     />
   );
 }

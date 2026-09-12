@@ -10,7 +10,7 @@ export default function DealsPage() {
   return (
     <PlaceholderPage
       title="Deals"
-      description="Active discounts and promotions across the marketplace, sourced from the offers and pricing modules."
+      description="Nothing to show yet: a price has a start and an end date in the API, but there is no endpoint that returns what is currently discounted, so there is no honest way to list deals."
     />
   );
 }

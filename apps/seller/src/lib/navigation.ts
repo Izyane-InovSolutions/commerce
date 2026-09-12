@@ -1,4 +1,4 @@
-import type { User } from '@commerce/contracts';
+import type { BackendUser } from '@commerce/contracts';
 import {
   Boxes,
   Building2,
@@ -29,11 +29,10 @@ export const navigation: NavItem[] = [
     icon: Package,
     children: [
       { href: '/products', label: 'My Products' },
-      { href: '/products/new', label: 'Add Product' },
-      { href: '/products?view=draft', label: 'Drafts' },
-      { href: '/products?view=pending', label: 'Pending Approval' },
-      { href: '/products?view=active', label: 'Approved' },
-      { href: '/products?view=rejected', label: 'Rejected' },
+      { href: '/products/new', label: 'List a Product' },
+      { href: '/products?status=DRAFT', label: 'Drafts' },
+      { href: '/products?status=PUBLISHED', label: 'Published' },
+      { href: '/products?status=ARCHIVED', label: 'Archived' },
     ],
   },
   { href: '/orders', label: 'Orders', icon: ClipboardList },
@@ -45,20 +44,15 @@ export const navigation: NavItem[] = [
   { href: '/settings', label: 'Store Settings', icon: Building2 },
 ];
 
-/** What someone who has not been approved to sell yet can reach. */
-const onboardingNavigation: NavItem[] = [
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/apply', label: 'Apply to sell', icon: Building2 },
-];
-
 /**
  * Navigation for a signed-in user.
  *
- * Trading sections are hidden until a seller account exists, so nobody is
- * offered a link that would only bounce them back to onboarding.
+ * Every section is listed regardless of role. What actually gates a section is
+ * the seller account behind the user — the API answers 403 until it is
+ * approved — and each section resolves that for itself, so the menu stays the
+ * same shape whether an application is pending or approved.
  */
-export function navigationFor(user: User): NavItem[] {
-  return user.sellerId && user.roles.includes('seller')
-    ? navigation
-    : onboardingNavigation;
+export function navigationFor(user: BackendUser): NavItem[] {
+  void user;
+  return navigation;
 }

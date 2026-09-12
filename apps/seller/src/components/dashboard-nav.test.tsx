@@ -1,4 +1,4 @@
-import type { User } from '@commerce/contracts';
+import type { BackendUser } from '@commerce/contracts';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -18,19 +18,15 @@ function at(pathname: string, search = ''): void {
   useSearchParams.mockReturnValue(new URLSearchParams(search));
 }
 
-const seller: User = {
+const seller: BackendUser = {
   id: '11111111-1111-4111-8111-111111111111',
-  email: 'seller@deskworks.test',
-  name: 'Dara Okoro',
-  roles: ['customer', 'seller'],
-  sellerId: '22222222-2222-4222-8222-222222222222',
-  createdAt: '2026-01-15T09:00:00.000Z',
+  email: 'seller@commerce.test',
+  role: 'SELLER',
 };
 
-const shopper: User = {
+const shopper: BackendUser = {
   ...seller,
-  roles: ['customer'],
-  sellerId: null,
+  role: 'CUSTOMER',
 };
 
 beforeEach(() => {
@@ -50,13 +46,14 @@ describe('DashboardNav', () => {
     }
   });
 
-  it('offers only onboarding to someone without a store', () => {
+  it('shows every section regardless of role', () => {
+    // The Commerce API has no seller domain, so there is nothing to gate on;
+    // each section states for itself what it is waiting for.
     at('/');
     render(<DashboardNav user={shopper} />);
 
-    expect(screen.getByRole('link', { name: 'Apply to sell' })).toBeVisible();
-    expect(screen.queryByRole('link', { name: 'Products' })).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Payments' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Products' })).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Payments' })).toBeVisible();
   });
 
   it('marks only the matching section as current', () => {
@@ -103,27 +100,26 @@ describe('DashboardNav', () => {
 
     for (const label of [
       'My Products',
-      'Add Product',
+      'List a Product',
       'Drafts',
-      'Pending Approval',
-      'Approved',
-      'Rejected',
+      'Published',
+      'Archived',
     ]) {
       expect(screen.getByRole('link', { name: label })).toBeVisible();
     }
   });
 
   it('marks the sub-view that matches the query string', () => {
-    at('/products', 'view=draft');
+    at('/products', 'status=DRAFT');
     render(<DashboardNav user={seller} />);
 
     expect(screen.getByRole('link', { name: 'Drafts' })).toHaveAttribute(
       'aria-current',
       'page',
     );
-    expect(
-      screen.getByRole('link', { name: 'Pending Approval' }),
-    ).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: 'Published' })).not.toHaveAttribute(
+      'aria-current',
+    );
     // "My Products" is the unfiltered list, so it is not current here.
     expect(
       screen.getByRole('link', { name: 'My Products' }),

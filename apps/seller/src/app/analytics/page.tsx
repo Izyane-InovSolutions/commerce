@@ -1,17 +1,18 @@
 import type { Metadata } from 'next';
 
-import { SectionPlaceholder } from '@/components/section-placeholder';
-import { requireSeller } from '@/lib/session';
+import { AwaitingBackend } from '@/components/awaiting-backend';
+import { requireUser } from '@/lib/session';
 
 export const metadata: Metadata = { title: 'Analytics' };
 
 export default async function AnalyticsPage() {
-  await requireSeller();
+  await requireUser();
 
   return (
-    <SectionPlaceholder
-      title="Analytics"
-      description="Sales, conversion, and how each of your offers performs."
+    <AwaitingBackend
+      title={'Analytics'}
+      description={'Sales, conversion, and offer performance.'}
+      needs={['GET /seller/insights']}
     />
   );
 }

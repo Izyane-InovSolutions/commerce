@@ -1,16 +1,18 @@
 import type { Metadata } from 'next';
 
-import { SectionPlaceholder } from '@/components/section-placeholder';
+import { AwaitingBackend } from '@/components/awaiting-backend';
+import { requireAdmin } from '@/lib/session';
 
-export const metadata: Metadata = {
-  title: 'Support',
-};
+export const metadata: Metadata = { title: 'Support' };
 
-export default function SupportPage() {
+export default async function SupportPage() {
+  await requireAdmin();
+
   return (
-    <SectionPlaceholder
-      title="Support"
-      description="Customer and seller support cases, including returns and disputes."
+    <AwaitingBackend
+      title={'Support'}
+      description={'Customer and seller support cases.'}
+      needs={['GET /admin/support/cases']}
     />
   );
 }

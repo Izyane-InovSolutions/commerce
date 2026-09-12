@@ -10,6 +10,7 @@ import type {
 
 export type ProductListQuery = {
   categorySlug?: string;
+  /** Free-text search, as the API names it. */
   q?: string;
   sort?: string;
   page?: number;

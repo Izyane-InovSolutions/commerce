@@ -46,8 +46,12 @@ describe('SellersService', () => {
     auditEvent: { create: jest.fn() },
     $transaction: jest.fn(),
   };
-  const media = new MediaService(prisma as unknown as PrismaService,new ConfigService(),{} as never);
-  jest.spyOn(media,'createDownloadUrl');
+  const media = new MediaService(
+    prisma as unknown as PrismaService,
+    new ConfigService(),
+    {} as never,
+  );
+  const createDownloadUrlSpy = jest.spyOn(media, 'createDownloadUrl');
   const service = new SellersService(
     prisma as unknown as PrismaService,
     media,
@@ -188,6 +192,6 @@ describe('SellersService', () => {
     await expect(
       service.documentUrl('admin', seller.id, 'other-doc'),
     ).rejects.toThrow(NotFoundException);
-    expect(media.createDownloadUrl).not.toHaveBeenCalled();
+    expect(createDownloadUrlSpy).not.toHaveBeenCalled();
   });
 });

@@ -14,6 +14,7 @@ function makeProduct(index: number): Product {
     slug: `product-${index}`,
     description: `Description for product ${index}.`,
     category: null,
+    media: [],
     variants: [
       {
         id: `v-${index}`,

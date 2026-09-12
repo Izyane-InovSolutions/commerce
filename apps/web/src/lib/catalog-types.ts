@@ -29,12 +29,29 @@ export type ProductVariant = {
   offers: ProductOffer[];
 };
 
+/**
+ * An image on a product.
+ *
+ * `url` is signed by the API and relative to its origin — which this app
+ * proxies under the same path (see `next.config.ts`), so it can be used as a
+ * `src` unchanged.
+ */
+export type ProductMedia = {
+  id: string;
+  mediaAssetId: string;
+  position: number;
+  isPrimary: boolean;
+  mimeType: string;
+  url: string;
+};
+
 export type Product = {
   id: string;
   name: string;
   slug: string;
   description: string | null;
   category: Category | null;
+  media: ProductMedia[];
   variants: ProductVariant[];
 };
 
@@ -59,6 +76,41 @@ export type ProductListPage = {
  * which cannot be part of a client bundle.
  */
 export function getDisplayPrice(product: Product): number | null {
-  const amount = product.variants[0]?.offers[0]?.currentPrice?.amount;
+  const amount = getPrimaryOffer(product)?.currentPrice?.amount;
   return typeof amount === 'number' ? amount / 100 : null;
+}
+
+/**
+ * The offer a shopper actually buys when they add this product to the cart.
+ *
+ * The cart is keyed by offer, not by product, so adding anything to it means
+ * choosing one — and with no variant picker yet that choice is the first
+ * variant's first priced offer, the same one the displayed price comes from.
+ * Null when nothing on the product is currently sellable.
+ */
+export function getPrimaryOffer(product: Product): ProductOffer | null {
+  for (const variant of product.variants) {
+    const offer = variant.offers.find((candidate) => candidate.currentPrice);
+    if (offer) {
+      return offer;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * The image to lead with: whichever is marked primary, else the first by
+ * position. Null when the product has no image yet, which every surface
+ * renders as a placeholder rather than a gap.
+ */
+export function getPrimaryImage(product: Product): ProductMedia | null {
+  if (product.media.length === 0) {
+    return null;
+  }
+
+  const ordered = [...product.media].sort(
+    (left, right) => left.position - right.position,
+  );
+  return ordered.find((image) => image.isPrimary) ?? ordered[0] ?? null;
 }

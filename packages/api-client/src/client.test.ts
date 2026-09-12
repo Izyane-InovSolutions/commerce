@@ -171,6 +171,33 @@ describe('createApiClient', () => {
     expect((error as ApiError).message).toBe('quantity must be positive');
   });
 
+  it('formats the Commerce API`s real nested error shape end to end', async () => {
+    // Captured live from POST /auth/login with wrong credentials.
+    const client = createApiClient({ baseUrl: BASE_URL, envelope: true });
+    fetchMock.mockResolvedValue(
+      jsonResponse(
+        {
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'Invalid email or password',
+            details: [],
+          },
+          requestId: '88705416-5b9b-425a-88fa-fc61b5d351fd',
+        },
+        401,
+      ),
+    );
+
+    const error = await client
+      .post('/auth/login', { body: {} })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ApiError);
+    // This is the exact failure that shipped: without unwrapping the nested
+    // object, this message came out as the literal string "[object Object]".
+    expect((error as ApiError).message).toBe('Invalid email or password');
+  });
+
   it('throws an ApiUnreachableError when the request cannot be sent', async () => {
     const client = createApiClient({ baseUrl: BASE_URL });
     fetchMock.mockRejectedValue(new TypeError('fetch failed'));
