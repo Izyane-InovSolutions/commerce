@@ -1,4 +1,7 @@
-import { OfferReadService, type CommerceOffer } from '../offers/offer-read.service';
+import {
+  OfferReadService,
+  type CommerceOffer,
+} from '../offers/offer-read.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import {
   CartStatus,
@@ -88,9 +91,20 @@ describe('CartService', () => {
     service = new CartService(
       prisma as unknown as PrismaService,
       inventoryService as unknown as InventoryService,
-      {find: prisma.offer.findUnique, findMany: jest.fn().mockImplementation(() =>
-        (prisma.cart.findUnique.mock.results.at(-1)?.value as Promise<{items:Array<{offerId:string;offer:CommerceOffer}>}>).then(result=>result.items.map(item=>({...item.offer,id:item.offerId})))
-      )} as unknown as OfferReadService,
+      {
+        find: prisma.offer.findUnique,
+        findMany: jest
+          .fn()
+          .mockImplementation(() =>
+            (
+              prisma.cart.findUnique.mock.results.at(-1)?.value as Promise<{
+                items: Array<{ offerId: string; offer: CommerceOffer }>;
+              }>
+            ).then((result) =>
+              result.items.map((item) => ({ ...item.offer, id: item.offerId })),
+            ),
+          ),
+      } as unknown as OfferReadService,
     );
   });
 

@@ -12,7 +12,8 @@ import { SellerOrdersController } from './seller-orders.controller';
 import { SellerOrdersService } from './seller-orders.service';
 
 @Module({
-  imports: [OffersModule, 
+  imports: [
+    OffersModule,
     CartModule,
     InventoryModule,
     AddressesModule,

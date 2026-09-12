@@ -86,7 +86,14 @@ describe('ProductsService', () => {
 
   beforeEach(() => {
     prisma = buildPrisma();
-    service = new ProductsService(prisma as unknown as PrismaService, new MediaService(prisma as unknown as PrismaService,new ConfigService(),{} as never));
+    service = new ProductsService(
+      prisma as unknown as PrismaService,
+      new MediaService(
+        prisma as unknown as PrismaService,
+        new ConfigService(),
+        {} as never,
+      ),
+    );
   });
 
   describe('findPublished', () => {

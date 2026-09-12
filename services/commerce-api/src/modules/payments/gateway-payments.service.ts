@@ -32,7 +32,7 @@ export class GatewayPaymentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly gateway: UnifiedPaymentProvider,
-    private readonly users:UsersService,
+    private readonly users: UsersService,
   ) {}
 
   async get(userId: string, id: string): Promise<PaymentSnapshot> {
@@ -134,7 +134,7 @@ export class GatewayPaymentsService {
   }
 
   private async actor(id: string, admin = false): Promise<void> {
-    const user=await this.users.findAccessById(id);
+    const user = await this.users.findAccessById(id);
     if (!user?.isActive || (admin && user.role !== Role.ADMIN))
       throw new ForbiddenException('Insufficient payment permissions');
   }

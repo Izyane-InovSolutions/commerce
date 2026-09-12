@@ -6,7 +6,7 @@ import { ProductsController } from './products.controller';
 import { ProductsService } from './products.service';
 
 @Module({
-  imports:[MediaModule],
+  imports: [MediaModule],
   controllers: [ProductsController, AdminProductsController],
   providers: [ProductsService],
   exports: [ProductsService],

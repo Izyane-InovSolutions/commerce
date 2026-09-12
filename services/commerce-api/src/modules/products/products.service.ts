@@ -51,7 +51,10 @@ const PRODUCT_DETAIL_INCLUDE = {
 
 @Injectable()
 export class ProductsService {
-  constructor(private readonly prisma: PrismaService, private readonly media:MediaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly media: MediaService,
+  ) {}
 
   async findPublished(
     query: ProductQueryDto,
@@ -291,7 +294,7 @@ export class ProductsService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
-        await this.media.lockForProductAttachment(dto.mediaAssetId,tx);
+        await this.media.lockForProductAttachment(dto.mediaAssetId, tx);
         if (dto.isPrimary) {
           await tx.productMedia.updateMany({
             where: { productId },

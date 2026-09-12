@@ -54,7 +54,7 @@ export class MarketplaceOffersService {
     private readonly prisma: PrismaService,
     private readonly sellers: SellersService,
     private readonly storefronts: StorefrontsService,
-    private readonly products:ProductReferencesService,
+    private readonly products: ProductReferencesService,
   ) {}
 
   async create(

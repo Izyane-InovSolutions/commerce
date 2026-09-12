@@ -29,7 +29,7 @@ export class CartService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly inventoryService: InventoryService,
-    private readonly offers:OfferReadService,
+    private readonly offers: OfferReadService,
   ) {}
 
   async getCartView(identity: CartIdentity): Promise<CartView> {
@@ -226,24 +226,49 @@ export class CartService {
   private async buildView(cartId: string): Promise<CartView> {
     const cart = await this.prisma.cart.findUnique({
       where: { id: cartId },
-      include: {items:true},
+      include: { items: true },
     });
 
     if (!cart) {
       return this.emptyView();
     }
 
-    const offers=await this.offers.findMany(cart.items.map(item=>item.offerId));
-    const byId=new Map(offers.map(offer=>[offer.id,offer]));
-    const quantities=await this.inventoryService.getAvailableQuantities(offers.filter(offer=>offer.stockSource!==OfferStockSource.SELLER).map(offer=>offer.variantId));
-    const lines:CartLineView[]=cart.items.map(item=>{
-      const offer=byId.get(item.offerId);
-      const currentPrice=pickCurrentPrice(offer?.prices ?? []);
-      const sellerStock=offer?.stockSource===OfferStockSource.SELLER;
-      const availableQuantity=offer ? (quantities.get(offer.variantId) ?? 0) : 0;
-      const sellerApproved=!!offer && (!offer.sellerId || offer.seller?.status===SellerStatus.APPROVED);
-      const isAvailable=sellerApproved && offer?.status===ProductStatus.PUBLISHED && !!currentPrice && (sellerStock || availableQuantity>=item.quantity);
-      return {id:item.id,offerId:item.offerId,sellerId:offer?.sellerId ?? null,quantity:item.quantity,unitPrice:currentPrice ? {amount:currentPrice.amount,currency:currentPrice.currency} : null,lineTotal:isAvailable && currentPrice ? currentPrice.amount*item.quantity : 0,isAvailable};
+    const offers = await this.offers.findMany(
+      cart.items.map((item) => item.offerId),
+    );
+    const byId = new Map(offers.map((offer) => [offer.id, offer]));
+    const quantities = await this.inventoryService.getAvailableQuantities(
+      offers
+        .filter((offer) => offer.stockSource !== OfferStockSource.SELLER)
+        .map((offer) => offer.variantId),
+    );
+    const lines: CartLineView[] = cart.items.map((item) => {
+      const offer = byId.get(item.offerId);
+      const currentPrice = pickCurrentPrice(offer?.prices ?? []);
+      const sellerStock = offer?.stockSource === OfferStockSource.SELLER;
+      const availableQuantity = offer
+        ? (quantities.get(offer.variantId) ?? 0)
+        : 0;
+      const sellerApproved =
+        !!offer &&
+        (!offer.sellerId || offer.seller?.status === SellerStatus.APPROVED);
+      const isAvailable =
+        sellerApproved &&
+        offer?.status === ProductStatus.PUBLISHED &&
+        !!currentPrice &&
+        (sellerStock || availableQuantity >= item.quantity);
+      return {
+        id: item.id,
+        offerId: item.offerId,
+        sellerId: offer?.sellerId ?? null,
+        quantity: item.quantity,
+        unitPrice: currentPrice
+          ? { amount: currentPrice.amount, currency: currentPrice.currency }
+          : null,
+        lineTotal:
+          isAvailable && currentPrice ? currentPrice.amount * item.quantity : 0,
+        isAvailable,
+      };
     });
 
     const availableLines = lines.filter((line) => line.isAvailable);

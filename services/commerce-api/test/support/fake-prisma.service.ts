@@ -923,7 +923,16 @@ export class FakePrismaService {
       let rows = [...this.offers.values()];
       if (where?.id?.in)
         rows = rows.filter((row) => where.id!.in.includes(row.id as string));
-      return Promise.resolve(rows.map((row) => this.attachSeller(row)));
+      return Promise.resolve(
+        rows.map((row) =>
+          this.attachSeller({
+            ...row,
+            prices: [...this.prices.values()].filter(
+              (price) => price.offerId === row.id,
+            ),
+          }),
+        ),
+      );
     },
     create: ({
       data,
