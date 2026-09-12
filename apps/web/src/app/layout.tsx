@@ -18,8 +18,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: 'Commerce Marketplace',
-    template: '%s | Commerce Marketplace',
+    default: 'iZyane Marketplace',
+    template: '%s | iZyane Marketplace',
   },
   description:
     'Shop first-party retail and third-party marketplace offers in one place.',
@@ -31,7 +31,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col">
+      <body className="flex min-h-screen flex-col">
         <SiteHeader />
         <main className="flex-1">{children}</main>
         <SiteFooter />

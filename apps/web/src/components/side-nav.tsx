@@ -3,8 +3,11 @@ import { CircleQuestionMark, Heart, Menu, Package } from 'lucide-react';
 
 import { Separator } from '@/components/ui/separator';
 
-const categoryLinks = [
+import type { Category } from '@/lib/catalog-types';
+
+const quickLinks = [
   { label: 'All Products', href: '/products' },
+  { label: 'Trending', href: '/products?filter=trending' },
   { label: 'New Arrivals', href: '/new-arrivals' },
   { label: 'Best Sellers', href: '/best-sellers' },
   { label: 'Deals', href: '/deals' },
@@ -13,7 +16,7 @@ const categoryLinks = [
 const linkClasses =
   'block rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-muted hover:text-foreground';
 
-export function SideNav() {
+export function SideNav({ categories = [] }: { categories?: Category[] }) {
   return (
     <nav
       aria-label="Storefront"
@@ -25,7 +28,7 @@ export function SideNav() {
           Categories
         </div>
         <ul>
-          {categoryLinks.map((link) => (
+          {quickLinks.map((link) => (
             <li key={link.href}>
               <Link
                 href={link.href}
@@ -37,6 +40,29 @@ export function SideNav() {
           ))}
         </ul>
       </div>
+
+      {categories.length > 0 ? (
+        <>
+          <Separator />
+          <div className="space-y-1">
+            <div className="px-2 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Shop by Category
+            </div>
+            <ul>
+              {categories.map((category) => (
+                <li key={category.id}>
+                  <Link
+                    href={`/products?category=${encodeURIComponent(category.slug)}`}
+                    className={`${linkClasses} text-muted-foreground`}
+                  >
+                    {category.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      ) : null}
 
       <Separator />
 

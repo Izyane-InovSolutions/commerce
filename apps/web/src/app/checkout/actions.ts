@@ -4,43 +4,46 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 import { readCurrency } from '@/lib/currency-cookie';
-import { checkout, createAddress, listAddresses } from '@/lib/orders';
-import type { Address } from '@/lib/commerce-types';
+import { checkout, createAddress } from '@/lib/orders';
 import { toFormState, type FormState } from '@/lib/form';
-import { getCurrentUser } from '@/lib/session';
 
-/** Splits a recipient name into the two fields the gateway's billing wants. */
-function splitName(recipientName: string): {
+/** Splits one typed name into the two the gateway's billing block wants. */
+function splitName(holderName: string): {
   firstName: string;
   lastName: string;
 } {
-  const parts = recipientName.trim().split(/\s+/);
+  const parts = holderName.trim().split(/\s+/);
   return {
-    firstName: parts[0] ?? recipientName,
+    firstName: parts[0] ?? holderName,
     lastName: parts.length > 1 ? parts.slice(1).join(' ') : (parts[0] ?? ''),
   };
 }
 
+function field(formData: FormData, name: string): string {
+  return String(formData.get(name) ?? '').trim();
+}
+
 /**
- * Builds the payment details the API expects, from the form and the address.
+ * Builds the payment details the API expects from what was typed.
  *
- * Card billing is derived from the shipping address and the signed-in
- * account's email rather than asked for again: the gateway requires all of
- * it, and asking a shopper to retype an address they just chose is how carts
- * get abandoned. A separate billing address is a later ticket.
+ * The billing block is asked for rather than taken from the shipping address:
+ * the card processor matches it against the issuer's record, and the address
+ * an order ships to is often not the one the card is registered at. Every
+ * field it requires has its own input, so nothing is inferred.
+ *
+ * None of it is stored here — it is passed straight through to the API, which
+ * hands it to the gateway.
  */
 function paymentDetails(
   formData: FormData,
-  address: Address,
-  email: string,
 ): Record<string, unknown> | undefined {
-  const method = String(formData.get('paymentMethod') ?? '');
+  const method = field(formData, 'paymentMethod');
 
   if (method === 'mobile-money') {
     return {
       paymentMethod: 'MOBILE_MONEY',
-      phoneNumber: String(formData.get('momoPhone') ?? '').replace(/\s+/g, ''),
-      provider: String(formData.get('momoProvider') ?? '') || undefined,
+      phoneNumber: field(formData, 'momoPhone').replace(/\s+/g, ''),
+      provider: field(formData, 'momoProvider') || undefined,
     };
   }
 
@@ -48,29 +51,31 @@ function paymentDetails(
     return undefined;
   }
 
-  const [expiryMonth = '', expiryYear = ''] = String(
-    formData.get('cardExpiry') ?? '',
+  // The field is typed as MM/YYYY, which is exactly the split the gateway
+  // takes — no century to infer.
+  const [expiryMonth = '', expiryYear = ''] = field(
+    formData,
+    'cardExpiry',
   ).split('/');
-  const { firstName, lastName } = splitName(address.recipientName);
+  const { firstName, lastName } = splitName(field(formData, 'cardName'));
 
   return {
     paymentMethod: 'CARD',
     card: {
-      number: String(formData.get('cardNumber') ?? '').replace(/\s+/g, ''),
+      number: field(formData, 'cardNumber').replace(/\s+/g, ''),
       expiryMonth,
-      // The form takes two digits; the API wants the century spelled out.
-      expiryYear: expiryYear === '' ? '' : `20${expiryYear}`,
-      securityCode: String(formData.get('cardCvc') ?? ''),
-      holderName: String(formData.get('cardName') ?? '').trim(),
+      expiryYear,
+      securityCode: field(formData, 'cardCvc'),
+      holderName: field(formData, 'cardName'),
       billing: {
         firstName,
         lastName,
-        address1: address.line1,
-        locality: address.city,
-        administrativeArea: address.region ?? address.city,
-        postalCode: address.postalCode,
-        country: address.country.toUpperCase(),
-        email,
+        address1: field(formData, 'billingAddress1'),
+        locality: field(formData, 'billingCity'),
+        administrativeArea: field(formData, 'billingState'),
+        postalCode: field(formData, 'billingPostalCode'),
+        country: field(formData, 'billingCountry').toUpperCase(),
+        email: field(formData, 'billingEmail'),
       },
     },
   };
@@ -97,27 +102,11 @@ export async function placeOrderAction(
   let orderId: string;
 
   try {
-    const [user, addresses] = await Promise.all([
-      getCurrentUser(),
-      listAddresses(),
-    ]);
-
-    const address = addresses.find(
-      (candidate) => candidate.id === shippingAddressId,
-    );
-
-    if (!user || !address) {
-      return {
-        status: 'error',
-        message: 'That delivery address is no longer available.',
-      };
-    }
-
     const result = await checkout(
       shippingAddressId,
       idempotencyKey,
       String(formData.get('currency') ?? '') || (await readCurrency()),
-      paymentDetails(formData, address, user.email),
+      paymentDetails(formData),
     );
 
     orderId = result.order.id;

@@ -141,24 +141,14 @@ export function CheckoutForm({
       {method === 'card' ? (
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="card-name">Name on card</Label>
-            <Input
-              id="card-name"
-              name="cardName"
-              autoComplete="cc-name"
-              placeholder="Jane Mwanza"
-              required
-            />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="card-number">Card number</Label>
             <Input
               id="card-number"
               name="cardNumber"
               inputMode="numeric"
               autoComplete="cc-number"
-              placeholder="4242 4242 4242 4242"
-              pattern="\d{4} \d{4} \d{4} \d{4}"
+              placeholder="4111 1111 1111 1111"
+              pattern="(\d{4} ){3}\d{4}"
               title="16 digits"
               maxLength={19}
               value={cardNumber}
@@ -166,8 +156,14 @@ export function CheckoutForm({
                 setCardNumber(formatCardNumber(event.target.value))
               }
               required
+              aria-describedby="card-number-note"
             />
+            <p id="card-number-note" className="text-muted-foreground text-xs">
+              Used for this authorization only. Never stored.
+            </p>
+            <FieldError messages={state.fieldErrors?.['card.number']} />
           </div>
+
           <div className="space-y-1.5">
             <Label htmlFor="card-expiry">Expiry</Label>
             <Input
@@ -175,10 +171,10 @@ export function CheckoutForm({
               name="cardExpiry"
               inputMode="numeric"
               autoComplete="cc-exp"
-              placeholder="MM/YY"
-              pattern="\d{2}/\d{2}"
-              title="MM/YY"
-              maxLength={5}
+              placeholder="MM/YYYY"
+              pattern="\d{2}/\d{4}"
+              title="MM/YYYY"
+              maxLength={7}
               value={cardExpiry}
               onChange={(event) =>
                 setCardExpiry((previous) =>
@@ -187,7 +183,10 @@ export function CheckoutForm({
               }
               required
             />
+            <FieldError messages={state.fieldErrors?.['card.expiryMonth']} />
+            <FieldError messages={state.fieldErrors?.['card.expiryYear']} />
           </div>
+
           <div className="space-y-1.5">
             <Label htmlFor="card-cvc">CVC</Label>
             <Input
@@ -195,14 +194,125 @@ export function CheckoutForm({
               name="cardCvc"
               inputMode="numeric"
               autoComplete="cc-csc"
-              placeholder="123"
-              pattern="\d{3}"
-              title="3 digits"
-              maxLength={3}
+              pattern="\d{3,4}"
+              title="3 or 4 digits"
+              maxLength={4}
               value={cardCvc}
               onChange={(event) => setCardCvc(formatCvc(event.target.value))}
               required
             />
+            <FieldError messages={state.fieldErrors?.['card.securityCode']} />
+          </div>
+
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="card-name">Cardholder name</Label>
+            <Input
+              id="card-name"
+              name="cardName"
+              autoComplete="cc-name"
+              placeholder="John Doe"
+              maxLength={150}
+              required
+            />
+            <FieldError messages={state.fieldErrors?.['card.holderName']} />
+          </div>
+
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="billing-address">Billing address</Label>
+            <Input
+              id="billing-address"
+              name="billingAddress1"
+              autoComplete="billing street-address"
+              placeholder="1 Market Street"
+              maxLength={200}
+              required
+            />
+            <FieldError
+              messages={state.fieldErrors?.['card.billing.address1']}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="billing-city">City</Label>
+            <Input
+              id="billing-city"
+              name="billingCity"
+              autoComplete="billing address-level2"
+              placeholder="San Francisco"
+              maxLength={100}
+              required
+            />
+            <FieldError
+              messages={state.fieldErrors?.['card.billing.locality']}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="billing-state">State / province</Label>
+            <Input
+              id="billing-state"
+              name="billingState"
+              autoComplete="billing address-level1"
+              placeholder="CA"
+              maxLength={100}
+              required
+            />
+            <FieldError
+              messages={state.fieldErrors?.['card.billing.administrativeArea']}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="billing-postal">Postal code</Label>
+            <Input
+              id="billing-postal"
+              name="billingPostalCode"
+              autoComplete="billing postal-code"
+              placeholder="94105"
+              maxLength={20}
+              required
+            />
+            <FieldError
+              messages={state.fieldErrors?.['card.billing.postalCode']}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="billing-country">Billing country</Label>
+            <Input
+              id="billing-country"
+              name="billingCountry"
+              autoComplete="billing country"
+              placeholder="ZM"
+              pattern="[A-Za-z]{2}"
+              title="Two letter country code"
+              maxLength={2}
+              required
+              aria-describedby="billing-country-note"
+            />
+            <p
+              id="billing-country-note"
+              className="text-muted-foreground text-xs"
+            >
+              Two letter code.
+            </p>
+            <FieldError
+              messages={state.fieldErrors?.['card.billing.country']}
+            />
+          </div>
+
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="billing-email">Cardholder email</Label>
+            <Input
+              id="billing-email"
+              name="billingEmail"
+              type="email"
+              autoComplete="billing email"
+              placeholder="john.doe@example.com"
+              maxLength={254}
+              required
+            />
+            <FieldError messages={state.fieldErrors?.['card.billing.email']} />
           </div>
         </div>
       ) : (
