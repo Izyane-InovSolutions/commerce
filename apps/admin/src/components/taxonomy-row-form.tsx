@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { idleFormState, type FormState } from '@/lib/form';
 
 type TaxonomyRowFormProps = {
-  entry: { id: string; name: string; slug: string; productCount: number };
+  entry: { id: string; name: string; slug: string };
   save: (state: FormState, formData: FormData) => Promise<FormState>;
   remove: () => Promise<FormState>;
   /** Parent choices, for a category. Omit for a flat taxonomy. */
@@ -78,17 +78,13 @@ export function TaxonomyRowForm({
           </SubmitButton>
         </form>
 
-        {entry.productCount === 0 ? (
-          <form action={removeAction}>
-            <Button type="submit" variant="ghost" size="sm">
-              Remove
-            </Button>
-          </form>
-        ) : (
-          <span className="text-muted-foreground text-xs">
-            {entry.productCount} in use
-          </span>
-        )}
+        {/* The API reports no usage count, so removal is always offered and
+            the server refuses it when something still references the entry. */}
+        <form action={removeAction}>
+          <Button type="submit" variant="ghost" size="sm">
+            Remove
+          </Button>
+        </form>
       </div>
 
       <FormError state={saveState} />

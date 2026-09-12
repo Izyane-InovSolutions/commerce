@@ -2,6 +2,7 @@ import {
   BadGatewayException,
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
   NotImplementedException,
   ServiceUnavailableException,
@@ -26,7 +27,30 @@ export type GatewayPayment = {
   amount: number;
   currency: string;
   reference: string;
+  failureCode?: string;
+  failureMessage?: string;
+  completedAt?: string;
+  expiresAt?: string;
 };
+
+/**
+ * Gateway statuses this system is willing to act on.
+ *
+ * Only SUCCESS is here, and only because it was observed on a real payment —
+ * the gateway's documentation lists no status enum at all. Anything else maps
+ * to PENDING below rather than being guessed at: reading an unknown string as
+ * a failure would cancel an order that may yet be paid, and reading one as a
+ * success would release goods for nothing.
+ */
+const GATEWAY_STATUS: Record<string, ProviderPaymentResult['status']> = {
+  SUCCESS: 'SUCCEEDED',
+};
+
+export function toProviderStatus(
+  gatewayStatus: string,
+): ProviderPaymentResult['status'] {
+  return GATEWAY_STATUS[gatewayStatus] ?? 'PENDING';
+}
 export type GatewayPaymentPage = {
   content: GatewayPayment[];
   page: number;
@@ -40,9 +64,17 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** Keeps an optional string field only when it carries something. */
+function text(value: unknown, key: string): Record<string, string> {
+  return typeof value === 'string' && value.trim() !== ''
+    ? { [key]: value }
+    : {};
+}
+
 @Injectable()
 export class UnifiedPaymentProvider implements PaymentProvider {
   readonly name = 'unified';
+  private readonly logger = new Logger(UnifiedPaymentProvider.name);
   constructor(private readonly config: ConfigService) {}
 
   async initialize(
@@ -51,6 +83,10 @@ export class UnifiedPaymentProvider implements PaymentProvider {
     this.validateInput(input);
     const details = input.details!;
     const merchantId = this.config.get<string>('UNIFIED_PAYMENTS_MERCHANT_ID');
+    // Every optional field is omitted rather than sent empty: the gateway
+    // documents them as droppable, and an absent key is unambiguous where a
+    // blank string is not.
+    const callbackUrl = this.callbackUrl();
     const body = {
       amount: input.amount / 100,
       currency: input.currency,
@@ -63,6 +99,11 @@ export class UnifiedPaymentProvider implements PaymentProvider {
             ...(details.provider ? { provider: details.provider } : {}),
           }
         : { card: details.card }),
+      ...(input.description ? { description: input.description } : {}),
+      ...(callbackUrl ? { callbackUrl } : {}),
+      ...(input.metadata && Object.keys(input.metadata).length
+        ? { metadata: input.metadata }
+        : {}),
     };
     const payment = this.payment(
       await this.request(
@@ -78,11 +119,12 @@ export class UnifiedPaymentProvider implements PaymentProvider {
       Math.round(payment.amount * 100) !== input.amount
     )
       throw new PaymentOutcomeUnknownException();
-    // Only PENDING is documented. Preserve external statuses for reconciliation
-    // without inventing terminal status mappings that could release inventory.
+    // A mobile money charge is normally still pending here — the subscriber
+    // has yet to approve it — but a gateway that settles inline is honoured
+    // rather than left to a later reconciliation.
     return {
       providerReference: payment.paymentId,
-      status: 'PENDING',
+      status: toProviderStatus(payment.status),
       gatewayStatus: payment.status,
     };
   }
@@ -117,12 +159,20 @@ export class UnifiedPaymentProvider implements PaymentProvider {
     }
   }
 
+  /**
+   * The gateway's own view of a payment.
+   *
+   * Reads rather than checks: `GET /payments/{id}` has no side effects, where
+   * the status route is a POST the gateway may treat as an action.
+   */
   async getPayment(id: string): Promise<ProviderPaymentResult> {
     const payment = await this.getDetails(id);
     return {
       providerReference: payment.paymentId,
-      status: 'PENDING',
+      status: toProviderStatus(payment.status),
       gatewayStatus: payment.status,
+      failureCode: payment.failureCode,
+      failureMessage: payment.failureMessage,
     };
   }
   async getDetails(id: string): Promise<GatewayPayment> {
@@ -229,7 +279,38 @@ export class UnifiedPaymentProvider implements PaymentProvider {
       amount: value.amount,
       currency: value.currency,
       reference: value.reference,
+      // Optional and only kept when the gateway sends a usable string, so a
+      // malformed extra field never fails an otherwise valid payment.
+      ...text(value.failureCode, 'failureCode'),
+      ...text(value.failureMessage, 'failureMessage'),
+      ...text(value.completedAt, 'completedAt'),
+      ...text(value.expiresAt, 'expiresAt'),
     };
+  }
+
+  /**
+   * Where the gateway should report status changes.
+   *
+   * Off unless configured, and deliberately so: this API can receive a
+   * callback but cannot yet verify one — the gateway's signing scheme is not
+   * in its documentation — so `PaymentsController` rejects every unsigned
+   * delivery. Publishing a callback URL before that is settled would only
+   * invite traffic that is guaranteed to be refused.
+   */
+  private callbackUrl(): string | undefined {
+    const configured = this.config.get<string>('UNIFIED_PAYMENTS_CALLBACK_URL');
+    if (!configured) {
+      return undefined;
+    }
+
+    try {
+      const url = new URL(configured);
+      return url.protocol === 'https:' || url.protocol === 'http:'
+        ? url.toString()
+        : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   private connection(): { base: string; key: string } {
@@ -328,6 +409,14 @@ export class UnifiedPaymentProvider implements PaymentProvider {
       !('data' in envelope)
     )
       throw new PaymentOutcomeUnknownException();
+
+    // The gateway asks for this when reporting a problem with a specific
+    // call, so it is worth having in our own logs rather than only theirs.
+    if (typeof envelope.correlationId === 'string')
+      this.logger.log(
+        `${method} ${path} correlationId=${envelope.correlationId}`,
+      );
+
     return envelope.data;
   }
 }

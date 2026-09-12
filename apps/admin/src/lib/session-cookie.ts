@@ -1,41 +1,60 @@
 import { cookies } from 'next/headers';
 
 /**
- * Name of this portal's session cookie.
+ * Session cookie names for this portal.
  *
  * Cookies are scoped by host and **ignore the port**, so every client running
- * on localhost shares one cookie jar. Each app therefore needs its own cookie
- * name — otherwise signing into one portal overwrites the other's session and
- * you cannot be an admin in one tab and a seller in another.
- *
- * Keep this unique per app even once the portals have their own hostnames: a
- * shared parent domain would reintroduce exactly the same clash.
+ * on localhost shares one cookie jar. Each app therefore needs its own names —
+ * otherwise signing into one portal overwrites the other's session and you
+ * cannot be an admin in one tab and a seller in another.
  */
-export const SESSION_COOKIE = 'commerce_admin_session';
+export const ACCESS_COOKIE = 'commerce_admin_access';
+export const REFRESH_COOKIE = 'commerce_admin_refresh';
 
-/**
- * The session token, read from an httpOnly cookie.
- *
- * Kept apart from the API client so reading it cannot pull the client into a
- * circular import, and so nothing on the client side can reach the token.
- */
-export async function readSessionToken(): Promise<string | undefined> {
-  return (await cookies()).get(SESSION_COOKIE)?.value;
+const REFRESH_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
+
+export async function readAccessToken(): Promise<string | undefined> {
+  return (await cookies()).get(ACCESS_COOKIE)?.value;
 }
 
-export async function writeSessionToken(
-  token: string,
-  expiresAt: string,
-): Promise<void> {
-  (await cookies()).set(SESSION_COOKIE, token, {
+export async function readRefreshToken(): Promise<string | undefined> {
+  return (await cookies()).get(REFRESH_COOKIE)?.value;
+}
+
+/**
+ * Stores a freshly issued pair.
+ *
+ * The access cookie is given the token's own lifetime, so it disappears at the
+ * moment the token stops working. "Access cookie absent, refresh cookie
+ * present" is then exactly the condition that means *refresh me*, with no
+ * clock comparison anywhere.
+ */
+export async function writeSession(session: {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+}): Promise<void> {
+  const jar = await cookies();
+  const secure = process.env.NODE_ENV === 'production';
+
+  jar.set(ACCESS_COOKIE, session.accessToken, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure,
     path: '/',
-    expires: new Date(expiresAt),
+    maxAge: session.expiresIn,
+  });
+  jar.set(REFRESH_COOKIE, session.refreshToken, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure,
+    path: '/',
+    maxAge: REFRESH_MAX_AGE_SECONDS,
   });
 }
 
-export async function clearSessionToken(): Promise<void> {
-  (await cookies()).delete(SESSION_COOKIE);
+export async function clearSession(): Promise<void> {
+  const jar = await cookies();
+  jar.delete(ACCESS_COOKIE);
+  jar.delete(REFRESH_COOKIE);
 }

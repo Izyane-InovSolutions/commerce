@@ -1,220 +1,182 @@
 'use client';
 
-import { useActionState } from 'react';
-import Link from 'next/link';
+import { useActionState, useId } from 'react';
 
-import type { Offer, SkuSummary } from '@commerce/contracts';
 import {
-  fulfillmentModes,
-  offerConditions,
-  offerStatuses,
+  backendOfferConditions,
+  backendOfferSources,
 } from '@commerce/contracts';
 
 import { FieldError } from '@/components/field-error';
 import { FormError } from '@/components/form-error';
 import { SelectField } from '@/components/select-field';
 import { SubmitButton } from '@/components/submit-button';
-import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { idleFormState, type FormState } from '@/lib/form';
 
-const FULFILLMENT_LABELS: Record<string, string> = {
-  platform: 'Platform fulfilled',
-  seller: 'I fulfil this myself',
-  threepl: '3PL',
-  pickup: 'Customer pickup',
+const CONDITION_OPTIONS = backendOfferConditions.map((value) => ({
+  value,
+  label: value.charAt(0) + value.slice(1).toLowerCase(),
+}));
+
+const SOURCE_OPTIONS = backendOfferSources.map((value) => ({
+  value,
+  label: value === 'PLATFORM' ? 'Platform' : 'Me',
+}));
+
+export type OfferDefaults = {
+  sellerSku?: string | null;
+  listingTitle?: string | null;
+  condition?: string;
+  stockSource?: string;
+  fulfillmentMode?: string;
 };
 
-function toDecimal(amountMinor: number): string {
-  return (amountMinor / 100).toFixed(2);
-}
-
-type OfferFormProps = {
+/**
+ * The listing itself: how a seller describes and qualifies what they sell.
+ *
+ * Used for both creating and editing, because the API takes the same fields
+ * either way — a create adds the variant being listed against and an opening
+ * price, an edit adds the version it is working from.
+ */
+export function OfferForm({
+  action,
+  defaults,
+  version,
+  variantId,
+  currency = 'ZMW',
+  submitLabel,
+  withPrice = false,
+}: {
   action: (state: FormState, formData: FormData) => Promise<FormState>;
-  /** SKUs available to offer against. Omitted when editing an existing offer. */
-  skus?: SkuSummary[];
-  offer?: Offer;
-};
-
-export function OfferForm({ action, skus, offer }: OfferFormProps) {
+  defaults?: OfferDefaults;
+  /** Required when editing: the API refuses a write against a stale version. */
+  version?: number;
+  /** Required when creating: which variant this lists against. */
+  variantId?: string;
+  currency?: string;
+  submitLabel: string;
+  withPrice?: boolean;
+}) {
   const [state, formAction] = useActionState(action, idleFormState);
-  const fieldErrors = state.fieldErrors ?? {};
+  const fieldId = useId();
 
   return (
-    <form action={formAction} className="max-w-2xl space-y-6">
-      <FormError state={state} />
+    <form action={formAction} className="space-y-4">
+      {version === undefined ? null : (
+        <input type="hidden" name="version" value={version} />
+      )}
+      {variantId === undefined ? null : (
+        <input type="hidden" name="variantId" value={variantId} />
+      )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>What you are selling</CardTitle>
-          <CardDescription>
-            An offer sits against a catalog SKU. The product itself belongs to
-            the platform.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {offer ? (
-            <div className="space-y-1.5">
-              <Label>SKU</Label>
-              <p className="text-sm font-medium">
-                {offer.productName}
-                <span className="text-muted-foreground">
-                  {' '}
-                  · {offer.variantName}
-                </span>
-              </p>
-              <p className="text-muted-foreground font-mono text-xs">
-                {offer.skuCode}
-              </p>
-              <p className="text-muted-foreground text-xs">
-                To sell a different SKU, create a separate offer.
-              </p>
-              <input type="hidden" name="skuId" value={offer.skuId} />
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              <Label htmlFor="skuId">SKU</Label>
-              <SelectField
-                id="skuId"
-                name="skuId"
-                required
-                className="w-full"
-                placeholder="Choose a SKU"
-                aria-invalid={fieldErrors.skuId !== undefined}
-                options={(skus ?? []).map((sku) => ({
-                  value: sku.skuId,
-                  label: `${sku.productName} · ${sku.variantName} (${sku.skuCode})`,
-                }))}
-              />
-              <FieldError messages={fieldErrors.skuId} />
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor={`${fieldId}-title`}>Listing title</Label>
+          <Input
+            id={`${fieldId}-title`}
+            name="listingTitle"
+            required
+            minLength={2}
+            maxLength={200}
+            defaultValue={defaults?.listingTitle ?? ''}
+            aria-invalid={state.fieldErrors?.listingTitle ? true : undefined}
+          />
+          <FieldError messages={state.fieldErrors?.listingTitle} />
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Commercial terms</CardTitle>
-          <CardDescription>
-            The API is authoritative on price. What you enter here is a proposal
-            it validates and stores.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="price">Price (GBP)</Label>
-              <Input
-                id="price"
-                name="price"
-                inputMode="decimal"
-                placeholder="249.99"
-                required
-                defaultValue={offer ? toDecimal(offer.price.amountMinor) : ''}
-                aria-invalid={fieldErrors.price !== undefined}
-              />
-              <FieldError messages={fieldErrors.price} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="compareAtPrice">Compare-at price</Label>
-              <Input
-                id="compareAtPrice"
-                name="compareAtPrice"
-                inputMode="decimal"
-                placeholder="Optional"
-                defaultValue={
-                  offer?.compareAtPrice
-                    ? toDecimal(offer.compareAtPrice.amountMinor)
-                    : ''
-                }
-                aria-invalid={fieldErrors.compareAtPrice !== undefined}
-              />
-              <FieldError messages={fieldErrors.compareAtPrice} />
-            </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`${fieldId}-sku`}>Your SKU</Label>
+          <Input
+            id={`${fieldId}-sku`}
+            name="sellerSku"
+            required
+            maxLength={100}
+            defaultValue={defaults?.sellerSku ?? ''}
+            aria-invalid={state.fieldErrors?.sellerSku ? true : undefined}
+          />
+          <FieldError messages={state.fieldErrors?.sellerSku} />
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="space-y-1.5">
+          <Label htmlFor={`${fieldId}-condition`}>Condition</Label>
+          <SelectField
+            id={`${fieldId}-condition`}
+            name="condition"
+            className="w-full"
+            defaultValue={defaults?.condition ?? 'NEW'}
+            options={CONDITION_OPTIONS}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor={`${fieldId}-stock`}>Stock held by</Label>
+          <SelectField
+            id={`${fieldId}-stock`}
+            name="stockSource"
+            className="w-full"
+            defaultValue={defaults?.stockSource ?? 'PLATFORM'}
+            options={SOURCE_OPTIONS}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor={`${fieldId}-fulfillment`}>Shipped by</Label>
+          <SelectField
+            id={`${fieldId}-fulfillment`}
+            name="fulfillmentMode"
+            className="w-full"
+            defaultValue={defaults?.fulfillmentMode ?? 'PLATFORM'}
+            options={SOURCE_OPTIONS}
+          />
+        </div>
+      </div>
+
+      {withPrice ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor={`${fieldId}-amount`}>Price</Label>
+            <Input
+              id={`${fieldId}-amount`}
+              name="amount"
+              inputMode="decimal"
+              placeholder="0.00"
+              required
+              aria-invalid={state.fieldErrors?.amount ? true : undefined}
+            />
+            <FieldError messages={state.fieldErrors?.amount} />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="condition">Condition</Label>
-              <SelectField
-                id="condition"
-                name="condition"
-                className="w-full"
-                defaultValue={offer?.condition ?? 'new'}
-                options={offerConditions.map((condition) => ({
-                  value: condition,
-                  label: condition.charAt(0).toUpperCase() + condition.slice(1),
-                }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="status">Status</Label>
-              <SelectField
-                id="status"
-                name="status"
-                className="w-full"
-                defaultValue={offer?.status ?? 'draft'}
-                options={offerStatuses.map((status) => ({
-                  value: status,
-                  label: status.charAt(0).toUpperCase() + status.slice(1),
-                }))}
-              />
-              <p className="text-muted-foreground text-xs">
-                Only active offers are buyable on the storefront.
-              </p>
-            </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`${fieldId}-currency`}>Currency</Label>
+            <Input
+              id={`${fieldId}-currency`}
+              name="currency"
+              defaultValue={currency}
+              maxLength={3}
+              pattern="[A-Za-z]{3}"
+              required
+              aria-invalid={state.fieldErrors?.currency ? true : undefined}
+            />
+            <FieldError messages={state.fieldErrors?.currency} />
           </div>
+        </div>
+      ) : null}
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="fulfillmentMode">Fulfillment</Label>
-              <SelectField
-                id="fulfillmentMode"
-                name="fulfillmentMode"
-                className="w-full"
-                defaultValue={offer?.fulfillmentMode ?? 'seller'}
-                options={fulfillmentModes.map((mode) => ({
-                  value: mode,
-                  label: FULFILLMENT_LABELS[mode] ?? mode,
-                }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="handlingTimeDays">Handling time (days)</Label>
-              <Input
-                id="handlingTimeDays"
-                name="handlingTimeDays"
-                type="number"
-                min={0}
-                max={30}
-                defaultValue={offer?.handlingTimeDays ?? 1}
-                aria-invalid={fieldErrors.handlingTimeDays !== undefined}
-              />
-              <FieldError messages={fieldErrors.handlingTimeDays} />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="flex items-center gap-2">
-        <SubmitButton>{offer ? 'Save changes' : 'Create offer'}</SubmitButton>
-        <Button variant="ghost" asChild>
-          <Link href="/offers">Cancel</Link>
-        </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <SubmitButton pendingLabel="Saving…">{submitLabel}</SubmitButton>
         {state.status === 'idle' && state.message ? (
-          <span className="text-muted-foreground text-sm" role="status">
+          <span className="text-muted-foreground text-xs" role="status">
             {state.message}
           </span>
         ) : null}
       </div>
+
+      <FieldError messages={state.fieldErrors?.version} />
+      <FormError state={state} />
     </form>
   );
 }

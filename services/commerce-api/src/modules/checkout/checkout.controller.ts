@@ -18,6 +18,7 @@ export class CheckoutController {
     return this.checkoutService.checkout(
       user.id,
       dto.shippingAddressId,
+      dto.currency,
       dto.paymentDetails,
     );
   }

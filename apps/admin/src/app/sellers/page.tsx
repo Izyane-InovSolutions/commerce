@@ -1,21 +1,19 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 
-import { listSellerApplications, listSellers } from '@commerce/api-client';
+import { backendListSellers } from '@commerce/api-client';
+import {
+  backendSellerStatuses,
+  type BackendSellerStatus,
+} from '@commerce/contracts';
 
 import { ApiErrorNotice } from '@/components/api-error-notice';
-import { ApplicationReview } from '@/components/application-review';
 import { EmptyState } from '@/components/empty-state';
 import { PageHeader } from '@/components/page-header';
-import { SellerLogo } from '@/components/seller-logo';
-import { SellerStatusToggle } from '@/components/seller-status-toggle';
+import { Pagination } from '@/components/pagination';
+import { SelectField } from '@/components/select-field';
 import { StatusBadge } from '@/components/status-badge';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -25,189 +23,148 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { apiClient } from '@/lib/api';
+import { readParam } from '@/lib/search-params';
 import { requireAdmin } from '@/lib/session';
-
-import {
-  approveApplicationAction,
-  rejectApplicationAction,
-  setSellerStatusAction,
-} from './actions';
 
 export const metadata: Metadata = { title: 'Sellers' };
 
-export default async function SellersPage() {
-  await requireAdmin();
+const PAGE_SIZE = 20;
 
-  let applications;
+function isStatus(value: string): value is BackendSellerStatus {
+  return (backendSellerStatuses as readonly string[]).includes(value);
+}
+
+export default async function SellersPage({
+  searchParams,
+}: PageProps<'/sellers'>) {
+  await requireAdmin();
+  const params = await searchParams;
+
+  const requested = Number(readParam(params, 'page') ?? '1');
+  const page = Number.isInteger(requested) && requested > 0 ? requested : 1;
+  const statusParam = readParam(params, 'status');
+  const status =
+    statusParam !== undefined && isStatus(statusParam)
+      ? statusParam
+      : undefined;
+
+  // Unlike the catalog, this endpoint pages and filters server-side, so the
+  // query goes to the API rather than being applied to a full listing here.
   let sellers;
   try {
-    [applications, sellers] = await Promise.all([
-      listSellerApplications(apiClient, { pageSize: 50 }),
-      listSellers(apiClient, { pageSize: 50 }),
-    ]);
+    sellers = await backendListSellers(apiClient, {
+      page,
+      limit: PAGE_SIZE,
+      status,
+    });
   } catch (error) {
     return (
       <div className="space-y-6">
         <PageHeader
           title="Sellers"
-          description="Applications, verification, approval, and suspension."
+          description="Applications, approvals, and standing."
         />
         <ApiErrorNotice error={error} />
       </div>
     );
   }
 
-  const pending = applications.items.filter(
-    (application) => application.status === 'pending',
-  );
-  const reviewed = applications.items.filter(
-    (application) => application.status !== 'pending',
-  );
+  const totalPages = Math.max(1, Math.ceil(sellers.total / sellers.limit));
+  const isFiltered = status !== undefined;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         title="Sellers"
-        description="Approving an application creates the seller account and grants the applicant the seller role. Nothing a seller does can grant it to themselves."
+        description="A seller applies, is reviewed here, and can sell only once approved. Suspending one leaves their offers in place but stops new orders reaching them."
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            Applications
-            {pending.length > 0 ? (
-              <span className="bg-primary text-primary-foreground rounded-full px-2 py-0.5 text-xs font-medium tabular-nums">
-                {pending.length} waiting
-              </span>
-            ) : null}
-          </CardTitle>
-          <CardDescription>
-            People asking to sell on the platform.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {pending.length === 0 ? (
-            <EmptyState
-              title="Nothing waiting"
-              description="Every application has been reviewed."
-            />
-          ) : (
-            pending.map((application) => (
-              <div
-                key={application.id}
-                className="flex flex-wrap items-start justify-between gap-4 rounded-lg border p-4"
-              >
-                <div className="min-w-0 space-y-1">
-                  <p className="font-medium">{application.displayName}</p>
-                  <p className="text-muted-foreground font-mono text-xs">
-                    /{application.slug}
-                  </p>
-                  <p className="max-w-xl text-sm text-pretty">
-                    {application.description}
-                  </p>
-                  <p className="text-muted-foreground text-xs">
-                    {application.userName} · {application.userEmail} · contact{' '}
-                    {application.contactEmail}
-                  </p>
-                </div>
-                <ApplicationReview
-                  application={application}
-                  approve={approveApplicationAction.bind(null, application.id)}
-                  reject={rejectApplicationAction.bind(null, application.id)}
-                />
-              </div>
-            ))
-          )}
+      <form className="flex flex-wrap items-end gap-2" action="/sellers">
+        <label htmlFor="seller-status" className="sr-only">
+          Status
+        </label>
+        <SelectField
+          id="seller-status"
+          name="status"
+          placeholder="Any status"
+          defaultValue={status ?? ''}
+          options={backendSellerStatuses.map((value) => ({
+            value,
+            label: value.charAt(0) + value.slice(1).toLowerCase(),
+          }))}
+        />
+        <Button type="submit" variant="secondary">
+          Apply
+        </Button>
+        {isFiltered ? (
+          <Button variant="ghost" asChild>
+            <Link href="/sellers">Clear</Link>
+          </Button>
+        ) : null}
+      </form>
 
-          {reviewed.length > 0 ? (
-            <div className="overflow-x-auto rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Applicant</TableHead>
-                    <TableHead>Store</TableHead>
-                    <TableHead>Outcome</TableHead>
-                    <TableHead>Reason</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {reviewed.map((application) => (
-                    <TableRow key={application.id}>
-                      <TableCell>{application.userName}</TableCell>
-                      <TableCell>{application.displayName}</TableCell>
-                      <TableCell>
-                        <StatusBadge status={application.status} />
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {application.rejectionReason ?? '—'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
+      {sellers.items.length === 0 ? (
+        <EmptyState
+          title={isFiltered ? 'No sellers with that status' : 'No sellers yet'}
+          description={
+            isFiltered
+              ? 'No seller is currently in this state.'
+              : 'Sellers appear here once they apply through the storefront.'
+          }
+          action={
+            isFiltered ? (
+              <Button asChild>
+                <Link href="/sellers">Clear filter</Link>
+              </Button>
+            ) : null
+          }
+        />
+      ) : (
+        <div className="overflow-x-auto rounded-xl border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Business</TableHead>
+                <TableHead>Applied</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sellers.items.map((seller) => (
+                <TableRow key={seller.id}>
+                  <TableCell>
+                    <Link
+                      href={`/sellers/${seller.id}`}
+                      className="font-medium hover:underline"
+                    >
+                      {seller.businessName}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {new Date(seller.createdAt).toLocaleDateString('en-GB', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    })}
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge status={seller.status.toLowerCase()} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Seller accounts</CardTitle>
-          <CardDescription>
-            Suspending a seller removes their offers from the storefront
-            immediately.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {sellers.items.length === 0 ? (
-            <EmptyState
-              title="No sellers yet"
-              description="Approve an application to create the first seller account."
-            />
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Seller</TableHead>
-                    <TableHead>Store address</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sellers.items.map((seller) => (
-                    <TableRow key={seller.id}>
-                      <TableCell>
-                        <span className="flex items-center gap-2.5">
-                          <SellerLogo seller={seller} />
-                          <span className="font-medium">{seller.name}</span>
-                        </span>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        /{seller.slug}
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={seller.status} />
-                      </TableCell>
-                      <TableCell>
-                        <SellerStatusToggle
-                          seller={seller}
-                          action={setSellerStatusAction.bind(
-                            null,
-                            seller.id,
-                            seller.status === 'approved',
-                          )}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <Pagination
+        pathname="/sellers"
+        params={params}
+        page={sellers.page}
+        pageSize={sellers.limit}
+        total={sellers.total}
+        totalPages={totalPages}
+      />
     </div>
   );
 }

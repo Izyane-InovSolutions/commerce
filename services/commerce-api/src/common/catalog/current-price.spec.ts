@@ -1,6 +1,6 @@
 import type { Price } from '@prisma/client';
 
-import { pickCurrentPrice } from './current-price';
+import { currentPrices, pickCurrentPrice } from './current-price';
 
 function buildPrice(overrides: Partial<Price>): Price {
   return {
@@ -19,13 +19,13 @@ describe('pickCurrentPrice', () => {
   const now = new Date('2026-06-01T00:00:00Z');
 
   it('returns undefined when there are no prices', () => {
-    expect(pickCurrentPrice([], now)).toBeUndefined();
+    expect(pickCurrentPrice([], 'USD', now)).toBeUndefined();
   });
 
   it('ignores a price that has not started yet', () => {
     const future = buildPrice({ startsAt: new Date('2027-01-01T00:00:00Z') });
 
-    expect(pickCurrentPrice([future], now)).toBeUndefined();
+    expect(pickCurrentPrice([future], 'USD', now)).toBeUndefined();
   });
 
   it('ignores a price that has already ended', () => {
@@ -34,7 +34,7 @@ describe('pickCurrentPrice', () => {
       endsAt: new Date('2026-01-01T00:00:00Z'),
     });
 
-    expect(pickCurrentPrice([expired], now)).toBeUndefined();
+    expect(pickCurrentPrice([expired], 'USD', now)).toBeUndefined();
   });
 
   it('returns an open-ended price that has started', () => {
@@ -43,7 +43,7 @@ describe('pickCurrentPrice', () => {
       endsAt: null,
     });
 
-    expect(pickCurrentPrice([active], now)?.id).toBe('price-1');
+    expect(pickCurrentPrice([active], 'USD', now)?.id).toBe('price-1');
   });
 
   it('picks the most recently started price when windows overlap', () => {
@@ -56,6 +56,61 @@ describe('pickCurrentPrice', () => {
       startsAt: new Date('2026-03-01T00:00:00Z'),
     });
 
-    expect(pickCurrentPrice([older, newer], now)?.id).toBe('newer');
+    expect(pickCurrentPrice([older, newer], 'USD', now)?.id).toBe('newer');
+  });
+
+  // The case that matters for a multi-currency catalog: adding a price in one
+  // currency must not change what another currency resolves to, whichever was
+  // entered last.
+  it('never crosses currencies, even when the other one is newer', () => {
+    const kwacha = buildPrice({
+      id: 'kwacha',
+      currency: 'ZMW',
+      startsAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    const pounds = buildPrice({
+      id: 'pounds',
+      currency: 'GBP',
+      startsAt: new Date('2026-05-01T00:00:00Z'),
+    });
+
+    expect(pickCurrentPrice([kwacha, pounds], 'ZMW', now)?.id).toBe('kwacha');
+    expect(pickCurrentPrice([kwacha, pounds], 'GBP', now)?.id).toBe('pounds');
+    expect(pickCurrentPrice([kwacha, pounds], 'USD', now)).toBeUndefined();
+  });
+});
+
+describe('currentPrices', () => {
+  const now = new Date('2026-06-01T00:00:00Z');
+
+  it('returns the price in force in each currency, one per currency', () => {
+    const oldKwacha = buildPrice({
+      id: 'old-kwacha',
+      currency: 'ZMW',
+      startsAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    const newKwacha = buildPrice({
+      id: 'new-kwacha',
+      currency: 'ZMW',
+      startsAt: new Date('2026-03-01T00:00:00Z'),
+    });
+    const pounds = buildPrice({ id: 'pounds', currency: 'GBP' });
+
+    const resolved = currentPrices([oldKwacha, newKwacha, pounds], now);
+
+    expect(resolved.map((price) => price.id).sort()).toEqual([
+      'new-kwacha',
+      'pounds',
+    ]);
+  });
+
+  it('leaves out currencies whose only price has expired', () => {
+    const expired = buildPrice({
+      id: 'expired',
+      currency: 'GBP',
+      endsAt: new Date('2026-01-01T00:00:00Z'),
+    });
+
+    expect(currentPrices([expired], now)).toEqual([]);
   });
 });

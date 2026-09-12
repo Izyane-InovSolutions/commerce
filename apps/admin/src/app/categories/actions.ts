@@ -3,9 +3,9 @@
 import { revalidatePath } from 'next/cache';
 
 import {
-  createCategory,
-  deleteCategory,
-  updateCategory,
+  backendCreateCategory,
+  backendDeleteCategory,
+  backendUpdateCategory,
 } from '@commerce/api-client';
 
 import { apiClient } from '@/lib/api';
@@ -13,8 +13,13 @@ import { toFormState, type FormState } from '@/lib/form';
 
 function revalidateTaxonomy(): void {
   revalidatePath('/categories');
-  // The product forms in both portals read the taxonomy.
   revalidatePath('/catalog');
+}
+
+/** The API rejects an empty string where it expects a UUID, so blanks go out. */
+function optionalId(value: FormDataEntryValue | null): string | undefined {
+  const id = String(value ?? '').trim();
+  return id === '' ? undefined : id;
 }
 
 export async function createCategoryAction(
@@ -22,10 +27,10 @@ export async function createCategoryAction(
   formData: FormData,
 ): Promise<FormState> {
   try {
-    await createCategory(apiClient, {
+    await backendCreateCategory(apiClient, {
       name: String(formData.get('name') ?? '').trim(),
       slug: String(formData.get('slug') ?? '').trim(),
-      parentId: (formData.get('parentId') as string) || null,
+      parentId: optionalId(formData.get('parentId')),
     });
   } catch (error) {
     return toFormState(error);
@@ -41,11 +46,10 @@ export async function updateCategoryAction(
   formData: FormData,
 ): Promise<FormState> {
   try {
-    await updateCategory(apiClient, categoryId, {
+    await backendUpdateCategory(apiClient, categoryId, {
       name: String(formData.get('name') ?? '').trim(),
       slug: String(formData.get('slug') ?? '').trim(),
-      // An empty select means top level, which is a real choice here.
-      parentId: (formData.get('parentId') as string) || null,
+      parentId: optionalId(formData.get('parentId')),
     });
   } catch (error) {
     return toFormState(error);
@@ -59,7 +63,7 @@ export async function deleteCategoryAction(
   categoryId: string,
 ): Promise<FormState> {
   try {
-    await deleteCategory(apiClient, categoryId);
+    await backendDeleteCategory(apiClient, categoryId);
   } catch (error) {
     return toFormState(error);
   }

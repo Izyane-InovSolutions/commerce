@@ -1,17 +1,18 @@
 import type { Metadata } from 'next';
 
-import { SectionPlaceholder } from '@/components/section-placeholder';
-import { requireSeller } from '@/lib/session';
+import { AwaitingBackend } from '@/components/awaiting-backend';
+import { requireUser } from '@/lib/session';
 
 export const metadata: Metadata = { title: 'Promotions' };
 
 export default async function PromotionsPage() {
-  await requireSeller();
+  await requireUser();
 
   return (
-    <SectionPlaceholder
-      title="Promotions"
-      description="Your own discounts and campaigns, on top of any the platform runs."
+    <AwaitingBackend
+      title={'Promotions'}
+      description={'Your discounts and campaigns.'}
+      needs={['GET /seller/promotions']}
     />
   );
 }

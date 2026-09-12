@@ -139,7 +139,7 @@ describe('WishlistService', () => {
         },
       ]);
 
-      const items = await service.list('user-1');
+      const items = await service.list('user-1', 'USD');
 
       expect(items[0]).toMatchObject({ isAvailable: false });
       expect(items[1]).toMatchObject({

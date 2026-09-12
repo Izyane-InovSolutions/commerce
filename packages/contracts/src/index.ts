@@ -1,4 +1,5 @@
 export * from './auth.ts';
+export * from './backend.ts';
 export * from './catalog.ts';
 export * from './common.ts';
 export * from './insights.ts';

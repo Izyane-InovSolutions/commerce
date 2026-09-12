@@ -3,7 +3,7 @@ import type {
   AttributeValue,
   Brand,
   Category,
-  MediaAsset,
+  MediaStatus,
   Offer,
   Price,
   Product,
@@ -23,19 +23,52 @@ export type VariantWithRelations = ProductVariant & {
   offers: OfferWithPrices[];
 };
 
-export type ProductMediaWithAsset = ProductMedia & { mediaAsset: MediaAsset };
+/**
+ * The part of a media asset a catalog response carries.
+ *
+ * Deliberately not the whole row: `byteSize` is a BigInt that JSON cannot
+ * serialise, and `storageKey` and `ownerUserId` are internal to the media
+ * module rather than something a catalog client should see.
+ */
+export type ProductMediaAsset = {
+  id: string;
+  mimeType: string;
+  originalFileName: string;
+  status: MediaStatus;
+};
 
-export type ProductWithRelations = Product & {
+export type ProductMediaWithAsset = ProductMedia & {
+  mediaAsset: ProductMediaAsset;
+};
+
+export type AdminProductMedia = ProductMediaWithAsset & {
+  /**
+   * Signed, and relative to the API's own origin. Null while the asset is
+   * still reserved: there are no bytes to serve until the upload lands.
+   */
+  url: string | null;
+};
+
+/** A product as it comes back from the database. */
+export type ProductRowWithRelations = Product & {
   brand: Brand | null;
   category: Category | null;
   variants: VariantWithRelations[];
   media: ProductMediaWithAsset[];
 };
 
+/** A product as the admin catalog returns it, with its images viewable. */
+export type ProductWithRelations = Omit<ProductRowWithRelations, 'media'> & {
+  media: AdminProductMedia[];
+};
+
 export type PublicOffer = {
   id: string;
   status: Offer['status'];
+  /** Resolved in the requested currency; null when it has no price in it. */
   currentPrice: { amount: number; currency: string } | null;
+  /** Every currency this offer currently carries a price in. */
+  currencies: string[];
 };
 
 export type PublicVariant = {
@@ -65,6 +98,9 @@ export type PublicProduct = {
     mediaAssetId: string;
     position: number;
     isPrimary: boolean;
+    mimeType: string;
+    /** Signed, and relative to the API's own origin. */
+    url: string;
   }[];
   variants: PublicVariant[];
 };

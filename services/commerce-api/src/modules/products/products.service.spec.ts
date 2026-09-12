@@ -136,7 +136,11 @@ describe('ProductsService', () => {
       ]);
       prisma.product.count.mockResolvedValue(1);
 
-      const result = await service.findPublished({ page: 1, limit: 20 });
+      const result = await service.findPublished({
+        page: 1,
+        limit: 20,
+        currency: 'USD',
+      });
 
       expect(prisma.product.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -157,6 +161,7 @@ describe('ProductsService', () => {
       prisma.product.count.mockResolvedValue(0);
 
       await service.findPublished({
+        currency: 'USD',
         page: 1,
         limit: 20,
         categorySlug: 'shoes',
@@ -179,7 +184,7 @@ describe('ProductsService', () => {
       prisma.product.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.findPublishedBySlug('missing'),
+        service.findPublishedBySlug('missing', 'USD'),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
@@ -196,7 +201,7 @@ describe('ProductsService', () => {
 
   describe('addVariant', () => {
     it('creates the variant and its attribute-value links in one transaction', async () => {
-      prisma.product.findUnique.mockResolvedValue({ id: 'p1' });
+      prisma.product.findUnique.mockResolvedValue({ id: 'p1', media: [] });
       prisma.productVariant.create.mockResolvedValue({
         id: 'v1',
         productId: 'p1',
@@ -223,7 +228,7 @@ describe('ProductsService', () => {
     });
 
     it('maps a duplicate SKU code to a conflict', async () => {
-      prisma.product.findUnique.mockResolvedValue({ id: 'p1' });
+      prisma.product.findUnique.mockResolvedValue({ id: 'p1', media: [] });
       prisma.$transaction.mockRejectedValue({ code: 'P2002' });
 
       await expect(
@@ -234,7 +239,7 @@ describe('ProductsService', () => {
 
   describe('attachMedia', () => {
     it('rejects when the media asset does not exist', async () => {
-      prisma.product.findUnique.mockResolvedValue({ id: 'p1' });
+      prisma.product.findUnique.mockResolvedValue({ id: 'p1', media: [] });
       prisma.mediaAsset.findUnique.mockResolvedValue(null);
 
       await expect(
@@ -243,7 +248,7 @@ describe('ProductsService', () => {
     });
 
     it('rejects when the media asset is not yet available', async () => {
-      prisma.product.findUnique.mockResolvedValue({ id: 'p1' });
+      prisma.product.findUnique.mockResolvedValue({ id: 'p1', media: [] });
       prisma.mediaAsset.findUnique.mockResolvedValue({
         id: 'm1',
         status: 'PENDING_UPLOAD',

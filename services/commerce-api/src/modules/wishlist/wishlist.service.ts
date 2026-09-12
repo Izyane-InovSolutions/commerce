@@ -13,37 +13,22 @@ export class WishlistService {
     private readonly prisma: PrismaService,
     private readonly inventoryService: InventoryService,
     private readonly offers: OfferReadService,
+    private readonly offers: OfferReadService,
   ) {}
 
-  async list(userId: string): Promise<WishlistItemView[]> {
+  async list(userId: string, currency: string): Promise<WishlistItemView[]> {
     const items = await this.prisma.wishlistItem.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
     });
 
-    const offers = await this.offers.findMany(
-      items.map((item) => item.offerId),
-    );
-    const byId = new Map(offers.map((offer) => [offer.id, offer]));
-    const quantities = await this.inventoryService.getAvailableQuantities(
-      offers.filter((offer) => !offer.sellerId).map((offer) => offer.variantId),
-    );
-    return items.map((item) => {
-      const offer = byId.get(item.offerId);
-      const currentPrice = pickCurrentPrice(offer?.prices ?? []);
-      return {
-        id: item.id,
-        offerId: item.offerId,
-        currentPrice: currentPrice
-          ? { amount: currentPrice.amount, currency: currentPrice.currency }
-          : null,
-        isAvailable:
-          !!offer &&
-          !offer.sellerId &&
-          offer.status === ProductStatus.PUBLISHED &&
-          !!currentPrice &&
-          (quantities.get(offer.variantId) ?? 0) > 0,
-      };
+    const offers=await this.offers.findMany(items.map(item=>item.offerId));
+    const byId=new Map(offers.map(offer=>[offer.id,offer]));
+    const quantities=await this.inventoryService.getAvailableQuantities(offers.filter(offer=>!offer.sellerId).map(offer=>offer.variantId));
+    return items.map(item=>{
+      const offer=byId.get(item.offerId);
+      const currentPrice=pickCurrentPrice(offer?.prices ?? []);
+      return {id:item.id,offerId:item.offerId,currentPrice:currentPrice ? {amount:currentPrice.amount,currency:currentPrice.currency} : null,isAvailable:!!offer && !offer.sellerId && offer.status===ProductStatus.PUBLISHED && !!currentPrice && (quantities.get(offer.variantId) ?? 0)>0};
     });
   }
 

@@ -134,7 +134,7 @@ describe('OrdersService', () => {
       });
 
       await expect(
-        service.createFromCart('user-1', 'addr-1'),
+        service.createFromCart('user-1', 'addr-1', 'USD'),
       ).rejects.toBeInstanceOf(ConflictException);
     });
 
@@ -146,7 +146,7 @@ describe('OrdersService', () => {
       });
 
       await expect(
-        service.createFromCart('user-1', 'addr-1'),
+        service.createFromCart('user-1', 'addr-1', 'USD'),
       ).rejects.toBeInstanceOf(ConflictException);
     });
 
@@ -185,7 +185,7 @@ describe('OrdersService', () => {
         ],
       });
 
-      const order = await service.createFromCart('user-1', 'addr-1');
+      const order = await service.createFromCart('user-1', 'addr-1', 'USD');
 
       expect(inventoryService.reserve).toHaveBeenCalledWith('variant-1', 2, {
         holderType: 'order_item',
@@ -275,7 +275,7 @@ describe('OrdersService', () => {
         ],
       });
 
-      const order = await service.createFromCart('user-1', 'addr-1');
+      const order = await service.createFromCart('user-1', 'addr-1', 'USD');
 
       expect(prisma.sellerOrder.create).toHaveBeenCalledTimes(3);
       expect(inventoryService.reserve).toHaveBeenCalledTimes(1);
@@ -334,7 +334,7 @@ describe('OrdersService', () => {
       });
 
       await expect(
-        service.createFromCart('user-1', 'addr-1'),
+        service.createFromCart('user-1', 'addr-1', 'USD'),
       ).rejects.toBeInstanceOf(ConflictException);
 
       expect(inventoryService.release).toHaveBeenCalledWith('reservation-1');

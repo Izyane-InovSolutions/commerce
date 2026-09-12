@@ -9,18 +9,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { idleFormState, type FormState } from '@/lib/form';
 
-type SignUpFormProps = {
+/**
+ * Creates an account against `POST /auth/register`.
+ *
+ * The API assigns every new account the `CUSTOMER` role — nothing a client
+ * sends can ask for another one, and there is no endpoint that grants one.
+ */
+export function SignUpForm({
+  action,
+  next,
+}: {
   action: (state: FormState, formData: FormData) => Promise<FormState>;
   next: string;
-};
-
-/**
- * Creates a shopper account.
- *
- * Selling is not granted here — a new account is a customer, and becomes a
- * seller only when an admin approves an application.
- */
-export function SignUpForm({ action, next }: SignUpFormProps) {
+}) {
   const [state, formAction] = useActionState(action, idleFormState);
   const fieldErrors = state.fieldErrors ?? {};
 
@@ -28,18 +29,6 @@ export function SignUpForm({ action, next }: SignUpFormProps) {
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="next" value={next} />
       <FormError state={state} />
-
-      <div className="space-y-1.5">
-        <Label htmlFor="signup-name">Name</Label>
-        <Input
-          id="signup-name"
-          name="name"
-          required
-          autoComplete="name"
-          aria-invalid={fieldErrors.name !== undefined}
-        />
-        <FieldError messages={fieldErrors.name} />
-      </div>
 
       <div className="space-y-1.5">
         <Label htmlFor="signup-email">Email</Label>

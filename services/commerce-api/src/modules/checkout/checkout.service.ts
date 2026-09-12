@@ -18,11 +18,13 @@ export class CheckoutService {
   async checkout(
     userId: string,
     shippingAddressId: string,
+    currency: string,
     paymentDetails?: PaymentDetailsDto,
   ): Promise<CheckoutResult> {
     const order = await this.ordersService.createFromCart(
       userId,
       shippingAddressId,
+      currency,
     );
 
     let payment: PaymentWithRedirect;

@@ -1,6 +1,7 @@
 import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -15,6 +16,10 @@ import {
   DEFAULT_PAGE_SIZE,
   MAX_PAGE_SIZE,
 } from '../../../common/pagination/pagination-query.dto';
+import {
+  DEFAULT_CURRENCY,
+  SUPPORTED_CURRENCIES,
+} from '../../../common/catalog/current-price';
 
 const SORT_PATTERN = /^([a-zA-Z0-9_]+):(asc|desc)$/;
 
@@ -41,6 +46,13 @@ export class ProductQueryDto {
     message: 'sort entries must match "field:asc" or "field:desc"',
   })
   sort?: string | string[];
+
+  // Which currency the returned prices are resolved in; an offer with no
+  // price in it comes back with a null currentPrice rather than another
+  // currency's number.
+  @IsOptional()
+  @IsIn(SUPPORTED_CURRENCIES)
+  currency: string = DEFAULT_CURRENCY;
 
   @IsOptional()
   @IsString()

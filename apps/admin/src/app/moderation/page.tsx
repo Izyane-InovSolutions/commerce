@@ -1,16 +1,18 @@
 import type { Metadata } from 'next';
 
-import { SectionPlaceholder } from '@/components/section-placeholder';
+import { AwaitingBackend } from '@/components/awaiting-backend';
+import { requireAdmin } from '@/lib/session';
 
-export const metadata: Metadata = {
-  title: 'Moderation',
-};
+export const metadata: Metadata = { title: 'Moderation' };
 
-export default function ModerationPage() {
+export default async function ModerationPage() {
+  await requireAdmin();
+
   return (
-    <SectionPlaceholder
-      title="Moderation"
-      description="Review moderation and reported content."
+    <AwaitingBackend
+      title={'Moderation'}
+      description={'Review moderation and reported content.'}
+      needs={['GET /admin/reviews']}
     />
   );
 }

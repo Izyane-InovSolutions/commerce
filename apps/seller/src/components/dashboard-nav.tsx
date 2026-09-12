@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 
-import type { User } from '@commerce/contracts';
+import type { BackendUser } from '@commerce/contracts';
 
 import { navigationFor } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
  * A section is active when the current path is the section itself or one of
  * its descendants, so a detail route keeps its parent lit.
  */
-export function DashboardNav({ user }: { user: User }) {
+export function DashboardNav({ user }: { user: BackendUser }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const current = `${pathname}${searchParams.size > 0 ? `?${searchParams}` : ''}`;

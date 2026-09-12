@@ -199,8 +199,32 @@ export class MediaService {
     return asset;
   }
 
-  private sign(action: 'upload' | 'download', id: string): SignedMediaUrl {
-    const ttl = this.config.get<number>('MEDIA_URL_TTL_SECONDS', 900);
+  /**
+   * A download URL for media attached to a product.
+   *
+   * Unlike createDownloadUrl this does not check ownership: a product image
+   * is public by the time it is on a product, and the shopper asking for it
+   * is not the administrator who uploaded it.
+   *
+   * It is signed for much longer, because these URLs are embedded in catalog
+   * responses that clients cache. A short-lived one would still be inside a
+   * cached page after it had expired, leaving broken images behind.
+   */
+  createProductDownloadUrl(id: string): SignedMediaUrl {
+    return this.sign(
+      'download',
+      id,
+      this.config.get<number>('MEDIA_PUBLIC_URL_TTL_SECONDS', 86_400),
+    );
+  }
+
+  private sign(
+    action: 'upload' | 'download',
+    id: string,
+    ttlSeconds?: number,
+  ): SignedMediaUrl {
+    const ttl =
+      ttlSeconds ?? this.config.get<number>('MEDIA_URL_TTL_SECONDS', 900);
     const expires = String(Math.floor(Date.now() / 1000) + ttl);
     const signature = this.signature(action, id, expires);
     const operation = action === 'upload' ? 'content' : 'download';

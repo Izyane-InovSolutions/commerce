@@ -157,16 +157,82 @@ can say plainly whether it is showing fixture data.
 
 Once the integration is done, delete this package and the `mock:dev` script.
 
-### Authentication and roles
+### Talking to the real Commerce API
+
+Both portals point at the NestJS API. The team's local setup runs it on
+**port 3005** (`services/commerce-api/.env`), not the 3000 in `.env.example`.
+
+```bash
+npm run api:dev      # the real API, on the port its .env sets
+npm run admin:dev    # http://localhost:3002
+npm run seller:dev   # http://localhost:3003
+```
+
+Three facts about the API shape the client, and all three are handled in one
+place rather than in every page:
+
+- **Every response is wrapped** in `{ data, meta: { requestId } }`, and a
+  paginated body wraps a second time. `createApiClient({ envelope: true })`
+  strips the outer layer, and only an object with exactly `data` and `meta`
+  counts as one — so a page body survives intact.
+- **The admin and public catalog reads are not symmetrical.** The public read
+  resolves `currentPrice`; the admin read returns the whole `prices` history
+  and leaves the caller to pick. `pickCurrentPrice` mirrors the server's own
+  rule so both agree.
+- **The admin product list takes no query parameters** and returns the whole
+  catalog as a bare array, while the public list is paginated. Searching and
+  paging on the admin screen therefore happen in the page.
+
+Backend-facing types live in `@commerce/contracts/backend.ts`, kept apart from
+the marketplace contract the portals were first built against. Where the two
+disagree the backend wins:
+
+|                | Commerce API                                    | Marketplace contract              |
+| -------------- | ----------------------------------------------- | --------------------------------- |
+| Money          | `{ amount, currency }`                          | `{ amountMinor, currency }`       |
+| Roles          | one string: `CUSTOMER`/`SELLER`/`STAFF`/`ADMIN` | an array of lowercase roles       |
+| Product status | `DRAFT`/`PUBLISHED`/`ARCHIVED`                  | adds `pending` and `rejected`     |
+| Sellable unit  | a variant                                       | a SKU                             |
+| Stock location | a warehouse                                     | a location, possibly seller-owned |
+
+### What is live, and what is not
+
+Admin **catalog, categories, brands and inventory** are wired to real
+endpoints. Every other admin section, and every seller trading section, renders
+`AwaitingBackend`, which names the endpoints it needs. That is deliberate: an
+empty table reads as "you have nothing" when the truth is "this does not
+exist", and the two call for completely different actions.
+
+**The seller portal has no backend beyond authentication.** The API has a
+`SELLER` role and a nullable `Offer.sellerId`, but no seller table and no
+seller-scoped endpoints — the schema notes sellers arrive in Phase 3.
+
+To keep building seller screens against the stand-in instead, point that app
+back at the mock:
+
+```bash
+# apps/seller/.env.local
+NEXT_PUBLIC_API_BASE_URL=http://localhost:3000/api/v1   # then: npm run mock:dev
+```
+
+## Authentication and roles
 
 Mock authentication lives in the mock API. **It is not an auth system** —
 passwords are compared in plain text and sessions are in memory. It exists so
 the portals can be built against real session and role behaviour; the NestJS
 auth module replaces all of it.
 
-A portal signs in through `POST /auth/sign-in`, stores the token in an
-httpOnly cookie, and `src/lib/api.ts` attaches it to every request via
-`getAuthHeaders`. The token never reaches the browser.
+A portal signs in through `POST /auth/login`, which returns an access token
+and a refresh token. Both are stored in httpOnly cookies and never reach the
+browser; `src/lib/api.ts` attaches the access token to every request.
+
+**Access tokens last fifteen minutes**, so a session needs renewing or the
+portal signs itself out mid-afternoon. The access cookie is given the token's
+own lifetime, which makes _access cookie gone, refresh cookie present_ the
+signal to renew — no clock arithmetic anywhere. Renewal happens in
+`middleware.ts`, because only middleware and route handlers may set cookies on
+the way out; a server component cannot. A refresh that fails clears the refresh
+cookie, so a spent token does not retry on every request.
 
 **Each client must use its own cookie name.** Cookies are scoped by host and
 ignore the port, so everything on localhost shares one cookie jar: a cookie

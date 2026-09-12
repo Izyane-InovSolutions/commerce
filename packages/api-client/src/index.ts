@@ -9,12 +9,17 @@ export {
 export {
   ApiError,
   ApiUnreachableError,
+  extractFieldErrors,
   formatApiErrorMessage,
+  parseApiError,
   type ApiErrorBody,
+  type ApiErrorDetail,
+  type ParsedApiError,
 } from './errors.ts';
 export { getHealth, type HealthResponse } from './health.ts';
 
 export * from './auth.ts';
+export * from './backend/index.ts';
 export * from './catalog.ts';
 export * from './insights.ts';
 export * from './inventory.ts';

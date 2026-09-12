@@ -33,12 +33,9 @@ export default async function SignInPage() {
         <CardContent className="space-y-6">
           <SignInForm action={signInAction} next="/" />
           <p className="text-muted-foreground border-t pt-4 text-xs">
-            Development accounts, served by the mock API:{' '}
-            <code className="font-mono">seller@deskworks.test</code> (an
-            approved seller) or{' '}
-            <code className="font-mono">shopper@example.test</code> (a shopper
-            with no store yet), both with password{' '}
-            <code className="font-mono">password123</code>.
+            Signs in against the Commerce API. Roles are assigned in the
+            database — registering here creates a{' '}
+            <code className="font-mono">CUSTOMER</code>.
           </p>
         </CardContent>
       </Card>
@@ -47,12 +44,12 @@ export default async function SignInPage() {
         <CardHeader>
           <CardTitle>Start selling</CardTitle>
           <CardDescription>
-            Create an account, then apply for a store. An administrator reviews
-            every application.
+            Creating an account gives you a customer login. The Commerce API has
+            no seller onboarding yet, so a store cannot be requested here.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <SignUpForm action={signUpAction} next="/apply" />
+          <SignUpForm action={signUpAction} next="/" />
         </CardContent>
       </Card>
     </div>
