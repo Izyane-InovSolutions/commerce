@@ -4463,7 +4463,8 @@
             }
           }
         }
-      }
+      },
+      "description": "Required role: SELLER."
     },
     "SellerOffersController_find": {
       "operationId": "SellerOffersController_find",
@@ -4527,7 +4528,8 @@
             }
           }
         }
-      }
+      },
+      "description": "Required role: SELLER."
     },
     "SellerOffersController_create": {
       "operationId": "SellerOffersController_create",
@@ -4582,6 +4584,7 @@
           }
         }
       },
+      "description": "Required role: SELLER.",
       "requestBody": {
         "required": true,
         "content": {
@@ -4656,6 +4659,7 @@
           }
         }
       },
+      "description": "Required role: SELLER.",
       "requestBody": {
         "required": true,
         "content": {
@@ -4730,6 +4734,7 @@
           }
         }
       },
+      "description": "Required role: SELLER.",
       "requestBody": {
         "required": true,
         "content": {
@@ -4804,6 +4809,7 @@
           }
         }
       },
+      "description": "Required role: SELLER.",
       "requestBody": {
         "required": true,
         "content": {

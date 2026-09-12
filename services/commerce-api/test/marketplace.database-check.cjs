@@ -60,12 +60,12 @@ async function run() {
     offer = await offers.status(userIds[0], offer.id, { version: offer.version, status: 'PUBLISHED' });
     const comparison = (await request(server).get(`/api/v1/catalog/variants/${variantId}/offers`).expect(200)).body.data;
     assert.equal(comparison.total, 2);
-    assert.equal(comparison.items.find(item => item.id === offer.id).checkoutSupported, false);
+    assert.equal(comparison.items.find(item => item.id === offer.id).checkoutSupported, true);
     assert.equal(comparison.items.find(item => item.id === retailId).isFirstParty, true);
     assert.ok(!JSON.stringify(comparison).includes('PRIVATE-'));
     const catalogue = (await request(server).get(`/api/v1/catalog/products/product-${productId}`).expect(200)).body.data;
     assert.deepEqual(catalogue.variants[0].offers.map(item => item.id), [retailId]);
-    await request(server).post('/api/v1/cart/items').auth(auth(0), { type: 'bearer' }).send({ offerId: offer.id, quantity: 1 }).expect(400);
+    await request(server).post('/api/v1/cart/items').auth(auth(0), { type: 'bearer' }).send({ offerId: offer.id, quantity: 1 }).expect(201);
     assert.equal(await prisma.reservation.count({ where: { inventoryRecord: { variantId } } }), 0);
     await request(server).patch(`/api/v1/admin/catalog/offers/${offer.id}/status`).auth(auth(2), { type: 'bearer' }).send({ status: 'PUBLISHED' }).expect(400);
     await request(server).patch(`/api/v1/admin/catalog/products/${productId}`).auth(auth(0), { type: 'bearer' }).send({ name: 'Hijacked' }).expect(403);

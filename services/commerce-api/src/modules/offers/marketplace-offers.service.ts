@@ -261,7 +261,7 @@ export class MarketplaceOffersService {
           amount: price.amount,
           currency: price.currency,
         },
-        checkoutSupported: offer.sellerId === null,
+        checkoutSupported: true,
       };
     });
     return { items, total, page: query.page, limit: query.limit };

@@ -93,17 +93,15 @@ describe('CartService', () => {
       inventoryService as unknown as InventoryService,
       {
         find: prisma.offer.findUnique,
-        findMany: jest
-          .fn()
-          .mockImplementation(() =>
-            (
-              prisma.cart.findUnique.mock.results.at(-1)?.value as Promise<{
-                items: Array<{ offerId: string; offer: CommerceOffer }>;
-              }>
-            ).then((result) =>
-              result.items.map((item) => ({ ...item.offer, id: item.offerId })),
-            ),
+        findMany: jest.fn().mockImplementation(() =>
+          (
+            prisma.cart.findUnique.mock.results.at(-1)?.value as Promise<{
+              items: Array<{ offerId: string; offer: CommerceOffer }>;
+            }>
+          ).then((result) =>
+            result.items.map((item) => ({ ...item.offer, id: item.offerId })),
           ),
+        ),
       } as unknown as OfferReadService,
     );
   });
