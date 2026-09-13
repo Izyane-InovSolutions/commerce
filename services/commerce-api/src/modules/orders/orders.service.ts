@@ -377,7 +377,10 @@ export class OrdersService {
       include: {
         items: true,
         sellerOrders: {
-          include: { items: true, shippingGroups: { include: { items: true } } },
+          include: {
+            items: true,
+            shippingGroups: { include: { items: true } },
+          },
         },
         payment: CUSTOMER_PAYMENT_SELECT,
       },
@@ -463,7 +466,10 @@ export class OrdersService {
       include: {
         items: true,
         sellerOrders: {
-          include: { items: true, shippingGroups: { include: { items: true } } },
+          include: {
+            items: true,
+            shippingGroups: { include: { items: true } },
+          },
         },
         payment: CUSTOMER_PAYMENT_SELECT,
       },

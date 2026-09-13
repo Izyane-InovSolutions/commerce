@@ -72,6 +72,7 @@ export class SellerOfferPriceDto {
   amount!: number;
 
   @Matches(/^[A-Z]{3}$/)
+  @IsIn(SUPPORTED_CURRENCIES)
   @IsString()
   currency!: string;
 }

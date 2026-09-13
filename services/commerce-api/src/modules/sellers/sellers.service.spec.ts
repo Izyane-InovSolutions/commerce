@@ -192,6 +192,6 @@ describe('SellersService', () => {
     await expect(
       service.documentUrl('admin', seller.id, 'other-doc'),
     ).rejects.toThrow(NotFoundException);
-    expect(media.createDownloadUrl).not.toHaveBeenCalled();
+    expect(createDownloadUrl).not.toHaveBeenCalled();
   });
 });

@@ -134,7 +134,7 @@ describe('Catalog (e2e)', () => {
     await request(server())
       .post(`/api/v1/admin/catalog/offers/${offer.data.id}/prices`)
       .set(asAdmin())
-      .send({ amount: 12999, currency: 'usd' })
+      .send({ amount: 12999, currency: 'USD' })
       .expect(201);
 
     await request(server())
@@ -157,7 +157,7 @@ describe('Catalog (e2e)', () => {
 
     const publicDetail = (
       await request(server())
-        .get('/api/v1/catalog/products/trail-runner')
+        .get('/api/v1/catalog/products/trail-runner?currency=USD')
         .expect(200)
     ).body as Body<{
       variants: {

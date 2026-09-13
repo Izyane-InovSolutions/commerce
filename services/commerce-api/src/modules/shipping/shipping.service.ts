@@ -47,8 +47,8 @@ export class ShippingService {
     }
 
     const quotes: ShippingQuoteGroup[] = [];
-    for (const [fulfillmentMode, groupItems] of [...groups].sort(([left], [right]) =>
-      left.localeCompare(right),
+    for (const [fulfillmentMode, groupItems] of [...groups].sort(
+      ([left], [right]) => left.localeCompare(right),
     )) {
       const sortedItems = [...groupItems].sort((left, right) =>
         left.offerId.localeCompare(right.offerId),
@@ -66,7 +66,9 @@ export class ShippingService {
         quantity: sortedItems.reduce((sum, item) => sum + item.quantity, 0),
       });
       if (!Number.isSafeInteger(rate.amount) || rate.amount < 0)
-        throw new BadRequestException('Shipping provider returned an invalid amount');
+        throw new BadRequestException(
+          'Shipping provider returned an invalid amount',
+        );
       quotes.push({
         fulfillmentMode,
         serviceLevel: rate.serviceLevel,

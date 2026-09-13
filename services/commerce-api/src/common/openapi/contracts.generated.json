@@ -4522,6 +4522,21 @@
           }
         },
         {
+          "name": "currency",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "ZMW",
+              "USD",
+              "GBP"
+            ],
+            "default": "ZMW"
+          }
+        },
+        {
           "name": "page",
           "in": "query",
           "required": false,
@@ -4542,21 +4557,6 @@
             "minimum": 1,
             "maximum": 100,
             "default": 20
-          }
-        },
-        {
-          "name": "currency",
-          "in": "query",
-          "required": false,
-          "schema": {
-            "type": "string",
-            "nullable": true,
-            "enum": [
-              "ZMW",
-              "USD",
-              "GBP"
-            ],
-            "default": "ZMW"
           }
         }
       ],
@@ -4694,6 +4694,21 @@
           }
         },
         {
+          "name": "currency",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "ZMW",
+              "USD",
+              "GBP"
+            ],
+            "default": "ZMW"
+          }
+        },
+        {
           "name": "page",
           "in": "query",
           "required": false,
@@ -4714,21 +4729,6 @@
             "minimum": 1,
             "maximum": 100,
             "default": 20
-          }
-        },
-        {
-          "name": "currency",
-          "in": "query",
-          "required": false,
-          "schema": {
-            "type": "string",
-            "nullable": true,
-            "enum": [
-              "ZMW",
-              "USD",
-              "GBP"
-            ],
-            "default": "ZMW"
           }
         }
       ],
@@ -10863,6 +10863,35 @@
       ],
       "additionalProperties": false
     },
+    "InputPublicOfferQueryDto": {
+      "type": "object",
+      "properties": {
+        "currency": {
+          "type": "string",
+          "nullable": true,
+          "enum": [
+            "ZMW",
+            "USD",
+            "GBP"
+          ],
+          "default": "ZMW"
+        },
+        "page": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1,
+          "default": 1
+        },
+        "limit": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        }
+      },
+      "additionalProperties": false
+    },
     "OfferPage": {
       "type": "object",
       "properties": {
@@ -11261,7 +11290,12 @@
         },
         "currency": {
           "type": "string",
-          "pattern": "^[A-Z]{3}$"
+          "pattern": "^[A-Z]{3}$",
+          "enum": [
+            "ZMW",
+            "USD",
+            "GBP"
+          ]
         }
       },
       "required": [

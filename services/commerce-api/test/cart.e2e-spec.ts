@@ -75,7 +75,7 @@ describe('Cart (e2e)', () => {
     await request(server())
       .post(`/api/v1/admin/catalog/offers/${offerId}/prices`)
       .set(asAdmin())
-      .send({ amount: 5000, currency: 'usd' })
+      .send({ amount: 5000, currency: 'ZMW' })
       .expect(201);
 
     const warehouse = (
@@ -127,7 +127,7 @@ describe('Cart (e2e)', () => {
       id: null,
       items: [],
       subtotal: 0,
-      currency: null,
+      currency: 'ZMW',
     });
 
     await request(server()).post('/api/v1/cart/merge').expect(401);

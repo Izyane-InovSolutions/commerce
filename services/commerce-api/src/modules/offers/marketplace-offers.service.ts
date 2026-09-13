@@ -218,6 +218,19 @@ export class MarketplaceOffersService {
           status: ProductStatus.PUBLISHED,
           product: { status: ProductStatus.PUBLISHED },
         },
+        OR: [
+          { sellerId: null },
+          {
+            seller: {
+              is: {
+                status: SellerStatus.APPROVED,
+                storefrontSlug: { not: null },
+                displayName: { not: null },
+                ownerUser: { isActive: true },
+              },
+            },
+          },
+        ],
       },
       include: {
         seller: { select: PUBLIC_STOREFRONT_SELECT },
