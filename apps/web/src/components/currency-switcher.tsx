@@ -30,7 +30,7 @@ export function CurrencySwitcher({
         name="currency"
         defaultValue={currency}
         onChange={() => formRef.current?.requestSubmit()}
-        className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-8 rounded-lg border bg-transparent px-2 text-sm outline-none focus-visible:ring-3"
+        className="h-8 rounded-lg border border-blue-300 bg-blue-50 px-2 text-sm text-blue-700 outline-none hover:bg-blue-100 focus-visible:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/50 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300 dark:hover:bg-blue-900"
       >
         {backendCurrencies.map((code) => (
           <option key={code} value={code}>

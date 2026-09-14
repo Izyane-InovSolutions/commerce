@@ -40,6 +40,7 @@ export function ProductCategorySection({
           size="sm"
           aria-expanded={expanded}
           onClick={() => setExpanded((value) => !value)}
+          className="border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 aria-expanded:bg-blue-100 aria-expanded:text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300 dark:hover:bg-blue-900"
         >
           {expanded ? 'View less' : 'View more'}
         </Button>
