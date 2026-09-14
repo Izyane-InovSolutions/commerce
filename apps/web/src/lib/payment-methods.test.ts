@@ -3,26 +3,22 @@ import { describe, expect, it } from 'vitest';
 import { availablePaymentMethods, unavailableReason } from './payment-methods';
 
 describe('availablePaymentMethods', () => {
-  it('offers mobile money for Kwacha orders, and not a card', () => {
-    expect(availablePaymentMethods('ZMW')).toEqual(['mobile-money']);
+  it('offers both mobile money and card for Kwacha orders', () => {
+    expect(availablePaymentMethods('ZMW')).toEqual(['mobile-money', 'card']);
   });
 
-  it('offers a card for the currencies the card connector settles in', () => {
-    expect(availablePaymentMethods('USD')).toEqual(['card']);
-    expect(availablePaymentMethods('GBP')).toEqual(['card']);
-  });
-
-  // The gateway routes on currency, so an order priced in anything else has
-  // no way to be paid for — checkout has to say so rather than fail at the end.
-  it('offers nothing for a currency neither connector takes', () => {
+  // Orders are only ever priced in ZMW; the gateway converts to the card
+  // connector's settlement currency itself, so nothing else is payable.
+  it('offers nothing for a currency orders are never priced in', () => {
+    expect(availablePaymentMethods('USD')).toEqual([]);
     expect(availablePaymentMethods('EUR')).toEqual([]);
   });
 });
 
 describe('unavailableReason', () => {
   it('names the currency the shopper is actually being asked about', () => {
-    expect(unavailableReason('card', 'ZMW')).toContain('ZMW');
-    expect(unavailableReason('card', 'ZMW')).toContain('USD or GBP');
+    expect(unavailableReason('card', 'USD')).toContain('ZMW');
+    expect(unavailableReason('card', 'USD')).toContain('USD');
     expect(unavailableReason('mobile-money', 'USD')).toContain('ZMW');
   });
 });

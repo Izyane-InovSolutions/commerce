@@ -123,11 +123,9 @@ export type BackendAdminOffer = z.infer<typeof backendAdminOfferSchema>;
 /**
  * The currencies the platform prices and settles in.
  *
- * Mirrors `SUPPORTED_CURRENCIES` in the API. The gateway routes on currency —
- * mobile money settles in ZMW, its card connector in USD or GBP — so an offer
- * is only sellable in a currency it carries a price for.
+ * Mirrors `SUPPORTED_CURRENCIES` in the API — Kwacha only.
  */
-export const backendCurrencies = ['ZMW', 'USD', 'GBP'] as const;
+export const backendCurrencies = ['ZMW'] as const;
 export const backendCurrencySchema = z.enum(backendCurrencies);
 export type BackendCurrency = z.infer<typeof backendCurrencySchema>;
 

@@ -623,6 +623,14 @@ model Order {
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
+  // The client-minted key that makes a retried checkout return the original
+  // order instead of creating a second one. Unique per (userId, key) rather
+  // than globally, so two shoppers minting the same UUID never collide.
+  // Nullable because a caller that sends no key gets no dedup, and Postgres
+  // treats every NULL in a unique index as distinct from every other NULL.
+  idempotencyKey String? @map("idempotency_key") @db.VarChar(64)
+
+  @@unique([userId, idempotencyKey])
   @@index([userId])
   @@map("orders")
 }

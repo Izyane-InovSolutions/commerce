@@ -13,7 +13,10 @@ import {
   backendSetVariantStatus,
   backendUpdateProduct,
 } from '@commerce/api-client';
-import { backendProductStatusSchema } from '@commerce/contracts';
+import {
+  backendProductStatusSchema,
+  defaultBackendCurrency,
+} from '@commerce/contracts';
 
 import { apiClient } from '@/lib/api';
 import { toFormState, type FormState } from '@/lib/form';
@@ -193,7 +196,9 @@ export async function createOfferAction(
     const offer = await backendCreateOffer(apiClient, variantId);
     await backendAddPrice(apiClient, offer.id, {
       amount: Math.round(Number(raw) * 100),
-      currency: String(formData.get('currency') ?? 'GBP').toUpperCase(),
+      currency: String(
+        formData.get('currency') ?? defaultBackendCurrency,
+      ).toUpperCase(),
     });
     await backendSetOfferStatus(apiClient, offer.id, 'PUBLISHED');
   } catch (error) {
@@ -227,7 +232,9 @@ export async function addPriceAction(
   try {
     await backendAddPrice(apiClient, offerId, {
       amount: Math.round(Number(raw) * 100),
-      currency: String(formData.get('currency') ?? 'GBP').toUpperCase(),
+      currency: String(
+        formData.get('currency') ?? defaultBackendCurrency,
+      ).toUpperCase(),
     });
   } catch (error) {
     return toFormState(error);

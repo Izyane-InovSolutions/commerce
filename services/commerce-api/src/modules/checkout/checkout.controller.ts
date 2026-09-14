@@ -1,4 +1,11 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Headers,
+  Post,
+} from '@nestjs/common';
+import { isUUID } from 'class-validator';
 
 import type { AuthenticatedUser } from '../../common/auth/authenticated-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
@@ -6,6 +13,14 @@ import { CheckoutService } from './checkout.service';
 import { CheckoutResult } from './checkout.types';
 import { CreateBuyNowCheckoutDto } from './dto/create-buy-now-checkout.dto';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
+
+/** Absent is fine — a caller that sends none simply gets no retry dedup. */
+function idempotencyKey(key: string | undefined): string | undefined {
+  if (key === undefined) return undefined;
+  if (!isUUID(key, '4'))
+    throw new BadRequestException('Idempotency-Key must be a UUID v4');
+  return key;
+}
 
 @Controller('checkout')
 export class CheckoutController {
@@ -15,6 +30,7 @@ export class CheckoutController {
   checkout(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateCheckoutDto,
+    @Headers('idempotency-key') key?: string,
   ): Promise<CheckoutResult> {
     return this.checkoutService.checkout(
       user.id,
@@ -22,6 +38,7 @@ export class CheckoutController {
       dto.currency,
       dto.paymentDetails,
       dto.itemIds,
+      idempotencyKey(key),
     );
   }
 
@@ -30,6 +47,7 @@ export class CheckoutController {
   buyNow(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateBuyNowCheckoutDto,
+    @Headers('idempotency-key') key?: string,
   ): Promise<CheckoutResult> {
     return this.checkoutService.checkoutOffer(
       user.id,
@@ -38,6 +56,7 @@ export class CheckoutController {
       dto.shippingAddressId,
       dto.currency,
       dto.paymentDetails,
+      idempotencyKey(key),
     );
   }
 }

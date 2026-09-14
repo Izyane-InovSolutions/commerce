@@ -20,6 +20,10 @@ export class CheckoutService {
    * rest of the cart alone — a shopper can pay for part of what they picked
    * without losing track of the rest. Omitted, it is every line in the cart,
    * same as before partial checkout existed.
+   *
+   * `idempotencyKey`, when given, makes a retried call — a double submit, or
+   * a retry after a timeout — return the order that call already created
+   * instead of checking out a second time.
    */
   async checkout(
     userId: string,
@@ -27,12 +31,17 @@ export class CheckoutService {
     currency: string,
     paymentDetails?: PaymentDetailsDto,
     itemIds?: string[],
+    idempotencyKey?: string,
   ): Promise<CheckoutResult> {
+    const replay = await this.replay(userId, idempotencyKey);
+    if (replay) return replay;
+
     const order = await this.ordersService.createFromCart(
       userId,
       shippingAddressId,
       currency,
       itemIds,
+      idempotencyKey,
     );
 
     let payment: PaymentWithRedirect;
@@ -67,13 +76,18 @@ export class CheckoutService {
     shippingAddressId: string,
     currency: string,
     paymentDetails?: PaymentDetailsDto,
+    idempotencyKey?: string,
   ): Promise<CheckoutResult> {
+    const replay = await this.replay(userId, idempotencyKey);
+    if (replay) return replay;
+
     const order = await this.ordersService.createFromOffer(
       userId,
       offerId,
       quantity,
       shippingAddressId,
       currency,
+      idempotencyKey,
     );
 
     let payment: PaymentWithRedirect;
@@ -87,5 +101,29 @@ export class CheckoutService {
       throw error;
     }
     return { order, payment };
+  }
+
+  /**
+   * The result of a previous call that used this key, if one reached
+   * payment. An order that never got that far (the gateway call threw
+   * before a payment existed) frees its key instead, so this checkout
+   * proceeds as a fresh attempt rather than being replayed or blocked.
+   */
+  private async replay(
+    userId: string,
+    idempotencyKey?: string,
+  ): Promise<CheckoutResult | null> {
+    if (!idempotencyKey) return null;
+    const existing = await this.ordersService.findByIdempotencyKey(
+      userId,
+      idempotencyKey,
+    );
+    if (!existing) return null;
+    if (!existing.payment) {
+      await this.ordersService.releaseIdempotencyKey(existing.id);
+      return null;
+    }
+    const payment = await this.paymentsService.getForOrder(existing.id);
+    return { order: existing, payment };
   }
 }
