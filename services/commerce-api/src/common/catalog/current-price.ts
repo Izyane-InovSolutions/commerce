@@ -1,14 +1,10 @@
 import type { Price } from '@prisma/client';
 
 /**
- * The currencies the platform prices and settles in.
- *
- * Kept here because price resolution is where the list actually bites: an
- * offer is only sellable in a currency it carries a price for, and the
- * payment gateway routes on currency too — mobile money settles in ZMW, its
- * card connector in USD or GBP.
+ * Commerce prices and balances use ZMW only. Foreign payment settlement is
+ * handled privately by the payment provider.
  */
-export const SUPPORTED_CURRENCIES = ['ZMW', 'USD', 'GBP'] as const;
+export const SUPPORTED_CURRENCIES = ['ZMW'] as const;
 
 export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
 
@@ -46,16 +42,15 @@ export function pickCurrentPrice(
 }
 
 /**
- * The price in force in every currency the offer is priced in.
- *
- * For callers that ask "is this sellable at all?" rather than "what does it
- * cost in Kwacha?" — publishing a listing, for instance, needs one currency
- * to have a price, not a particular one.
+ * Current ZMW prices. Historical foreign prices cannot qualify an offer for
+ * publication or purchase.
  */
 export function currentPrices(prices: Price[], at: Date = new Date()): Price[] {
   const byCurrency = new Map<string, Price>();
 
-  for (const price of prices.filter((price) => isCurrent(price, at))) {
+  for (const price of prices.filter(
+    (price) => price.currency === DEFAULT_CURRENCY && isCurrent(price, at),
+  )) {
     const held = byCurrency.get(price.currency);
     if (!held || newestFirst(price, held) < 0) {
       byCurrency.set(price.currency, price);

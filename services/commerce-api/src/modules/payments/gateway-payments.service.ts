@@ -58,10 +58,15 @@ export class GatewayPaymentsService {
   async status(userId: string, id: string): Promise<PaymentSnapshot> {
     const payment = await this.own(userId, id);
     const gateway = await this.gateway.checkStatus(this.reference(payment));
+    // Verify the recorded settlement before applying any business effects.
+    await this.snapshot(payment, gateway);
     const reconciled = await this.payments.applyProviderResult(payment, {
       providerReference: gateway.paymentId,
       status: toProviderStatus(gateway.status),
       gatewayStatus: gateway.status,
+      amount: Math.round(gateway.amount * 100),
+      currency: gateway.currency,
+      reference: gateway.reference,
       failureCode: gateway.failureCode,
       failureMessage: gateway.failureMessage,
     });
@@ -131,12 +136,19 @@ export class GatewayPaymentsService {
     return payment.providerReference;
   }
 
-  private snapshot(payment: Payment, gateway: GatewayPayment): PaymentSnapshot {
+  private async snapshot(
+    payment: Payment,
+    gateway: GatewayPayment,
+  ): Promise<PaymentSnapshot> {
+    const settlement = await this.prisma.paymentSettlement.findUnique({
+      where: { paymentId: payment.id },
+    });
     if (
       gateway.paymentId !== payment.providerReference ||
       gateway.reference !== payment.orderId ||
-      gateway.currency !== payment.currency ||
-      Math.round(gateway.amount * 100) !== payment.amount
+      gateway.currency !== (settlement?.currency ?? payment.currency) ||
+      Math.round(gateway.amount * 100) !==
+        (settlement?.amount ?? payment.amount)
     )
       throw new ConflictException(
         'Gateway payment does not match the local order',
@@ -148,7 +160,12 @@ export class GatewayPaymentsService {
       id: payment.id,
       orderId: payment.orderId,
       localStatus: payment.status,
-      gateway,
+      // Customer-facing payment snapshots always show the original ZMW amount.
+      gateway: {
+        ...gateway,
+        amount: payment.amount / 100,
+        currency: payment.currency,
+      },
       requiresReconciliation:
         (mapped === 'PENDING' && gateway.status !== 'PENDING') ||
         (mapped === 'SUCCEEDED' && payment.status !== 'SUCCEEDED'),

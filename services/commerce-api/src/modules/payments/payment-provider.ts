@@ -1,4 +1,5 @@
 import type { PaymentDetailsDto } from './dto/payment-details.dto';
+import type { SettlementQuote } from './payment-currency-converter';
 
 export const PAYMENT_PROVIDER = Symbol('PAYMENT_PROVIDER');
 
@@ -16,6 +17,10 @@ export type InitializePaymentInput = {
 };
 
 export type ProviderPaymentResult = {
+  /** Private gateway amounts for reconciliation against the stored quote. */
+  amount?: number;
+  currency?: string;
+  reference?: string;
   providerReference: string;
   /** Set only once the gateway reports a payment as failed. */
   failureCode?: string;
@@ -46,6 +51,9 @@ export type VerifiedPaymentEvent = {
 
 export interface PaymentProvider {
   readonly name: string;
+  prepareInput?(
+    input: InitializePaymentInput,
+  ): InitializePaymentInput & { settlement?: SettlementQuote };
   validateInput?(input: InitializePaymentInput): void;
   initialize(input: InitializePaymentInput): Promise<ProviderPaymentResult>;
   getPayment(providerReference: string): Promise<ProviderPaymentResult>;

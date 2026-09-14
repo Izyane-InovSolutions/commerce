@@ -134,7 +134,7 @@ describe('Catalog (e2e)', () => {
     await request(server())
       .post(`/api/v1/admin/catalog/offers/${offer.data.id}/prices`)
       .set(asAdmin())
-      .send({ amount: 12999, currency: 'usd' })
+      .send({ amount: 12999, currency: 'ZMW' })
       .expect(201);
 
     await request(server())
@@ -169,7 +169,7 @@ describe('Catalog (e2e)', () => {
     expect(publicDetail.data.variants[0]?.skuCode).toBe('TR-42');
     expect(publicDetail.data.variants[0]?.offers[0]?.currentPrice).toEqual({
       amount: 12999,
-      currency: 'USD',
+      currency: 'ZMW',
     });
 
     const publicList = (

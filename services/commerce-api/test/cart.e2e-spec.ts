@@ -75,7 +75,7 @@ describe('Cart (e2e)', () => {
     await request(server())
       .post(`/api/v1/admin/catalog/offers/${offerId}/prices`)
       .set(asAdmin())
-      .send({ amount: 5000, currency: 'usd' })
+      .send({ amount: 5000, currency: 'ZMW' })
       .expect(201);
 
     const warehouse = (

@@ -118,6 +118,55 @@ describe('PaymentsService', () => {
     );
   });
   describe('initializeForOrder', () => {
+    it('persists a private settlement quote while keeping the payment in ZMW', async () => {
+      const settlement = {
+        amount: 100,
+        currency: 'USD',
+        rate: '0.05',
+        quoteId: 'quote-1',
+        expiresAt: new Date('2030-01-01'),
+      };
+      provider.prepareInput = jest.fn((input) => ({
+        ...input,
+        amount: 100,
+        currency: 'USD',
+        settlement,
+      }));
+      prisma.payment.create.mockResolvedValue({
+        id: 'payment-1',
+        amount: 2000,
+        currency: 'ZMW',
+        status: PaymentStatus.PENDING,
+      });
+      prisma.payment.update.mockResolvedValue({
+        id: 'payment-1',
+        amount: 2000,
+        currency: 'ZMW',
+        status: PaymentStatus.PENDING,
+      });
+      provider.initialize.mockResolvedValue({
+        providerReference: 'pay_123',
+        status: 'PENDING',
+      });
+      await expect(
+        service.initializeForOrder({
+          id: 'order-1',
+          total: 2000,
+          currency: 'ZMW',
+        } as never),
+      ).resolves.toMatchObject({ amount: 2000, currency: 'ZMW' });
+      expect(prisma.payment.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          amount: 2000,
+          currency: 'ZMW',
+          settlement: { create: settlement },
+        }) as object,
+      });
+      expect(provider.initialize).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 100, currency: 'USD' }),
+      );
+    });
+
     const order = { id: 'order-1', total: 2000, currency: 'USD' } as never;
 
     it('preserves the pending payment after an ambiguous gateway outcome', async () => {

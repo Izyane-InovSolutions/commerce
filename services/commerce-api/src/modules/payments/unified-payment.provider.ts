@@ -20,6 +20,7 @@ import type {
 import { PaymentDetailsDto } from './dto/payment-details.dto';
 import { GatewayPaymentQueryDto } from './dto/gateway-payment.dto';
 import { PaymentOutcomeUnknownException } from './gateway-errors';
+import { PaymentCurrencyConverter } from './payment-currency-converter';
 
 export type GatewayPayment = {
   paymentId: string;
@@ -76,6 +77,27 @@ export class UnifiedPaymentProvider implements PaymentProvider {
   readonly name = 'unified';
   private readonly logger = new Logger(UnifiedPaymentProvider.name);
   constructor(private readonly config: ConfigService) {}
+
+  prepareInput(input: InitializePaymentInput): InitializePaymentInput & {
+    settlement?: import('./payment-currency-converter').SettlementQuote;
+  } {
+    if (input.currency !== 'ZMW')
+      throw new BadRequestException('Orders must be priced in ZMW');
+    if (input.details?.paymentMethod !== 'CARD') return input;
+    const currency = this.config.get<string>(
+      'UNIFIED_PAYMENTS_CARD_CURRENCY',
+      'USD',
+    );
+    if (!['USD', 'GBP'].includes(currency))
+      throw new ServiceUnavailableException(
+        'This payment method is temporarily unavailable',
+      );
+    const settlement = new PaymentCurrencyConverter(this.config).quote(
+      input.amount,
+      currency,
+    );
+    return { ...input, amount: settlement.amount, currency, settlement };
+  }
 
   async initialize(
     input: InitializePaymentInput,
@@ -171,6 +193,9 @@ export class UnifiedPaymentProvider implements PaymentProvider {
       providerReference: payment.paymentId,
       status: toProviderStatus(payment.status),
       gatewayStatus: payment.status,
+      amount: Math.round(payment.amount * 100),
+      currency: payment.currency,
+      reference: payment.reference,
       failureCode: payment.failureCode,
       failureMessage: payment.failureMessage,
     };

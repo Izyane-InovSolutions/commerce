@@ -83,7 +83,7 @@ describe('pickCurrentPrice', () => {
 describe('currentPrices', () => {
   const now = new Date('2026-06-01T00:00:00Z');
 
-  it('returns the price in force in each currency, one per currency', () => {
+  it('returns the current ZMW price and excludes historical foreign prices', () => {
     const oldKwacha = buildPrice({
       id: 'old-kwacha',
       currency: 'ZMW',
@@ -98,10 +98,7 @@ describe('currentPrices', () => {
 
     const resolved = currentPrices([oldKwacha, newKwacha, pounds], now);
 
-    expect(resolved.map((price) => price.id).sort()).toEqual([
-      'new-kwacha',
-      'pounds',
-    ]);
+    expect(resolved.map((price) => price.id)).toEqual(['new-kwacha']);
   });
 
   it('leaves out currencies whose only price has expired', () => {

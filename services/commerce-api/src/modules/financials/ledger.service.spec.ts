@@ -113,7 +113,7 @@ describe('LedgerService', () => {
   it('rejects payouts exceeding a locked balance', async () => {
     prisma.sellerBalance.findUnique.mockResolvedValue({
       balance: 100,
-      currency: 'USD',
+      currency: 'ZMW',
     });
     await expect(service.recordPayout('seller-1', 200)).rejects.toBeInstanceOf(
       ConflictException,
@@ -123,7 +123,7 @@ describe('LedgerService', () => {
   it('checks the conditional debit before recording a payout', async () => {
     prisma.sellerBalance.findUnique.mockResolvedValue({
       balance: 100,
-      currency: 'USD',
+      currency: 'ZMW',
     });
     prisma.sellerBalance.updateMany.mockResolvedValue({ count: 0 });
     await expect(service.recordPayout('seller-1', 80)).rejects.toBeInstanceOf(
@@ -134,7 +134,7 @@ describe('LedgerService', () => {
   it('records a payout and guarded debit in one transaction', async () => {
     prisma.sellerBalance.findUnique.mockResolvedValue({
       balance: 100,
-      currency: 'USD',
+      currency: 'ZMW',
     });
     await service.recordPayout('seller-1', 80);
     expect(prisma.sellerBalance.updateMany).toHaveBeenCalledWith({
