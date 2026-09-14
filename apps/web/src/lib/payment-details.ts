@@ -45,12 +45,14 @@ export function buildPaymentDetails(
     return undefined;
   }
 
-  // The field is typed as MM/YYYY, which is exactly the split the gateway
-  // takes — no century to infer.
-  const [expiryMonth = '', expiryYear = ''] = field(
+  // Typed as "MM/YY", the same two-digit year printed on the card — the
+  // gateway wants four (`expiryYear` must match `20\d{2}`), so the century
+  // is assumed here rather than asked for twice.
+  const [expiryMonth = '', expiryYearShort = ''] = field(
     formData,
     'cardExpiry',
   ).split('/');
+  const expiryYear = expiryYearShort ? `20${expiryYearShort}` : '';
   const { firstName, lastName } = splitName(field(formData, 'cardName'));
 
   return {

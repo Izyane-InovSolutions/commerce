@@ -179,10 +179,10 @@ export function CheckoutForm({
               name="cardExpiry"
               inputMode="numeric"
               autoComplete="cc-exp"
-              placeholder="MM/YYYY"
-              pattern="\d{2}/\d{4}"
-              title="MM/YYYY"
-              maxLength={7}
+              placeholder="MM/YY"
+              pattern="\d{2}/\d{2}"
+              title="MM/YY"
+              maxLength={5}
               value={cardExpiry}
               onChange={(event) =>
                 setCardExpiry((previous) =>
@@ -202,9 +202,9 @@ export function CheckoutForm({
               name="cardCvc"
               inputMode="numeric"
               autoComplete="cc-csc"
-              pattern="\d{3,4}"
-              title="3 or 4 digits"
-              maxLength={4}
+              pattern="\d{3}"
+              title="3 digits"
+              maxLength={3}
               value={cardCvc}
               onChange={(event) => setCardCvc(formatCvc(event.target.value))}
               required

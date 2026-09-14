@@ -40,17 +40,13 @@ describe('formatExpiry', () => {
     expect(formatExpiry('00', '0')).toBe('01/');
   });
 
-  it('continues building the year after the slash', () => {
+  it('builds a two-digit year, matching what is printed on the card', () => {
     expect(formatExpiry('12/3', '12/')).toBe('12/3');
     expect(formatExpiry('12/30', '12/3')).toBe('12/30');
   });
 
-  it('builds a four-digit year, which is what the gateway takes', () => {
-    expect(formatExpiry('12/2031', '12/203')).toBe('12/2031');
-  });
-
-  it('caps at 6 digits total', () => {
-    expect(formatExpiry('12/20311', '12/2031')).toBe('12/2031');
+  it('caps at 4 digits total', () => {
+    expect(formatExpiry('12/301', '12/30')).toBe('12/30');
   });
 
   it('does not re-insert the slash when backspacing past it', () => {
@@ -64,9 +60,8 @@ describe('formatCvc', () => {
     expect(formatCvc('1a2b3c')).toBe('123');
   });
 
-  // Four digits so an Amex code is not silently truncated.
-  it('caps at 4', () => {
-    expect(formatCvc('12345')).toBe('1234');
+  it('caps at 3', () => {
+    expect(formatCvc('12345')).toBe('123');
   });
 });
 

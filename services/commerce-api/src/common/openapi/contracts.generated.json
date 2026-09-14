@@ -9189,7 +9189,7 @@
         },
         "securityCode": {
           "type": "string",
-          "pattern": "^\\d{3,4}$"
+          "pattern": "^\\d{3}$"
         },
         "holderName": {
           "type": "string",
