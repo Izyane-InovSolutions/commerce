@@ -214,6 +214,25 @@ describe('UnifiedPaymentProvider', () => {
     });
   });
 
+  it('recognises a declined charge as failed, with its reason', async () => {
+    reply({
+      success: true,
+      data: {
+        ...data,
+        status: 'FAILED',
+        failureCode: 'PAYMENT_DECLINED',
+        failureMessage: 'The payment was declined by the provider',
+      },
+    });
+    await expect(provider.initialize(input)).resolves.toEqual({
+      providerReference: 'pay_123',
+      status: 'FAILED',
+      gatewayStatus: 'FAILED',
+      failureCode: 'PAYMENT_DECLINED',
+      failureMessage: 'The payment was declined by the provider',
+    });
+  });
+
   it('preserves unknown outcomes for timeouts and inconsistent responses', async () => {
     fetchMock.mockRejectedValueOnce(new Error('Timeout'));
     await expect(provider.initialize(input)).rejects.toBeInstanceOf(

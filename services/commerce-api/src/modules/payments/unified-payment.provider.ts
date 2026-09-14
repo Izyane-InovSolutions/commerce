@@ -37,14 +37,18 @@ export type GatewayPayment = {
 /**
  * Gateway statuses this system is willing to act on.
  *
- * Only SUCCESS is here, and only because it was observed on a real payment —
- * the gateway's documentation lists no status enum at all. Anything else maps
- * to PENDING below rather than being guessed at: reading an unknown string as
- * a failure would cancel an order that may yet be paid, and reading one as a
- * success would release goods for nothing.
+ * Only the statuses here are, and only because each was observed on a real
+ * payment — the gateway's documentation lists no status enum at all. Anything
+ * else maps to PENDING below rather than being guessed at: reading an unknown
+ * string as a failure would cancel an order that may yet be paid, and reading
+ * one as a success would release goods for nothing. FAILED was confirmed on a
+ * declined sandbox card charge, returned alongside a `completedAt` timestamp
+ * and a `failureCode` — the gateway's own signal that the attempt is over,
+ * not still in flight.
  */
 const GATEWAY_STATUS: Record<string, ProviderPaymentResult['status']> = {
   SUCCESS: 'SUCCEEDED',
+  FAILED: 'FAILED',
 };
 
 export function toProviderStatus(
@@ -143,11 +147,17 @@ export class UnifiedPaymentProvider implements PaymentProvider {
       throw new PaymentOutcomeUnknownException();
     // A mobile money charge is normally still pending here — the subscriber
     // has yet to approve it — but a gateway that settles inline is honoured
-    // rather than left to a later reconciliation.
+    // rather than left to a later reconciliation. That includes a card
+    // declined inline: the failure reason travels with it so the customer
+    // sees why, rather than a payment stuck looking like it is still pending.
     return {
       providerReference: payment.paymentId,
       status: toProviderStatus(payment.status),
       gatewayStatus: payment.status,
+      ...(payment.failureCode ? { failureCode: payment.failureCode } : {}),
+      ...(payment.failureMessage
+        ? { failureMessage: payment.failureMessage }
+        : {}),
     };
   }
 
