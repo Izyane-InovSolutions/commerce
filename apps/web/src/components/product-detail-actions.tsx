@@ -1,11 +1,12 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import Link from 'next/link';
 import { Heart } from 'lucide-react';
 
 import { SubmitButton } from '@/components/submit-button';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { idleFormState, type FormState } from '@/lib/form';
 
 /**
@@ -34,6 +35,7 @@ export function ProductDetailActions({
     async () => addToWishlist(),
     idleFormState,
   );
+  const [quantity, setQuantity] = useState(1);
 
   if (!available) {
     return (
@@ -45,15 +47,34 @@ export function ProductDetailActions({
 
   return (
     <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <label htmlFor="product-quantity" className="text-sm font-medium">
+          Quantity
+        </label>
+        <Input
+          id="product-quantity"
+          type="number"
+          min={1}
+          value={quantity}
+          onChange={(event) => {
+            const next = Number(event.target.value);
+            setQuantity(Number.isInteger(next) && next > 0 ? next : 1);
+          }}
+          className="w-16"
+        />
+      </div>
+
       <div className="flex flex-wrap items-center gap-3">
         <form action={formAction} className="flex items-center gap-3">
-          <input type="hidden" name="quantity" value={1} />
+          <input type="hidden" name="quantity" value={quantity} />
           <SubmitButton size="default" pendingLabel="Adding…">
             Add to cart
           </SubmitButton>
         </form>
         <Button asChild>
-          <Link href={`/buy-now/${slug}`}>Buy it now</Link>
+          <Link href={`/buy-now/${slug}?quantity=${quantity}`}>
+            Buy it now
+          </Link>
         </Button>
       </div>
 
