@@ -2426,6 +2426,70 @@
         }
       }
     },
+    "CheckoutController_buyNow": {
+      "operationId": "CheckoutController_buyNow",
+      "tags": [
+        "checkout"
+      ],
+      "parameters": [],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/CheckoutResult"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputCreateBuyNowCheckoutDto"
+            }
+          }
+        }
+      }
+    },
     "AdminFinancialsController_balance": {
       "operationId": "AdminFinancialsController_balance",
       "tags": [
@@ -9514,6 +9578,44 @@
         "failureReason"
       ]
     },
+    "InputCreateBuyNowCheckoutDto": {
+      "type": "object",
+      "properties": {
+        "offerId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "quantity": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1,
+          "default": 1
+        },
+        "shippingAddressId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "currency": {
+          "type": "string",
+          "nullable": true,
+          "enum": [
+            "ZMW",
+            "USD",
+            "GBP"
+          ],
+          "default": "ZMW"
+        },
+        "paymentDetails": {
+          "$ref": "#/components/schemas/InputPaymentDetailsDto",
+          "nullable": true
+        }
+      },
+      "required": [
+        "offerId",
+        "shippingAddressId"
+      ],
+      "additionalProperties": false
+    },
     "SellerBalanceView": {
       "type": "object",
       "properties": {
@@ -11898,13 +12000,17 @@
           "items": {
             "type": "string"
           }
+        },
+        "inStock": {
+          "type": "boolean"
         }
       },
       "required": [
         "id",
         "status",
         "currentPrice",
-        "currencies"
+        "currencies",
+        "inStock"
       ]
     },
     "__type18": {

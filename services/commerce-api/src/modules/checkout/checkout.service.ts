@@ -42,4 +42,38 @@ export class CheckoutService {
     await this.cartService.clearCart({ userId });
     return { order, payment };
   }
+
+  /**
+   * "Buy now": checks one offer out directly, at its own quantity. The
+   * persisted cart is never read or written, so there is nothing to clear
+   * afterwards and nothing in it to fail on.
+   */
+  async checkoutOffer(
+    userId: string,
+    offerId: string,
+    quantity: number,
+    shippingAddressId: string,
+    currency: string,
+    paymentDetails?: PaymentDetailsDto,
+  ): Promise<CheckoutResult> {
+    const order = await this.ordersService.createFromOffer(
+      userId,
+      offerId,
+      quantity,
+      shippingAddressId,
+      currency,
+    );
+
+    let payment: PaymentWithRedirect;
+    try {
+      payment = await this.paymentsService.initializeForOrder(
+        order,
+        paymentDetails,
+      );
+    } catch (error) {
+      await this.ordersService.cancel(order.id);
+      throw error;
+    }
+    return { order, payment };
+  }
 }

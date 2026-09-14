@@ -357,6 +357,41 @@ describe('CartService', () => {
     });
   });
 
+  describe('previewOfferLine', () => {
+    it('rejects a non-positive quantity without reading the offer', async () => {
+      await expect(
+        service.previewOfferLine('offer-1', 0, 'USD'),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.offer.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('prices and checks a single offer without touching any cart', async () => {
+      prisma.offer.findUnique.mockResolvedValue(buildOffer());
+
+      const line = await service.previewOfferLine('offer-1', 3, 'USD');
+
+      expect(line).toMatchObject({
+        offerId: 'offer-1',
+        quantity: 3,
+        isAvailable: true,
+        lineTotal: 3000,
+      });
+      expect(prisma.cart.findFirst).not.toHaveBeenCalled();
+      expect(prisma.cart.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('flags the line unavailable when stock is insufficient', async () => {
+      prisma.offer.findUnique.mockResolvedValue(buildOffer());
+      inventoryService.getAvailableQuantities.mockResolvedValue(
+        new Map([['variant-1', 1]]),
+      );
+
+      const line = await service.previewOfferLine('offer-1', 5, 'USD');
+
+      expect(line).toMatchObject({ isAvailable: false, lineTotal: 0 });
+    });
+  });
+
   describe('updateItemQuantity / removeItem', () => {
     it('throws not found when the cart does not exist', async () => {
       prisma.cart.findFirst.mockResolvedValue(null);

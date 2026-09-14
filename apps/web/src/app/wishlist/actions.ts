@@ -4,7 +4,18 @@ import { revalidatePath } from 'next/cache';
 
 import { addToCart } from '@/lib/cart';
 import { toFormState, type FormState } from '@/lib/form';
-import { removeFromWishlist } from '@/lib/wishlist';
+import { addToWishlist, removeFromWishlist } from '@/lib/wishlist';
+
+export async function addToWishlistAction(offerId: string): Promise<FormState> {
+  try {
+    await addToWishlist(offerId);
+  } catch (error) {
+    return toFormState(error);
+  }
+
+  revalidatePath('/wishlist');
+  return { status: 'idle', message: 'Saved to your wishlist.' };
+}
 
 export async function removeFromWishlistAction(
   offerId: string,

@@ -34,13 +34,23 @@ export async function SiteHeader() {
 
         <nav className="ml-auto flex items-center gap-1">
           <CurrencySwitcher currency={currency} action={setCurrencyAction} />
-          <Button variant="ghost" size="sm" asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            asChild
+            className="hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-950 dark:hover:text-blue-300"
+          >
             <Link href="/account">
               <User data-icon="inline-start" />
               Account
             </Link>
           </Button>
-          <Button variant="ghost" size="sm" asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            asChild
+            className="hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-950 dark:hover:text-blue-300"
+          >
             <Link href="/cart">
               <ShoppingCart data-icon="inline-start" />
               Cart

@@ -2,6 +2,7 @@
 
 import { useActionState } from 'react';
 import Link from 'next/link';
+import { Heart } from 'lucide-react';
 
 import { SubmitButton } from '@/components/submit-button';
 import { Button } from '@/components/ui/button';
@@ -16,15 +17,23 @@ import { idleFormState, type FormState } from '@/lib/form';
  */
 export function ProductDetailActions({
   name,
+  slug,
   available,
   addToCart,
+  addToWishlist,
 }: {
   name: string;
+  slug: string;
   /** False when nothing on this product is currently sellable. */
   available: boolean;
   addToCart: (state: FormState, formData: FormData) => Promise<FormState>;
+  addToWishlist: () => Promise<FormState>;
 }) {
   const [state, formAction] = useActionState(addToCart, idleFormState);
+  const [wishlistState, wishlistAction] = useActionState(
+    async () => addToWishlist(),
+    idleFormState,
+  );
 
   if (!available) {
     return (
@@ -43,10 +52,17 @@ export function ProductDetailActions({
             Add to cart
           </SubmitButton>
         </form>
-        <Button variant="outline" asChild>
-          <Link href="/cart">Go to cart</Link>
+        <Button asChild>
+          <Link href={`/buy-now/${slug}`}>Buy it now</Link>
         </Button>
       </div>
+
+      <form action={wishlistAction}>
+        <Button type="submit" variant="outline">
+          <Heart data-icon="inline-start" />
+          Add to wishlist
+        </Button>
+      </form>
 
       {state.status === 'idle' && state.message ? (
         <p className="text-muted-foreground text-sm" role="status">
@@ -56,6 +72,16 @@ export function ProductDetailActions({
       {state.status === 'error' ? (
         <p className="text-destructive text-sm" role="alert">
           {state.message ?? 'Could not add this to your cart.'}
+        </p>
+      ) : null}
+      {wishlistState.status === 'idle' && wishlistState.message ? (
+        <p className="text-muted-foreground text-sm" role="status">
+          {name} saved to your wishlist.
+        </p>
+      ) : null}
+      {wishlistState.status === 'error' ? (
+        <p className="text-destructive text-sm" role="alert">
+          {wishlistState.message ?? 'Could not save this to your wishlist.'}
         </p>
       ) : null}
     </div>

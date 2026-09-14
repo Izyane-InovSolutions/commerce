@@ -244,6 +244,61 @@ describe('Checkout (e2e)', () => {
     });
   });
 
+  it('buys an offer directly ("buy now") without touching or being limited by the cart', async () => {
+    const userHeaders = await registerCustomer('buy-now-buyer@example.com');
+    const addressId = await createAddress(userHeaders);
+
+    // Something already sitting in the cart, unrelated to what is bought now
+    // — buy-now must neither read it nor be blocked by it.
+    await request(server())
+      .post('/api/v1/cart/items')
+      .set(userHeaders)
+      .send({ offerId, quantity: 5 })
+      .expect(201);
+
+    const buyNowResponse = await request(server())
+      .post('/api/v1/checkout/buy-now')
+      .set(userHeaders)
+      .send({ offerId, quantity: 1, shippingAddressId: addressId })
+      .expect(201);
+    const buyNowBody = buyNowResponse.body as Body<{
+      order: { id: string; status: string; items: { quantity: number }[] };
+      payment: { providerReference: string };
+    }>;
+    expect(buyNowBody.data.order.status).toBe('PENDING_PAYMENT');
+    expect(buyNowBody.data.order.items).toHaveLength(1);
+    expect(buyNowBody.data.order.items[0].quantity).toBe(1);
+
+    // The persisted cart is untouched — the 5 units placed earlier are
+    // still there, unaffected by the direct purchase of 1.
+    const cartAfterBuyNow = await request(server())
+      .get('/api/v1/cart')
+      .set(userHeaders)
+      .expect(200);
+    expect(
+      (cartAfterBuyNow.body as Body<{ items: { quantity: number }[] }>).data
+        .items,
+    ).toEqual([expect.objectContaining({ quantity: 5 })]);
+
+    paymentProvider.queueEvent(
+      buyNowBody.data.payment.providerReference,
+      'SUCCEEDED',
+    );
+    await request(server())
+      .post('/api/v1/payments/webhook')
+      .set('x-webhook-signature', 'fake-signature')
+      .send({ providerReference: buyNowBody.data.payment.providerReference })
+      .expect(200);
+
+    const orderAfterWebhook = await request(server())
+      .get(`/api/v1/orders/${buyNowBody.data.order.id}`)
+      .set(userHeaders)
+      .expect(200);
+    expect(
+      (orderAfterWebhook.body as Body<{ status: string }>).data.status,
+    ).toBe('PAID');
+  });
+
   it('rejects checkout for an empty cart and leaves nothing behind', async () => {
     const userHeaders = await registerCustomer('empty-cart-buyer@example.com');
     const addressId = await createAddress(userHeaders);

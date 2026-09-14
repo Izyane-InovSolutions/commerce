@@ -6,6 +6,7 @@ import { ProductCard } from '@/components/product-card';
 import { ProductImage } from '@/components/product-image';
 import { ProductDetailActions } from '@/components/product-detail-actions';
 import { addToCartAction } from '@/app/cart/actions';
+import { addToWishlistAction } from '@/app/wishlist/actions';
 import { getProductBySlug, listProducts } from '@/lib/catalog';
 import {
   getDisplayPrice,
@@ -99,8 +100,10 @@ export default async function ProductDetailPage({
 
           <ProductDetailActions
             name={product.name}
+            slug={product.slug}
             available={offer !== null}
             addToCart={addToCartAction.bind(null, offer?.id ?? '')}
+            addToWishlist={addToWishlistAction.bind(null, offer?.id ?? '')}
           />
         </div>
       </div>

@@ -4,18 +4,18 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 import { readCurrency } from '@/lib/currency-cookie';
-import { checkout, createAddress } from '@/lib/orders';
+import { checkoutOffer, createAddress } from '@/lib/orders';
 import { toFormState, type FormState } from '@/lib/form';
 import { buildPaymentDetails } from '@/lib/payment-details';
 
 /**
- * Turns the cart into an order.
- *
- * If the gateway refuses, the API cancels the order it just created and
- * leaves the cart alone — so a failure here is genuinely retryable, and the
- * message says so rather than leaving a shopper wondering what they bought.
+ * Turns one offer directly into an order — "buy now" rather than
+ * "add to cart, then checkout". The persisted cart is never touched, so
+ * there is nothing here to clear or to be blocked by.
  */
-export async function placeOrderAction(
+export async function buyNowAction(
+  offerId: string,
+  quantity: number,
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
@@ -29,7 +29,9 @@ export async function placeOrderAction(
   let orderId: string;
 
   try {
-    const result = await checkout(
+    const result = await checkoutOffer(
+      offerId,
+      quantity,
       shippingAddressId,
       idempotencyKey,
       String(formData.get('currency') ?? '') || (await readCurrency()),
@@ -41,7 +43,6 @@ export async function placeOrderAction(
     return toFormState(error);
   }
 
-  revalidatePath('/cart');
   revalidatePath('/orders');
   redirect(`/orders?placed=${orderId}`);
 }
@@ -73,6 +74,9 @@ export async function createAddressAction(
     return toFormState(error);
   }
 
-  revalidatePath('/checkout');
+  // Every /buy-now/[slug] page, not just the one the address was added
+  // from — the address list is the same regardless of which product got
+  // you there.
+  revalidatePath('/buy-now/[slug]', 'page');
   return { status: 'idle', message: 'Address saved.' };
 }

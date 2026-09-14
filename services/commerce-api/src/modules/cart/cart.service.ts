@@ -16,7 +16,10 @@ import {
   currentPrices,
   pickCurrentPrice,
 } from '../../common/catalog/current-price';
-import { OfferReadService } from '../offers/offer-read.service';
+import {
+  OfferReadService,
+  type CommerceOffer,
+} from '../offers/offer-read.service';
 import { PrismaService } from '../../database/prisma.service';
 import { InventoryService } from '../inventory/inventory.service';
 import {
@@ -117,6 +120,40 @@ export class CartService {
     await this.prisma.cartItem.delete({ where: { id: itemId } });
 
     return this.buildView(cart.id, currency);
+  }
+
+  /**
+   * Prices and checks the availability of one offer as a cart line, without
+   * reading or writing the persisted cart.
+   *
+   * Backs "buy now": a shopper can check a single offer out directly, and
+   * this is what lets that path reuse the exact same availability and
+   * pricing rules a cart line gets, rather than a second copy of them.
+   */
+  async previewOfferLine(
+    offerId: string,
+    quantity: number,
+    currency: string,
+  ): Promise<CartLineView> {
+    if (quantity <= 0) {
+      throw new BadRequestException('quantity must be positive');
+    }
+
+    const offer = await this.offers.find(offerId);
+    const offerById = new Map(offer ? [[offer.id, offer]] : []);
+    const quantities =
+      offer && offer.stockSource !== OfferStockSource.SELLER
+        ? await this.inventoryService.getAvailableQuantities([
+            offer.variantId,
+          ])
+        : new Map<string, number>();
+
+    return this.toLineView(
+      { id: `buy-now:${offerId}`, offerId, quantity },
+      offerById,
+      quantities,
+      currency,
+    );
   }
 
   async clearCart(identity: CartIdentity): Promise<void> {
@@ -258,39 +295,9 @@ export class CartService {
         .filter((offer) => offer.stockSource !== OfferStockSource.SELLER)
         .map((offer) => offer.variantId),
     );
-    const lines: CartLineView[] = cart.items.map((item) => {
-      const offer = byId.get(item.offerId);
-      const currentPrice = pickCurrentPrice(offer?.prices ?? [], currency);
-      const sellerStock = offer?.stockSource === OfferStockSource.SELLER;
-      const availableQuantity = offer
-        ? (quantities.get(offer.variantId) ?? 0)
-        : 0;
-      const sellerApproved =
-        !!offer &&
-        (!offer.sellerId || offer.seller?.status === SellerStatus.APPROVED);
-      const isAvailable =
-        sellerApproved &&
-        offer?.status === ProductStatus.PUBLISHED &&
-        !!currentPrice &&
-        (sellerStock || availableQuantity >= item.quantity);
-      return {
-        id: item.id,
-        offerId: item.offerId,
-        sellerId: offer?.sellerId ?? null,
-        quantity: item.quantity,
-        unitPrice: currentPrice
-          ? { amount: currentPrice.amount, currency: currentPrice.currency }
-          : null,
-        lineTotal:
-          isAvailable && currentPrice ? currentPrice.amount * item.quantity : 0,
-        isAvailable,
-        // What it is priced in, so a client can tell "we stopped selling this"
-        // apart from "we don't sell this in the currency you are browsing".
-        currencies: currentPrices(offer?.prices ?? [])
-          .map((price) => price.currency)
-          .sort(),
-      };
-    });
+    const lines: CartLineView[] = cart.items.map((item) =>
+      this.toLineView(item, byId, quantities, currency),
+    );
 
     const subtotal = lines
       .filter((line) => line.isAvailable)
@@ -304,5 +311,44 @@ export class CartService {
 
   private emptyView(currency: string): CartView {
     return { id: null, items: [], subtotal: 0, currency };
+  }
+
+  private toLineView(
+    item: { id: string; offerId: string; quantity: number },
+    offerById: Map<string, CommerceOffer>,
+    quantities: Map<string, number>,
+    currency: string,
+  ): CartLineView {
+    const offer = offerById.get(item.offerId);
+    const currentPrice = pickCurrentPrice(offer?.prices ?? [], currency);
+    const sellerStock = offer?.stockSource === OfferStockSource.SELLER;
+    const availableQuantity = offer
+      ? (quantities.get(offer.variantId) ?? 0)
+      : 0;
+    const sellerApproved =
+      !!offer &&
+      (!offer.sellerId || offer.seller?.status === SellerStatus.APPROVED);
+    const isAvailable =
+      sellerApproved &&
+      offer?.status === ProductStatus.PUBLISHED &&
+      !!currentPrice &&
+      (sellerStock || availableQuantity >= item.quantity);
+    return {
+      id: item.id,
+      offerId: item.offerId,
+      sellerId: offer?.sellerId ?? null,
+      quantity: item.quantity,
+      unitPrice: currentPrice
+        ? { amount: currentPrice.amount, currency: currentPrice.currency }
+        : null,
+      lineTotal:
+        isAvailable && currentPrice ? currentPrice.amount * item.quantity : 0,
+      isAvailable,
+      // What it is priced in, so a client can tell "we stopped selling this"
+      // apart from "we don't sell this in the currency you are browsing".
+      currencies: currentPrices(offer?.prices ?? [])
+        .map((price) => price.currency)
+        .sort(),
+    };
   }
 }

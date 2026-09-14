@@ -72,6 +72,51 @@ export class OrdersService {
       );
     }
 
+    return this.createOrderFromLines(
+      userId,
+      cart.items,
+      shippingAddressId,
+      currency,
+    );
+  }
+
+  /**
+   * Checks one offer out directly, at its own quantity, leaving the
+   * persisted cart untouched — "buy now" rather than "add, then checkout".
+   */
+  async createFromOffer(
+    userId: string,
+    offerId: string,
+    quantity: number,
+    shippingAddressId: string,
+    currency: string,
+  ): Promise<OrderWithItems> {
+    const line = await this.cartService.previewOfferLine(
+      offerId,
+      quantity,
+      currency,
+    );
+
+    if (!line.isAvailable) {
+      throw new ConflictException(
+        'This item is not available for purchase right now',
+      );
+    }
+
+    return this.createOrderFromLines(
+      userId,
+      [line],
+      shippingAddressId,
+      currency,
+    );
+  }
+
+  private async createOrderFromLines(
+    userId: string,
+    lines: CartLineView[],
+    shippingAddressId: string,
+    currency: string,
+  ): Promise<OrderWithItems> {
     const address = await this.addressesService.findOne(
       userId,
       shippingAddressId,
@@ -79,10 +124,11 @@ export class OrdersService {
     const shippingAddress = toAddressSnapshot(address);
 
     const offers = await this.offers.findMany(
-      cart.items.map((item) => item.offerId),
+      lines.map((item) => item.offerId),
     );
     const offerById = new Map(offers.map((offer) => [offer.id, offer]));
-    const groups = this.groupBySeller(cart.items);
+    const groups = this.groupBySeller(lines);
+    const subtotal = lines.reduce((sum, item) => sum + item.lineTotal, 0);
 
     const createdOrderId = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.create({
@@ -90,8 +136,8 @@ export class OrdersService {
           userId,
           status: OrderStatus.PENDING_PAYMENT,
           currency,
-          subtotal: cart.subtotal,
-          total: cart.subtotal,
+          subtotal,
+          total: subtotal,
           shippingAddress: shippingAddress as unknown as Prisma.InputJsonValue,
         },
       });

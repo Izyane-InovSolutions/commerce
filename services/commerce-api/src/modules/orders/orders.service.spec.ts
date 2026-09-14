@@ -73,7 +73,11 @@ function cartLine(
 
 describe('OrdersService', () => {
   let prisma: ReturnType<typeof buildPrisma>;
-  let cartService: { getCartView: jest.Mock; clearCart: jest.Mock };
+  let cartService: {
+    getCartView: jest.Mock;
+    clearCart: jest.Mock;
+    previewOfferLine: jest.Mock;
+  };
   let inventoryService: {
     reserve: jest.Mock;
     commit: jest.Mock;
@@ -101,7 +105,11 @@ describe('OrdersService', () => {
     prisma.sellerOrder.findUniqueOrThrow.mockImplementation(
       (args: unknown) => prisma.sellerOrder.findUnique(args) as unknown,
     );
-    cartService = { getCartView: jest.fn(), clearCart: jest.fn() };
+    cartService = {
+      getCartView: jest.fn(),
+      clearCart: jest.fn(),
+      previewOfferLine: jest.fn(),
+    };
     inventoryService = {
       reserve: jest.fn(),
       commit: jest.fn(),
@@ -341,6 +349,70 @@ describe('OrdersService', () => {
         where: { id: 'order-1' },
         data: { status: OrderStatus.CANCELLED },
       });
+    });
+  });
+
+  describe('createFromOffer', () => {
+    it('rejects an offer previewOfferLine reports unavailable', async () => {
+      cartService.previewOfferLine.mockResolvedValue(
+        cartLine({ isAvailable: false }),
+      );
+
+      await expect(
+        service.createFromOffer('user-1', 'offer-1', 2, 'addr-1', 'USD'),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('creates a single-line order without ever reading the cart', async () => {
+      cartService.previewOfferLine.mockResolvedValue(cartLine());
+      prisma.offer.findMany.mockResolvedValue([
+        {
+          id: 'offer-1',
+          variantId: 'variant-1',
+          sellerId: null,
+          stockSource: 'PLATFORM',
+        },
+      ]);
+      prisma.order.create.mockResolvedValue({ id: 'order-1' });
+      inventoryService.reserve.mockResolvedValue({ id: 'reservation-1' });
+      prisma.order.findUnique.mockResolvedValue({
+        id: 'order-1',
+        items: [
+          {
+            id: 'item-1',
+            offerId: 'offer-1',
+            quantity: 2,
+            reservationId: 'reservation-1',
+          },
+        ],
+        sellerOrders: [
+          {
+            id: 'seller-order-1',
+            sellerId: null,
+            items: [{ id: 'item-1', offerId: 'offer-1', quantity: 2 }],
+          },
+        ],
+      });
+
+      const order = await service.createFromOffer(
+        'user-1',
+        'offer-1',
+        2,
+        'addr-1',
+        'USD',
+      );
+
+      expect(cartService.previewOfferLine).toHaveBeenCalledWith(
+        'offer-1',
+        2,
+        'USD',
+      );
+      expect(cartService.getCartView).not.toHaveBeenCalled();
+      expect(inventoryService.reserve).toHaveBeenCalledWith('variant-1', 2, {
+        holderType: 'order_item',
+        holderId: 'item-1',
+      });
+      expect(order.id).toBe('order-1');
     });
   });
 

@@ -104,3 +104,25 @@ export async function checkout(
   );
   return response.data;
 }
+
+/**
+ * "Buy now": checks one offer out directly, at its own quantity, without
+ * ever adding it to (or reading) the persisted cart.
+ */
+export async function checkoutOffer(
+  offerId: string,
+  quantity: number,
+  shippingAddressId: string,
+  idempotencyKey: string,
+  currency: string,
+  paymentDetails?: Record<string, unknown>,
+): Promise<CheckoutResult> {
+  const response = await apiClient.post<SuccessEnvelope<CheckoutResult>>(
+    '/checkout/buy-now',
+    {
+      body: { offerId, quantity, shippingAddressId, currency, paymentDetails },
+      idempotencyKey,
+    },
+  );
+  return response.data;
+}
