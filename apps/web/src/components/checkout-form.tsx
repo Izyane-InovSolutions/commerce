@@ -339,8 +339,8 @@ export function CheckoutForm({
               type="tel"
               inputMode="numeric"
               placeholder="097 123 4567"
-              pattern="0\d{2} \d{3} \d{4}"
-              title="10 digits, starting with 0"
+              pattern="09\d \d{3} \d{4}"
+              title="10 digits, starting with 09"
               maxLength={12}
               value={momoPhone}
               onChange={(event) =>

@@ -64,7 +64,7 @@ export function OfferControls({
             <Input
               id={`currency-${variantLabel}`}
               name="currency"
-              defaultValue="GBP"
+              defaultValue="ZMW"
               maxLength={3}
               className="uppercase"
             />
@@ -139,7 +139,7 @@ function OfferRow({
           <Input
             id={`newcur-${offer.id}`}
             name="currency"
-            defaultValue="GBP"
+            defaultValue="ZMW"
             maxLength={3}
             className="uppercase"
           />

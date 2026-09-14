@@ -6,10 +6,10 @@ import {
 import {
   OfferStockSource,
   OrderStatus,
+  Prisma,
   type Order,
   type PaymentStatus,
   type OrderItem,
-  type Prisma,
   type SellerOrder,
 } from '@prisma/client';
 
@@ -44,6 +44,13 @@ const CUSTOMER_PAYMENT_SELECT = {
 
 type SellerGroup = { sellerId: string | null; items: CartLineView[] };
 
+function isUniqueConstraintViolation(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2002'
+  );
+}
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -64,6 +71,7 @@ export class OrdersService {
     shippingAddressId: string,
     currency: string,
     itemIds?: string[],
+    idempotencyKey?: string,
   ): Promise<OrderWithItems> {
     const cart = await this.cartService.getCartView({ userId }, currency);
     const lines = itemIds
@@ -93,6 +101,7 @@ export class OrdersService {
       lines,
       shippingAddressId,
       currency,
+      idempotencyKey,
     );
   }
 
@@ -106,6 +115,7 @@ export class OrdersService {
     quantity: number,
     shippingAddressId: string,
     currency: string,
+    idempotencyKey?: string,
   ): Promise<OrderWithItems> {
     const line = await this.cartService.previewOfferLine(
       offerId,
@@ -124,7 +134,40 @@ export class OrdersService {
       [line],
       shippingAddressId,
       currency,
+      idempotencyKey,
     );
+  }
+
+  /**
+   * The order a previous checkout call already created for this key, if any.
+   *
+   * Scoped to one user so two shoppers minting the same UUID never collide,
+   * matching the `(userId, idempotencyKey)` unique constraint on `Order`.
+   */
+  findByIdempotencyKey(
+    userId: string,
+    idempotencyKey: string,
+  ): Promise<OrderWithItems | null> {
+    return this.prisma.order.findUnique({
+      where: { userId_idempotencyKey: { userId, idempotencyKey } },
+      include: {
+        items: true,
+        sellerOrders: { include: { items: true } },
+        payment: CUSTOMER_PAYMENT_SELECT,
+      },
+    });
+  }
+
+  /**
+   * Frees an idempotency key from an order that never reached payment, so a
+   * fresh retry with the same key can create a new order instead of being
+   * blocked by the unique constraint on a dead one.
+   */
+  async releaseIdempotencyKey(orderId: string): Promise<void> {
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: { idempotencyKey: null },
+    });
   }
 
   private async createOrderFromLines(
@@ -132,6 +175,7 @@ export class OrdersService {
     lines: CartLineView[],
     shippingAddressId: string,
     currency: string,
+    idempotencyKey?: string,
   ): Promise<OrderWithItems> {
     const address = await this.addressesService.findOne(
       userId,
@@ -146,52 +190,71 @@ export class OrdersService {
     const groups = this.groupBySeller(lines);
     const subtotal = lines.reduce((sum, item) => sum + item.lineTotal, 0);
 
-    const createdOrderId = await this.prisma.$transaction(async (tx) => {
-      const order = await tx.order.create({
-        data: {
-          userId,
-          status: OrderStatus.PENDING_PAYMENT,
-          currency,
-          subtotal,
-          total: subtotal,
-          shippingAddress: shippingAddress as unknown as Prisma.InputJsonValue,
-        },
-      });
-
-      for (const group of [...groups].sort((a, b) =>
-        (a.sellerId ?? '').localeCompare(b.sellerId ?? ''),
-      )) {
-        if (group.sellerId)
-          await this.ledgerService.ensureCurrency(group.sellerId, currency, tx);
-        const groupSubtotal = group.items.reduce(
-          (sum, item) => sum + item.lineTotal,
-          0,
-        );
-
-        await tx.sellerOrder.create({
+    let createdOrderId: string;
+    try {
+      createdOrderId = await this.prisma.$transaction(async (tx) => {
+        const order = await tx.order.create({
           data: {
-            orderId: order.id,
-            sellerId: group.sellerId,
+            userId,
             status: OrderStatus.PENDING_PAYMENT,
             currency,
-            subtotal: groupSubtotal,
-            total: groupSubtotal,
-            items: {
-              create: group.items.map((item) => ({
-                orderId: order.id,
-                offerId: item.offerId,
-                quantity: item.quantity,
-                unitAmount: item.unitPrice?.amount ?? 0,
-                currency: item.unitPrice?.currency ?? currency,
-                lineTotal: item.lineTotal,
-              })),
-            },
+            subtotal,
+            total: subtotal,
+            shippingAddress:
+              shippingAddress as unknown as Prisma.InputJsonValue,
+            idempotencyKey: idempotencyKey ?? null,
           },
         });
-      }
 
-      return order.id;
-    });
+        for (const group of [...groups].sort((a, b) =>
+          (a.sellerId ?? '').localeCompare(b.sellerId ?? ''),
+        )) {
+          if (group.sellerId)
+            await this.ledgerService.ensureCurrency(
+              group.sellerId,
+              currency,
+              tx,
+            );
+          const groupSubtotal = group.items.reduce(
+            (sum, item) => sum + item.lineTotal,
+            0,
+          );
+
+          await tx.sellerOrder.create({
+            data: {
+              orderId: order.id,
+              sellerId: group.sellerId,
+              status: OrderStatus.PENDING_PAYMENT,
+              currency,
+              subtotal: groupSubtotal,
+              total: groupSubtotal,
+              items: {
+                create: group.items.map((item) => ({
+                  orderId: order.id,
+                  offerId: item.offerId,
+                  quantity: item.quantity,
+                  unitAmount: item.unitPrice?.amount ?? 0,
+                  currency: item.unitPrice?.currency ?? currency,
+                  lineTotal: item.lineTotal,
+                })),
+              },
+            },
+          });
+        }
+
+        return order.id;
+      });
+    } catch (error) {
+      // Two requests racing on the same key both pass the caller's
+      // pre-check; the loser hits this constraint instead of silently
+      // creating a second order. The transaction already rolled back, so
+      // nothing needs compensating.
+      if (idempotencyKey && isUniqueConstraintViolation(error))
+        throw new ConflictException(
+          'A checkout with this idempotency key is already in progress',
+        );
+      throw error;
+    }
 
     const created = await this.findByIdOrThrow(createdOrderId);
     const reservedItemIds: string[] = [];

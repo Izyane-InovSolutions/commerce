@@ -191,6 +191,15 @@ export class PaymentsService {
     }
   }
 
+  /** The payment already recorded for an order, for replaying a checkout retry. */
+  async getForOrder(orderId: string): Promise<Payment> {
+    const payment = await this.prisma.payment.findUnique({
+      where: { orderId },
+    });
+    if (!payment) throw new NotFoundException('Payment not found');
+    return payment;
+  }
+
   async handleWebhook(rawBody: Buffer, signature: string): Promise<void> {
     await this.applyEvent(this.provider.verifyWebhook(rawBody, signature));
   }

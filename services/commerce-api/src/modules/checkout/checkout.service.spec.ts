@@ -8,8 +8,10 @@ describe('CheckoutService', () => {
     createFromCart: jest.Mock;
     createFromOffer: jest.Mock;
     cancel: jest.Mock;
+    findByIdempotencyKey: jest.Mock;
+    releaseIdempotencyKey: jest.Mock;
   };
-  let paymentsService: { initializeForOrder: jest.Mock };
+  let paymentsService: { initializeForOrder: jest.Mock; getForOrder: jest.Mock };
   let cartService: { clearCart: jest.Mock; removeItems: jest.Mock };
   let service: CheckoutService;
 
@@ -18,8 +20,13 @@ describe('CheckoutService', () => {
       createFromCart: jest.fn(),
       createFromOffer: jest.fn(),
       cancel: jest.fn(),
+      findByIdempotencyKey: jest.fn().mockResolvedValue(null),
+      releaseIdempotencyKey: jest.fn(),
     };
-    paymentsService = { initializeForOrder: jest.fn() };
+    paymentsService = {
+      initializeForOrder: jest.fn(),
+      getForOrder: jest.fn(),
+    };
     cartService = { clearCart: jest.fn(), removeItems: jest.fn() };
     service = new CheckoutService(
       ordersService as unknown as OrdersService,
@@ -82,6 +89,7 @@ describe('CheckoutService', () => {
         'addr-1',
         'USD',
         ['item-1', 'item-2'],
+        undefined,
       );
       expect(cartService.removeItems).toHaveBeenCalledWith(
         { userId: 'user-1' },
@@ -127,6 +135,7 @@ describe('CheckoutService', () => {
         2,
         'addr-1',
         'USD',
+        undefined,
       );
       expect(cartService.clearCart).not.toHaveBeenCalled();
       expect(ordersService.cancel).not.toHaveBeenCalled();
@@ -147,6 +156,70 @@ describe('CheckoutService', () => {
 
       expect(ordersService.cancel).toHaveBeenCalledWith('order-1');
       expect(cartService.clearCart).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('idempotency', () => {
+    it('replays the order and payment already created for this key, without checking out again', async () => {
+      ordersService.findByIdempotencyKey.mockResolvedValue({
+        id: 'order-1',
+        payment: { id: 'payment-1', status: 'PENDING' },
+      });
+      paymentsService.getForOrder.mockResolvedValue({ id: 'payment-1' });
+
+      const result = await service.checkout(
+        'user-1',
+        'addr-1',
+        'USD',
+        undefined,
+        undefined,
+        'key-1',
+      );
+
+      expect(ordersService.findByIdempotencyKey).toHaveBeenCalledWith(
+        'user-1',
+        'key-1',
+      );
+      expect(paymentsService.getForOrder).toHaveBeenCalledWith('order-1');
+      expect(ordersService.createFromCart).not.toHaveBeenCalled();
+      expect(cartService.clearCart).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        order: { id: 'order-1', payment: { id: 'payment-1', status: 'PENDING' } },
+        payment: { id: 'payment-1' },
+      });
+    });
+
+    it('frees the key and checks out fresh when a prior order never reached payment', async () => {
+      ordersService.findByIdempotencyKey.mockResolvedValue({
+        id: 'dead-order',
+        payment: null,
+      });
+      ordersService.createFromCart.mockResolvedValue({ id: 'order-2' });
+      paymentsService.initializeForOrder.mockResolvedValue({ id: 'payment-2' });
+
+      const result = await service.checkout(
+        'user-1',
+        'addr-1',
+        'USD',
+        undefined,
+        undefined,
+        'key-1',
+      );
+
+      expect(ordersService.releaseIdempotencyKey).toHaveBeenCalledWith(
+        'dead-order',
+      );
+      expect(ordersService.createFromCart).toHaveBeenCalledWith(
+        'user-1',
+        'addr-1',
+        'USD',
+        undefined,
+        'key-1',
+      );
+      expect(result).toEqual({
+        order: { id: 'order-2' },
+        payment: { id: 'payment-2' },
+      });
     });
   });
 });

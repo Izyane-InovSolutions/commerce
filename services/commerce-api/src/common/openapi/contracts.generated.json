@@ -2357,7 +2357,16 @@
       "tags": [
         "checkout"
       ],
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "idempotency-key",
+          "in": "header",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
       "security": [
         {
           "bearer": []
@@ -2421,7 +2430,16 @@
       "tags": [
         "checkout"
       ],
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "idempotency-key",
+          "in": "header",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
       "security": [
         {
           "bearer": []
@@ -9302,6 +9320,10 @@
           "description": "JSON value; may be an object, array, scalar or null.",
           "nullable": true
         },
+        "idempotencyKey": {
+          "type": "string",
+          "nullable": true
+        },
         "items": {
           "type": "array",
           "items": {
@@ -9334,6 +9356,7 @@
         "subtotal",
         "total",
         "shippingAddress",
+        "idempotencyKey",
         "items",
         "sellerOrders"
       ]
@@ -9512,6 +9535,9 @@
         "currency": {
           "type": "string"
         },
+        "idempotencyKey": {
+          "type": "string"
+        },
         "orderId": {
           "type": "string"
         },
@@ -9527,9 +9553,6 @@
         },
         "amount": {
           "type": "number"
-        },
-        "idempotencyKey": {
-          "type": "string"
         },
         "failureReason": {
           "type": "string",
@@ -9551,12 +9574,12 @@
         "updatedAt",
         "status",
         "currency",
+        "idempotencyKey",
         "orderId",
         "refundedAmount",
         "provider",
         "providerReference",
         "amount",
-        "idempotencyKey",
         "failureReason"
       ]
     },
@@ -11001,6 +11024,9 @@
         "currency": {
           "type": "string"
         },
+        "idempotencyKey": {
+          "type": "string"
+        },
         "sellerOrderId": {
           "type": "string"
         },
@@ -11010,9 +11036,6 @@
         },
         "amount": {
           "type": "number"
-        },
-        "idempotencyKey": {
-          "type": "string"
         },
         "failureReason": {
           "type": "string",
@@ -11031,10 +11054,10 @@
         "updatedAt",
         "status",
         "currency",
+        "idempotencyKey",
         "sellerOrderId",
         "providerReference",
         "amount",
-        "idempotencyKey",
         "failureReason",
         "paymentId",
         "reason"
