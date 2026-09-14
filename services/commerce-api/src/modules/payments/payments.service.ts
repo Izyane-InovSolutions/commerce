@@ -4,6 +4,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import {
   PaymentStatus,
@@ -20,11 +21,13 @@ import type { PaymentDetailsDto } from './dto/payment-details.dto';
 import { PaymentOutcomeUnknownException } from './gateway-errors';
 import {
   PAYMENT_PROVIDER,
+  type InitializePaymentInput,
   type PaymentProvider,
   type ProviderPaymentResult,
   type ProviderRefundResult,
   type VerifiedPaymentEvent,
 } from './payment-provider';
+import type { SettlementQuote } from './payment-currency-converter';
 
 const PROVIDER_STATUS_TO_PAYMENT_STATUS: Record<
   ProviderPaymentResult['status'],
@@ -87,14 +90,17 @@ export class PaymentsService {
     order: OrderWithItems,
     details?: PaymentDetailsDto,
   ): Promise<PaymentWithRedirect> {
-    this.provider.validateInput?.({
+    const originalInput = {
       paymentId: order.id,
       reference: order.id,
       amount: order.total,
       currency: order.currency,
       idempotencyKey: order.id,
       details,
-    });
+    };
+    const input: InitializePaymentInput & { settlement?: SettlementQuote } =
+      this.provider.prepareInput?.(originalInput) ?? originalInput;
+    this.provider.validateInput?.(input);
     const payment = await this.prisma.payment.create({
       data: {
         orderId: order.id,
@@ -103,15 +109,22 @@ export class PaymentsService {
         amount: order.total,
         currency: order.currency,
         idempotencyKey: order.id,
+        ...(input.settlement
+          ? { settlement: { create: input.settlement } }
+          : {}),
       },
     });
 
     let accepted = false;
     try {
+      if (input.settlement && input.settlement.expiresAt <= new Date())
+        throw new ServiceUnavailableException(
+          'This payment method is temporarily unavailable',
+        );
       const result = await this.provider.initialize({
         paymentId: payment.id,
-        amount: order.total,
-        currency: order.currency,
+        amount: input.amount,
+        currency: input.currency,
         idempotencyKey: order.id,
         reference: order.id,
         description: `Order ${order.id}`,
@@ -229,6 +242,22 @@ export class PaymentsService {
     payment: Payment,
     result: ProviderPaymentResult,
   ): Promise<Payment> {
+    if (payment.provider === 'unified') {
+      const settlement = await this.prisma.paymentSettlement.findUnique({
+        where: { paymentId: payment.id },
+      });
+      if (
+        result.providerReference !== payment.providerReference ||
+        (result.amount !== undefined &&
+          result.amount !== (settlement?.amount ?? payment.amount)) ||
+        (result.currency !== undefined &&
+          result.currency !== (settlement?.currency ?? payment.currency)) ||
+        (result.reference !== undefined && result.reference !== payment.orderId)
+      )
+        throw new ConflictException(
+          'Gateway payment does not match the local order',
+        );
+    }
     if (!this.isReconcilable(payment) || result.status === 'PENDING') {
       return payment;
     }

@@ -156,6 +156,8 @@ export class LedgerService {
       });
       if (!balance || amount > balance.balance)
         throw new ConflictException('Payout amount exceeds the seller balance');
+      if (balance.currency !== 'ZMW')
+        throw new ConflictException('Payouts require a ZMW seller account');
       const changed = await tx.sellerBalance.updateMany({
         where: { sellerId, balance: { gte: amount } },
         data: { balance: { decrement: amount } },
@@ -193,7 +195,7 @@ export class LedgerService {
           balance: balance.balance,
           currency: balance.currency,
         }
-      : { sellerId, balance: 0, currency: 'USD' };
+      : { sellerId, balance: 0, currency: 'ZMW' };
   }
 
   async listEntries(

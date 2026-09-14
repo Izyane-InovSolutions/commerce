@@ -685,23 +685,39 @@ model OrderItem {
 
 // One payment per order for now - no retry-with-new-payment-row modeling.
 model Payment {
-  id                String         @id @default(uuid()) @db.Uuid
-  orderId           String         @unique @map("order_id") @db.Uuid
-  order             Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id                String             @id @default(uuid()) @db.Uuid
+  orderId           String             @unique @map("order_id") @db.Uuid
+  order             Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
   provider          String
-  providerReference String?        @unique @map("provider_reference")
-  status            PaymentStatus  @default(PENDING)
+  providerReference String?            @unique @map("provider_reference")
+  status            PaymentStatus      @default(PENDING)
   amount            Int
-  refundedAmount    Int            @default(0) @map("refunded_amount")
-  currency          String         @db.VarChar(3)
-  idempotencyKey    String         @unique @map("idempotency_key")
-  failureReason     String?        @map("failure_reason")
+  refundedAmount    Int                @default(0) @map("refunded_amount")
+  currency          String             @db.VarChar(3)
+  idempotencyKey    String             @unique @map("idempotency_key")
+  failureReason     String?            @map("failure_reason")
   events            PaymentEvent[]
   refunds           Refund[]
-  createdAt         DateTime       @default(now()) @map("created_at")
-  updatedAt         DateTime       @updatedAt @map("updated_at")
+  settlement        PaymentSettlement?
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
 
   @@map("payments")
+}
+
+// Private payment quote; catalog prices, orders, refunds and seller balances
+// remain in ZMW. Persisted before the gateway charge for stable reconciliation.
+model PaymentSettlement {
+  paymentId String   @id @map("payment_id") @db.Uuid
+  payment   Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  amount    Int
+  currency  String   @db.VarChar(3)
+  rate      String
+  quoteId   String   @map("quote_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("payment_settlements")
 }
 
 // Every refund is scoped to exactly one SellerOrder, even a "refund the

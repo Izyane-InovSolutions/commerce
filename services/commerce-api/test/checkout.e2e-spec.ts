@@ -92,7 +92,7 @@ describe('Checkout (e2e)', () => {
     await request(server())
       .post(`/api/v1/admin/catalog/offers/${offerId}/prices`)
       .set(asAdmin())
-      .send({ amount: 5000, currency: 'usd' })
+      .send({ amount: 5000, currency: 'ZMW' })
       .expect(201);
 
     const warehouse = (
@@ -328,7 +328,7 @@ describe('Checkout (e2e)', () => {
       },
     })) as { id: string };
     await prisma.price.create({
-      data: { offerId: sellerOffer.id, amount: 3000, currency: 'USD' },
+      data: { offerId: sellerOffer.id, amount: 3000, currency: 'ZMW' },
     });
 
     const userHeaders = await registerCustomer(

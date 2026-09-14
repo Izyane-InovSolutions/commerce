@@ -29,6 +29,7 @@ describe('GatewayPaymentsService', () => {
     status: 'PENDING',
   };
   const prisma = {
+    paymentSettlement: { findUnique: jest.fn() },
     user: { findUnique: jest.fn() },
     payment: { findFirst: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
     auditEvent: { create: jest.fn() },
@@ -53,6 +54,7 @@ describe('GatewayPaymentsService', () => {
     });
     prisma.payment.findFirst.mockResolvedValue(payment);
     prisma.payment.findUnique.mockResolvedValue(payment);
+    prisma.paymentSettlement.findUnique.mockResolvedValue(null);
     gateway.getDetails.mockResolvedValue(remote);
     gateway.checkStatus.mockResolvedValue(remote);
     payments.applyProviderResult.mockImplementation(
@@ -103,6 +105,26 @@ describe('GatewayPaymentsService', () => {
       ConflictException,
     );
     expect(prisma.payment.update).not.toHaveBeenCalled();
+    expect(payments.applyProviderResult).not.toHaveBeenCalled();
+  });
+
+  it('verifies foreign settlement but returns only the ZMW amount', async () => {
+    prisma.paymentSettlement.findUnique.mockResolvedValue({
+      amount: 500,
+      currency: 'USD',
+    });
+    gateway.checkStatus.mockResolvedValue({
+      ...remote,
+      amount: 5,
+      currency: 'USD',
+      status: 'SUCCESS',
+    });
+    const result = await service.status('buyer-1', 'local-1');
+    expect(result.gateway).toMatchObject({ amount: 100, currency: 'ZMW' });
+    expect(payments.applyProviderResult).toHaveBeenCalledWith(
+      payment,
+      expect.objectContaining({ amount: 500, currency: 'USD' }),
+    );
   });
 
   it('returns external cancellation state without inventing a local transition', async () => {

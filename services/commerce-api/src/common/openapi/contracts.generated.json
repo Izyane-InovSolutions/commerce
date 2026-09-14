@@ -603,9 +603,7 @@
             "type": "string",
             "nullable": true,
             "enum": [
-              "ZMW",
-              "USD",
-              "GBP"
+              "ZMW"
             ],
             "default": "ZMW"
           }
@@ -690,9 +688,7 @@
             "type": "string",
             "nullable": true,
             "enum": [
-              "ZMW",
-              "USD",
-              "GBP"
+              "ZMW"
             ],
             "default": "ZMW"
           }
@@ -796,9 +792,7 @@
             "type": "string",
             "nullable": true,
             "enum": [
-              "ZMW",
-              "USD",
-              "GBP"
+              "ZMW"
             ],
             "default": "ZMW"
           }
@@ -894,9 +888,7 @@
             "type": "string",
             "nullable": true,
             "enum": [
-              "ZMW",
-              "USD",
-              "GBP"
+              "ZMW"
             ],
             "default": "ZMW"
           }
@@ -965,9 +957,7 @@
             "type": "string",
             "nullable": true,
             "enum": [
-              "ZMW",
-              "USD",
-              "GBP"
+              "ZMW"
             ],
             "default": "ZMW"
           }
@@ -4347,9 +4337,7 @@
             "type": "string",
             "nullable": true,
             "enum": [
-              "ZMW",
-              "USD",
-              "GBP"
+              "ZMW"
             ],
             "default": "ZMW"
           }
@@ -4422,9 +4410,7 @@
             "type": "string",
             "nullable": true,
             "enum": [
-              "ZMW",
-              "USD",
-              "GBP"
+              "ZMW"
             ],
             "default": "ZMW"
           }
@@ -4519,9 +4505,7 @@
             "type": "string",
             "nullable": true,
             "enum": [
-              "ZMW",
-              "USD",
-              "GBP"
+              "ZMW"
             ],
             "default": "ZMW"
           }
@@ -6807,9 +6791,7 @@
             "type": "string",
             "nullable": true,
             "enum": [
-              "ZMW",
-              "USD",
-              "GBP"
+              "ZMW"
             ],
             "default": "ZMW"
           }
@@ -6923,9 +6905,7 @@
             "type": "string",
             "nullable": true,
             "enum": [
-              "ZMW",
-              "USD",
-              "GBP"
+              "ZMW"
             ],
             "default": "ZMW"
           }
@@ -8230,9 +8210,7 @@
             "type": "string",
             "nullable": true,
             "enum": [
-              "ZMW",
-              "USD",
-              "GBP"
+              "ZMW"
             ],
             "default": "ZMW"
           }
@@ -8640,9 +8618,7 @@
           "type": "string",
           "nullable": true,
           "enum": [
-            "ZMW",
-            "USD",
-            "GBP"
+            "ZMW"
           ],
           "default": "ZMW"
         }
@@ -9125,9 +9101,7 @@
           "type": "string",
           "nullable": true,
           "enum": [
-            "ZMW",
-            "USD",
-            "GBP"
+            "ZMW"
           ],
           "default": "ZMW"
         },
@@ -9599,9 +9573,7 @@
           "type": "string",
           "nullable": true,
           "enum": [
-            "ZMW",
-            "USD",
-            "GBP"
+            "ZMW"
           ],
           "default": "ZMW"
         },
@@ -10453,9 +10425,7 @@
         "currency": {
           "type": "string",
           "enum": [
-            "ZMW",
-            "USD",
-            "GBP"
+            "ZMW"
           ]
         },
         "startsAt": {
@@ -10874,9 +10844,7 @@
         "currency": {
           "type": "string",
           "enum": [
-            "ZMW",
-            "USD",
-            "GBP"
+            "ZMW"
           ]
         }
       },
@@ -11761,9 +11729,7 @@
           "type": "string",
           "nullable": true,
           "enum": [
-            "ZMW",
-            "USD",
-            "GBP"
+            "ZMW"
           ],
           "default": "ZMW"
         },
@@ -12000,17 +11966,13 @@
           "items": {
             "type": "string"
           }
-        },
-        "inStock": {
-          "type": "boolean"
         }
       },
       "required": [
         "id",
         "status",
         "currentPrice",
-        "currencies",
-        "inStock"
+        "currencies"
       ]
     },
     "__type18": {
