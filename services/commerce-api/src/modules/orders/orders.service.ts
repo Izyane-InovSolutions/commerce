@@ -55,18 +55,34 @@ export class OrdersService {
     private readonly offers: OfferReadService,
   ) {}
 
+  /**
+   * `itemIds`, when given, restricts the order to those cart lines — a
+   * partial checkout — rather than everything in the cart.
+   */
   async createFromCart(
     userId: string,
     shippingAddressId: string,
     currency: string,
+    itemIds?: string[],
   ): Promise<OrderWithItems> {
     const cart = await this.cartService.getCartView({ userId }, currency);
+    const lines = itemIds
+      ? cart.items.filter((item) => itemIds.includes(item.id))
+      : cart.items;
 
-    if (cart.items.length === 0) {
-      throw new ConflictException('Cart is empty');
+    if (itemIds && lines.length !== itemIds.length) {
+      throw new ConflictException(
+        'One or more selected items are no longer in your cart',
+      );
     }
 
-    if (cart.items.some((item) => !item.isAvailable)) {
+    if (lines.length === 0) {
+      throw new ConflictException(
+        itemIds ? 'No items selected' : 'Cart is empty',
+      );
+    }
+
+    if (lines.some((item) => !item.isAvailable)) {
       throw new ConflictException(
         'Cart has unavailable items; revalidate the cart before checking out',
       );
@@ -74,7 +90,7 @@ export class OrdersService {
 
     return this.createOrderFromLines(
       userId,
-      cart.items,
+      lines,
       shippingAddressId,
       currency,
     );

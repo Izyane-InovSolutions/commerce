@@ -10,7 +10,7 @@ describe('CheckoutService', () => {
     cancel: jest.Mock;
   };
   let paymentsService: { initializeForOrder: jest.Mock };
-  let cartService: { clearCart: jest.Mock };
+  let cartService: { clearCart: jest.Mock; removeItems: jest.Mock };
   let service: CheckoutService;
 
   beforeEach(() => {
@@ -20,7 +20,7 @@ describe('CheckoutService', () => {
       cancel: jest.fn(),
     };
     paymentsService = { initializeForOrder: jest.fn() };
-    cartService = { clearCart: jest.fn() };
+    cartService = { clearCart: jest.fn(), removeItems: jest.fn() };
     service = new CheckoutService(
       ordersService as unknown as OrdersService,
       paymentsService as unknown as PaymentsService,
@@ -65,6 +65,45 @@ describe('CheckoutService', () => {
       'Database unavailable',
     );
     expect(ordersService.cancel).not.toHaveBeenCalled();
+  });
+
+  describe('partial checkout (itemIds)', () => {
+    it('removes only the checked-out lines, leaving the rest of the cart alone', async () => {
+      ordersService.createFromCart.mockResolvedValue({ id: 'order-1' });
+      paymentsService.initializeForOrder.mockResolvedValue({ id: 'payment-1' });
+
+      await service.checkout('user-1', 'addr-1', 'USD', undefined, [
+        'item-1',
+        'item-2',
+      ]);
+
+      expect(ordersService.createFromCart).toHaveBeenCalledWith(
+        'user-1',
+        'addr-1',
+        'USD',
+        ['item-1', 'item-2'],
+      );
+      expect(cartService.removeItems).toHaveBeenCalledWith(
+        { userId: 'user-1' },
+        ['item-1', 'item-2'],
+      );
+      expect(cartService.clearCart).not.toHaveBeenCalled();
+    });
+
+    it('leaves the cart untouched when payment initialization fails', async () => {
+      ordersService.createFromCart.mockResolvedValue({ id: 'order-1' });
+      paymentsService.initializeForOrder.mockRejectedValue(
+        new Error('Payment gateway rejected the charge'),
+      );
+
+      await expect(
+        service.checkout('user-1', 'addr-1', 'USD', undefined, ['item-1']),
+      ).rejects.toThrow('Payment gateway rejected the charge');
+
+      expect(cartService.removeItems).not.toHaveBeenCalled();
+      expect(cartService.clearCart).not.toHaveBeenCalled();
+      expect(ordersService.cancel).toHaveBeenCalledWith('order-1');
+    });
   });
 
   describe('checkoutOffer', () => {

@@ -9131,6 +9131,14 @@
           ],
           "default": "ZMW"
         },
+        "itemIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nullable": true
+        },
         "paymentDetails": {
           "$ref": "#/components/schemas/InputPaymentDetailsDto",
           "nullable": true
@@ -12000,17 +12008,13 @@
           "items": {
             "type": "string"
           }
-        },
-        "inStock": {
-          "type": "boolean"
         }
       },
       "required": [
         "id",
         "status",
         "currentPrice",
-        "currencies",
-        "inStock"
+        "currencies"
       ]
     },
     "__type18": {

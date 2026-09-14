@@ -61,6 +61,7 @@ function cartLine(
   overrides: Record<string, unknown> = {},
 ): Record<string, unknown> {
   return {
+    id: 'item-1',
     offerId: 'offer-1',
     sellerId: null,
     quantity: 2,
@@ -154,6 +155,77 @@ describe('OrdersService', () => {
       await expect(
         service.createFromCart('user-1', 'addr-1', 'USD'),
       ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('rejects a selection naming an item no longer in the cart', async () => {
+      cartService.getCartView.mockResolvedValue({
+        items: [cartLine({ id: 'item-1' })],
+        subtotal: 2000,
+        currency: 'USD',
+      });
+
+      await expect(
+        service.createFromCart('user-1', 'addr-1', 'USD', [
+          'item-1',
+          'item-missing',
+        ]),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('rejects an empty selection', async () => {
+      cartService.getCartView.mockResolvedValue({
+        items: [cartLine({ id: 'item-1' })],
+        subtotal: 2000,
+        currency: 'USD',
+      });
+
+      await expect(
+        service.createFromCart('user-1', 'addr-1', 'USD', []),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('builds the order from only the selected lines, ignoring an unavailable line left unselected', async () => {
+      cartService.getCartView.mockResolvedValue({
+        items: [
+          cartLine({ id: 'item-1', offerId: 'offer-1' }),
+          cartLine({ id: 'item-2', offerId: 'offer-2', isAvailable: false }),
+        ],
+        subtotal: 2000,
+        currency: 'USD',
+      });
+      prisma.offer.findMany.mockResolvedValue([
+        {
+          id: 'offer-1',
+          variantId: 'variant-1',
+          sellerId: null,
+          stockSource: 'PLATFORM',
+        },
+      ]);
+      prisma.order.create.mockResolvedValue({ id: 'order-1' });
+      inventoryService.reserve.mockResolvedValue({ id: 'reservation-1' });
+      prisma.order.findUnique.mockResolvedValue({
+        id: 'order-1',
+        items: [
+          {
+            id: 'order-item-1',
+            offerId: 'offer-1',
+            quantity: 2,
+            reservationId: 'reservation-1',
+          },
+        ],
+        sellerOrders: [{ id: 'seller-order-1', sellerId: null, items: [] }],
+      });
+
+      const order = await service.createFromCart('user-1', 'addr-1', 'USD', [
+        'item-1',
+      ]);
+
+      expect(prisma.offer.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: { in: ['offer-1'] } },
+        }) as object,
+      );
+      expect(order.id).toBe('order-1');
     });
 
     it('creates the order, reserves stock per line, and returns it', async () => {

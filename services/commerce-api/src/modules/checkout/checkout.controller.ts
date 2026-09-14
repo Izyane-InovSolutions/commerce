@@ -21,6 +21,7 @@ export class CheckoutController {
       dto.shippingAddressId,
       dto.currency,
       dto.paymentDetails,
+      dto.itemIds,
     );
   }
 

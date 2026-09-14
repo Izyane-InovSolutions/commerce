@@ -15,16 +15,24 @@ export class CheckoutService {
     private readonly cartService: CartService,
   ) {}
 
+  /**
+   * `itemIds`, when given, checks out only those cart lines and leaves the
+   * rest of the cart alone — a shopper can pay for part of what they picked
+   * without losing track of the rest. Omitted, it is every line in the cart,
+   * same as before partial checkout existed.
+   */
   async checkout(
     userId: string,
     shippingAddressId: string,
     currency: string,
     paymentDetails?: PaymentDetailsDto,
+    itemIds?: string[],
   ): Promise<CheckoutResult> {
     const order = await this.ordersService.createFromCart(
       userId,
       shippingAddressId,
       currency,
+      itemIds,
     );
 
     let payment: PaymentWithRedirect;
@@ -39,7 +47,11 @@ export class CheckoutService {
       throw error;
     }
     // A cart write failure cannot undo a charge already accepted by the gateway.
-    await this.cartService.clearCart({ userId });
+    if (itemIds && itemIds.length > 0) {
+      await this.cartService.removeItems({ userId }, itemIds);
+    } else {
+      await this.cartService.clearCart({ userId });
+    }
     return { order, payment };
   }
 

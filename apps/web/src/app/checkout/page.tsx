@@ -14,7 +14,9 @@ export const metadata: Metadata = {
   title: 'Checkout',
 };
 
-export default async function CheckoutPage() {
+export default async function CheckoutPage({
+  searchParams,
+}: PageProps<'/checkout'>) {
   const user = await getCurrentUser();
 
   // Checkout is the one storefront flow the API will not serve a guest: an
@@ -32,6 +34,12 @@ export default async function CheckoutPage() {
       </div>
     );
   }
+
+  const { items: itemsParam } = await searchParams;
+  const requestedIds =
+    typeof itemsParam === 'string' && itemsParam.length > 0
+      ? itemsParam.split(',')
+      : null;
 
   let cart;
   let labels;
@@ -62,6 +70,7 @@ export default async function CheckoutPage() {
           cart={cart}
           labels={labels}
           addresses={addresses}
+          selectedItemIds={requestedIds}
           placeOrder={placeOrderAction}
           createAddress={createAddressAction}
         />
