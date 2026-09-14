@@ -478,4 +478,24 @@ describe('CartService', () => {
       expect(prisma.cartItem.deleteMany).not.toHaveBeenCalled();
     });
   });
+
+  describe('removeItems', () => {
+    it('deletes only the named items on the resolved cart', async () => {
+      prisma.cart.findFirst.mockResolvedValue({ id: 'cart-1' });
+
+      await service.removeItems({ userId: 'user-1' }, ['item-1', 'item-2']);
+
+      expect(prisma.cartItem.deleteMany).toHaveBeenCalledWith({
+        where: { cartId: 'cart-1', id: { in: ['item-1', 'item-2'] } },
+      });
+    });
+
+    it('is a no-op when no cart resolves', async () => {
+      prisma.cart.findFirst.mockResolvedValue(null);
+
+      await service.removeItems({ userId: 'user-1' }, ['item-1']);
+
+      expect(prisma.cartItem.deleteMany).not.toHaveBeenCalled();
+    });
+  });
 });

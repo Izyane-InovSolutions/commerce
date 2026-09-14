@@ -166,6 +166,24 @@ export class CartService {
     await this.prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
   }
 
+  /**
+   * Removes only the named lines, leaving the rest of the cart as it is.
+   *
+   * Backs a partial checkout: a shopper who pays for some of their cart
+   * should still find whatever they left unselected still there afterwards.
+   */
+  async removeItems(identity: CartIdentity, itemIds: string[]): Promise<void> {
+    const cart = await this.findCart(identity);
+
+    if (!cart) {
+      return;
+    }
+
+    await this.prisma.cartItem.deleteMany({
+      where: { cartId: cart.id, id: { in: itemIds } },
+    });
+  }
+
   async mergeGuestCart(
     userId: string,
     guestToken: string | undefined,

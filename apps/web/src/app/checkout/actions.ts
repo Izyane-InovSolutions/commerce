@@ -21,9 +21,17 @@ export async function placeOrderAction(
 ): Promise<FormState> {
   const shippingAddressId = String(formData.get('shippingAddressId') ?? '');
   const idempotencyKey = String(formData.get('idempotencyKey') ?? '');
+  const itemIds = formData.getAll('itemIds').map(String).filter(Boolean);
 
   if (shippingAddressId === '') {
     return { status: 'error', message: 'Choose a delivery address.' };
+  }
+
+  if (itemIds.length === 0) {
+    return {
+      status: 'error',
+      message: 'Select at least one item to check out.',
+    };
   }
 
   let orderId: string;
@@ -34,6 +42,7 @@ export async function placeOrderAction(
       idempotencyKey,
       String(formData.get('currency') ?? '') || (await readCurrency()),
       buildPaymentDetails(formData),
+      itemIds,
     );
 
     orderId = result.order.id;

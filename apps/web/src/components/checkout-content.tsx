@@ -20,12 +20,19 @@ export function CheckoutContent({
   cart,
   labels,
   addresses,
+  selectedItemIds,
   placeOrder,
   createAddress,
 }: {
   cart: CartView;
   labels: Map<string, OfferLabel>;
   addresses: Address[];
+  /**
+   * Which cart lines to check out with, as chosen on the cart page. Null
+   * means none were specified — every currently available line, same as
+   * checkout worked before selection existed.
+   */
+  selectedItemIds: string[] | null;
   placeOrder: (state: FormState, formData: FormData) => Promise<FormState>;
   createAddress: (state: FormState, formData: FormData) => Promise<FormState>;
 }) {
@@ -44,6 +51,33 @@ export function CheckoutContent({
   }
 
   const currency = cart.currency ?? 'ZMW';
+
+  // An out-of-stock line can never be selected, whether or not it was named
+  // in the query — the cart page never offers it, and a stale/shared link
+  // must not resurrect it either.
+  const availableIds = new Set(
+    cart.items.filter((line) => line.isAvailable).map((line) => line.id),
+  );
+  const selected = selectedItemIds
+    ? new Set(selectedItemIds.filter((id) => availableIds.has(id)))
+    : availableIds;
+  const selectedLines = cart.items.filter((line) => selected.has(line.id));
+  const subtotal = selectedLines.reduce((sum, line) => sum + line.lineTotal, 0);
+  const leftInCart = cart.items.length - selectedLines.length;
+
+  if (selectedLines.length === 0) {
+    return (
+      <div className="space-y-3 rounded-2xl border border-dashed p-8 text-center">
+        <p className="font-medium">Nothing selected to check out</p>
+        <p className="text-muted-foreground text-sm text-pretty">
+          Go back to your cart and select at least one item that is in stock.
+        </p>
+        <Button asChild size="sm">
+          <Link href="/cart">Back to cart</Link>
+        </Button>
+      </div>
+    );
+  }
 
   if (addresses.length === 0) {
     return (
@@ -68,11 +102,21 @@ export function CheckoutContent({
         placeOrder={placeOrder}
       />
 
+      {selectedLines.map((line) => (
+        <input
+          key={line.id}
+          type="hidden"
+          name="itemIds"
+          value={line.id}
+          form={CHECKOUT_FORM_ID}
+        />
+      ))}
+
       <Card className="h-fit">
         <CardContent className="space-y-4">
           <h2 className="text-base font-semibold">Order summary</h2>
           <ul className="space-y-3">
-            {cart.items.map((line) => (
+            {selectedLines.map((line) => (
               <li key={line.id} className="flex justify-between gap-3 text-sm">
                 <span className="text-muted-foreground">
                   {labels.get(line.offerId)?.name ?? 'Item'} × {line.quantity}
@@ -86,11 +130,17 @@ export function CheckoutContent({
           <Separator />
           <div className="flex justify-between text-sm font-semibold">
             <span>Total</span>
-            <span>{formatMinor(cart.subtotal, currency)}</span>
+            <span>{formatMinor(subtotal, currency)}</span>
           </div>
           <Button type="submit" form={CHECKOUT_FORM_ID} className="w-full">
-            Pay {formatMinor(cart.subtotal, currency)}
+            Pay {formatMinor(subtotal, currency)}
           </Button>
+          {leftInCart > 0 ? (
+            <p className="text-muted-foreground text-xs text-pretty">
+              {leftInCart} other item{leftInCart === 1 ? '' : 's'} left in
+              your cart, not part of this order.
+            </p>
+          ) : null}
           <p className="text-muted-foreground text-xs text-pretty">
             If the payment provider cannot be reached, the order is cancelled
             and your cart is left as it is.

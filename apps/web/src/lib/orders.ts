@@ -80,16 +80,21 @@ export async function createAddress(
 }
 
 /**
- * Turns the cart into an order, and starts its payment.
+ * Turns the cart — or a chosen subset of it — into an order, and starts its
+ * payment.
  *
  * The idempotency key matters here more than anywhere else in the storefront:
  * a retried checkout would otherwise be a second order against the same cart.
+ * `itemIds`, when given, checks out only those lines and leaves the rest of
+ * the cart as it is; omitted, it is every line, same as before selective
+ * checkout existed.
  */
 export async function checkout(
   shippingAddressId: string,
   idempotencyKey: string,
   currency: string,
   paymentDetails?: Record<string, unknown>,
+  itemIds?: string[],
 ): Promise<CheckoutResult> {
   const response = await apiClient.post<SuccessEnvelope<CheckoutResult>>(
     '/checkout',
@@ -98,7 +103,7 @@ export async function checkout(
       // cookie server-side, so the order is priced at what the shopper was
       // looking at when they confirmed — not at whatever they switched to
       // in another tab while the request was in flight.
-      body: { shippingAddressId, currency, paymentDetails },
+      body: { shippingAddressId, currency, paymentDetails, itemIds },
       idempotencyKey,
     },
   );

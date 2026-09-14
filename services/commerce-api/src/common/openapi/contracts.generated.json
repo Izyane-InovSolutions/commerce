@@ -9105,6 +9105,14 @@
           ],
           "default": "ZMW"
         },
+        "itemIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nullable": true
+        },
         "paymentDetails": {
           "$ref": "#/components/schemas/InputPaymentDetailsDto",
           "nullable": true
