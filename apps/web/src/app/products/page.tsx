@@ -1,25 +1,49 @@
 import type { Metadata } from 'next';
 
-import { ProductGrid } from '@/components/product-grid';
-import { listProducts } from '@/lib/catalog';
-import type { Product } from '@/lib/catalog-types';
+import { StorefrontCatalog } from '@/components/storefront-catalog';
+import { listCategories, listProducts } from '@/lib/catalog';
+import type { Category, Product } from '@/lib/catalog-types';
 
 export const metadata: Metadata = {
   title: 'All Products',
 };
 
-export default async function ProductsPage() {
+export default async function ProductsPage({
+  searchParams,
+}: PageProps<'/products'>) {
+  const params = searchParams ? await searchParams : {};
+  const category = typeof params.category === 'string' ? params.category : undefined;
+  const filter = typeof params.filter === 'string' ? params.filter : undefined;
+  const sort = typeof params.sort === 'string' ? params.sort : undefined;
+  const q = typeof params.q === 'string' ? params.q : undefined;
+
   let products: Product[] = [];
+  let categories: Category[] = [];
+
   try {
-    ({ products } = await listProducts({ sort: 'name:asc', limit: 24 }));
+    const [productsResult, categoriesResult] = await Promise.all([
+      listProducts({ limit: 100 }),
+      listCategories(),
+    ]);
+    products = productsResult.products;
+    categories = categoriesResult;
   } catch {
     products = [];
+    categories = [];
   }
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-12">
-      <h1 className="text-2xl font-semibold tracking-tight">All Products</h1>
-      <ProductGrid products={products} />
+      <StorefrontCatalog
+        products={products}
+        categories={categories}
+        initialCategory={category}
+        initialFilter={filter}
+        initialSort={sort}
+        initialQuery={q}
+        title="All Products"
+        description="Browse all products by category, filter by trending or new arrivals, and find the best deals."
+      />
     </div>
   );
 }

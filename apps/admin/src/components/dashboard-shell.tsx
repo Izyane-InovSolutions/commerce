@@ -17,7 +17,7 @@ export async function DashboardShell({ children }: { children: ReactNode }) {
   const user = await getCurrentUser();
 
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="flex min-h-screen flex-col">
       <header className="border-b">
         <div className="flex flex-wrap items-center gap-3 px-4 py-3">
           <Link href="/" className="flex items-center gap-2.5">
@@ -42,8 +42,11 @@ export async function DashboardShell({ children }: { children: ReactNode }) {
         <main className="min-w-0 flex-1 p-6">{children}</main>
       </div>
 
-      <footer className="text-muted-foreground border-t px-4 py-4 text-sm">
-        Every privileged action recorded here raises an audit event.
+      <footer className="mt-auto border-t px-4 py-4 text-sm text-muted-foreground">
+        <div className="flex flex-col items-center justify-between gap-2 sm:flex-row">
+          <span>Every privileged action recorded here raises an audit event.</span>
+          <span>&copy; {new Date().getFullYear()} Commerce Admin. All rights reserved.</span>
+        </div>
       </footer>
     </div>
   );

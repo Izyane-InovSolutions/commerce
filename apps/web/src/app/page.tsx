@@ -6,7 +6,9 @@ import {
   type ProductSection,
 } from '@/components/product-category-section';
 import { SideNav } from '@/components/side-nav';
-import { listProducts } from '@/lib/catalog';
+import { StorefrontCatalog } from '@/components/storefront-catalog';
+import { listCategories, listProducts } from '@/lib/catalog';
+import type { Category, Product } from '@/lib/catalog-types';
 
 const HOMEPAGE_CATEGORIES = [
   { slug: 'electronics', title: 'Electronics' },
@@ -36,13 +38,30 @@ async function getHomepageSections(): Promise<ProductSection[]> {
 }
 
 export default async function HomePage() {
-  const sections = await getHomepageSections();
+  let allProducts: Product[] = [];
+  let categories: Category[] = [];
+  let sections: ProductSection[] = [];
+
+  try {
+    const [productsResult, categoriesResult, sectionsResult] = await Promise.all([
+      listProducts({ limit: 100 }),
+      listCategories(),
+      getHomepageSections(),
+    ]);
+    allProducts = productsResult.products;
+    categories = categoriesResult;
+    sections = sectionsResult;
+  } catch {
+    allProducts = [];
+    categories = [];
+    sections = [];
+  }
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-12 sm:flex-row">
-      <SideNav />
+      <SideNav categories={categories} />
 
-      <div className="min-w-0 flex-1 space-y-10">
+      <div className="min-w-0 flex-1 space-y-12">
         <section className="flex items-center gap-6 overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#2563eb_0%,#1e3a8a_100%)] px-6 py-10 text-white sm:px-10">
           <div className="min-w-0 flex-1 space-y-3">
             <h1 className="text-3xl font-semibold tracking-tight text-balance">
@@ -107,15 +126,30 @@ export default async function HomePage() {
           />
         </section>
 
+        {/* Interactive Storefront Catalog with Categories & Trending Filters */}
+        <StorefrontCatalog
+          products={allProducts}
+          categories={categories}
+          title="All Products"
+          description="Browse by category, filter by trending or new arrivals, and sort by price."
+        />
+
+        {/* Featured Category Spotlights */}
         {sections.length > 0 ? (
-          sections.map((section) => (
-            <ProductCategorySection key={section.slug} category={section} />
-          ))
-        ) : (
-          <p className="text-muted-foreground text-sm">
-            Products aren&apos;t available right now — check back soon.
-          </p>
-        )}
+          <div className="space-y-10 border-t pt-10">
+            <div className="space-y-1">
+              <h2 className="text-xl font-semibold tracking-tight">
+                Featured Collections
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Hand-picked collections organized by category.
+              </p>
+            </div>
+            {sections.map((section) => (
+              <ProductCategorySection key={section.slug} category={section} />
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );

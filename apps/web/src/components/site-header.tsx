@@ -14,7 +14,7 @@ export async function SiteHeader() {
     <header className="border-b">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-4 py-3">
         <Link href="/" className="text-base font-semibold tracking-tight">
-          Commerce
+          iZyane Marketplace
         </Link>
 
         <form
