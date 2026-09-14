@@ -33,7 +33,7 @@ function paymentNote(order: Order): string | null {
 
   return order.status === 'PENDING_PAYMENT' &&
     order.payment?.status === 'PENDING'
-    ? 'Approve the prompt on your phone to complete this order.'
+    ? 'Your payment is processing. The order status will update automatically.'
     : null;
 }
 
@@ -100,12 +100,11 @@ export default async function OrdersPage({
           role="status"
           className="rounded-2xl border border-dashed px-4 py-3 text-sm"
         >
-          <p className="font-medium">Order placed — awaiting payment</p>
+          <p className="font-medium">Order placed</p>
           <p className="text-muted-foreground text-pretty">
             It is the first one below, under reference{' '}
-            <span className="font-mono">{justPlaced.slice(0, 8)}</span>. If you
-            paid by mobile money, approve the prompt on your phone; the status
-            here updates once the payment clears.
+            <span className="font-mono">{justPlaced.slice(0, 8)}</span>. Your
+            payment status will update automatically.
           </p>
         </div>
       ) : null}
