@@ -415,6 +415,7 @@ model Offer {
   cartItems       CartItem[]
   wishlistItems   WishlistItem[]
   orderItems      OrderItem[]
+  inventoryRecord InventoryRecord?
   createdAt       DateTime             @default(now()) @map("created_at")
   updatedAt       DateTime             @updatedAt @map("updated_at")
 
@@ -471,18 +472,22 @@ model Warehouse {
 // `available` is never stored — always computed as onHand - reserved.
 model InventoryRecord {
   id           String              @id @default(uuid()) @db.Uuid
-  warehouseId  String              @map("warehouse_id") @db.Uuid
-  warehouse    Warehouse           @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  warehouseId  String?             @map("warehouse_id") @db.Uuid
+  warehouse    Warehouse?          @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  offerId      String?             @unique @map("offer_id") @db.Uuid
+  offer        Offer?              @relation(fields: [offerId], references: [id], onDelete: Cascade)
   variantId    String              @map("variant_id") @db.Uuid
   variant      ProductVariant      @relation(fields: [variantId], references: [id], onDelete: Cascade)
   onHand       Int                 @default(0) @map("on_hand")
   reserved     Int                 @default(0)
+  version      Int                 @default(0)
   movements    InventoryMovement[]
   reservations Reservation[]
   createdAt    DateTime            @default(now()) @map("created_at")
   updatedAt    DateTime            @updatedAt @map("updated_at")
 
   @@unique([warehouseId, variantId])
+  @@index([offerId, createdAt])
   @@map("inventory_records")
 }
 
@@ -603,25 +608,26 @@ enum LedgerEntryType {
   PAYOUT
 }
 
-// No shipping/tax modeling yet - total === subtotal for now, but both are
-// stored explicitly so a later ticket can add shipping/tax without a shape
-// change. shippingAddress is a point-in-time AddressSnapshot JSON blob (see
+// Shipping is snapshotted through ShippingGroup rows; tax modeling remains a
+// later concern. shippingAddress is a point-in-time AddressSnapshot JSON blob (see
 // src/common/addresses/address-snapshot.ts), not a live FK to Address, so the
 // order survives the customer later editing or deleting that address.
 model Order {
-  id              String        @id @default(uuid()) @db.Uuid
-  userId          String        @map("user_id") @db.Uuid
-  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  status          OrderStatus   @default(PENDING_PAYMENT)
-  currency        String        @db.VarChar(3)
+  id              String          @id @default(uuid()) @db.Uuid
+  userId          String          @map("user_id") @db.Uuid
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status          OrderStatus     @default(PENDING_PAYMENT)
+  currency        String          @db.VarChar(3)
   subtotal        Int
+  shippingAmount  Int             @default(0) @map("shipping_amount")
   total           Int
-  shippingAddress Json          @map("shipping_address")
+  shippingAddress Json            @map("shipping_address")
   items           OrderItem[]
   sellerOrders    SellerOrder[]
+  shippingGroups  ShippingGroup[]
   payment         Payment?
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
 
   // The client-minted key that makes a retried checkout return the original
   // order instead of creating a second one. Unique per (userId, key) rather
@@ -644,23 +650,49 @@ model Order {
 // a later ticket, and this shape is what makes that possible without another
 // migration.
 model SellerOrder {
-  id             String      @id @default(uuid()) @db.Uuid
-  orderId        String      @map("order_id") @db.Uuid
-  order          Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  sellerId       String?     @map("seller_id") @db.Uuid
-  seller         Seller?     @relation(fields: [sellerId], references: [id], onDelete: Restrict)
-  status         OrderStatus @default(PENDING_PAYMENT)
+  id             String          @id @default(uuid()) @db.Uuid
+  orderId        String          @map("order_id") @db.Uuid
+  order          Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sellerId       String?         @map("seller_id") @db.Uuid
+  seller         Seller?         @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  status         OrderStatus     @default(PENDING_PAYMENT)
   subtotal       Int
+  shippingAmount Int             @default(0) @map("shipping_amount")
   total          Int
-  refundedAmount Int         @default(0) @map("refunded_amount")
-  currency       String      @db.VarChar(3)
+  refundedAmount Int             @default(0) @map("refunded_amount")
+  currency       String          @db.VarChar(3)
   items          OrderItem[]
+  shippingGroups ShippingGroup[]
   refunds        Refund[]
-  createdAt      DateTime    @default(now()) @map("created_at")
-  updatedAt      DateTime    @updatedAt @map("updated_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
 
   @@index([sellerId, status])
   @@map("seller_orders")
+}
+
+// A durable quote snapshot for the items that travel together. Seller orders
+// remain the financial/ownership split; shipping groups split those items
+// again when one seller uses more than one fulfillment mode.
+model ShippingGroup {
+  id              String               @id @default(uuid()) @db.Uuid
+  orderId         String               @map("order_id") @db.Uuid
+  order           Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sellerOrderId   String               @map("seller_order_id") @db.Uuid
+  sellerOrder     SellerOrder          @relation(fields: [sellerOrderId], references: [id], onDelete: Cascade)
+  fulfillmentMode OfferFulfillmentMode @map("fulfillment_mode")
+  serviceLevel    String               @map("service_level") @db.VarChar(50)
+  rateCode        String               @map("rate_code") @db.VarChar(100)
+  subtotal        Int
+  shippingAmount  Int                  @map("shipping_amount")
+  total           Int
+  currency        String               @db.VarChar(3)
+  items           OrderItem[]
+  createdAt       DateTime             @default(now()) @map("created_at")
+
+  @@unique([sellerOrderId, fulfillmentMode])
+  @@index([orderId])
+  @@map("shipping_groups")
 }
 
 // reservationId has no FK - same loose-reference convention as
@@ -672,22 +704,25 @@ model SellerOrder {
 // orderId is kept as a direct FK too, deliberately denormalized alongside
 // sellerOrderId, so every existing order.items query keeps working unchanged.
 model OrderItem {
-  id            String       @id @default(uuid()) @db.Uuid
-  orderId       String       @map("order_id") @db.Uuid
-  order         Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  sellerOrderId String?      @map("seller_order_id") @db.Uuid
-  sellerOrder   SellerOrder? @relation(fields: [sellerOrderId], references: [id], onDelete: Cascade)
-  offerId       String       @map("offer_id") @db.Uuid
-  offer         Offer        @relation(fields: [offerId], references: [id], onDelete: Cascade)
-  quantity      Int
-  unitAmount    Int          @map("unit_amount")
-  currency      String       @db.VarChar(3)
-  lineTotal     Int          @map("line_total")
-  reservationId String?      @map("reservation_id")
-  createdAt     DateTime     @default(now()) @map("created_at")
+  id              String         @id @default(uuid()) @db.Uuid
+  orderId         String         @map("order_id") @db.Uuid
+  order           Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sellerOrderId   String?        @map("seller_order_id") @db.Uuid
+  sellerOrder     SellerOrder?   @relation(fields: [sellerOrderId], references: [id], onDelete: Cascade)
+  shippingGroupId String?        @map("shipping_group_id") @db.Uuid
+  shippingGroup   ShippingGroup? @relation(fields: [shippingGroupId], references: [id], onDelete: SetNull)
+  offerId         String         @map("offer_id") @db.Uuid
+  offer           Offer          @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  quantity        Int
+  unitAmount      Int            @map("unit_amount")
+  currency        String         @db.VarChar(3)
+  lineTotal       Int            @map("line_total")
+  reservationId   String?        @map("reservation_id")
+  createdAt       DateTime       @default(now()) @map("created_at")
 
   @@index([orderId])
   @@index([sellerOrderId])
+  @@index([shippingGroupId])
   @@map("order_items")
 }
 

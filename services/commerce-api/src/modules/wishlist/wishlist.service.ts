@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { ProductStatus } from '@prisma/client';
+import { OfferStockSource, ProductStatus, SellerStatus } from '@prisma/client';
 
 import { pickCurrentPrice } from '../../common/catalog/current-price';
 import { OfferReadService } from '../offers/offer-read.service';
@@ -25,12 +25,27 @@ export class WishlistService {
       items.map((item) => item.offerId),
     );
     const byId = new Map(offers.map((offer) => [offer.id, offer]));
-    const quantities = await this.inventoryService.getAvailableQuantities(
-      offers.filter((offer) => !offer.sellerId).map((offer) => offer.variantId),
-    );
+    const [quantities, sellerQuantities] = await Promise.all([
+      this.inventoryService.getAvailableQuantities(
+        offers
+          .filter((offer) => offer.stockSource !== OfferStockSource.SELLER)
+          .map((offer) => offer.variantId),
+      ),
+      this.inventoryService.getAvailableOfferQuantities(
+        offers
+          .filter((offer) => offer.stockSource === OfferStockSource.SELLER)
+          .map((offer) => offer.id),
+      ),
+    ]);
     return items.map((item) => {
       const offer = byId.get(item.offerId);
       const currentPrice = pickCurrentPrice(offer?.prices ?? [], currency);
+      const sellerStock = offer?.stockSource === OfferStockSource.SELLER;
+      const availableQuantity = offer
+        ? sellerStock
+          ? (sellerQuantities.get(offer.id) ?? 0)
+          : (quantities.get(offer.variantId) ?? 0)
+        : 0;
       return {
         id: item.id,
         offerId: item.offerId,
@@ -39,10 +54,10 @@ export class WishlistService {
           : null,
         isAvailable:
           !!offer &&
-          !offer.sellerId &&
+          (!offer.sellerId || offer.seller?.status === SellerStatus.APPROVED) &&
           offer.status === ProductStatus.PUBLISHED &&
           !!currentPrice &&
-          (quantities.get(offer.variantId) ?? 0) > 0,
+          availableQuantity > 0,
       };
     });
   }

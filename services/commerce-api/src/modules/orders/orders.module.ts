@@ -6,17 +6,20 @@ import { CartModule } from '../cart/cart.module';
 import { FinancialsModule } from '../financials/financials.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { SellersModule } from '../sellers/sellers.module';
+import { ShippingModule } from '../shipping/shipping.module';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
 import { SellerOrdersController } from './seller-orders.controller';
 import { SellerOrdersService } from './seller-orders.service';
 
 @Module({
-  imports: [OffersModule, 
+  imports: [
+    OffersModule,
     CartModule,
     InventoryModule,
     AddressesModule,
     SellersModule,
+    ShippingModule,
     FinancialsModule,
   ],
   controllers: [OrdersController, SellerOrdersController],

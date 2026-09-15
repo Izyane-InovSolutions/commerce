@@ -76,6 +76,29 @@ npm run build
 npm run test:e2e
 ```
 
+## Multi-seller orders and shipping
+
+Checkout creates one seller order per seller, with `sellerId = null` for
+first-party retail. Each seller order contains shipping groups separated by
+fulfillment mode. Order items retain their offer, seller-order, and shipping-group
+references; customer reads expose the complete order and seller reads expose only
+that seller's child order.
+
+Shipping quotes are snapshotted in minor currency units. At each level,
+`total = subtotal + shippingAmount`; the parent amounts are the sum of child
+amounts. The local `FreeShippingRateProvider` explicitly quotes standard shipping
+at zero using `FREE_STANDARD_V1`. Replace `SHIPPING_RATE_PROVIDER` to introduce
+carrier rates. Carrier booking and fulfillment transitions are separate work.
+
+After building and applying migrations, run the real PostgreSQL verification
+from `services/commerce-api`:
+
+```bash
+node --env-file=.env test/marketplace.database-check.cjs
+```
+
+The check creates isolated test records and removes them afterward.
+
 ## Module boundaries
 
 Business capabilities belong under `src/modules`. Each module owns its HTTP

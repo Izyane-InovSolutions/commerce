@@ -51,7 +51,7 @@ describe('SellersService', () => {
     new ConfigService(),
     {} as never,
   );
-  const createDownloadUrlSpy = jest.spyOn(media, 'createDownloadUrl');
+  const createDownloadUrl = jest.spyOn(media, 'createDownloadUrl');
   const service = new SellersService(
     prisma as unknown as PrismaService,
     media,
@@ -192,6 +192,6 @@ describe('SellersService', () => {
     await expect(
       service.documentUrl('admin', seller.id, 'other-doc'),
     ).rejects.toThrow(NotFoundException);
-    expect(createDownloadUrlSpy).not.toHaveBeenCalled();
+    expect(createDownloadUrl).not.toHaveBeenCalled();
   });
 });

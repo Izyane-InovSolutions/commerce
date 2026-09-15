@@ -11,6 +11,7 @@ import {
   type PaymentStatus,
   type OrderItem,
   type SellerOrder,
+  type ShippingGroup,
 } from '@prisma/client';
 
 import { toAddressSnapshot } from '../../common/addresses/address-snapshot';
@@ -21,10 +22,22 @@ import { CartLineView } from '../cart/cart.types';
 import { CartService } from '../cart/cart.service';
 import { LedgerService } from '../financials/ledger.service';
 import { InventoryService } from '../inventory/inventory.service';
+import type { CommerceOffer } from '../offers/offer-read.service';
+import {
+  ShippingService,
+  type ShippingLine,
+  type ShippingQuoteGroup,
+} from '../shipping/shipping.service';
+
+export type ShippingGroupWithItems = ShippingGroup & { items: OrderItem[] };
+export type SellerOrderWithItems = SellerOrder & {
+  items: OrderItem[];
+  shippingGroups: ShippingGroupWithItems[];
+};
 
 export type OrderWithItems = Order & {
   items: OrderItem[];
-  sellerOrders: (SellerOrder & { items: OrderItem[] })[];
+  sellerOrders: SellerOrderWithItems[];
   /**
    * Present on a customer's own reads so a client can tell an order awaiting
    * approval from one whose payment failed, and can ask for that payment to
@@ -42,7 +55,7 @@ const CUSTOMER_PAYMENT_SELECT = {
   select: { id: true, status: true, failureReason: true },
 } as const;
 
-type SellerGroup = { sellerId: string | null; items: CartLineView[] };
+type SellerGroup = { sellerId: string | null; items: ShippingLine[] };
 
 function isUniqueConstraintViolation(error: unknown): boolean {
   return (
@@ -50,6 +63,12 @@ function isUniqueConstraintViolation(error: unknown): boolean {
     error.code === 'P2002'
   );
 }
+type QuotedSellerGroup = SellerGroup & {
+  shippingGroups: ShippingQuoteGroup[];
+  subtotal: number;
+  shippingAmount: number;
+  total: number;
+};
 
 @Injectable()
 export class OrdersService {
@@ -60,6 +79,7 @@ export class OrdersService {
     private readonly addressesService: AddressesService,
     private readonly ledgerService: LedgerService,
     private readonly offers: OfferReadService,
+    private readonly shippingService: ShippingService,
   ) {}
 
   /**
@@ -187,60 +207,51 @@ export class OrdersService {
       lines.map((item) => item.offerId),
     );
     const offerById = new Map(offers.map((offer) => [offer.id, offer]));
-    const groups = this.groupBySeller(lines);
-    const subtotal = lines.reduce((sum, item) => sum + item.lineTotal, 0);
+    const groups = this.groupBySeller(cart.items);
 
-    let createdOrderId: string;
-    try {
-      createdOrderId = await this.prisma.$transaction(async (tx) => {
-        const order = await tx.order.create({
+    const createdOrderId = await this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.create({
+        data: {
+          userId,
+          status: OrderStatus.PENDING_PAYMENT,
+          currency,
+          subtotal: cart.subtotal,
+          total: cart.subtotal,
+          shippingAddress: shippingAddress as unknown as Prisma.InputJsonValue,
+        },
+      });
+
+      for (const group of [...groups].sort((a, b) =>
+        (a.sellerId ?? '').localeCompare(b.sellerId ?? ''),
+      )) {
+        if (group.sellerId)
+          await this.ledgerService.ensureCurrency(group.sellerId, currency, tx);
+        const groupSubtotal = group.items.reduce(
+          (sum, item) => sum + item.lineTotal,
+          0,
+        );
+
+        await tx.sellerOrder.create({
           data: {
-            userId,
+            orderId: order.id,
+            sellerId: group.sellerId,
             status: OrderStatus.PENDING_PAYMENT,
             currency,
-            subtotal,
-            total: subtotal,
-            shippingAddress:
-              shippingAddress as unknown as Prisma.InputJsonValue,
-            idempotencyKey: idempotencyKey ?? null,
+            subtotal: groupSubtotal,
+            total: groupSubtotal,
+            items: {
+              create: group.items.map((item) => ({
+                orderId: order.id,
+                offerId: item.offerId,
+                quantity: item.quantity,
+                unitAmount: item.unitPrice?.amount ?? 0,
+                currency: item.unitPrice?.currency ?? currency,
+                lineTotal: item.lineTotal,
+              })),
+            },
           },
         });
-
-        for (const group of [...groups].sort((a, b) =>
-          (a.sellerId ?? '').localeCompare(b.sellerId ?? ''),
-        )) {
-          if (group.sellerId)
-            await this.ledgerService.ensureCurrency(
-              group.sellerId,
-              currency,
-              tx,
-            );
-          const groupSubtotal = group.items.reduce(
-            (sum, item) => sum + item.lineTotal,
-            0,
-          );
-
-          await tx.sellerOrder.create({
-            data: {
-              orderId: order.id,
-              sellerId: group.sellerId,
-              status: OrderStatus.PENDING_PAYMENT,
-              currency,
-              subtotal: groupSubtotal,
-              total: groupSubtotal,
-              items: {
-                create: group.items.map((item) => ({
-                  orderId: order.id,
-                  offerId: item.offerId,
-                  quantity: item.quantity,
-                  unitAmount: item.unitPrice?.amount ?? 0,
-                  currency: item.unitPrice?.currency ?? currency,
-                  lineTotal: item.lineTotal,
-                })),
-              },
-            },
-          });
-        }
+      }
 
         return order.id;
       });
@@ -267,21 +278,19 @@ export class OrdersService {
         throw new ConflictException('Offer is no longer available');
       }
 
-      // SELLER-stockSource offers have no backing inventory model yet
-      // (#33's job) - nothing to reserve, so leave reservationId unset.
-      if (offer.stockSource !== OfferStockSource.PLATFORM) {
-        continue;
-      }
-
       try {
-        const reservation = await this.inventoryService.reserve(
-          offer.variantId,
-          item.quantity,
-          {
-            holderType: 'order_item',
-            holderId: item.id,
-          },
-        );
+        const reservation =
+          offer.stockSource === OfferStockSource.SELLER
+            ? await this.inventoryService.reserveOffer(
+                offer.id,
+                item.quantity,
+                { holderType: 'order_item', holderId: item.id },
+              )
+            : await this.inventoryService.reserve(
+                offer.variantId,
+                item.quantity,
+                { holderType: 'order_item', holderId: item.id },
+              );
         await this.prisma.orderItem.update({
           where: { id: item.id },
           data: { reservationId: reservation.id },
@@ -442,7 +451,12 @@ export class OrdersService {
       where: { userId },
       include: {
         items: true,
-        sellerOrders: { include: { items: true } },
+        sellerOrders: {
+          include: {
+            items: true,
+            shippingGroups: { include: { items: true } },
+          },
+        },
         payment: CUSTOMER_PAYMENT_SELECT,
       },
       orderBy: { createdAt: 'desc' },
@@ -462,16 +476,28 @@ export class OrdersService {
   // sellerId: null is the platform/first-party group - every order gets at
   // least one group, even a purely first-party one, so callers never have to
   // branch on whether splitting happened.
-  private groupBySeller(items: CartLineView[]): SellerGroup[] {
-    const groups = new Map<string | null, CartLineView[]>();
+  private groupBySeller(
+    items: CartLineView[],
+    offerById: Map<string, CommerceOffer>,
+  ): SellerGroup[] {
+    const groups = new Map<string | null, ShippingLine[]>();
 
     for (const item of items) {
-      const existing = groups.get(item.sellerId);
+      const offer = offerById.get(item.offerId);
+      if (!offer || offer.sellerId !== item.sellerId)
+        throw new ConflictException(
+          'Offer ownership changed; reload the cart before checking out',
+        );
+      const shippingLine = {
+        ...item,
+        fulfillmentMode: offer.fulfillmentMode,
+      };
+      const existing = groups.get(offer.sellerId);
 
       if (existing) {
-        existing.push(item);
+        existing.push(shippingLine);
       } else {
-        groups.set(item.sellerId, [item]);
+        groups.set(offer.sellerId, [shippingLine]);
       }
     }
 
@@ -514,7 +540,12 @@ export class OrdersService {
       where: { id: orderId },
       include: {
         items: true,
-        sellerOrders: { include: { items: true } },
+        sellerOrders: {
+          include: {
+            items: true,
+            shippingGroups: { include: { items: true } },
+          },
+        },
         payment: CUSTOMER_PAYMENT_SELECT,
       },
     });

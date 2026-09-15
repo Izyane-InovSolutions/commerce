@@ -10,6 +10,8 @@ const { AppModule } = require('../dist/app.module');
 const { PrismaService } = require('../dist/database/prisma.service');
 const { MarketplaceOffersService } = require('../dist/modules/offers/marketplace-offers.service');
 const { SellersService } = require('../dist/modules/sellers/sellers.service');
+const { InventoryService } = require('../dist/modules/inventory/inventory.service');
+const { OrdersService } = require('../dist/modules/orders/orders.service');
 
 async function run() {
   const app = await NestFactory.create(AppModule, { logger: false });
@@ -19,6 +21,7 @@ async function run() {
   const prisma = app.get(PrismaService);
   const offers = app.get(MarketplaceOffersService);
   const sellers = app.get(SellersService);
+  const inventory = app.get(InventoryService);
   const jwt = app.get(JwtService);
   const userIds = [randomUUID(), randomUUID(), randomUUID()];
   const sellerIds = [randomUUID(), randomUUID()];
@@ -58,15 +61,60 @@ async function run() {
     await request(server).patch(`/api/v1/sellers/me/offers/${offer.id}/status`).auth(auth(0), { type: 'bearer' }).send({ version: 0, status: 'PUBLISHED' }).expect(400);
     offer = await offers.price(userIds[0], offer.id, { version: 0, amount: 2500, currency: 'USD' });
     offer = await offers.status(userIds[0], offer.id, { version: offer.version, status: 'PUBLISHED' });
-    const comparison = (await request(server).get(`/api/v1/catalog/variants/${variantId}/offers`).expect(200)).body.data;
+    const emptyInventory = (await request(server).get('/api/v1/sellers/me/inventory').auth(auth(0), { type: 'bearer' }).expect(200)).body.data;
+    assert.deepEqual(emptyInventory.find(item => item.offerId === offer.id), {
+      id: null,
+      offerId: offer.id,
+      variantId,
+      sellerSku: body.sellerSku,
+      listingTitle: body.listingTitle,
+      onHand: 0,
+      reserved: 0,
+      available: 0,
+      version: 0,
+      updatedAt: null,
+    });
+    await request(server).put(`/api/v1/sellers/me/inventory/${offer.id}`).auth(auth(1), { type: 'bearer' }).send({ quantity: 5, version: 0 }).expect(404);
+    let sellerInventory = (await request(server).put(`/api/v1/sellers/me/inventory/${offer.id}`).auth(auth(0), { type: 'bearer' }).send({ quantity: 5, version: 0, note: 'Initial count' }).expect(200)).body.data;
+    assert.equal(sellerInventory.available, 5);
+    sellerInventory = (await request(server).patch('/api/v1/sellers/me/inventory/bulk').auth(auth(0), { type: 'bearer' }).send({ items: [{ offerId: offer.id, quantity: 8, version: sellerInventory.version }] }).expect(200)).body.data[0];
+    assert.equal(sellerInventory.onHand, 8);
+    const movements = (await request(server).get(`/api/v1/sellers/me/inventory/${offer.id}/movements`).auth(auth(0), { type: 'bearer' }).expect(200)).body.data;
+    assert.deepEqual(movements.map(item => item.quantity).sort((a, b) => a - b), [3, 5]);
+    const reservations = await Promise.allSettled([
+      inventory.reserveOffer(offer.id, 6, { ttlSeconds: 60 }),
+      inventory.reserveOffer(offer.id, 6, { ttlSeconds: 60 }),
+    ]);
+    assert.equal(reservations.filter(item => item.status === 'fulfilled').length, 1);
+    await inventory.release(reservations.find(item => item.status === 'fulfilled').value.id);
+    const comparison = (await request(server).get(`/api/v1/catalog/variants/${variantId}/offers?currency=USD`).expect(200)).body.data;
     assert.equal(comparison.total, 2);
-    assert.equal(comparison.items.find(item => item.id === offer.id).checkoutSupported, false);
+    assert.equal(comparison.items.find(item => item.id === offer.id).checkoutSupported, true);
     assert.equal(comparison.items.find(item => item.id === retailId).isFirstParty, true);
     assert.ok(!JSON.stringify(comparison).includes('PRIVATE-'));
-    const catalogue = (await request(server).get(`/api/v1/catalog/products/product-${productId}`).expect(200)).body.data;
+    const catalogue = (await request(server).get(`/api/v1/catalog/products/product-${productId}?currency=USD`).expect(200)).body.data;
     assert.deepEqual(catalogue.variants[0].offers.map(item => item.id), [retailId]);
-    await request(server).post('/api/v1/cart/items').auth(auth(0), { type: 'bearer' }).send({ offerId: offer.id, quantity: 1 }).expect(400);
-    assert.equal(await prisma.reservation.count({ where: { inventoryRecord: { variantId } } }), 0);
+    await request(server).post('/api/v1/cart/items?currency=USD').auth(auth(0), { type: 'bearer' }).send({ offerId: offer.id, quantity: 1 }).expect(201);
+    assert.equal(await prisma.reservation.count({ where: { inventoryRecord: { variantId }, status: 'ACTIVE' } }), 0);
+    await request(server).post('/api/v1/cart/items?currency=USD').auth(auth(0), { type: 'bearer' }).send({ offerId: retailId, quantity: 1 }).expect(201);
+    const address = (await request(server).post('/api/v1/users/me/addresses').auth(auth(0), { type: 'bearer' }).send({ recipientName: 'Test buyer', line1: '1 Test Road', city: 'Lusaka', postalCode: '10101', country: 'ZM' }).expect(201)).body.data;
+    const orders = app.get(OrdersService);
+    const order = await orders.createFromCart(userIds[0], address.id, 'USD');
+    assert.equal(order.sellerOrders.length, 2);
+    assert.equal(order.total, order.subtotal + order.shippingAmount);
+    assert.equal(order.total, order.sellerOrders.reduce((sum, group) => sum + group.total, 0));
+    for (const group of order.sellerOrders) {
+      assert.equal(group.total, group.subtotal + group.shippingAmount);
+      assert.equal(group.shippingGroups.length, 1);
+      assert.equal(group.shippingGroups[0].rateCode, 'FREE_STANDARD_V1');
+      assert.ok(group.items.every(item => item.shippingGroupId === group.shippingGroups[0].id));
+    }
+    const ownedGroup = order.sellerOrders.find(group => group.sellerId === sellerIds[0]);
+    await request(server).get(`/api/v1/sellers/me/orders/${ownedGroup.id}`).auth(auth(1), { type: 'bearer' }).expect(404);
+    const visible = (await request(server).get(`/api/v1/sellers/me/orders/${ownedGroup.id}`).auth(auth(0), { type: 'bearer' }).expect(200)).body.data;
+    assert.deepEqual(visible.items.map(item => item.offerId), [offer.id]);
+    await orders.cancel(order.id);
+    console.log('PASS: persisted shipping groups, coherent multi-seller totals, ownership isolation, and cancellation.');
     await request(server).patch(`/api/v1/admin/catalog/offers/${offer.id}/status`).auth(auth(2), { type: 'bearer' }).send({ status: 'PUBLISHED' }).expect(400);
     await request(server).patch(`/api/v1/admin/catalog/products/${productId}`).auth(auth(0), { type: 'bearer' }).send({ name: 'Hijacked' }).expect(403);
 
@@ -81,7 +129,7 @@ async function run() {
     await request(server).get(`/api/v1/storefronts/${slug}`).expect(404);
     await request(server).get(`/api/v1/catalog/offers/${offer.id}`).expect(404);
     await assert.rejects(() => offers.price(userIds[0], offer.id, { version: 3, amount: 2800, currency: 'USD' }), { status: 403 });
-    assert.equal((await offers.compare(variantId, { page: 1, limit: 20 })).total, 1);
+    assert.equal((await offers.compare(variantId, { page: 1, limit: 20 }, 'USD')).total, 1);
 
     // Restore only the fixture to test variant visibility and lifecycle separately.
     await prisma.seller.update({ where: { id: sellerIds[0] }, data: { status: 'APPROVED' } });
@@ -94,11 +142,13 @@ async function run() {
     offer = await offers.status(userIds[0], offer.id, { version: offer.version, status: 'ARCHIVED' });
     await assert.rejects(() => offers.status(userIds[0], offer.id, { version: offer.version, status: 'PUBLISHED' }), { status: 409 });
     assert.ok(await prisma.auditEvent.count({ where: { targetId: offer.id, action: 'offer.status_changed' } }) >= 3);
-    console.log('Marketplace database/HTTP checks passed: storefront uniqueness/privacy, approval, ownership, publishing, price races, public comparison, suspension, archive, retail isolation.');
+    console.log('Marketplace database/HTTP checks passed: storefront privacy, offer ownership/publishing, seller inventory, bulk audit history, concurrent reservations, suspension, archive, and retail isolation.');
   } finally {
+    await prisma.order.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.offer.deleteMany({ where: { variantId } });
     await prisma.warehouse.deleteMany({ where: { id: warehouseId } });
     await prisma.product.deleteMany({ where: { id: productId } });
+    await prisma.sellerBalance.deleteMany({ where: { sellerId: { in: sellerIds } } });
     await prisma.seller.deleteMany({ where: { id: { in: sellerIds } } });
     await prisma.auditEvent.deleteMany({ where: { actorUserId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });

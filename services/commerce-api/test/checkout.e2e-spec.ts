@@ -170,7 +170,7 @@ describe('Checkout (e2e)', () => {
     const addressId = await createAddress(userHeaders);
 
     await request(server())
-      .post('/api/v1/cart/items')
+      .post('/api/v1/cart/items?currency=USD')
       .set(userHeaders)
       .send({ offerId, quantity: 2 })
       .expect(201);
@@ -178,7 +178,7 @@ describe('Checkout (e2e)', () => {
     const checkoutResponse = await request(server())
       .post('/api/v1/checkout')
       .set(userHeaders)
-      .send({ shippingAddressId: addressId })
+      .send({ shippingAddressId: addressId, currency: 'USD' })
       .expect(201);
     const checkoutBody = checkoutResponse.body as Body<{
       order: { id: string; status: string };
@@ -193,7 +193,7 @@ describe('Checkout (e2e)', () => {
 
     // Cart is cleared once payment initialization succeeds.
     const cartAfterCheckout = await request(server())
-      .get('/api/v1/cart')
+      .get('/api/v1/cart?currency=USD')
       .set(userHeaders)
       .expect(200);
     expect(
@@ -306,7 +306,7 @@ describe('Checkout (e2e)', () => {
     await request(server())
       .post('/api/v1/checkout')
       .set(userHeaders)
-      .send({ shippingAddressId: addressId })
+      .send({ shippingAddressId: addressId, currency: 'USD' })
       .expect(409);
   });
 
@@ -330,6 +330,13 @@ describe('Checkout (e2e)', () => {
     await prisma.price.create({
       data: { offerId: sellerOffer.id, amount: 3000, currency: 'ZMW' },
     });
+    await prisma.inventoryRecord.create({
+      data: {
+        offerId: sellerOffer.id,
+        variantId,
+        onHand: 5,
+      },
+    });
 
     const userHeaders = await registerCustomer(
       'multi-seller-buyer@example.com',
@@ -337,12 +344,12 @@ describe('Checkout (e2e)', () => {
     const addressId = await createAddress(userHeaders);
 
     await request(server())
-      .post('/api/v1/cart/items')
+      .post('/api/v1/cart/items?currency=USD')
       .set(userHeaders)
       .send({ offerId, quantity: 1 })
       .expect(201);
     await request(server())
-      .post('/api/v1/cart/items')
+      .post('/api/v1/cart/items?currency=USD')
       .set(userHeaders)
       .send({ offerId: sellerOffer.id, quantity: 1 })
       .expect(201);
@@ -350,7 +357,7 @@ describe('Checkout (e2e)', () => {
     const checkoutResponse = await request(server())
       .post('/api/v1/checkout')
       .set(userHeaders)
-      .send({ shippingAddressId: addressId })
+      .send({ shippingAddressId: addressId, currency: 'USD' })
       .expect(201);
     const checkoutBody = checkoutResponse.body as Body<{
       order: {
@@ -387,5 +394,9 @@ describe('Checkout (e2e)', () => {
         (group) => group.status === 'PAID',
       ),
     ).toBe(true);
+    const sellerInventory = await prisma.inventoryRecord.findUnique({
+      where: { offerId: sellerOffer.id },
+    });
+    expect(sellerInventory).toMatchObject({ onHand: 4, reserved: 0 });
   });
 });

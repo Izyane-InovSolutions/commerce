@@ -1,11 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { OrderItem, SellerOrder } from '@prisma/client';
+import type { OrderItem, SellerOrder, ShippingGroup } from '@prisma/client';
 
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
 import { PrismaService } from '../../database/prisma.service';
 import { SellersService } from '../sellers/sellers.service';
 
-export type SellerOrderWithItems = SellerOrder & { items: OrderItem[] };
+export type SellerOrderWithItems = SellerOrder & {
+  items: OrderItem[];
+  shippingGroups: (ShippingGroup & { items: OrderItem[] })[];
+};
 
 export type SellerOrderPage<T> = {
   items: T[];
@@ -31,7 +34,7 @@ export class SellerOrdersService {
     const [items, total] = await this.prisma.$transaction([
       this.prisma.sellerOrder.findMany({
         where,
-        include: { items: true },
+        include: { items: true, shippingGroups: { include: { items: true } } },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip: (query.page - 1) * query.limit,
         take: query.limit,
@@ -49,7 +52,7 @@ export class SellerOrdersService {
     const seller = await this.sellersService.requireApproved(userId);
     const sellerOrder = await this.prisma.sellerOrder.findUnique({
       where: { id: sellerOrderId },
-      include: { items: true },
+      include: { items: true, shippingGroups: { include: { items: true } } },
     });
 
     if (!sellerOrder || sellerOrder.sellerId !== seller.id) {

@@ -218,6 +218,19 @@ export class MarketplaceOffersService {
           status: ProductStatus.PUBLISHED,
           product: { status: ProductStatus.PUBLISHED },
         },
+        OR: [
+          { sellerId: null },
+          {
+            seller: {
+              is: {
+                status: SellerStatus.APPROVED,
+                storefrontSlug: { not: null },
+                displayName: { not: null },
+                ownerUser: { isActive: true },
+              },
+            },
+          },
+        ],
       },
       include: {
         seller: { select: PUBLIC_STOREFRONT_SELECT },
@@ -242,7 +255,7 @@ export class MarketplaceOffersService {
       currencies: currentPrices(offer.prices)
         .map((each) => each.currency)
         .sort(),
-      checkoutSupported: offer.sellerId === null,
+      checkoutSupported: true,
     };
   }
 
@@ -315,7 +328,7 @@ export class MarketplaceOffersService {
           currency: price.currency,
         },
         currencies: [price.currency],
-        checkoutSupported: offer.sellerId === null,
+        checkoutSupported: true,
       };
     });
     return { items, total, page: query.page, limit: query.limit };

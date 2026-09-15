@@ -28,7 +28,10 @@ describe('OffersService', () => {
       productVariant: { findUnique: jest.fn() },
       price: { create: jest.fn() },
     };
-    service = new OffersService(prisma as unknown as PrismaService, new ProductReferencesService(prisma as unknown as PrismaService));
+    service = new OffersService(
+      prisma as unknown as PrismaService,
+      new ProductReferencesService(prisma as unknown as PrismaService),
+    );
   });
 
   describe('create', () => {

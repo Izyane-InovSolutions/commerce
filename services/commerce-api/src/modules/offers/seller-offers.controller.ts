@@ -9,8 +9,10 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Role } from '@prisma/client';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/auth/authenticated-user';
+import { Roles } from '../../common/auth/roles.decorator';
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
 import { MarketplaceOffersService } from './marketplace-offers.service';
 import type { OfferPage, SellerOffer } from './marketplace-offers.service';
@@ -23,6 +25,7 @@ import {
 
 @ApiTags('Seller offers')
 @ApiBearerAuth()
+@Roles(Role.SELLER)
 @Controller('sellers/me/offers')
 export class SellerOffersController {
   constructor(private readonly offers: MarketplaceOffersService) {}

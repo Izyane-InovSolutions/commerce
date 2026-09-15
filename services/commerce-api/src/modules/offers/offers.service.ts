@@ -15,7 +15,10 @@ export type OfferWithPrices = Offer & { prices: Price[] };
 
 @Injectable()
 export class OffersService {
-  constructor(private readonly prisma: PrismaService, private readonly products:ProductReferencesService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly products: ProductReferencesService,
+  ) {}
 
   async findByIdAdmin(id: string): Promise<OfferWithPrices> {
     const offer = await this.prisma.offer.findUnique({
@@ -31,7 +34,8 @@ export class OffersService {
   }
 
   async create(dto: CreateOfferDto): Promise<OfferWithPrices> {
-    if(!await this.products.variantExists(dto.variantId)) throw new BadRequestException('The referenced variant does not exist');
+    if (!(await this.products.variantExists(dto.variantId)))
+      throw new BadRequestException('The referenced variant does not exist');
 
     // The admin retail creation route always creates first-party offers.
     const offer = await this.prisma.offer.create({

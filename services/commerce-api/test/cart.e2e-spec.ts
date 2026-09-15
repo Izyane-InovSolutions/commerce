@@ -127,7 +127,7 @@ describe('Cart (e2e)', () => {
       id: null,
       items: [],
       subtotal: 0,
-      currency: null,
+      currency: 'ZMW',
     });
 
     await request(server()).post('/api/v1/cart/merge').expect(401);

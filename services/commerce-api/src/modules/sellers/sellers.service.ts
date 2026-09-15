@@ -32,8 +32,8 @@ export class SellersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly media: MediaService,
-    private readonly products:ProductReferencesService,
-    private readonly users:UsersService,
+    private readonly products: ProductReferencesService,
+    private readonly users: UsersService,
   ) {}
 
   async apply(
@@ -234,7 +234,7 @@ export class SellersService {
           'Application changed; reload before reviewing',
         );
       if (status === SellerStatus.APPROVED)
-        await this.users.promoteCustomerToSeller(seller.ownerUserId,tx);
+        await this.users.promoteCustomerToSeller(seller.ownerUserId, tx);
       await this.audit(tx, actorId, id, `seller.${status.toLowerCase()}`, {
         from: seller.status,
         to: status,
@@ -275,8 +275,8 @@ export class SellersService {
     userId: string,
     ids: string[],
   ): Promise<void> {
-    await this.media.lockVerificationDocuments(userId,ids,tx);
-    const published=await this.products.hasMediaAssignments(ids,tx);
+    await this.media.lockVerificationDocuments(userId, ids, tx);
+    const published = await this.products.hasMediaAssignments(ids, tx);
     if (published)
       throw new BadRequestException(
         'Product media cannot be used as private verification documents',
@@ -287,7 +287,7 @@ export class SellersService {
     tx: Prisma.TransactionClient,
     id: string,
   ): Promise<void> {
-    const user = await this.users.findAccessById(id,tx);
+    const user = await this.users.findAccessById(id, tx);
     if (!user?.isActive)
       throw new ForbiddenException('Active account required');
   }
@@ -296,7 +296,7 @@ export class SellersService {
     id: string,
     tx: Prisma.TransactionClient = this.prisma,
   ): Promise<void> {
-    const user = await this.users.findAccessById(id,tx);
+    const user = await this.users.findAccessById(id, tx);
     if (!user?.isActive || user.role !== Role.ADMIN)
       throw new ForbiddenException('Administrator access required');
   }

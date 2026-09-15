@@ -71,6 +71,8 @@ export class SellerOfferPriceDto {
   @Max(2147483647)
   amount!: number;
 
+  @Matches(/^[A-Z]{3}$/)
   @IsIn(SUPPORTED_CURRENCIES)
+  @IsString()
   currency!: string;
 }

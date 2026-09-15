@@ -16,6 +16,7 @@ function buildPrisma(): {
     findUniqueOrThrow: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
+    updateMany: jest.Mock;
   };
   inventoryMovement: {
     create: jest.Mock;
@@ -39,6 +40,7 @@ function buildPrisma(): {
       findUniqueOrThrow: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
     inventoryMovement: {
       create: jest.fn(),
@@ -108,8 +110,86 @@ describe('InventoryService', () => {
     );
     expect(prisma.inventoryRecord.findMany).toHaveBeenCalledTimes(1);
     expect(prisma.inventoryRecord.findMany).toHaveBeenCalledWith({
-      where: { variantId: { in: ['v1', 'v2'] } },
+      where: { variantId: { in: ['v1', 'v2'] }, offerId: null },
       select: { variantId: true, onHand: true, reserved: true },
+    });
+  });
+
+  it('batches seller availability by offer without mixing platform stock', async () => {
+    prisma.inventoryRecord.findMany.mockResolvedValue([
+      { offerId: 'offer-1', onHand: 8, reserved: 3 },
+      { offerId: 'offer-2', onHand: 2, reserved: 0 },
+    ]);
+
+    await expect(
+      service.getAvailableOfferQuantities(['offer-1', 'offer-1', 'offer-2']),
+    ).resolves.toEqual(
+      new Map([
+        ['offer-1', 5],
+        ['offer-2', 2],
+      ]),
+    );
+    expect(prisma.inventoryRecord.findMany).toHaveBeenCalledWith({
+      where: { offerId: { in: ['offer-1', 'offer-2'] } },
+      select: { offerId: true, onHand: true, reserved: true },
+    });
+  });
+
+  describe('setOfferQuantity', () => {
+    it('uses optimistic concurrency and records the signed quantity change', async () => {
+      prisma.inventoryRecord.findUnique.mockResolvedValue({
+        id: 'record-1',
+        offerId: 'offer-1',
+        variantId: 'variant-1',
+        onHand: 3,
+        reserved: 1,
+        version: 2,
+      });
+      prisma.inventoryRecord.updateMany.mockResolvedValue({ count: 1 });
+      prisma.inventoryRecord.findUniqueOrThrow.mockResolvedValue({
+        id: 'record-1',
+        offerId: 'offer-1',
+        variantId: 'variant-1',
+        onHand: 7,
+        reserved: 1,
+        version: 3,
+      });
+
+      await service.setOfferQuantity(
+        'offer-1',
+        'variant-1',
+        7,
+        2,
+        'user-1',
+        'counted',
+      );
+
+      expect(prisma.inventoryRecord.updateMany).toHaveBeenCalledWith({
+        where: { id: 'record-1', version: 2, reserved: { lte: 7 } },
+        data: { onHand: 7, version: { increment: 1 } },
+      });
+      expect(prisma.inventoryMovement.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          type: 'ADJUSTMENT',
+          quantity: 4,
+          referenceType: 'seller_user',
+          referenceId: 'user-1',
+        }) as object,
+      });
+    });
+
+    it('rejects a stale version or a quantity below reserved stock', async () => {
+      prisma.inventoryRecord.findUnique.mockResolvedValue({
+        id: 'record-1',
+        onHand: 5,
+        reserved: 4,
+        version: 2,
+      });
+      prisma.inventoryRecord.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.setOfferQuantity('offer-1', 'variant-1', 3, 1, 'user-1'),
+      ).rejects.toBeInstanceOf(ConflictException);
     });
   });
 
