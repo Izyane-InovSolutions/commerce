@@ -90,6 +90,12 @@ describe('PaymentDetailsDto', () => {
     ).toContain('expiryYear');
   });
 
+  it('rejects a four-digit security code', () => {
+    expect(
+      errors({ ...card, card: { ...card.card, securityCode: '1234' } }),
+    ).toContain('securityCode');
+  });
+
   it('rejects a billing country that is not a two-letter code', () => {
     const billing = { ...card.card.billing, country: 'USA' };
 

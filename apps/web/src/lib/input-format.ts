@@ -14,18 +14,17 @@ function clampMonth(digits: string): string {
 }
 
 /**
- * "MM/YYYY", clamping the month to 01–12 as soon as both its digits are typed.
- *
- * A four-digit year rather than two because that is what the payment gateway
- * takes (`expiryYear` must match `20\d{2}`), so what is typed goes straight
- * through with no century to infer.
+ * "MM/YY", clamping the month to 01–12 as soon as both its digits are typed —
+ * the same two-digit-year form printed on the card itself. The payment
+ * gateway wants a four-digit year (`expiryYear` must match `20\d{2}`), so the
+ * century is added back in when the payment details are built for it.
  *
  * Needs the previous value to tell typing from deleting: without that, a
  * user backspacing right after "MM/" would have the "/" immediately
  * reinserted, and get stuck unable to delete past it.
  */
 export function formatExpiry(value: string, previousValue: string): string {
-  const digits = onlyDigits(value, 6);
+  const digits = onlyDigits(value, 4);
   const deleting = value.length < previousValue.length;
 
   if (digits.length < 2 || (digits.length === 2 && deleting)) {
@@ -37,9 +36,9 @@ export function formatExpiry(value: string, previousValue: string): string {
   return year ? `${month}/${year}` : `${month}/`;
 }
 
-/** The card verification code: three digits, or four on Amex. */
+/** The card verification code: three digits. */
 export function formatCvc(value: string): string {
-  return onlyDigits(value, 4);
+  return onlyDigits(value, 3);
 }
 
 /** Zambian mobile numbers: 10 digits starting with 0, grouped as "0XX XXX XXXX". */

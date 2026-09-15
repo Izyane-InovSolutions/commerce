@@ -27,7 +27,7 @@ export class PaymentCardDto {
   @Matches(/^\d{13,19}$/) number!: string;
   @Matches(/^(0[1-9]|1[0-2])$/) expiryMonth!: string;
   @Matches(/^20\d{2}$/) expiryYear!: string;
-  @Matches(/^\d{3,4}$/) securityCode!: string;
+  @Matches(/^\d{3}$/) securityCode!: string;
   @IsString() @MinLength(1) @MaxLength(150) holderName!: string;
   @IsDefined()
   @ValidateNested()
