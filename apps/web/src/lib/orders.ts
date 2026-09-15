@@ -69,14 +69,58 @@ export async function listAddresses(): Promise<Address[]> {
   return response.data;
 }
 
-export async function createAddress(
-  input: Omit<Address, 'id' | 'isDefault'>,
-): Promise<Address> {
+export type AddressInput = Omit<Address, 'id' | 'isDefault'>;
+
+export async function createAddress(input: AddressInput): Promise<Address> {
   const response = await apiClient.post<SuccessEnvelope<Address>>(
     '/users/me/addresses',
     { body: input },
   );
   return response.data;
+}
+
+export async function updateAddress(
+  id: string,
+  input: AddressInput,
+): Promise<Address> {
+  const response = await apiClient.patch<SuccessEnvelope<Address>>(
+    `/users/me/addresses/${id}`,
+    { body: input },
+  );
+  return response.data;
+}
+
+export async function deleteAddress(id: string): Promise<void> {
+  await apiClient.delete(`/users/me/addresses/${id}`);
+}
+
+export async function setDefaultAddress(id: string): Promise<Address> {
+  const response = await apiClient.post<SuccessEnvelope<Address>>(
+    `/users/me/addresses/${id}/default`,
+  );
+  return response.data;
+}
+
+/** Every field the address forms collect, pulled out of one submission. */
+export function addressInputFromFormData(formData: FormData): AddressInput {
+  const optional = (name: string): string | null => {
+    const value = String(formData.get(name) ?? '').trim();
+    return value === '' ? null : value;
+  };
+
+  return {
+    label: optional('label'),
+    recipientName: String(formData.get('recipientName') ?? '').trim(),
+    phone: optional('phone'),
+    line1: String(formData.get('line1') ?? '').trim(),
+    line2: optional('line2'),
+    city: String(formData.get('city') ?? '').trim(),
+    region: optional('region'),
+    postalCode: String(formData.get('postalCode') ?? '').trim(),
+    country: String(formData.get('country') ?? 'ZM')
+      .trim()
+      .toUpperCase(),
+  };
 }
 
 /**

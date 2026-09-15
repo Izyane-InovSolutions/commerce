@@ -5,6 +5,7 @@ import { BackButton } from '@/components/back-button';
 import { ProductCard } from '@/components/product-card';
 import { ProductImage } from '@/components/product-image';
 import { ProductDetailActions } from '@/components/product-detail-actions';
+import { RecordProductView } from '@/components/record-product-view';
 import { addToCartAction } from '@/app/cart/actions';
 import { addToWishlistAction } from '@/app/wishlist/actions';
 import { getProductBySlug, listProducts } from '@/lib/catalog';
@@ -55,6 +56,14 @@ export default async function ProductDetailPage({
 
   return (
     <div className="mx-auto max-w-4xl space-y-12 px-4 py-12">
+      <RecordProductView
+        id={product.id}
+        slug={product.slug}
+        name={product.name}
+        imageUrl={getPrimaryImage(product)?.url ?? null}
+        priceAmount={price?.amount ?? null}
+        priceCurrency={price?.currency ?? null}
+      />
       <BackButton />
 
       <div className="grid gap-8 sm:grid-cols-2">

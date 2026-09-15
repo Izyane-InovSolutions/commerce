@@ -1,5 +1,6 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 import { apiClient } from '@/lib/api';
@@ -7,6 +8,13 @@ import type { AuthTokens, SuccessEnvelope } from '@/lib/auth-types';
 import { mergeGuestCart } from '@/lib/cart';
 import { toFormState, type FormState } from '@/lib/form';
 import { clearGuestToken } from '@/lib/guest-cookie';
+import {
+  addressInputFromFormData,
+  createAddress,
+  deleteAddress,
+  setDefaultAddress,
+  updateAddress,
+} from '@/lib/orders';
 import {
   clearSession,
   readRefreshToken,
@@ -93,4 +101,59 @@ export async function signOutAction(): Promise<void> {
 
   await clearSession();
   redirect('/account');
+}
+
+export async function addAddressAction(
+  _state: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  try {
+    await createAddress(addressInputFromFormData(formData));
+  } catch (error) {
+    return toFormState(error);
+  }
+
+  revalidatePath('/account');
+  return { status: 'idle', message: 'Address added.' };
+}
+
+export async function updateAddressAction(
+  addressId: string,
+  _state: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  try {
+    await updateAddress(addressId, addressInputFromFormData(formData));
+  } catch (error) {
+    return toFormState(error);
+  }
+
+  revalidatePath('/account');
+  return { status: 'idle', message: 'Address updated.' };
+}
+
+export async function deleteAddressAction(
+  addressId: string,
+): Promise<FormState> {
+  try {
+    await deleteAddress(addressId);
+  } catch (error) {
+    return toFormState(error);
+  }
+
+  revalidatePath('/account');
+  return { status: 'idle', message: 'Address removed.' };
+}
+
+export async function setDefaultAddressAction(
+  addressId: string,
+): Promise<FormState> {
+  try {
+    await setDefaultAddress(addressId);
+  } catch (error) {
+    return toFormState(error);
+  }
+
+  revalidatePath('/account');
+  return { status: 'idle', message: 'Default address updated.' };
 }
