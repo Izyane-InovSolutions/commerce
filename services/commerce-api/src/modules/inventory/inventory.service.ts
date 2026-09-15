@@ -200,16 +200,24 @@ export class InventoryService {
     return this.toView(updated);
   }
 
+  /**
+   * `tx`, when given, runs the whole reservation inside the caller's own
+   * transaction instead of opening a new one — the caller's transaction then
+   * rolls back the reservation along with everything else in it if a later
+   * step fails, rather than leaving a compensating call to undo it.
+   */
   async reserve(
     variantId: string,
     quantity: number,
     options: ReserveOptions = {},
+    tx?: Prisma.TransactionClient,
   ): Promise<Reservation> {
     if (quantity <= 0) {
       throw new BadRequestException('quantity must be positive');
     }
 
-    const candidates = await this.prisma.inventoryRecord.findMany({
+    const client = tx ?? this.prisma;
+    const candidates = await client.inventoryRecord.findMany({
       where: {
         variantId,
         offerId: null,
@@ -227,7 +235,7 @@ export class InventoryService {
       await this.sweepExpired(candidate.id);
     }
 
-    const refreshed = await this.prisma.inventoryRecord.findMany({
+    const refreshed = await client.inventoryRecord.findMany({
       where: { id: { in: candidates.map((candidate) => candidate.id) } },
     });
     const target = refreshed.find(
@@ -238,18 +246,21 @@ export class InventoryService {
       throw new ConflictException('Insufficient available stock');
     }
 
-    return this.claimRecord(target, quantity, options);
+    return this.claimRecord(target, quantity, options, tx);
   }
 
   private async claimRecord(
     target: InventoryRecord,
     quantity: number,
     options: ReserveOptions,
+    tx?: Prisma.TransactionClient,
   ): Promise<Reservation> {
     const ttlSeconds = options.ttlSeconds ?? DEFAULT_RESERVATION_TTL_SECONDS;
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
-    const reservation = await this.prisma.$transaction(async (tx) => {
-      const affected = await tx.$executeRaw`
+    const claim = async (
+      client: Prisma.TransactionClient,
+    ): Promise<Reservation> => {
+      const affected = await client.$executeRaw`
         UPDATE inventory_records
         SET reserved = reserved + ${quantity}, updated_at = now()
         WHERE id = ${target.id}::uuid AND on_hand - reserved >= ${quantity}
@@ -259,7 +270,7 @@ export class InventoryService {
         throw new ConflictException('Insufficient available stock');
       }
 
-      const created = await tx.reservation.create({
+      const created = await client.reservation.create({
         data: {
           inventoryRecordId: target.id,
           quantity,
@@ -270,7 +281,7 @@ export class InventoryService {
       });
 
       await this.recordMovement(
-        tx,
+        client,
         target.id,
         InventoryMovementType.RESERVATION,
         quantity,
@@ -281,37 +292,42 @@ export class InventoryService {
         },
       );
 
+      await this.backgroundJobsService.enqueue(
+        {
+          type: 'inventory.expire_reservation',
+          payload: { reservationId: created.id },
+          runAt: expiresAt,
+        },
+        client,
+      );
+
       return created;
-    });
+    };
 
-    await this.backgroundJobsService.enqueue({
-      type: 'inventory.expire_reservation',
-      payload: { reservationId: reservation.id },
-      runAt: expiresAt,
-    });
-
-    return reservation;
+    return tx ? claim(tx) : this.prisma.$transaction(claim);
   }
 
   async reserveOffer(
     offerId: string,
     quantity: number,
     options: ReserveOptions = {},
+    tx?: Prisma.TransactionClient,
   ): Promise<Reservation> {
     if (quantity <= 0)
       throw new BadRequestException('quantity must be positive');
-    const record = await this.prisma.inventoryRecord.findUnique({
+    const client = tx ?? this.prisma;
+    const record = await client.inventoryRecord.findUnique({
       where: { offerId },
     });
     if (!record)
       throw new NotFoundException('No inventory record exists for this offer');
     await this.sweepExpired(record.id);
-    const refreshed = await this.prisma.inventoryRecord.findUniqueOrThrow({
+    const refreshed = await client.inventoryRecord.findUniqueOrThrow({
       where: { id: record.id },
     });
     if (refreshed.onHand - refreshed.reserved < quantity)
       throw new ConflictException('Insufficient available stock');
-    return this.claimRecord(refreshed, quantity, options);
+    return this.claimRecord(refreshed, quantity, options, tx);
   }
 
   async setOfferQuantity(

@@ -15,6 +15,11 @@ export type ShippingRate = {
   serviceLevel: string;
   rateCode: string;
   amount: number;
+  /** Identifies the specific quote for reconciliation if the rate policy changes later. */
+  quoteId: string;
+  /** Business days, inclusive, counted from the day the order ships. */
+  estimatedDeliveryDays: { min: number; max: number };
+  expiresAt: Date;
 };
 
 export interface ShippingRateProvider {

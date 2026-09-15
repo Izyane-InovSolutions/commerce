@@ -34,6 +34,9 @@ describe('ShippingService', () => {
           serviceLevel: 'STANDARD',
           rateCode: `${fulfillmentMode}_STANDARD`,
           amount: fulfillmentMode === 'SELLER' ? 500 : 250,
+          quoteId: `quote-${fulfillmentMode}`,
+          estimatedDeliveryDays: { min: 2, max: 5 },
+          expiresAt: new Date(Date.now() + 60_000),
         }),
     );
   });
@@ -71,6 +74,26 @@ describe('ShippingService', () => {
       serviceLevel: 'STANDARD',
       rateCode: 'INVALID',
       amount: -1,
+    });
+
+    await expect(
+      service.quoteSellerGroups(
+        'seller-1',
+        [line('offer-a', 'SELLER', 1000)],
+        'ZM',
+        'ZMW',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects a rate the provider already returned expired', async () => {
+    rates.quote.mockResolvedValue({
+      serviceLevel: 'STANDARD',
+      rateCode: 'STALE',
+      amount: 100,
+      quoteId: 'quote-1',
+      estimatedDeliveryDays: { min: 2, max: 5 },
+      expiresAt: new Date(Date.now() - 1_000),
     });
 
     await expect(

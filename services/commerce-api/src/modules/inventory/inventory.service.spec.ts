@@ -370,6 +370,7 @@ describe('InventoryService', () => {
         expect.objectContaining({
           type: 'inventory.expire_reservation',
         }) as object,
+        expect.anything() as object,
       );
     });
 

@@ -132,6 +132,37 @@ class EnvironmentVariables {
   // startup.
   @IsString()
   PAYMENT_FX_QUOTES = '{}';
+
+  // See ZoneShippingRateProvider. Domestic is ZMW's home market and gets the
+  // cheaper rate plus a free-shipping threshold; everywhere else pays the
+  // flat international rate.
+  @IsString()
+  SHIPPING_DOMESTIC_COUNTRY = 'ZM';
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  SHIPPING_DOMESTIC_RATE_MINOR = 3_000;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  SHIPPING_DOMESTIC_FREE_THRESHOLD_MINOR = 50_000;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  SHIPPING_INTERNATIONAL_RATE_MINOR = 15_000;
+
+  // Comma-separated ISO-2 country codes shipping is refused to. Empty by
+  // default — there is no real carrier restriction list yet.
+  @IsString()
+  SHIPPING_UNSUPPORTED_COUNTRIES = '';
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(60)
+  SHIPPING_QUOTE_TTL_SECONDS = 3_600;
 }
 
 export function validate(

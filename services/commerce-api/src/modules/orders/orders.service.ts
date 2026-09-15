@@ -284,7 +284,7 @@ export class OrdersService {
           });
 
           for (const shippingGroup of group.shippingGroups) {
-            await tx.shippingGroup.create({
+            const createdShippingGroup = await tx.shippingGroup.create({
               data: {
                 orderId: order.id,
                 sellerOrderId: sellerOrder.id,
@@ -295,6 +295,12 @@ export class OrdersService {
                 shippingAmount: shippingGroup.shippingAmount,
                 total: shippingGroup.total,
                 currency: shippingGroup.currency,
+                quoteId: shippingGroup.quoteId,
+                quoteExpiresAt: shippingGroup.quoteExpiresAt,
+                estimatedDeliveryMinDays:
+                  shippingGroup.estimatedDeliveryMinDays,
+                estimatedDeliveryMaxDays:
+                  shippingGroup.estimatedDeliveryMaxDays,
                 items: {
                   create: shippingGroup.items.map((item) => ({
                     orderId: order.id,
@@ -307,7 +313,38 @@ export class OrdersService {
                   })),
                 },
               },
+              include: { items: true },
             });
+
+            // Reserving here, inside the same transaction that creates the
+            // order, means a failed reservation rolls the whole order back
+            // instead of leaving it to a separate compensation step that a
+            // crash between the two could skip.
+            for (const item of createdShippingGroup.items) {
+              const offer = offerById.get(item.offerId);
+
+              if (!offer)
+                throw new ConflictException('Offer is no longer available');
+
+              const reservation =
+                offer.stockSource === OfferStockSource.SELLER
+                  ? await this.inventoryService.reserveOffer(
+                      offer.id,
+                      item.quantity,
+                      { holderType: 'order_item', holderId: item.id },
+                      tx,
+                    )
+                  : await this.inventoryService.reserve(
+                      offer.variantId,
+                      item.quantity,
+                      { holderType: 'order_item', holderId: item.id },
+                      tx,
+                    );
+              await tx.orderItem.update({
+                where: { id: item.id },
+                data: { reservationId: reservation.id },
+              });
+            }
           }
         }
 
@@ -317,47 +354,12 @@ export class OrdersService {
       // Two requests racing on the same key both pass the caller's
       // pre-check; the loser hits this constraint instead of silently
       // creating a second order. The transaction already rolled back, so
-      // nothing needs compensating.
+      // there is nothing left to compensate.
       if (idempotencyKey && isUniqueConstraintViolation(error))
         throw new ConflictException(
           'A checkout with this idempotency key is already in progress',
         );
       throw error;
-    }
-
-    const created = await this.findByIdOrThrow(createdOrderId);
-    const reservedItemIds: string[] = [];
-
-    for (const item of created.items) {
-      const offer = offerById.get(item.offerId);
-
-      if (!offer) {
-        await this.compensate(createdOrderId, reservedItemIds);
-        throw new ConflictException('Offer is no longer available');
-      }
-
-      try {
-        const reservation =
-          offer.stockSource === OfferStockSource.SELLER
-            ? await this.inventoryService.reserveOffer(
-                offer.id,
-                item.quantity,
-                { holderType: 'order_item', holderId: item.id },
-              )
-            : await this.inventoryService.reserve(
-                offer.variantId,
-                item.quantity,
-                { holderType: 'order_item', holderId: item.id },
-              );
-        await this.prisma.orderItem.update({
-          where: { id: item.id },
-          data: { reservationId: reservation.id },
-        });
-        reservedItemIds.push(item.id);
-      } catch (error) {
-        await this.compensate(createdOrderId, reservedItemIds);
-        throw error;
-      }
     }
 
     return this.findByIdOrThrow(createdOrderId);
@@ -563,31 +565,6 @@ export class OrdersService {
       sellerId,
       items: groupItems,
     }));
-  }
-
-  private async compensate(
-    orderId: string,
-    reservedItemIds: string[],
-  ): Promise<void> {
-    for (const itemId of reservedItemIds) {
-      const item = await this.prisma.orderItem.findUnique({
-        where: { id: itemId },
-      });
-
-      if (item?.reservationId) {
-        await this.inventoryService.release(item.reservationId);
-      }
-    }
-
-    await this.prisma.sellerOrder.updateMany({
-      where: { orderId },
-      data: { status: OrderStatus.CANCELLED },
-    });
-
-    await this.prisma.order.update({
-      where: { id: orderId },
-      data: { status: OrderStatus.CANCELLED },
-    });
   }
 
   private async findByIdOrThrow(

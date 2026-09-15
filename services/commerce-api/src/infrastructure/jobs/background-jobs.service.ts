@@ -15,8 +15,11 @@ export type EnqueueJobInput = {
 export class BackgroundJobsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  enqueue(input: EnqueueJobInput): Promise<BackgroundJob> {
-    return this.prisma.backgroundJob.create({
+  enqueue(
+    input: EnqueueJobInput,
+    client: Pick<Prisma.TransactionClient, 'backgroundJob'> = this.prisma,
+  ): Promise<BackgroundJob> {
+    return client.backgroundJob.create({
       data: {
         type: input.type,
         payload: input.payload,

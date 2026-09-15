@@ -20,6 +20,10 @@ export type ShippingQuoteGroup = {
   total: number;
   currency: string;
   items: ShippingLine[];
+  quoteId: string;
+  quoteExpiresAt: Date;
+  estimatedDeliveryMinDays: number;
+  estimatedDeliveryMaxDays: number;
 };
 
 @Injectable()
@@ -69,6 +73,10 @@ export class ShippingService {
         throw new BadRequestException(
           'Shipping provider returned an invalid amount',
         );
+      if (rate.expiresAt <= new Date())
+        throw new BadRequestException(
+          'Shipping provider returned an already-expired quote',
+        );
       quotes.push({
         fulfillmentMode,
         serviceLevel: rate.serviceLevel,
@@ -78,6 +86,10 @@ export class ShippingService {
         total: subtotal + rate.amount,
         currency,
         items: sortedItems,
+        quoteId: rate.quoteId,
+        quoteExpiresAt: rate.expiresAt,
+        estimatedDeliveryMinDays: rate.estimatedDeliveryDays.min,
+        estimatedDeliveryMaxDays: rate.estimatedDeliveryDays.max,
       });
     }
     return quotes;

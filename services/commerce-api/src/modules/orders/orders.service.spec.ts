@@ -32,6 +32,7 @@ function buildPrisma(): {
   $transaction: jest.Mock;
 } {
   let sellerOrderSequence = 0;
+  let orderItemSequence = 0;
   const prisma = {
     offer: { findMany: jest.fn() },
     order: {
@@ -55,7 +56,24 @@ function buildPrisma(): {
         .mockResolvedValue([{ status: OrderStatus.PARTIALLY_REFUNDED }]),
       update: jest.fn(),
     },
-    shippingGroup: { create: jest.fn().mockResolvedValue({}) },
+    shippingGroup: {
+      // Mirrors Prisma: the nested `items.create` entries come back with a
+      // freshly generated id apiece, distinct from the cart line id they
+      // were built from — reservations key off that id, not the cart line's.
+      create: jest
+        .fn()
+        .mockImplementation(
+          (args: {
+            data: { items?: { create?: Array<Record<string, unknown>> } };
+          }) => {
+            const items = (args.data.items?.create ?? []).map((item) => ({
+              id: `order-item-${++orderItemSequence}`,
+              ...item,
+            }));
+            return Promise.resolve({ id: `shipping-group-1`, items });
+          },
+        ),
+    },
     $queryRaw: jest.fn().mockResolvedValue([]),
     $transaction: jest.fn(),
   };
@@ -165,6 +183,10 @@ describe('OrdersService', () => {
                 total: subtotal,
                 currency,
                 items: groupedItems,
+                quoteId: `quote-${fulfillmentMode}`,
+                quoteExpiresAt: new Date(Date.now() + 60_000),
+                estimatedDeliveryMinDays: 2,
+                estimatedDeliveryMaxDays: 5,
               };
             }),
           );
@@ -305,6 +327,10 @@ describe('OrdersService', () => {
           total: 2300,
           currency: 'USD',
           items: [cartLine()],
+          quoteId: 'quote-platform',
+          quoteExpiresAt: new Date(Date.now() + 60_000),
+          estimatedDeliveryMinDays: 2,
+          estimatedDeliveryMaxDays: 5,
         },
       ]);
       prisma.order.findUnique.mockResolvedValue({
@@ -348,14 +374,20 @@ describe('OrdersService', () => {
           shippingAmount: 300,
           total: 2300,
           rateCode: 'PLATFORM_STANDARD',
+          quoteId: 'quote-platform',
+          estimatedDeliveryMinDays: 2,
+          estimatedDeliveryMaxDays: 5,
         }) as unknown,
+        include: { items: true },
       });
-      expect(inventoryService.reserve).toHaveBeenCalledWith('variant-1', 2, {
-        holderType: 'order_item',
-        holderId: 'item-1',
-      });
+      expect(inventoryService.reserve).toHaveBeenCalledWith(
+        'variant-1',
+        2,
+        { holderType: 'order_item', holderId: 'order-item-1' },
+        prisma,
+      );
       expect(prisma.orderItem.update).toHaveBeenCalledWith({
-        where: { id: 'item-1' },
+        where: { id: 'order-item-1' },
         data: { reservationId: 'reservation-1' },
       });
       expect(order.id).toBe('order-1');
@@ -445,19 +477,23 @@ describe('OrdersService', () => {
 
       expect(prisma.sellerOrder.create).toHaveBeenCalledTimes(3);
       expect(inventoryService.reserve).toHaveBeenCalledTimes(1);
-      expect(inventoryService.reserve).toHaveBeenCalledWith('variant-1', 1, {
-        holderType: 'order_item',
-        holderId: 'item-1',
-      });
+      expect(inventoryService.reserve).toHaveBeenCalledWith(
+        'variant-1',
+        1,
+        { holderType: 'order_item', holderId: 'order-item-1' },
+        prisma,
+      );
       expect(inventoryService.reserveOffer).toHaveBeenCalledTimes(2);
-      expect(inventoryService.reserveOffer).toHaveBeenCalledWith('offer-2', 1, {
-        holderType: 'order_item',
-        holderId: 'item-2',
-      });
+      expect(inventoryService.reserveOffer).toHaveBeenCalledWith(
+        'offer-2',
+        1,
+        { holderType: 'order_item', holderId: 'order-item-2' },
+        prisma,
+      );
       expect(order.sellerOrders).toHaveLength(3);
     });
 
-    it('compensates already-reserved lines and cancels the order when a later reservation fails', async () => {
+    it('rolls back atomically, with no separate compensation step, when a later reservation fails', async () => {
       cartService.getCartView.mockResolvedValue({
         items: [
           cartLine({ offerId: 'offer-1' }),
@@ -483,37 +519,23 @@ describe('OrdersService', () => {
         },
       ]);
       prisma.order.create.mockResolvedValue({ id: 'order-1' });
-      prisma.order.findUnique.mockResolvedValue({
-        id: 'order-1',
-        items: [
-          { id: 'item-1', offerId: 'offer-1', quantity: 2 },
-          { id: 'item-2', offerId: 'offer-2', quantity: 2 },
-        ],
-        sellerOrders: [{ id: 'so-1', sellerId: null, items: [] }],
-      });
       inventoryService.reserve
         .mockResolvedValueOnce({ id: 'reservation-1' })
         .mockRejectedValueOnce(
           new ConflictException('Insufficient available stock'),
         );
-      prisma.orderItem.findUnique.mockResolvedValue({
-        id: 'item-1',
-        reservationId: 'reservation-1',
-      });
 
       await expect(
         service.createFromCart('user-1', 'addr-1', 'USD'),
       ).rejects.toBeInstanceOf(ConflictException);
 
-      expect(inventoryService.release).toHaveBeenCalledWith('reservation-1');
-      expect(prisma.sellerOrder.updateMany).toHaveBeenCalledWith({
-        where: { orderId: 'order-1' },
-        data: { status: OrderStatus.CANCELLED },
-      });
-      expect(prisma.order.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
-        data: { status: OrderStatus.CANCELLED },
-      });
+      // Reserving the first item and creating the order happen in the same
+      // transaction as the second item's failed reservation, so the database
+      // rolls all of it back together — OrdersService has nothing left to
+      // undo by hand.
+      expect(inventoryService.release).not.toHaveBeenCalled();
+      expect(prisma.sellerOrder.updateMany).not.toHaveBeenCalled();
+      expect(prisma.order.update).not.toHaveBeenCalled();
     });
   });
 
@@ -573,10 +595,12 @@ describe('OrdersService', () => {
         'USD',
       );
       expect(cartService.getCartView).not.toHaveBeenCalled();
-      expect(inventoryService.reserve).toHaveBeenCalledWith('variant-1', 2, {
-        holderType: 'order_item',
-        holderId: 'item-1',
-      });
+      expect(inventoryService.reserve).toHaveBeenCalledWith(
+        'variant-1',
+        2,
+        { holderType: 'order_item', holderId: 'order-item-1' },
+        prisma,
+      );
       expect(order.id).toBe('order-1');
     });
   });

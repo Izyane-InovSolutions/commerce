@@ -675,20 +675,27 @@ model SellerOrder {
 // remain the financial/ownership split; shipping groups split those items
 // again when one seller uses more than one fulfillment mode.
 model ShippingGroup {
-  id              String               @id @default(uuid()) @db.Uuid
-  orderId         String               @map("order_id") @db.Uuid
-  order           Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  sellerOrderId   String               @map("seller_order_id") @db.Uuid
-  sellerOrder     SellerOrder          @relation(fields: [sellerOrderId], references: [id], onDelete: Cascade)
-  fulfillmentMode OfferFulfillmentMode @map("fulfillment_mode")
-  serviceLevel    String               @map("service_level") @db.VarChar(50)
-  rateCode        String               @map("rate_code") @db.VarChar(100)
-  subtotal        Int
-  shippingAmount  Int                  @map("shipping_amount")
-  total           Int
-  currency        String               @db.VarChar(3)
-  items           OrderItem[]
-  createdAt       DateTime             @default(now()) @map("created_at")
+  id                       String               @id @default(uuid()) @db.Uuid
+  orderId                  String               @map("order_id") @db.Uuid
+  order                    Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sellerOrderId            String               @map("seller_order_id") @db.Uuid
+  sellerOrder              SellerOrder          @relation(fields: [sellerOrderId], references: [id], onDelete: Cascade)
+  fulfillmentMode          OfferFulfillmentMode @map("fulfillment_mode")
+  serviceLevel             String               @map("service_level") @db.VarChar(50)
+  rateCode                 String               @map("rate_code") @db.VarChar(100)
+  subtotal                 Int
+  shippingAmount           Int                  @map("shipping_amount")
+  total                    Int
+  currency                 String               @db.VarChar(3)
+  // Rate-quote provenance, mirroring PaymentSettlement.quoteId/expiresAt -
+  // ties this group back to the specific rate the provider quoted, for
+  // reconciliation if the rate policy changes later.
+  quoteId                  String               @map("quote_id")
+  quoteExpiresAt           DateTime             @map("quote_expires_at")
+  estimatedDeliveryMinDays Int                  @map("estimated_delivery_min_days")
+  estimatedDeliveryMaxDays Int                  @map("estimated_delivery_max_days")
+  items                    OrderItem[]
+  createdAt                DateTime             @default(now()) @map("created_at")
 
   @@unique([sellerOrderId, fulfillmentMode])
   @@index([orderId])

@@ -9811,6 +9811,19 @@
         "rateCode": {
           "type": "string"
         },
+        "quoteId": {
+          "type": "string"
+        },
+        "quoteExpiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "estimatedDeliveryMinDays": {
+          "type": "number"
+        },
+        "estimatedDeliveryMaxDays": {
+          "type": "number"
+        },
         "items": {
           "type": "array",
           "items": {
@@ -9830,6 +9843,10 @@
         "fulfillmentMode",
         "serviceLevel",
         "rateCode",
+        "quoteId",
+        "quoteExpiresAt",
+        "estimatedDeliveryMinDays",
+        "estimatedDeliveryMaxDays",
         "items"
       ]
     },
@@ -11546,6 +11563,19 @@
         "rateCode": {
           "type": "string"
         },
+        "quoteId": {
+          "type": "string"
+        },
+        "quoteExpiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "estimatedDeliveryMinDays": {
+          "type": "number"
+        },
+        "estimatedDeliveryMaxDays": {
+          "type": "number"
+        },
         "items": {
           "type": "array",
           "items": {
@@ -11565,6 +11595,10 @@
         "fulfillmentMode",
         "serviceLevel",
         "rateCode",
+        "quoteId",
+        "quoteExpiresAt",
+        "estimatedDeliveryMinDays",
+        "estimatedDeliveryMaxDays",
         "items"
       ]
     },

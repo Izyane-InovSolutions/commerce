@@ -1,3 +1,5 @@
+import { BackgroundJobsService } from '../../infrastructure/jobs/background-jobs.service';
+import { CART_CLEANUP_JOB_TYPE } from '../cart/jobs/cart-cleanup.handler';
 import { CartService } from '../cart/cart.service';
 import { OrdersService } from '../orders/orders.service';
 import { PaymentsService } from '../payments/payments.service';
@@ -10,12 +12,14 @@ describe('CheckoutService', () => {
     cancel: jest.Mock;
     findByIdempotencyKey: jest.Mock;
     releaseIdempotencyKey: jest.Mock;
+    findOwn: jest.Mock;
   };
   let paymentsService: {
     initializeForOrder: jest.Mock;
     getForOrder: jest.Mock;
   };
   let cartService: { clearCart: jest.Mock; removeItems: jest.Mock };
+  let backgroundJobsService: { enqueue: jest.Mock };
   let service: CheckoutService;
 
   beforeEach(() => {
@@ -25,22 +29,28 @@ describe('CheckoutService', () => {
       cancel: jest.fn(),
       findByIdempotencyKey: jest.fn().mockResolvedValue(null),
       releaseIdempotencyKey: jest.fn(),
+      findOwn: jest.fn(),
     };
     paymentsService = {
       initializeForOrder: jest.fn(),
       getForOrder: jest.fn(),
     };
     cartService = { clearCart: jest.fn(), removeItems: jest.fn() };
+    backgroundJobsService = { enqueue: jest.fn() };
     service = new CheckoutService(
       ordersService as unknown as OrdersService,
       paymentsService as unknown as PaymentsService,
       cartService as unknown as CartService,
+      backgroundJobsService as unknown as BackgroundJobsService,
     );
   });
 
   it('clears the cart once payment initialization succeeds', async () => {
     ordersService.createFromCart.mockResolvedValue({ id: 'order-1' });
-    paymentsService.initializeForOrder.mockResolvedValue({ id: 'payment-1' });
+    paymentsService.initializeForOrder.mockResolvedValue({
+      id: 'payment-1',
+      status: 'SUCCEEDED',
+    });
 
     const result = await service.checkout('user-1', 'addr-1', 'USD');
 
@@ -48,7 +58,7 @@ describe('CheckoutService', () => {
     expect(ordersService.cancel).not.toHaveBeenCalled();
     expect(result).toEqual({
       order: { id: 'order-1' },
-      payment: { id: 'payment-1' },
+      payment: { id: 'payment-1', status: 'SUCCEEDED' },
     });
   });
 
@@ -67,14 +77,48 @@ describe('CheckoutService', () => {
     expect(cartService.clearCart).not.toHaveBeenCalled();
   });
 
-  it('does not cancel an accepted payment when clearing the cart fails', async () => {
+  it('does not cancel or fail an accepted payment when clearing the cart fails, retrying via a background job instead', async () => {
     ordersService.createFromCart.mockResolvedValue({ id: 'order-1' });
-    paymentsService.initializeForOrder.mockResolvedValue({ id: 'payment-1' });
+    paymentsService.initializeForOrder.mockResolvedValue({
+      id: 'payment-1',
+      status: 'SUCCEEDED',
+    });
     cartService.clearCart.mockRejectedValue(new Error('Database unavailable'));
-    await expect(service.checkout('user-1', 'addr-1', 'USD')).rejects.toThrow(
-      'Database unavailable',
-    );
+
+    const result = await service.checkout('user-1', 'addr-1', 'USD');
+
     expect(ordersService.cancel).not.toHaveBeenCalled();
+    expect(backgroundJobsService.enqueue).toHaveBeenCalledWith({
+      type: CART_CLEANUP_JOB_TYPE,
+      payload: { userId: 'user-1', itemIds: [] },
+    });
+    expect(result).toEqual({
+      order: { id: 'order-1' },
+      payment: { id: 'payment-1', status: 'SUCCEEDED' },
+    });
+  });
+
+  it('preserves the cart and returns the cancelled order when the gateway declines inline', async () => {
+    ordersService.createFromCart.mockResolvedValue({ id: 'order-1' });
+    paymentsService.initializeForOrder.mockResolvedValue({
+      id: 'payment-1',
+      status: 'FAILED',
+    });
+    ordersService.findOwn.mockResolvedValue({
+      id: 'order-1',
+      status: 'CANCELLED',
+    });
+
+    const result = await service.checkout('user-1', 'addr-1', 'USD');
+
+    expect(cartService.clearCart).not.toHaveBeenCalled();
+    expect(cartService.removeItems).not.toHaveBeenCalled();
+    expect(ordersService.cancel).not.toHaveBeenCalled();
+    expect(ordersService.findOwn).toHaveBeenCalledWith('user-1', 'order-1');
+    expect(result).toEqual({
+      order: { id: 'order-1', status: 'CANCELLED' },
+      payment: { id: 'payment-1', status: 'FAILED' },
+    });
   });
 
   describe('partial checkout (itemIds)', () => {

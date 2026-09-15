@@ -1,18 +1,30 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { PaymentStatus } from '@prisma/client';
 
+import { BackgroundJobsService } from '../../infrastructure/jobs/background-jobs.service';
 import { CartService } from '../cart/cart.service';
+import { CART_CLEANUP_JOB_TYPE } from '../cart/jobs/cart-cleanup.handler';
 import { OrdersService } from '../orders/orders.service';
 import { PaymentsService } from '../payments/payments.service';
 import type { PaymentWithRedirect } from '../payments/payments.service';
 import { CheckoutResult } from './checkout.types';
 import type { PaymentDetailsDto } from '../payments/dto/payment-details.dto';
 
+/** A payment that will never accept a charge; nothing was taken from the customer. */
+const TERMINAL_FAILURE_STATUSES: PaymentStatus[] = [
+  PaymentStatus.FAILED,
+  PaymentStatus.CANCELLED,
+];
+
 @Injectable()
 export class CheckoutService {
+  private readonly logger = new Logger(CheckoutService.name);
+
   constructor(
     private readonly ordersService: OrdersService,
     private readonly paymentsService: PaymentsService,
     private readonly cartService: CartService,
+    private readonly backgroundJobsService: BackgroundJobsService,
   ) {}
 
   /**
@@ -55,13 +67,47 @@ export class CheckoutService {
       await this.ordersService.cancel(order.id);
       throw error;
     }
-    // A cart write failure cannot undo a charge already accepted by the gateway.
-    if (itemIds && itemIds.length > 0) {
-      await this.cartService.removeItems({ userId }, itemIds);
-    } else {
-      await this.cartService.clearCart({ userId });
+
+    // A gateway that settles inline can come back already declined; the
+    // order is already cancelled by then (see PaymentsService.applyEvent),
+    // so the cart must be preserved, not cleared, and the caller needs the
+    // cancelled order rather than the stale pending one it was created as.
+    if (TERMINAL_FAILURE_STATUSES.includes(payment.status)) {
+      return {
+        order: await this.ordersService.findOwn(userId, order.id),
+        payment,
+      };
     }
+
+    await this.cleanUpCart(userId, itemIds);
     return { order, payment };
+  }
+
+  /**
+   * A cart write failure cannot undo a charge already accepted by the
+   * gateway, so it must never fail the checkout response. Retrying inline
+   * would still block the response on a second flaky write, so a failure
+   * here is instead handed to a durable job that keeps retrying until the
+   * cart matches the order it was checked out into.
+   */
+  private async cleanUpCart(userId: string, itemIds?: string[]): Promise<void> {
+    try {
+      if (itemIds && itemIds.length > 0) {
+        await this.cartService.removeItems({ userId }, itemIds);
+      } else {
+        await this.cartService.clearCart({ userId });
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Cart cleanup failed after checkout for user ${userId}; retrying via background job: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      await this.backgroundJobsService.enqueue({
+        type: CART_CLEANUP_JOB_TYPE,
+        payload: { userId, itemIds: itemIds ?? [] },
+      });
+    }
   }
 
   /**
@@ -100,6 +146,14 @@ export class CheckoutService {
       await this.ordersService.cancel(order.id);
       throw error;
     }
+
+    if (TERMINAL_FAILURE_STATUSES.includes(payment.status)) {
+      return {
+        order: await this.ordersService.findOwn(userId, order.id),
+        payment,
+      };
+    }
+
     return { order, payment };
   }
 
