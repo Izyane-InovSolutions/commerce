@@ -40,8 +40,7 @@ export function CartContents({
   labels: Record<string, OfferLabel>;
 }) {
   const availableIds = useMemo(
-    () =>
-      cart.items.filter((line) => line.isAvailable).map((line) => line.id),
+    () => cart.items.filter((line) => line.isAvailable).map((line) => line.id),
     [cart.items],
   );
   const [selected, setSelected] = useState<Set<string>>(
@@ -168,17 +167,11 @@ export function CartContents({
                     !included && 'text-muted-foreground/60',
                   )}
                 >
-                  <span
-                    className={cn(!included && 'line-through', 'truncate')}
-                  >
-                    {labels[line.offerId]?.name ?? 'Item'} ×{' '}
-                    {line.quantity}
+                  <span className={cn(!included && 'line-through', 'truncate')}>
+                    {labels[line.offerId]?.name ?? 'Item'} × {line.quantity}
                   </span>
                   <span
-                    className={cn(
-                      'font-medium',
-                      !included && 'line-through',
-                    )}
+                    className={cn('font-medium', !included && 'line-through')}
                   >
                     {formatMinor(line.lineTotal, currency)}
                   </span>
@@ -192,9 +185,8 @@ export function CartContents({
             <span>{formatMinor(subtotal, currency)}</span>
           </div>
           <p className="text-muted-foreground text-xs text-pretty">
-            Select which items to check out with — out-of-stock items are
-            left out automatically, and the subtotal only counts what is
-            selected.
+            Select which items to check out with — out-of-stock items are left
+            out automatically, and the subtotal only counts what is selected.
           </p>
           <Button
             asChild={selected.size > 0}

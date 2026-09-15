@@ -51,8 +51,8 @@ export default async function AccountPage() {
         <CardHeader>
           <CardTitle>Sign in</CardTitle>
           <CardDescription>
-            One account for customers, sellers, and admins — sign in here
-            either way.
+            One account for customers, sellers, and admins — sign in here either
+            way.
           </CardDescription>
         </CardHeader>
         <CardContent>

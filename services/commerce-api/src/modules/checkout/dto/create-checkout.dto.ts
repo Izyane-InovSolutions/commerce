@@ -1,4 +1,10 @@
-import { IsArray, IsIn, IsOptional, IsUUID, ValidateNested } from 'class-validator';
+import {
+  IsArray,
+  IsIn,
+  IsOptional,
+  IsUUID,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import {
   DEFAULT_CURRENCY,

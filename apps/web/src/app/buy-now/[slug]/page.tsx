@@ -46,8 +46,8 @@ export default async function BuyNowPage({ params }: BuyNowPageProps) {
       <div className="mx-auto max-w-4xl space-y-4 px-4 py-12">
         <h1 className="text-2xl font-semibold tracking-tight">Buy now</h1>
         <p className="text-muted-foreground text-sm text-pretty">
-          Sign in to buy this. Buying now still needs an account to ship and
-          pay to, the same as checkout does.
+          Sign in to buy this. Buying now still needs an account to ship and pay
+          to, the same as checkout does.
         </p>
         <Button asChild size="sm">
           <Link href="/account">Sign in</Link>

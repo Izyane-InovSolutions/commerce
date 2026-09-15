@@ -170,7 +170,7 @@ describe('Checkout (e2e)', () => {
     const addressId = await createAddress(userHeaders);
 
     await request(server())
-      .post('/api/v1/cart/items?currency=USD')
+      .post('/api/v1/cart/items?currency=ZMW')
       .set(userHeaders)
       .send({ offerId, quantity: 2 })
       .expect(201);
@@ -178,7 +178,7 @@ describe('Checkout (e2e)', () => {
     const checkoutResponse = await request(server())
       .post('/api/v1/checkout')
       .set(userHeaders)
-      .send({ shippingAddressId: addressId, currency: 'USD' })
+      .send({ shippingAddressId: addressId, currency: 'ZMW' })
       .expect(201);
     const checkoutBody = checkoutResponse.body as Body<{
       order: { id: string; status: string };
@@ -193,7 +193,7 @@ describe('Checkout (e2e)', () => {
 
     // Cart is cleared once payment initialization succeeds.
     const cartAfterCheckout = await request(server())
-      .get('/api/v1/cart?currency=USD')
+      .get('/api/v1/cart?currency=ZMW')
       .set(userHeaders)
       .expect(200);
     expect(
@@ -206,7 +206,7 @@ describe('Checkout (e2e)', () => {
       .expect(200);
     expect(
       (inventoryAfterReserve.body as Body<{ reserved: number }[]>).data[0]
-        .reserved,
+        ?.reserved,
     ).toBe(2);
 
     paymentProvider.queueEvent(
@@ -267,7 +267,7 @@ describe('Checkout (e2e)', () => {
     }>;
     expect(buyNowBody.data.order.status).toBe('PENDING_PAYMENT');
     expect(buyNowBody.data.order.items).toHaveLength(1);
-    expect(buyNowBody.data.order.items[0].quantity).toBe(1);
+    expect(buyNowBody.data.order.items[0]?.quantity).toBe(1);
 
     // The persisted cart is untouched — the 5 units placed earlier are
     // still there, unaffected by the direct purchase of 1.
@@ -306,7 +306,7 @@ describe('Checkout (e2e)', () => {
     await request(server())
       .post('/api/v1/checkout')
       .set(userHeaders)
-      .send({ shippingAddressId: addressId, currency: 'USD' })
+      .send({ shippingAddressId: addressId, currency: 'ZMW' })
       .expect(409);
   });
 
@@ -317,7 +317,16 @@ describe('Checkout (e2e)', () => {
     // load, so no full seller/marketplace-offers fake is needed here.
     const prisma = app.get(PrismaService);
     await prisma.seller.create({
-      data: { id: 'seller-approved-1', status: 'APPROVED' },
+      data: {
+        id: 'seller-approved-1',
+        ownerUserId: 'seller-approved-1-owner',
+        businessName: 'Approved Seller Ltd',
+        registrationNumber: 'REG-1',
+        country: 'ZM',
+        businessAddress: '1 Cairo Road, Lusaka',
+        contactEmail: 'seller-approved-1@example.com',
+        status: 'APPROVED',
+      },
     });
     const sellerOffer = (await prisma.offer.create({
       data: {
@@ -344,12 +353,12 @@ describe('Checkout (e2e)', () => {
     const addressId = await createAddress(userHeaders);
 
     await request(server())
-      .post('/api/v1/cart/items?currency=USD')
+      .post('/api/v1/cart/items?currency=ZMW')
       .set(userHeaders)
       .send({ offerId, quantity: 1 })
       .expect(201);
     await request(server())
-      .post('/api/v1/cart/items?currency=USD')
+      .post('/api/v1/cart/items?currency=ZMW')
       .set(userHeaders)
       .send({ offerId: sellerOffer.id, quantity: 1 })
       .expect(201);
@@ -357,7 +366,7 @@ describe('Checkout (e2e)', () => {
     const checkoutResponse = await request(server())
       .post('/api/v1/checkout')
       .set(userHeaders)
-      .send({ shippingAddressId: addressId, currency: 'USD' })
+      .send({ shippingAddressId: addressId, currency: 'ZMW' })
       .expect(201);
     const checkoutBody = checkoutResponse.body as Body<{
       order: {

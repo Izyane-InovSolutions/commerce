@@ -8,7 +8,7 @@ describe('PaymentCurrencyConverter', () => {
     currency: string,
     rate: string,
     expiresAt = '2026-09-15T00:00:00Z',
-  ) {
+  ): PaymentCurrencyConverter {
     return new PaymentCurrencyConverter(
       new ConfigService({
         PAYMENT_FX_QUOTES: JSON.stringify({

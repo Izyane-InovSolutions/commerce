@@ -47,8 +47,13 @@ export async function DashboardShell({ children }: { children: ReactNode }) {
 
       <footer className="mt-auto border-t px-4 py-4 text-sm text-muted-foreground">
         <div className="flex flex-col items-center justify-between gap-2 sm:flex-row">
-          <span>Every request is scoped to the resources your seller account owns.</span>
-          <span>&copy; {new Date().getFullYear()} Commerce Seller. All rights reserved.</span>
+          <span>
+            Every request is scoped to the resources your seller account owns.
+          </span>
+          <span>
+            &copy; {new Date().getFullYear()} Commerce Seller. All rights
+            reserved.
+          </span>
         </div>
       </footer>
     </div>

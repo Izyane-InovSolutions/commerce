@@ -141,17 +141,21 @@ export class CartService {
 
     const offer = await this.offers.find(offerId);
     const offerById = new Map(offer ? [[offer.id, offer]] : []);
+    const sellerStock = offer?.stockSource === OfferStockSource.SELLER;
     const quantities =
-      offer && offer.stockSource !== OfferStockSource.SELLER
-        ? await this.inventoryService.getAvailableQuantities([
-            offer.variantId,
-          ])
+      offer && !sellerStock
+        ? await this.inventoryService.getAvailableQuantities([offer.variantId])
+        : new Map<string, number>();
+    const offerQuantities =
+      offer && sellerStock
+        ? await this.inventoryService.getAvailableOfferQuantities([offer.id])
         : new Map<string, number>();
 
     return this.toLineView(
       { id: `buy-now:${offerId}`, offerId, quantity },
       offerById,
       quantities,
+      offerQuantities,
       currency,
     );
   }
@@ -313,8 +317,14 @@ export class CartService {
         .filter((offer) => offer.stockSource !== OfferStockSource.SELLER)
         .map((offer) => offer.variantId),
     );
+    const offerQuantities =
+      await this.inventoryService.getAvailableOfferQuantities(
+        offers
+          .filter((offer) => offer.stockSource === OfferStockSource.SELLER)
+          .map((offer) => offer.id),
+      );
     const lines: CartLineView[] = cart.items.map((item) =>
-      this.toLineView(item, byId, quantities, currency),
+      this.toLineView(item, byId, quantities, offerQuantities, currency),
     );
 
     const subtotal = lines
@@ -335,13 +345,16 @@ export class CartService {
     item: { id: string; offerId: string; quantity: number },
     offerById: Map<string, CommerceOffer>,
     quantities: Map<string, number>,
+    offerQuantities: Map<string, number>,
     currency: string,
   ): CartLineView {
     const offer = offerById.get(item.offerId);
     const currentPrice = pickCurrentPrice(offer?.prices ?? [], currency);
     const sellerStock = offer?.stockSource === OfferStockSource.SELLER;
     const availableQuantity = offer
-      ? (quantities.get(offer.variantId) ?? 0)
+      ? sellerStock
+        ? (offerQuantities.get(offer.id) ?? 0)
+        : (quantities.get(offer.variantId) ?? 0)
       : 0;
     const sellerApproved =
       !!offer &&
@@ -350,7 +363,7 @@ export class CartService {
       sellerApproved &&
       offer?.status === ProductStatus.PUBLISHED &&
       !!currentPrice &&
-      (sellerStock || availableQuantity >= item.quantity);
+      availableQuantity >= item.quantity;
     return {
       id: item.id,
       offerId: item.offerId,

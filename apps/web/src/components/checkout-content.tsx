@@ -137,8 +137,8 @@ export function CheckoutContent({
           </Button>
           {leftInCart > 0 ? (
             <p className="text-muted-foreground text-xs text-pretty">
-              {leftInCart} other item{leftInCart === 1 ? '' : 's'} left in
-              your cart, not part of this order.
+              {leftInCart} other item{leftInCart === 1 ? '' : 's'} left in your
+              cart, not part of this order.
             </p>
           ) : null}
           <p className="text-muted-foreground text-xs text-pretty">

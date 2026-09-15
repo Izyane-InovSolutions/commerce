@@ -111,27 +111,27 @@ const mockProducts: Product[] = [
 describe('StorefrontCatalog', () => {
   it('renders all products and category pills initially', () => {
     render(
-      <StorefrontCatalog
-        products={mockProducts}
-        categories={mockCategories}
-      />,
+      <StorefrontCatalog products={mockProducts} categories={mockCategories} />,
     );
 
     expect(screen.getByText('Wireless Headphones')).toBeInTheDocument();
     expect(screen.getByText('Smart Watch')).toBeInTheDocument();
     expect(screen.getByText('Ceramic Coffee Mug')).toBeInTheDocument();
 
-    expect(screen.getByRole('button', { name: /All Categories/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Electronics/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Home & Living/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /All Categories/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Electronics/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Home & Living/ }),
+    ).toBeInTheDocument();
   });
 
   it('filters products when a category pill is selected', () => {
     render(
-      <StorefrontCatalog
-        products={mockProducts}
-        categories={mockCategories}
-      />,
+      <StorefrontCatalog products={mockProducts} categories={mockCategories} />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Home & Living/ }));
@@ -143,10 +143,7 @@ describe('StorefrontCatalog', () => {
 
   it('filters by trending products', () => {
     render(
-      <StorefrontCatalog
-        products={mockProducts}
-        categories={mockCategories}
-      />,
+      <StorefrontCatalog products={mockProducts} categories={mockCategories} />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Trending/ }));
@@ -157,13 +154,12 @@ describe('StorefrontCatalog', () => {
 
   it('filters by search input', () => {
     render(
-      <StorefrontCatalog
-        products={mockProducts}
-        categories={mockCategories}
-      />,
+      <StorefrontCatalog products={mockProducts} categories={mockCategories} />,
     );
 
-    const searchInput = screen.getByPlaceholderText('Search within products...');
+    const searchInput = screen.getByPlaceholderText(
+      'Search within products...',
+    );
     fireEvent.change(searchInput, { target: { value: 'headphones' } });
 
     expect(screen.getByText('Wireless Headphones')).toBeInTheDocument();
@@ -173,10 +169,7 @@ describe('StorefrontCatalog', () => {
 
   it('allows resetting filters', () => {
     render(
-      <StorefrontCatalog
-        products={mockProducts}
-        categories={mockCategories}
-      />,
+      <StorefrontCatalog products={mockProducts} categories={mockCategories} />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Home & Living/ }));

@@ -172,7 +172,12 @@ export class OrdersService {
       where: { userId_idempotencyKey: { userId, idempotencyKey } },
       include: {
         items: true,
-        sellerOrders: { include: { items: true } },
+        sellerOrders: {
+          include: {
+            items: true,
+            shippingGroups: { include: { items: true } },
+          },
+        },
         payment: CUSTOMER_PAYMENT_SELECT,
       },
     });
@@ -207,51 +212,104 @@ export class OrdersService {
       lines.map((item) => item.offerId),
     );
     const offerById = new Map(offers.map((offer) => [offer.id, offer]));
-    const groups = this.groupBySeller(cart.items);
+    const groups = this.groupBySeller(lines, offerById);
+    const subtotal = lines.reduce((sum, item) => sum + item.lineTotal, 0);
 
-    const createdOrderId = await this.prisma.$transaction(async (tx) => {
-      const order = await tx.order.create({
-        data: {
-          userId,
-          status: OrderStatus.PENDING_PAYMENT,
-          currency,
-          subtotal: cart.subtotal,
-          total: cart.subtotal,
-          shippingAddress: shippingAddress as unknown as Prisma.InputJsonValue,
-        },
+    const quotedGroups: QuotedSellerGroup[] = [];
+    for (const group of [...groups].sort((left, right) =>
+      (left.sellerId ?? '').localeCompare(right.sellerId ?? ''),
+    )) {
+      const shippingGroups = await this.shippingService.quoteSellerGroups(
+        group.sellerId,
+        group.items,
+        shippingAddress.country,
+        currency,
+      );
+      const groupSubtotal = shippingGroups.reduce(
+        (sum, shippingGroup) => sum + shippingGroup.subtotal,
+        0,
+      );
+      const groupShippingAmount = shippingGroups.reduce(
+        (sum, shippingGroup) => sum + shippingGroup.shippingAmount,
+        0,
+      );
+      quotedGroups.push({
+        ...group,
+        shippingGroups,
+        subtotal: groupSubtotal,
+        shippingAmount: groupShippingAmount,
+        total: groupSubtotal + groupShippingAmount,
       });
+    }
+    const shippingAmount = quotedGroups.reduce(
+      (sum, group) => sum + group.shippingAmount,
+      0,
+    );
 
-      for (const group of [...groups].sort((a, b) =>
-        (a.sellerId ?? '').localeCompare(b.sellerId ?? ''),
-      )) {
-        if (group.sellerId)
-          await this.ledgerService.ensureCurrency(group.sellerId, currency, tx);
-        const groupSubtotal = group.items.reduce(
-          (sum, item) => sum + item.lineTotal,
-          0,
-        );
-
-        await tx.sellerOrder.create({
+    let createdOrderId: string;
+    try {
+      createdOrderId = await this.prisma.$transaction(async (tx) => {
+        const order = await tx.order.create({
           data: {
-            orderId: order.id,
-            sellerId: group.sellerId,
+            userId,
             status: OrderStatus.PENDING_PAYMENT,
             currency,
-            subtotal: groupSubtotal,
-            total: groupSubtotal,
-            items: {
-              create: group.items.map((item) => ({
-                orderId: order.id,
-                offerId: item.offerId,
-                quantity: item.quantity,
-                unitAmount: item.unitPrice?.amount ?? 0,
-                currency: item.unitPrice?.currency ?? currency,
-                lineTotal: item.lineTotal,
-              })),
-            },
+            subtotal,
+            shippingAmount,
+            total: subtotal + shippingAmount,
+            shippingAddress:
+              shippingAddress as unknown as Prisma.InputJsonValue,
+            idempotencyKey: idempotencyKey ?? null,
           },
         });
-      }
+
+        for (const group of quotedGroups) {
+          if (group.sellerId)
+            await this.ledgerService.ensureCurrency(
+              group.sellerId,
+              currency,
+              tx,
+            );
+
+          const sellerOrder = await tx.sellerOrder.create({
+            data: {
+              orderId: order.id,
+              sellerId: group.sellerId,
+              status: OrderStatus.PENDING_PAYMENT,
+              currency,
+              subtotal: group.subtotal,
+              shippingAmount: group.shippingAmount,
+              total: group.total,
+            },
+          });
+
+          for (const shippingGroup of group.shippingGroups) {
+            await tx.shippingGroup.create({
+              data: {
+                orderId: order.id,
+                sellerOrderId: sellerOrder.id,
+                fulfillmentMode: shippingGroup.fulfillmentMode,
+                serviceLevel: shippingGroup.serviceLevel,
+                rateCode: shippingGroup.rateCode,
+                subtotal: shippingGroup.subtotal,
+                shippingAmount: shippingGroup.shippingAmount,
+                total: shippingGroup.total,
+                currency: shippingGroup.currency,
+                items: {
+                  create: shippingGroup.items.map((item) => ({
+                    orderId: order.id,
+                    sellerOrderId: sellerOrder.id,
+                    offerId: item.offerId,
+                    quantity: item.quantity,
+                    unitAmount: item.unitPrice?.amount ?? 0,
+                    currency: item.unitPrice?.currency ?? currency,
+                    lineTotal: item.lineTotal,
+                  })),
+                },
+              },
+            });
+          }
+        }
 
         return order.id;
       });

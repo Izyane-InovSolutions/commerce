@@ -1,7 +1,14 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Flame, Sparkles, SlidersHorizontal, Search, X, ArrowUpDown } from 'lucide-react';
+import {
+  Flame,
+  Sparkles,
+  SlidersHorizontal,
+  Search,
+  X,
+  ArrowUpDown,
+} from 'lucide-react';
 
 import { ProductCard } from '@/components/product-card';
 import { Button } from '@/components/ui/button';
@@ -22,18 +29,27 @@ export type StorefrontCatalogProps = {
 };
 
 type QuickFilter = 'all' | 'trending' | 'new-arrivals';
-type SortOption = 'trending' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc';
+type SortOption =
+  | 'trending'
+  | 'newest'
+  | 'price-asc'
+  | 'price-desc'
+  | 'name-asc';
 
 function isTrendingProduct(product: Product): boolean {
   // Deterministic calculation: products with multiple variants/offers or matching pattern
   if (product.variants.length > 1) return true;
-  const hash = product.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  const hash = product.id
+    .split('')
+    .reduce((acc, c) => acc + c.charCodeAt(0), 0);
   return hash % 2 === 0;
 }
 
 function isNewArrival(product: Product, index: number, total: number): boolean {
   if (index >= total - 6) return true;
-  const hash = product.slug.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  const hash = product.slug
+    .split('')
+    .reduce((acc, c) => acc + c.charCodeAt(0), 0);
   return hash % 3 === 0;
 }
 
@@ -47,9 +63,12 @@ export function StorefrontCatalog({
   title = 'Explore Products',
   description,
 }: StorefrontCatalogProps) {
-  const [selectedCategory, setSelectedCategory] = useState<string>(initialCategory);
+  const [selectedCategory, setSelectedCategory] =
+    useState<string>(initialCategory);
   const [quickFilter, setQuickFilter] = useState<QuickFilter>(
-    (initialFilter === 'trending' || initialFilter === 'new-arrivals' ? initialFilter : 'all') as QuickFilter,
+    (initialFilter === 'trending' || initialFilter === 'new-arrivals'
+      ? initialFilter
+      : 'all') as QuickFilter,
   );
   const [sortOption, setSortOption] = useState<SortOption>(
     (initialSort || 'trending') as SortOption,
@@ -146,7 +165,8 @@ export function StorefrontCatalog({
           <div className="flex items-center gap-2.5">
             <h2 className="text-2xl font-semibold tracking-tight">{title}</h2>
             <Badge variant="secondary" className="font-mono text-xs">
-              {filteredProducts.length} {filteredProducts.length === 1 ? 'item' : 'items'}
+              {filteredProducts.length}{' '}
+              {filteredProducts.length === 1 ? 'item' : 'items'}
             </Badge>
           </div>
           {description ? (
@@ -189,7 +209,9 @@ export function StorefrontCatalog({
           }`}
         >
           All Categories
-          <span className="text-[10px] opacity-75">({categoryCounts.all ?? products.length})</span>
+          <span className="text-[10px] opacity-75">
+            ({categoryCounts.all ?? products.length})
+          </span>
         </button>
 
         {categories.map((cat) => {
@@ -234,7 +256,9 @@ export function StorefrontCatalog({
             variant={quickFilter === 'trending' ? 'secondary' : 'ghost'}
             size="sm"
             className={`h-8 text-xs font-medium ${
-              quickFilter === 'trending' ? 'text-amber-600 dark:text-amber-400 font-semibold' : ''
+              quickFilter === 'trending'
+                ? 'text-amber-600 dark:text-amber-400 font-semibold'
+                : ''
             }`}
             onClick={() => setQuickFilter('trending')}
           >
@@ -246,7 +270,9 @@ export function StorefrontCatalog({
             variant={quickFilter === 'new-arrivals' ? 'secondary' : 'ghost'}
             size="sm"
             className={`h-8 text-xs font-medium ${
-              quickFilter === 'new-arrivals' ? 'text-blue-600 dark:text-blue-400 font-semibold' : ''
+              quickFilter === 'new-arrivals'
+                ? 'text-blue-600 dark:text-blue-400 font-semibold'
+                : ''
             }`}
             onClick={() => setQuickFilter('new-arrivals')}
           >
@@ -257,7 +283,10 @@ export function StorefrontCatalog({
 
         {/* Sort Select */}
         <div className="flex items-center gap-2 ml-auto">
-          <label htmlFor="catalog-sort" className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+          <label
+            htmlFor="catalog-sort"
+            className="text-xs font-medium text-muted-foreground flex items-center gap-1"
+          >
             <ArrowUpDown className="size-3.5" /> Sort by:
           </label>
           <select
@@ -292,8 +321,13 @@ export function StorefrontCatalog({
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span>Active filters:</span>
           {selectedCategory !== 'all' ? (
-            <Badge variant="outline" className="gap-1 py-0.5 text-xs font-normal">
-              Category: {categories.find((c) => c.slug === selectedCategory)?.name ?? selectedCategory}
+            <Badge
+              variant="outline"
+              className="gap-1 py-0.5 text-xs font-normal"
+            >
+              Category:{' '}
+              {categories.find((c) => c.slug === selectedCategory)?.name ??
+                selectedCategory}
               <button
                 type="button"
                 onClick={() => setSelectedCategory('all')}
@@ -305,8 +339,12 @@ export function StorefrontCatalog({
             </Badge>
           ) : null}
           {quickFilter !== 'all' ? (
-            <Badge variant="outline" className="gap-1 py-0.5 text-xs font-normal">
-              Filter: {quickFilter === 'trending' ? '🔥 Trending' : '✨ New Arrivals'}
+            <Badge
+              variant="outline"
+              className="gap-1 py-0.5 text-xs font-normal"
+            >
+              Filter:{' '}
+              {quickFilter === 'trending' ? '🔥 Trending' : '✨ New Arrivals'}
               <button
                 type="button"
                 onClick={() => setQuickFilter('all')}
@@ -318,7 +356,10 @@ export function StorefrontCatalog({
             </Badge>
           ) : null}
           {searchQuery ? (
-            <Badge variant="outline" className="gap-1 py-0.5 text-xs font-normal">
+            <Badge
+              variant="outline"
+              className="gap-1 py-0.5 text-xs font-normal"
+            >
               Search: &ldquo;{searchQuery}&rdquo;
               <button
                 type="button"
@@ -331,7 +372,10 @@ export function StorefrontCatalog({
             </Badge>
           ) : null}
           {sortOption !== 'trending' ? (
-            <Badge variant="outline" className="gap-1 py-0.5 text-xs font-normal">
+            <Badge
+              variant="outline"
+              className="gap-1 py-0.5 text-xs font-normal"
+            >
               Sorted: {sortOption}
             </Badge>
           ) : null}
@@ -344,22 +388,25 @@ export function StorefrontCatalog({
           {filteredProducts.map((product, index) => {
             const isTrend = isTrendingProduct(product);
             const isNew = isNewArrival(product, index, products.length);
-            const badge = isTrend ? '🔥 Trending' : isNew ? '✨ New' : undefined;
+            const badge = isTrend
+              ? '🔥 Trending'
+              : isNew
+                ? '✨ New'
+                : undefined;
 
             return (
-              <ProductCard
-                key={product.id}
-                product={product}
-                badge={badge}
-              />
+              <ProductCard key={product.id} product={product} badge={badge} />
             );
           })}
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed p-12 text-center">
-          <p className="text-base font-semibold">No products match your criteria</p>
+          <p className="text-base font-semibold">
+            No products match your criteria
+          </p>
           <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-            Try adjusting your category selection, search terms, or active filters.
+            Try adjusting your category selection, search terms, or active
+            filters.
           </p>
           <Button
             type="button"

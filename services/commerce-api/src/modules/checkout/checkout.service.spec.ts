@@ -11,7 +11,10 @@ describe('CheckoutService', () => {
     findByIdempotencyKey: jest.Mock;
     releaseIdempotencyKey: jest.Mock;
   };
-  let paymentsService: { initializeForOrder: jest.Mock; getForOrder: jest.Mock };
+  let paymentsService: {
+    initializeForOrder: jest.Mock;
+    getForOrder: jest.Mock;
+  };
   let cartService: { clearCart: jest.Mock; removeItems: jest.Mock };
   let service: CheckoutService;
 
@@ -184,7 +187,10 @@ describe('CheckoutService', () => {
       expect(ordersService.createFromCart).not.toHaveBeenCalled();
       expect(cartService.clearCart).not.toHaveBeenCalled();
       expect(result).toEqual({
-        order: { id: 'order-1', payment: { id: 'payment-1', status: 'PENDING' } },
+        order: {
+          id: 'order-1',
+          payment: { id: 'payment-1', status: 'PENDING' },
+        },
         payment: { id: 'payment-1' },
       });
     });

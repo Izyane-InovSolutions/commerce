@@ -11,10 +11,7 @@ function subtotalText(): string {
   if (!row) {
     throw new Error('Subtotal row not found');
   }
-  return (within(row).getByText(/^K\s/).textContent ?? '').replace(
-    /\s/g,
-    ' ',
-  );
+  return (within(row).getByText(/^K\s/).textContent ?? '').replace(/\s/g, ' ');
 }
 
 function line(overrides: Partial<CartView['items'][number]> = {}) {
@@ -52,7 +49,9 @@ describe('CartContents selection', () => {
 
     expect(subtotalText()).toBe('K 30.00');
     const checkboxes = screen.getAllByRole('checkbox');
-    expect(checkboxes.every((box) => box.getAttribute('data-state') === 'checked')).toBe(true);
+    expect(
+      checkboxes.every((box) => box.getAttribute('data-state') === 'checked'),
+    ).toBe(true);
   });
 
   it('auto-deselects an out-of-stock line and excludes it from the subtotal', () => {

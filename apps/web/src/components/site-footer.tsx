@@ -5,7 +5,9 @@ export function SiteFooter() {
         <span>
           iZyane Marketplace — retail and marketplace offers in one catalog.
         </span>
-        <span>&copy; {new Date().getFullYear()} iZyane. All rights reserved.</span>
+        <span>
+          &copy; {new Date().getFullYear()} iZyane. All rights reserved.
+        </span>
       </div>
     </footer>
   );

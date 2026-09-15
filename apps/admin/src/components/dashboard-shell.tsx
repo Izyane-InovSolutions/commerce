@@ -44,8 +44,13 @@ export async function DashboardShell({ children }: { children: ReactNode }) {
 
       <footer className="mt-auto border-t px-4 py-4 text-sm text-muted-foreground">
         <div className="flex flex-col items-center justify-between gap-2 sm:flex-row">
-          <span>Every privileged action recorded here raises an audit event.</span>
-          <span>&copy; {new Date().getFullYear()} Commerce Admin. All rights reserved.</span>
+          <span>
+            Every privileged action recorded here raises an audit event.
+          </span>
+          <span>
+            &copy; {new Date().getFullYear()} Commerce Admin. All rights
+            reserved.
+          </span>
         </div>
       </footer>
     </div>

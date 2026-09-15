@@ -2686,7 +2686,6 @@
                 "properties": {
                   "data": {
                     "$ref": "#/components/schemas/__type9"
-                    "$ref": "#/components/schemas/__type9"
                   },
                   "meta": {
                     "type": "object",
@@ -4602,9 +4601,7 @@
             "type": "string",
             "nullable": true,
             "enum": [
-              "ZMW",
-              "USD",
-              "GBP"
+              "ZMW"
             ],
             "default": "ZMW"
           }
@@ -4630,21 +4627,6 @@
             "minimum": 1,
             "maximum": 100,
             "default": 20
-          }
-        },
-        {
-          "name": "currency",
-          "in": "query",
-          "required": false,
-          "schema": {
-            "type": "string",
-            "nullable": true,
-            "enum": [
-              "ZMW",
-              "USD",
-              "GBP"
-            ],
-            "default": "ZMW"
           }
         }
       ],
@@ -4787,9 +4769,7 @@
             "type": "string",
             "nullable": true,
             "enum": [
-              "ZMW",
-              "USD",
-              "GBP"
+              "ZMW"
             ],
             "default": "ZMW"
           }
@@ -4815,21 +4795,6 @@
             "minimum": 1,
             "maximum": 100,
             "default": 20
-          }
-        },
-        {
-          "name": "currency",
-          "in": "query",
-          "required": false,
-          "schema": {
-            "type": "string",
-            "nullable": true,
-            "enum": [
-              "ZMW",
-              "USD",
-              "GBP"
-            ],
-            "default": "ZMW"
           }
         }
       ],
@@ -10506,7 +10471,129 @@
         "expiresAt"
       ]
     },
-    "__type11": {
+    "SellerInventoryView": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "nullable": true
+        },
+        "offerId": {
+          "type": "string"
+        },
+        "variantId": {
+          "type": "string"
+        },
+        "sellerSku": {
+          "type": "string",
+          "nullable": true
+        },
+        "listingTitle": {
+          "type": "string",
+          "nullable": true
+        },
+        "onHand": {
+          "type": "number"
+        },
+        "reserved": {
+          "type": "number"
+        },
+        "available": {
+          "type": "number"
+        },
+        "version": {
+          "type": "number"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        }
+      },
+      "required": [
+        "id",
+        "offerId",
+        "variantId",
+        "sellerSku",
+        "listingTitle",
+        "onHand",
+        "reserved",
+        "available",
+        "version",
+        "updatedAt"
+      ]
+    },
+    "InputSetSellerInventoryDto": {
+      "type": "object",
+      "properties": {
+        "quantity": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "note": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 500
+        }
+      },
+      "required": [
+        "quantity",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "InputBulkSellerInventoryDto": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/InputBulkSellerInventoryItemDto"
+          },
+          "minItems": 1,
+          "maxItems": 100
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "InputBulkSellerInventoryItemDto": {
+      "type": "object",
+      "properties": {
+        "offerId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "note": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 500
+        }
+      },
+      "required": [
+        "offerId",
+        "quantity",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "__type12": {
       "type": "object",
       "properties": {
         "name": {
@@ -10886,9 +10973,7 @@
           "type": "string",
           "nullable": true,
           "enum": [
-            "ZMW",
-            "USD",
-            "GBP"
+            "ZMW"
           ],
           "default": "ZMW"
         },

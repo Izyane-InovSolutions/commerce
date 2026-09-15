@@ -157,7 +157,7 @@ describe('Catalog (e2e)', () => {
 
     const publicDetail = (
       await request(server())
-        .get('/api/v1/catalog/products/trail-runner?currency=USD')
+        .get('/api/v1/catalog/products/trail-runner?currency=ZMW')
         .expect(200)
     ).body as Body<{
       variants: {

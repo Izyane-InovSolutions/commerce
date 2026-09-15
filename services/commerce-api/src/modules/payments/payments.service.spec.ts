@@ -3,8 +3,8 @@ import { ConflictException, NotImplementedException } from '@nestjs/common';
 import { LedgerService } from '../financials/ledger.service';
 import { OrdersService } from '../orders/orders.service';
 import { PrismaService } from '../../database/prisma.service';
-import type { PaymentProvider } from './payment-provider';
 import { PaymentsService } from './payments.service';
+import type { InitializePaymentInput } from './payment-provider';
 import { PaymentOutcomeUnknownException } from './gateway-errors';
 
 function buildPrisma(): {
@@ -42,7 +42,15 @@ function buildPrisma(): {
 
 describe('PaymentsService', () => {
   let prisma: ReturnType<typeof buildPrisma>;
-  let provider: jest.Mocked<PaymentProvider>;
+  let provider: {
+    name: string;
+    prepareInput?: jest.Mock;
+    initialize: jest.Mock;
+    getPayment: jest.Mock;
+    verifyWebhook: jest.Mock;
+    refund: jest.Mock;
+    getRefund: jest.Mock;
+  };
   let refundCall: jest.Mock;
   let getPaymentCall: jest.Mock;
   let ordersService: {
@@ -126,7 +134,7 @@ describe('PaymentsService', () => {
         quoteId: 'quote-1',
         expiresAt: new Date('2030-01-01'),
       };
-      provider.prepareInput = jest.fn((input) => ({
+      provider.prepareInput = jest.fn((input: InitializePaymentInput) => ({
         ...input,
         amount: 100,
         currency: 'USD',

@@ -96,6 +96,12 @@ class EnvironmentVariables {
   @IsString()
   UNIFIED_PAYMENTS_MERCHANT_ID = '';
 
+  // Settlement currency the card connector charges in; conversion from ZMW
+  // happens on the backend via PAYMENT_FX_QUOTES below.
+  @IsString()
+  @MinLength(3)
+  UNIFIED_PAYMENTS_CARD_CURRENCY = 'USD';
+
   // Optional, and only honoured once the gateway's webhook signing scheme is
   // known — see UnifiedPaymentProvider.callbackUrl.
   @IsOptional()
@@ -119,6 +125,13 @@ class EnvironmentVariables {
   @Min(0)
   @Max(10000)
   MARKETPLACE_COMMISSION_BPS = 1000;
+
+  // JSON keyed by target currency; see PaymentCurrencyConverter. Left
+  // unvalidated beyond "is a string" — a missing, expired or malformed quote
+  // safely disables foreign settlement at request time rather than failing
+  // startup.
+  @IsString()
+  PAYMENT_FX_QUOTES = '{}';
 }
 
 export function validate(

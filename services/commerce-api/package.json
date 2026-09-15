@@ -5,6 +5,7 @@
   "description": "Commerce platform modular monolith API",
   "scripts": {
     "build": "npm run swagger:generate && nest build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "swagger:generate": "node scripts/generate-openapi.cjs",
     "swagger:check": "node scripts/generate-openapi.cjs --check",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",

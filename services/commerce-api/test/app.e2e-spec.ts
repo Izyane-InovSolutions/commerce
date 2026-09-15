@@ -99,12 +99,12 @@ describe('Commerce API (e2e)', () => {
         return operation ? [operation] : [];
       }),
     );
-    expect(operations).toHaveLength(129);
+    expect(operations).toHaveLength(130);
     for (const operation of operations) {
       expect(operation.security).toBeDefined();
       expect(operation.responses.default).toBeDefined();
       for (const [status, response] of Object.entries(operation.responses)) {
-        if ('$ref' in response) continue;
+        if (!response || '$ref' in response) continue;
         if (status === '204') expect(response.content).toBeUndefined();
         else expect(response.content).toBeDefined();
       }
@@ -133,16 +133,16 @@ describe('Commerce API (e2e)', () => {
         password: { minLength: 8 },
       },
     });
-    expect(schemas.InputUpdateAddressDto.required).toBeUndefined();
+    expect(schemas.InputUpdateAddressDto?.required).toBeUndefined();
     expect(
-      schemas.InputCreateVariantDto.properties?.attributeValueIds,
+      schemas.InputCreateVariantDto?.properties?.attributeValueIds,
     ).toMatchObject({
       type: 'array',
       uniqueItems: true,
       items: { format: 'uuid' },
     });
     const products = document.paths['/api/v1/catalog/products']
-      .get as OperationObject;
+      ?.get as OperationObject;
     expect(products.parameters).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -161,7 +161,7 @@ describe('Commerce API (e2e)', () => {
         (parameter) => 'name' in parameter && parameter.name === 'limit',
       ),
     ).toMatchObject({ schema: { default: 20, maximum: 100 } });
-    expect(schemas.InputUpdateStatusDto.properties?.status).toMatchObject({
+    expect(schemas.InputUpdateStatusDto?.properties?.status).toMatchObject({
       enum: ['DRAFT', 'PUBLISHED', 'ARCHIVED'],
     });
   });
@@ -171,11 +171,11 @@ describe('Commerce API (e2e)', () => {
       type: 'http',
       scheme: 'bearer',
     });
-    expect(document.paths['/api/v1/auth/register'].post?.security).toEqual([]);
-    expect(document.paths['/api/v1/auth/me'].get?.security).toEqual([
+    expect(document.paths['/api/v1/auth/register']?.post?.security).toEqual([]);
+    expect(document.paths['/api/v1/auth/me']?.get?.security).toEqual([
       { bearer: [] },
     ]);
-    expect(document.paths['/api/v1/cart'].get?.security).toEqual([
+    expect(document.paths['/api/v1/cart']?.get?.security).toEqual([
       {},
       { bearer: [] },
     ]);
@@ -183,22 +183,22 @@ describe('Commerce API (e2e)', () => {
       string,
       SchemaObject
     >;
-    expect(Object.keys(schemas.AuthTokensResponse.properties ?? {})).toEqual([
+    expect(Object.keys(schemas.AuthTokensResponse?.properties ?? {})).toEqual([
       'accessToken',
       'refreshToken',
       'tokenType',
       'expiresIn',
       'user',
     ]);
-    expect(schemas.PublicUser.properties).not.toHaveProperty('passwordHash');
-    expect(schemas.ProductWithRelations.properties).toHaveProperty('variants');
-    expect(schemas.ProductWithRelations.properties).toHaveProperty('media');
-    expect(schemas.SessionSummary.properties?.createdAt).toMatchObject({
+    expect(schemas.PublicUser?.properties).not.toHaveProperty('passwordHash');
+    expect(schemas.ProductWithRelations?.properties).toHaveProperty('variants');
+    expect(schemas.ProductWithRelations?.properties).toHaveProperty('media');
+    expect(schemas.SessionSummary?.properties?.createdAt).toMatchObject({
       type: 'string',
       format: 'date-time',
     });
     const response =
-      document.paths['/api/v1/auth/register'].post?.responses['201'];
+      document.paths['/api/v1/auth/register']?.post?.responses['201'];
     expect(response).toMatchObject({
       content: {
         'application/json': { schema: { required: ['data', 'meta'] } },
@@ -207,7 +207,7 @@ describe('Commerce API (e2e)', () => {
   });
 
   it('documents file transport and the pending webhook without inventing provider fields', () => {
-    const upload = document.paths['/api/v1/media/{id}/content'].put;
+    const upload = document.paths['/api/v1/media/{id}/content']?.put;
     expect(upload?.requestBody).toMatchObject({
       content: {
         'multipart/form-data': {
@@ -218,12 +218,12 @@ describe('Commerce API (e2e)', () => {
         },
       },
     });
-    const download = document.paths['/api/v1/media/{id}/download'].get;
+    const download = document.paths['/api/v1/media/{id}/download']?.get;
     expect(download?.security).toEqual([]);
     expect(download?.responses['200']).toMatchObject({
       content: { 'image/jpeg': { schema: { format: 'binary' } } },
     });
-    const webhook = document.paths['/api/v1/payments/webhook'].post;
+    const webhook = document.paths['/api/v1/payments/webhook']?.post;
     expect(webhook?.description).toContain('pending');
     expect(webhook?.responses['503']).toBeDefined();
     expect(webhook?.parameters).toEqual(

@@ -43,11 +43,12 @@ export default async function HomePage() {
   let sections: ProductSection[] = [];
 
   try {
-    const [productsResult, categoriesResult, sectionsResult] = await Promise.all([
-      listProducts({ limit: 100 }),
-      listCategories(),
-      getHomepageSections(),
-    ]);
+    const [productsResult, categoriesResult, sectionsResult] =
+      await Promise.all([
+        listProducts({ limit: 100 }),
+        listCategories(),
+        getHomepageSections(),
+      ]);
     allProducts = productsResult.products;
     categories = categoriesResult;
     sections = sectionsResult;

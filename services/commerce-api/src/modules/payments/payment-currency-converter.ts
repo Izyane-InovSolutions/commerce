@@ -24,7 +24,7 @@ export class PaymentCurrencyConverter {
       throw new BadRequestException(
         'Payment amount must be positive minor units',
       );
-    const unavailable = () =>
+    const unavailable = (): ServiceUnavailableException =>
       new ServiceUnavailableException(
         'This payment method is temporarily unavailable',
       );

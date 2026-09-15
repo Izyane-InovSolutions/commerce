@@ -191,7 +191,9 @@ describe('Inventory (e2e)', () => {
         .set(asAdmin())
         .query({ variantId })
         .expect(200)
-    ).body as Body<{ onHand: number; reserved: number; available: number }[]>;
+    ).body as Body<
+      { id: string; onHand: number; reserved: number; available: number }[]
+    >;
     expect(afterExpiry.data[0]).toMatchObject({
       onHand: 10,
       reserved: 0,
@@ -200,7 +202,7 @@ describe('Inventory (e2e)', () => {
 
     const reservations = (
       await request(server())
-        .get(`/api/v1/admin/inventory/${afterExpiry.data[0].id}/reservations`)
+        .get(`/api/v1/admin/inventory/${afterExpiry.data[0]?.id}/reservations`)
         .set(asAdmin())
         .expect(200)
     ).body as Body<{ id: string; status: string }[]>;

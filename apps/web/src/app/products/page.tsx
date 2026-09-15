@@ -12,7 +12,8 @@ export default async function ProductsPage({
   searchParams,
 }: PageProps<'/products'>) {
   const params = searchParams ? await searchParams : {};
-  const category = typeof params.category === 'string' ? params.category : undefined;
+  const category =
+    typeof params.category === 'string' ? params.category : undefined;
   const filter = typeof params.filter === 'string' ? params.filter : undefined;
   const sort = typeof params.sort === 'string' ? params.sort : undefined;
   const q = typeof params.q === 'string' ? params.q : undefined;

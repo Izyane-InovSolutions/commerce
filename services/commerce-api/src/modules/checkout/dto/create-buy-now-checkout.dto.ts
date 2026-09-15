@@ -1,4 +1,11 @@
-import { IsIn, IsInt, IsOptional, IsUUID, Min, ValidateNested } from 'class-validator';
+import {
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsUUID,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import {
   DEFAULT_CURRENCY,
