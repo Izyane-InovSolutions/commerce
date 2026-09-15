@@ -13,6 +13,7 @@ import { AppModule } from '../src/app.module';
 import { ValidationException } from '../src/common/http/validation-exception';
 import { PrismaService } from '../src/database/prisma.service';
 import { FakePrismaService } from './support/fake-prisma.service';
+import { issueTestToken } from './support/issue-test-token';
 
 type Body<T> = { data: T };
 
@@ -23,11 +24,12 @@ describe('Catalog (e2e)', () => {
   let customerToken: string;
 
   beforeAll(async () => {
+    const fakePrisma = new FakePrismaService();
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
       .overrideProvider(PrismaService)
-      .useValue(new FakePrismaService())
+      .useValue(fakePrisma)
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -44,16 +46,18 @@ describe('Catalog (e2e)', () => {
     await app.init();
 
     jwtService = app.get(JwtService);
-    adminToken = await jwtService.signAsync({
-      sub: 'admin-1',
-      role: Role.ADMIN,
-      sid: 'session-admin',
-    });
-    customerToken = await jwtService.signAsync({
-      sub: 'customer-1',
-      role: Role.CUSTOMER,
-      sid: 'session-customer',
-    });
+    adminToken = await issueTestToken(
+      jwtService,
+      fakePrisma,
+      'admin-1',
+      Role.ADMIN,
+    );
+    customerToken = await issueTestToken(
+      jwtService,
+      fakePrisma,
+      'customer-1',
+      Role.CUSTOMER,
+    );
   });
 
   afterAll(async () => {

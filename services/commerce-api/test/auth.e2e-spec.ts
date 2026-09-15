@@ -89,17 +89,51 @@ describe('Auth (e2e)', () => {
     const rotated = (refreshResponse.body as TokensBody).data;
     expect(rotated.refreshToken).not.toBe(refreshToken);
 
-    // The original refresh token was rotated away — presenting it again is reuse.
+    // The rotated access token is backed by its own, still-active session.
     await request(server())
-      .post('/api/v1/auth/refresh')
-      .send({ refreshToken })
-      .expect(401);
+      .get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${rotated.accessToken}`)
+      .expect(200);
 
     await request(server())
       .post('/api/v1/auth/logout')
       .set('Authorization', `Bearer ${rotated.accessToken}`)
       .send({ refreshToken: rotated.refreshToken })
       .expect(204);
+
+    await request(server())
+      .post('/api/v1/auth/refresh')
+      .send({ refreshToken: rotated.refreshToken })
+      .expect(401);
+  });
+
+  it('revokes a still-valid access token immediately when refresh-token reuse is detected', async () => {
+    const registerResponse = await request(server())
+      .post('/api/v1/auth/register')
+      .send({ email: 'reuse-victim@example.com', password: 'password123' })
+      .expect(201);
+    const { refreshToken } = (registerResponse.body as TokensBody).data;
+
+    const refreshResponse = await request(server())
+      .post('/api/v1/auth/refresh')
+      .send({ refreshToken })
+      .expect(200);
+    const rotated = (refreshResponse.body as TokensBody).data;
+
+    // The original refresh token was rotated away — presenting it again looks
+    // like theft, so every session for this user (including the one just
+    // issued above) is revoked, not just the stolen token's own session.
+    await request(server())
+      .post('/api/v1/auth/refresh')
+      .send({ refreshToken })
+      .expect(401);
+
+    // That revocation takes effect immediately: the rotated access token
+    // stops authenticating without waiting out its own 15-minute expiry.
+    await request(server())
+      .get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${rotated.accessToken}`)
+      .expect(401);
 
     await request(server())
       .post('/api/v1/auth/refresh')

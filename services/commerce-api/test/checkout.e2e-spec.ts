@@ -16,6 +16,7 @@ import { PrismaService } from '../src/database/prisma.service';
 import { PAYMENT_PROVIDER } from '../src/modules/payments/payment-provider';
 import { FakePaymentProvider } from './support/fake-payment-provider';
 import { FakePrismaService } from './support/fake-prisma.service';
+import { issueTestToken } from './support/issue-test-token';
 
 type Body<T> = { data: T };
 
@@ -29,12 +30,13 @@ describe('Checkout (e2e)', () => {
 
   beforeAll(async () => {
     paymentProvider = new FakePaymentProvider();
+    const fakePrisma = new FakePrismaService();
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
       .overrideProvider(PrismaService)
-      .useValue(new FakePrismaService())
+      .useValue(fakePrisma)
       .overrideProvider(PAYMENT_PROVIDER)
       .useValue(paymentProvider)
       .compile();
@@ -60,11 +62,12 @@ describe('Checkout (e2e)', () => {
     await app.init();
 
     const jwtService = app.get(JwtService);
-    adminToken = await jwtService.signAsync({
-      sub: 'admin-1',
-      role: Role.ADMIN,
-      sid: 'session-admin',
-    });
+    adminToken = await issueTestToken(
+      jwtService,
+      fakePrisma,
+      'admin-1',
+      Role.ADMIN,
+    );
 
     const product = (
       await request(server())

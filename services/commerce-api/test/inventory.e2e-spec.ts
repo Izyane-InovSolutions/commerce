@@ -17,6 +17,7 @@ import { PrismaService } from '../src/database/prisma.service';
 import { JobWorkerService } from '../src/infrastructure/jobs/job-worker.service';
 import { InventoryService } from '../src/modules/inventory/inventory.service';
 import { FakePrismaService } from './support/fake-prisma.service';
+import { issueTestToken } from './support/issue-test-token';
 
 type Body<T> = { data: T };
 
@@ -27,11 +28,12 @@ describe('Inventory (e2e)', () => {
   let adminToken: string;
 
   beforeAll(async () => {
+    const fakePrisma = new FakePrismaService();
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
       .overrideProvider(PrismaService)
-      .useValue(new FakePrismaService())
+      .useValue(fakePrisma)
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -50,11 +52,12 @@ describe('Inventory (e2e)', () => {
     inventoryService = app.get(InventoryService);
     jobWorkerService = app.get(JobWorkerService);
     const jwtService = app.get(JwtService);
-    adminToken = await jwtService.signAsync({
-      sub: 'admin-1',
-      role: Role.ADMIN,
-      sid: 'session-admin',
-    });
+    adminToken = await issueTestToken(
+      jwtService,
+      fakePrisma,
+      'admin-1',
+      Role.ADMIN,
+    );
   });
 
   afterAll(async () => {
