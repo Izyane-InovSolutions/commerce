@@ -1,3 +1,4 @@
+import { InventoryModule } from '../inventory/inventory.module';
 import { MediaModule } from '../media/media.module';
 import { Module } from '@nestjs/common';
 
@@ -6,7 +7,7 @@ import { ProductsController } from './products.controller';
 import { ProductsService } from './products.service';
 
 @Module({
-  imports: [MediaModule],
+  imports: [MediaModule, InventoryModule],
   controllers: [ProductsController, AdminProductsController],
   providers: [ProductsService],
   exports: [ProductsService],

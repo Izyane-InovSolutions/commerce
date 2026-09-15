@@ -20,6 +20,7 @@ export function ProductDetailActions({
   name,
   slug,
   available,
+  inStock,
   addToCart,
   addToWishlist,
 }: {
@@ -27,6 +28,8 @@ export function ProductDetailActions({
   slug: string;
   /** False when nothing on this product is currently sellable. */
   available: boolean;
+  /** False once the offer that would be bought has run out of stock. */
+  inStock: boolean;
   addToCart: (state: FormState, formData: FormData) => Promise<FormState>;
   addToWishlist: () => Promise<FormState>;
 }) {
@@ -42,6 +45,47 @@ export function ProductDetailActions({
       <Button disabled className="w-full sm:w-auto">
         Currently unavailable
       </Button>
+    );
+  }
+
+  // A shopper can still wishlist something to buy later even while it's out
+  // of stock — only buying it outright is blocked.
+  const wishlistForm = (
+    <form action={wishlistAction}>
+      <Button type="submit" variant="outline">
+        <Heart data-icon="inline-start" />
+        Add to wishlist
+      </Button>
+    </form>
+  );
+
+  const wishlistNotices = (
+    <>
+      {wishlistState.status === 'idle' && wishlistState.message ? (
+        <p className="text-muted-foreground text-sm" role="status">
+          {name} saved to your wishlist.
+        </p>
+      ) : null}
+      {wishlistState.status === 'error' ? (
+        <p className="text-destructive text-sm" role="alert">
+          {wishlistState.message ?? 'Could not save this to your wishlist.'}
+        </p>
+      ) : null}
+    </>
+  );
+
+  if (!inStock) {
+    return (
+      <div className="space-y-2">
+        <p className="text-destructive text-sm font-medium" role="status">
+          Out of stock
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button disabled>Out of stock</Button>
+          {wishlistForm}
+        </div>
+        {wishlistNotices}
+      </div>
     );
   }
 
@@ -78,12 +122,7 @@ export function ProductDetailActions({
         </Button>
       </div>
 
-      <form action={wishlistAction}>
-        <Button type="submit" variant="outline">
-          <Heart data-icon="inline-start" />
-          Add to wishlist
-        </Button>
-      </form>
+      {wishlistForm}
 
       {state.status === 'idle' && state.message ? (
         <p className="text-muted-foreground text-sm" role="status">
@@ -95,16 +134,7 @@ export function ProductDetailActions({
           {state.message ?? 'Could not add this to your cart.'}
         </p>
       ) : null}
-      {wishlistState.status === 'idle' && wishlistState.message ? (
-        <p className="text-muted-foreground text-sm" role="status">
-          {name} saved to your wishlist.
-        </p>
-      ) : null}
-      {wishlistState.status === 'error' ? (
-        <p className="text-destructive text-sm" role="alert">
-          {wishlistState.message ?? 'Could not save this to your wishlist.'}
-        </p>
-      ) : null}
+      {wishlistNotices}
     </div>
   );
 }

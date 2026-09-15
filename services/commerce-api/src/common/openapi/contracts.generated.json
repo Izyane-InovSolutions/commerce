@@ -4578,6 +4578,81 @@
         }
       }
     },
+    "AdminOffersController_updateShipping": {
+      "operationId": "AdminOffersController_updateShipping",
+      "tags": [
+        "admin/catalog/offers"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/OfferWithPrices"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputUpdateOfferShippingDto"
+            }
+          }
+        }
+      }
+    },
     "PublicOffersController_compare": {
       "operationId": "PublicOffersController_compare",
       "tags": [
@@ -7311,7 +7386,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type20"
+                    "$ref": "#/components/schemas/__type21"
                   },
                   "meta": {
                     "type": "object",
@@ -8037,7 +8112,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type22"
+                      "$ref": "#/components/schemas/__type23"
                     }
                   },
                   "meta": {
@@ -8102,7 +8177,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type22"
+                    "$ref": "#/components/schemas/__type23"
                   },
                   "meta": {
                     "type": "object",
@@ -8156,7 +8231,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type22"
+                    "$ref": "#/components/schemas/__type23"
                   },
                   "meta": {
                     "type": "object",
@@ -8230,7 +8305,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type22"
+                    "$ref": "#/components/schemas/__type23"
                   },
                   "meta": {
                     "type": "object",
@@ -8341,7 +8416,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type22"
+                    "$ref": "#/components/schemas/__type23"
                   },
                   "meta": {
                     "type": "object",
@@ -10821,6 +10896,10 @@
             "ARCHIVED"
           ]
         },
+        "shippingAmount": {
+          "type": "number",
+          "nullable": true
+        },
         "sellerId": {
           "type": "string",
           "nullable": true
@@ -10861,6 +10940,10 @@
             "PLATFORM"
           ]
         },
+        "shippingCurrency": {
+          "type": "string",
+          "nullable": true
+        },
         "prices": {
           "type": "array",
           "items": {
@@ -10873,6 +10956,7 @@
         "createdAt",
         "updatedAt",
         "status",
+        "shippingAmount",
         "sellerId",
         "fulfillmentMode",
         "variantId",
@@ -10881,6 +10965,7 @@
         "listingTitle",
         "condition",
         "stockSource",
+        "shippingCurrency",
         "prices"
       ]
     },
@@ -10980,6 +11065,26 @@
       "required": [
         "amount",
         "currency"
+      ],
+      "additionalProperties": false
+    },
+    "InputUpdateOfferShippingDto": {
+      "type": "object",
+      "properties": {
+        "amount": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "enum": [
+            "ZMW"
+          ]
+        }
+      },
+      "required": [
+        "amount"
       ],
       "additionalProperties": false
     },
@@ -11205,6 +11310,10 @@
             "ARCHIVED"
           ]
         },
+        "shippingAmount": {
+          "type": "number",
+          "nullable": true
+        },
         "sellerId": {
           "type": "string",
           "nullable": true
@@ -11245,6 +11354,10 @@
             "PLATFORM"
           ]
         },
+        "shippingCurrency": {
+          "type": "string",
+          "nullable": true
+        },
         "prices": {
           "type": "array",
           "items": {
@@ -11257,6 +11370,7 @@
         "createdAt",
         "updatedAt",
         "status",
+        "shippingAmount",
         "sellerId",
         "fulfillmentMode",
         "variantId",
@@ -11265,6 +11379,7 @@
         "listingTitle",
         "condition",
         "stockSource",
+        "shippingCurrency",
         "prices"
       ]
     },
@@ -12069,6 +12184,10 @@
             "ARCHIVED"
           ]
         },
+        "shippingAmount": {
+          "type": "number",
+          "nullable": true
+        },
         "sellerId": {
           "type": "string",
           "nullable": true
@@ -12109,6 +12228,10 @@
             "PLATFORM"
           ]
         },
+        "shippingCurrency": {
+          "type": "string",
+          "nullable": true
+        },
         "prices": {
           "type": "array",
           "items": {
@@ -12121,6 +12244,7 @@
         "createdAt",
         "updatedAt",
         "status",
+        "shippingAmount",
         "sellerId",
         "fulfillmentMode",
         "variantId",
@@ -12129,6 +12253,7 @@
         "listingTitle",
         "condition",
         "stockSource",
+        "shippingCurrency",
         "prices"
       ]
     },
@@ -12423,7 +12548,7 @@
           }
         },
         "meta": {
-          "$ref": "#/components/schemas/__type19"
+          "$ref": "#/components/schemas/__type20"
         }
       },
       "required": [
@@ -12623,13 +12748,27 @@
           "items": {
             "type": "string"
           }
+        },
+        "inStock": {
+          "type": "boolean"
+        },
+        "shippingCost": {
+          "type": "object",
+          "allOf": [
+            {
+              "$ref": "#/components/schemas/__type19"
+            }
+          ],
+          "nullable": true
         }
       },
       "required": [
         "id",
         "status",
         "currentPrice",
-        "currencies"
+        "currencies",
+        "inStock",
+        "shippingCost"
       ]
     },
     "__type18": {
@@ -12648,6 +12787,21 @@
       ]
     },
     "__type19": {
+      "type": "object",
+      "properties": {
+        "amount": {
+          "type": "number"
+        },
+        "currency": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "amount",
+        "currency"
+      ]
+    },
+    "__type20": {
       "type": "object",
       "properties": {
         "page": {
@@ -12695,7 +12849,7 @@
       },
       "additionalProperties": false
     },
-    "__type20": {
+    "__type21": {
       "type": "object",
       "properties": {
         "items": {
@@ -12827,7 +12981,7 @@
         "documents": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type21"
+            "$ref": "#/components/schemas/__type22"
           }
         }
       },
@@ -12852,7 +13006,7 @@
         "documents"
       ]
     },
-    "__type21": {
+    "__type22": {
       "type": "object",
       "properties": {
         "mediaAssetId": {
@@ -13001,7 +13155,7 @@
         "version"
       ]
     },
-    "__type22": {
+    "__type23": {
       "type": "object",
       "properties": {
         "id": {
@@ -13241,7 +13395,7 @@
           "type": "object",
           "allOf": [
             {
-              "$ref": "#/components/schemas/__type23"
+              "$ref": "#/components/schemas/__type24"
             }
           ],
           "nullable": true
@@ -13257,7 +13411,7 @@
         "isAvailable"
       ]
     },
-    "__type23": {
+    "__type24": {
       "type": "object",
       "properties": {
         "amount": {

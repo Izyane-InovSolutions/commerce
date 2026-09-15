@@ -10,6 +10,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { UpdateStatusDto } from '../../common/catalog/dto/update-status.dto';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { CreatePriceDto } from './dto/create-price.dto';
+import { UpdateOfferShippingDto } from './dto/update-offer-shipping.dto';
 
 export type OfferWithPrices = Offer & { prices: Price[] };
 
@@ -82,6 +83,23 @@ export class OffersService {
     });
 
     return this.findByIdAdmin(offerId);
+  }
+
+  async updateShipping(
+    id: string,
+    dto: UpdateOfferShippingDto,
+  ): Promise<OfferWithPrices> {
+    this.requireFirstParty(await this.findByIdAdmin(id));
+
+    await this.prisma.offer.update({
+      where: { id },
+      data: {
+        shippingAmount: dto.amount,
+        shippingCurrency: dto.amount === null ? null : dto.currency,
+      },
+    });
+
+    return this.findByIdAdmin(id);
   }
 
   private requireFirstParty(offer: Offer): void {

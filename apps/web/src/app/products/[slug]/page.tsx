@@ -14,6 +14,7 @@ import {
   getOtherCurrencies,
   getPrimaryImage,
   getPrimaryOffer,
+  getShippingCost,
 } from '@/lib/catalog-types';
 import { formatMinor } from '@/lib/currency';
 import { readCurrency } from '@/lib/currency-cookie';
@@ -42,6 +43,8 @@ export default async function ProductDetailPage({
   const currency = await readCurrency();
   const price = getDisplayPrice(product);
   const offer = getPrimaryOffer(product);
+  const shippingCost = getShippingCost(product);
+  const inStock = offer?.inStock ?? true;
   const elsewhere = getOtherCurrencies(product, currency);
   const relatedProducts = product.category
     ? (
@@ -88,11 +91,25 @@ export default async function ProductDetailPage({
           </div>
 
           <div className="space-y-1">
-            <p className="text-2xl font-semibold">
-              {price !== null
-                ? formatMinor(price.amount, price.currency)
-                : `Not sold in ${currency}`}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-2xl font-semibold">
+                {price !== null
+                  ? formatMinor(price.amount, price.currency)
+                  : `Not sold in ${currency}`}
+              </p>
+              {price !== null && !inStock ? (
+                <span className="inline-flex items-center rounded-full bg-destructive/90 px-2.5 py-0.5 text-xs font-medium text-white">
+                  Out of stock
+                </span>
+              ) : null}
+            </div>
+            {price !== null && shippingCost !== null ? (
+              <p className="text-muted-foreground text-sm">
+                {shippingCost.amount === 0
+                  ? 'Free shipping'
+                  : `+ ${formatMinor(shippingCost.amount, shippingCost.currency)} shipping`}
+              </p>
+            ) : null}
             {price === null && elsewhere.length > 0 ? (
               <p className="text-muted-foreground text-sm text-pretty">
                 Priced in {elsewhere.join(' and ')} — switch currency in the
@@ -111,6 +128,7 @@ export default async function ProductDetailPage({
             name={product.name}
             slug={product.slug}
             available={offer !== null}
+            inStock={inStock}
             addToCart={addToCartAction.bind(null, offer?.id ?? '')}
             addToWishlist={addToWishlistAction.bind(null, offer?.id ?? '')}
           />

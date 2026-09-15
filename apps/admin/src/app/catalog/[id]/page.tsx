@@ -32,6 +32,7 @@ import {
   addPriceAction,
   addVariantAction,
   createOfferAction,
+  setOfferShippingAction,
   setOfferStatusAction,
   setStatusAction,
   updateProductAction,
@@ -189,6 +190,14 @@ export default async function ProductPage({
                       .map((price) =>
                         formatMinor(price.amount, price.currency),
                       ),
+                    shipping:
+                      offer.shippingAmount !== null &&
+                      offer.shippingCurrency !== null
+                        ? formatMinor(
+                            offer.shippingAmount,
+                            offer.shippingCurrency,
+                          )
+                        : null,
                   }))}
                   createOffer={createOfferAction.bind(
                     null,
@@ -197,6 +206,10 @@ export default async function ProductPage({
                   )}
                   addPrice={addPriceAction.bind(null, product.id)}
                   setOfferStatus={setOfferStatusAction.bind(null, product.id)}
+                  setOfferShipping={setOfferShippingAction.bind(
+                    null,
+                    product.id,
+                  )}
                 />
               </div>
             ))

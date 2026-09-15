@@ -8,7 +8,18 @@ import {
 import { ProductStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import type { InventoryService } from '../inventory/inventory.service';
 import { ProductsService } from './products.service';
+
+function buildInventory(): {
+  getAvailableQuantities: jest.Mock;
+  getAvailableOfferQuantities: jest.Mock;
+} {
+  return {
+    getAvailableQuantities: jest.fn().mockResolvedValue(new Map()),
+    getAvailableOfferQuantities: jest.fn().mockResolvedValue(new Map()),
+  };
+}
 
 function buildPrisma(): {
   product: {
@@ -82,10 +93,12 @@ function buildPrisma(): {
 
 describe('ProductsService', () => {
   let prisma: ReturnType<typeof buildPrisma>;
+  let inventory: ReturnType<typeof buildInventory>;
   let service: ProductsService;
 
   beforeEach(() => {
     prisma = buildPrisma();
+    inventory = buildInventory();
     service = new ProductsService(
       prisma as unknown as PrismaService,
       new MediaService(
@@ -93,6 +106,7 @@ describe('ProductsService', () => {
         new ConfigService(),
         {} as never,
       ),
+      inventory as unknown as InventoryService,
     );
   });
 
@@ -119,6 +133,9 @@ describe('ProductsService', () => {
                 {
                   id: 'o1',
                   status: ProductStatus.PUBLISHED,
+                  stockSource: 'PLATFORM',
+                  shippingAmount: null,
+                  shippingCurrency: null,
                   prices: [
                     {
                       id: 'price-1',
@@ -135,6 +152,9 @@ describe('ProductsService', () => {
         },
       ]);
       prisma.product.count.mockResolvedValue(1);
+      inventory.getAvailableQuantities.mockResolvedValue(
+        new Map([['v1', 3]]),
+      );
 
       const result = await service.findPublished({
         page: 1,
@@ -152,6 +172,56 @@ describe('ProductsService', () => {
       expect(result.meta).toEqual({ page: 1, limit: 20, total: 1 });
       expect(result.data[0]?.variants[0]?.offers[0]?.currentPrice).toEqual({
         amount: 500,
+        currency: 'USD',
+      });
+      expect(result.data[0]?.variants[0]?.offers[0]?.inStock).toBe(true);
+      expect(inventory.getAvailableQuantities).toHaveBeenCalledWith(['v1']);
+    });
+
+    it("marks an offer out of stock once available quantity runs out", async () => {
+      prisma.product.findMany.mockResolvedValue([
+        {
+          id: 'p1',
+          name: 'Widget',
+          slug: 'widget',
+          description: null,
+          status: ProductStatus.PUBLISHED,
+          brand: null,
+          category: null,
+          media: [],
+          variants: [
+            {
+              id: 'v1',
+              skuCode: 'WID-1',
+              name: null,
+              status: ProductStatus.PUBLISHED,
+              attributeValues: [],
+              offers: [
+                {
+                  id: 'o1',
+                  status: ProductStatus.PUBLISHED,
+                  stockSource: 'PLATFORM',
+                  shippingAmount: 1500,
+                  shippingCurrency: 'USD',
+                  prices: [],
+                },
+              ],
+            },
+          ],
+        },
+      ]);
+      prisma.product.count.mockResolvedValue(1);
+      inventory.getAvailableQuantities.mockResolvedValue(new Map([['v1', 0]]));
+
+      const result = await service.findPublished({
+        page: 1,
+        limit: 20,
+        currency: 'USD',
+      });
+
+      expect(result.data[0]?.variants[0]?.offers[0]?.inStock).toBe(false);
+      expect(result.data[0]?.variants[0]?.offers[0]?.shippingCost).toEqual({
+        amount: 1500,
         currency: 'USD',
       });
     });

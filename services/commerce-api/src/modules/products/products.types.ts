@@ -69,6 +69,14 @@ export type PublicOffer = {
   currentPrice: { amount: number; currency: string } | null;
   /** Every currency this offer currently carries a price in. */
   currencies: string[];
+  /** False once available stock (on-hand minus reserved) has run out. */
+  inStock: boolean;
+  /**
+   * A flat, informational shipping cost shown on the catalog — separate from
+   * the dynamic per-destination quote computed at checkout. Null until an
+   * admin sets one for this offer.
+   */
+  shippingCost: { amount: number; currency: string } | null;
 };
 
 export type PublicVariant = {

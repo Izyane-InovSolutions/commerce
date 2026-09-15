@@ -117,6 +117,14 @@ export const backendAdminOfferSchema = z.object({
   sellerId: z.uuid().nullable(),
   status: backendProductStatusSchema,
   prices: z.array(backendPriceSchema).default([]),
+  /**
+   * A flat, informational shipping cost shown on the storefront — separate
+   * from the dynamic per-destination quote computed at checkout. The admin
+   * read hands back the raw offer row, so this is two plain columns rather
+   * than a nested `BackendMoney`; both are null until an admin sets one.
+   */
+  shippingAmount: z.int().nullable().default(null),
+  shippingCurrency: z.string().nullable().default(null),
 });
 export type BackendAdminOffer = z.infer<typeof backendAdminOfferSchema>;
 
@@ -393,6 +401,15 @@ export const backendCreatePriceSchema = z.object({
   currency: z.string().length(3),
 });
 export type BackendCreatePriceInput = z.input<typeof backendCreatePriceSchema>;
+
+/** `amount: null` clears the offer's shipping cost. */
+export const backendUpdateOfferShippingSchema = z.object({
+  amount: z.int().min(0).nullable(),
+  currency: z.string().length(3).optional(),
+});
+export type BackendUpdateOfferShippingInput = z.input<
+  typeof backendUpdateOfferShippingSchema
+>;
 
 export const backendStockMovementSchema = z.object({
   warehouseId: z.uuid(),

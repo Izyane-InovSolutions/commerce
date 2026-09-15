@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   MediaStatus,
+  OfferStockSource,
   ProductStatus,
   type Prisma,
   type ProductVariant,
@@ -16,6 +17,7 @@ import {
   paginatedResult,
 } from '../../common/pagination/paginated-result';
 import { parseSort } from '../../common/pagination/sort.dto';
+import { InventoryService } from '../inventory/inventory.service';
 import { MediaService } from '../media/media.service';
 import { PrismaService } from '../../database/prisma.service';
 import {
@@ -76,6 +78,7 @@ export class ProductsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly media: MediaService,
+    private readonly inventory: InventoryService,
   ) {}
 
   async findPublished(
@@ -111,8 +114,12 @@ export class ProductsService {
       this.prisma.product.count({ where }),
     ]);
 
+    const stock = await this.loadStock(products);
+
     return paginatedResult(
-      products.map((product) => this.toPublicProduct(product, query.currency)),
+      products.map((product) =>
+        this.toPublicProduct(product, query.currency, stock),
+      ),
       query.page,
       query.limit,
       total,
@@ -148,7 +155,9 @@ export class ProductsService {
       throw new NotFoundException('Product not found');
     }
 
-    return this.toPublicProduct(product, currency);
+    const stock = await this.loadStock([product]);
+
+    return this.toPublicProduct(product, currency, stock);
   }
 
   async findAllAdmin(): Promise<ProductWithRelations[]> {
@@ -487,9 +496,47 @@ export class ProductsService {
     return orderBy.length > 0 ? orderBy : [{ createdAt: 'desc' }];
   }
 
+  /**
+   * Available quantity for every offer across a page of products, batched
+   * into two queries rather than one per offer.
+   *
+   * An offer's stock lives in one of two places depending on `stockSource`
+   * (see `CartService.previewOfferLine`, which resolves availability the
+   * same way for a cart line): a platform-stocked offer shares its variant's
+   * inventory record (`offerId: null`), while a seller-stocked offer has its
+   * own record keyed by `offerId`.
+   */
+  private async loadStock(products: ProductRowWithRelations[]): Promise<{
+    byVariant: Map<string, number>;
+    byOffer: Map<string, number>;
+  }> {
+    const variantIds: string[] = [];
+    const offerIds: string[] = [];
+
+    for (const product of products) {
+      for (const variant of product.variants) {
+        for (const offer of variant.offers) {
+          if (offer.stockSource === OfferStockSource.SELLER) {
+            offerIds.push(offer.id);
+          } else {
+            variantIds.push(variant.id);
+          }
+        }
+      }
+    }
+
+    const [byVariant, byOffer] = await Promise.all([
+      this.inventory.getAvailableQuantities(variantIds),
+      this.inventory.getAvailableOfferQuantities(offerIds),
+    ]);
+
+    return { byVariant, byOffer };
+  }
+
   private toPublicProduct(
     product: ProductRowWithRelations,
     currency: string,
+    stock: { byVariant: Map<string, number>; byOffer: Map<string, number> },
   ): PublicProduct {
     return {
       id: product.id,
@@ -524,6 +571,10 @@ export class ProductsService {
         })),
         offers: variant.offers.map((offer) => {
           const currentPrice = pickCurrentPrice(offer.prices, currency);
+          const available =
+            offer.stockSource === OfferStockSource.SELLER
+              ? (stock.byOffer.get(offer.id) ?? 0)
+              : (stock.byVariant.get(variant.id) ?? 0);
           return {
             id: offer.id,
             status: offer.status,
@@ -535,6 +586,11 @@ export class ProductsService {
             currencies: currentPrices(offer.prices)
               .map((price) => price.currency)
               .sort(),
+            inStock: available > 0,
+            shippingCost:
+              offer.shippingAmount !== null && offer.shippingCurrency !== null
+                ? { amount: offer.shippingAmount, currency: offer.shippingCurrency }
+                : null,
           };
         }),
       })),

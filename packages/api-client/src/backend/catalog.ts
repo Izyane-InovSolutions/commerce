@@ -11,6 +11,7 @@ import type {
   BackendPage,
   BackendProduct,
   BackendProductStatus,
+  BackendUpdateOfferShippingInput,
   BackendVariant,
 } from '@commerce/contracts';
 
@@ -205,5 +206,15 @@ export function backendSetOfferStatus(
 ): Promise<BackendAdminOffer> {
   return client.patch(`/admin/catalog/offers/${offerId}/status`, {
     body: { status },
+  });
+}
+
+export function backendSetOfferShipping(
+  client: ApiClient,
+  offerId: string,
+  input: BackendUpdateOfferShippingInput,
+): Promise<BackendAdminOffer> {
+  return client.patch(`/admin/catalog/offers/${offerId}/shipping`, {
+    body: input,
   });
 }

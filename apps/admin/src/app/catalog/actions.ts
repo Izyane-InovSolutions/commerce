@@ -8,6 +8,7 @@ import {
   backendAddVariant,
   backendCreateOffer,
   backendCreateProduct,
+  backendSetOfferShipping,
   backendSetOfferStatus,
   backendSetProductStatus,
   backendSetVariantStatus,
@@ -242,4 +243,51 @@ export async function addPriceAction(
 
   revalidateCatalog(productId);
   return { status: 'idle', message: 'Price updated.' };
+}
+
+/**
+ * Sets or clears an offer's flat shipping cost.
+ *
+ * An empty amount clears it — there's no separate "remove" control, since a
+ * blank field reads more naturally as "no shipping cost" than a second
+ * button would.
+ */
+export async function setOfferShippingAction(
+  productId: string,
+  _state: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const offerId = String(formData.get('offerId') ?? '');
+  const raw = String(formData.get('shippingAmount') ?? '').trim();
+
+  if (raw === '') {
+    try {
+      await backendSetOfferShipping(apiClient, offerId, { amount: null });
+    } catch (error) {
+      return toFormState(error);
+    }
+    revalidateCatalog(productId);
+    return { status: 'idle', message: 'Shipping cost cleared.' };
+  }
+
+  if (!/^\d+(\.\d{1,2})?$/.test(raw)) {
+    return {
+      status: 'error',
+      fieldErrors: { shippingAmount: ['Enter an amount such as 12.50.'] },
+    };
+  }
+
+  try {
+    await backendSetOfferShipping(apiClient, offerId, {
+      amount: Math.round(Number(raw) * 100),
+      currency: String(
+        formData.get('shippingCurrency') ?? defaultBackendCurrency,
+      ).toUpperCase(),
+    });
+  } catch (error) {
+    return toFormState(error);
+  }
+
+  revalidateCatalog(productId);
+  return { status: 'idle', message: 'Shipping cost updated.' };
 }

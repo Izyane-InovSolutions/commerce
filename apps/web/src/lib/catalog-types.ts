@@ -25,6 +25,13 @@ export type ProductOffer = {
    */
   currentPrice: { amount: number; currency: string } | null;
   currencies: string[];
+  /** False once available stock (on-hand minus reserved) has run out. */
+  inStock: boolean;
+  /**
+   * A flat, informational shipping cost — separate from the dynamic
+   * per-destination quote computed at checkout. Null until an admin sets one.
+   */
+  shippingCost: { amount: number; currency: string } | null;
 };
 
 export type ProductVariant = {
@@ -85,6 +92,27 @@ export function getDisplayPrice(
   product: Product,
 ): { amount: number; currency: string } | null {
   return getPrimaryOffer(product)?.currentPrice ?? null;
+}
+
+/**
+ * The flat shipping cost shown alongside the display price, from the same
+ * offer. Null when that offer has none set, which every page treats as
+ * nothing to show rather than as free shipping.
+ */
+export function getShippingCost(
+  product: Product,
+): { amount: number; currency: string } | null {
+  return getPrimaryOffer(product)?.shippingCost ?? null;
+}
+
+/**
+ * False once the offer a shopper would actually buy has run out of stock.
+ * True when the product carries no sellable offer at all — that case is
+ * "unavailable", not "out of stock", and every page already tells those
+ * apart via `getPrimaryOffer` returning null.
+ */
+export function isInStock(product: Product): boolean {
+  return getPrimaryOffer(product)?.inStock ?? true;
 }
 
 /**
