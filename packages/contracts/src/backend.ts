@@ -624,6 +624,37 @@ const backendSellerOfferDetails = {
   fulfillmentMode: backendOfferSourceSchema,
 };
 
+/** A seller application, as `POST /sellers/applications` and `POST /sellers/me/resubmit` both take it. */
+export const backendSellerApplicationSchema = z.object({
+  businessName: z
+    .string()
+    .trim()
+    .min(2, 'Give the business a name.')
+    .max(200, 'Keep the business name under 200 characters.'),
+  registrationNumber: z
+    .string()
+    .trim()
+    .min(2, 'Enter a registration number.')
+    .max(100, 'Keep the registration number under 100 characters.'),
+  country: z
+    .string()
+    .trim()
+    .regex(/^[A-Z]{2}$/, 'Use a two-letter country code, such as ZM.'),
+  businessAddress: z
+    .string()
+    .trim()
+    .min(5, 'Enter the business address.')
+    .max(1000, 'Keep the address under 1000 characters.'),
+  contactEmail: z.email('Enter a valid contact email address.'),
+  documentIds: z
+    .array(z.uuid())
+    .min(1, 'Upload at least one verification document.')
+    .max(10, 'Upload at most 10 verification documents.'),
+});
+export type BackendSellerApplicationInput = z.input<
+  typeof backendSellerApplicationSchema
+>;
+
 export const backendCreateSellerOfferSchema = z.object({
   ...backendSellerOfferDetails,
   variantId: z.uuid('Choose a variant to list against.'),

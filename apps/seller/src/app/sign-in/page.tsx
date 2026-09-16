@@ -44,8 +44,8 @@ export default async function SignInPage() {
         <CardHeader>
           <CardTitle>Start selling</CardTitle>
           <CardDescription>
-            Creating an account gives you a customer login. The Commerce API has
-            no seller onboarding yet, so a store cannot be requested here.
+            Creating an account gives you a customer login first — apply to
+            sell once you are signed in, and an administrator will review it.
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -1,5 +1,8 @@
+import Link from 'next/link';
+
 import { PageHeader } from '@/components/page-header';
 import { StatusBadge } from '@/components/status-badge';
+import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
@@ -53,12 +56,22 @@ export function SellerGateNotice({
                   Last decision: {account.seller.reviewReason}
                 </p>
               ) : null}
+              {account.seller.status === 'REJECTED' ? (
+                <Button asChild size="sm">
+                  <Link href="/apply">Resubmit application</Link>
+                </Button>
+              ) : null}
             </>
           ) : (
-            <p className="text-pretty">
-              Apply through the storefront; an administrator reviews it and you
-              will see the decision here.
-            </p>
+            <>
+              <p className="text-pretty">
+                Apply to sell, and an administrator will review it. You will
+                see the decision here.
+              </p>
+              <Button asChild size="sm">
+                <Link href="/apply">Apply as a seller</Link>
+              </Button>
+            </>
           )}
         </CardContent>
       </Card>
