@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useMemo, useState } from 'react';
+import { useActionState, useEffect, useMemo, useState } from 'react';
 
 import { FieldError } from '@/components/field-error';
 import { FormError } from '@/components/form-error';
@@ -48,6 +48,11 @@ export function CheckoutForm({
   const [method, setMethod] = useState<PaymentMethod>(
     available[0] ?? 'mobile-money',
   );
+  // A failed attempt with one method shouldn't keep showing its error once
+  // the shopper switches to the other method — that reads as the newly
+  // chosen method being broken, when it was never even tried.
+  const [dismissedError, setDismissedError] = useState(false);
+  useEffect(() => setDismissedError(false), [state]);
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvc, setCardCvc] = useState('');
@@ -106,7 +111,10 @@ export function CheckoutForm({
         <legend className="text-sm font-medium">Payment method</legend>
         <RadioGroup
           value={method}
-          onValueChange={(value) => setMethod(value as PaymentMethod)}
+          onValueChange={(value) => {
+            setMethod(value as PaymentMethod);
+            setDismissedError(true);
+          }}
         >
           {available.includes('mobile-money') ? (
             <div className="border-input flex items-center gap-3 rounded-lg border px-3 py-2.5">
@@ -353,7 +361,7 @@ export function CheckoutForm({
         </div>
       )}
 
-      <FormError state={state} />
+      <FormError state={dismissedError ? idleFormState : state} />
     </form>
   );
 }
