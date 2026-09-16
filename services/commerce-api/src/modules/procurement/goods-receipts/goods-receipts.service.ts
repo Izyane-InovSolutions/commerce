@@ -160,7 +160,13 @@ export class GoodsReceiptsService {
     return this.post(draft.id, actorUserId, actorRole, idempotencyKey);
   }
 
-  /** Only a DRAFT receipt may be edited — a posted one is immutable. */
+  /**
+   * Only a DRAFT receipt may be edited — a posted one is immutable. The
+   * DRAFT check is re-verified after locking the row, inside the same
+   * transaction as the write: a `post()` that started (and locked the row)
+   * between our pre-check and this call must not be silently overwritten
+   * once it commits.
+   */
   async updateDraft(
     id: string,
     dto: CreateGoodsReceiptDto,
@@ -198,9 +204,11 @@ export class GoodsReceiptsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      const locked = await this.lockAndRequireDraft(tx, id);
+
       await tx.goodsReceiptLine.deleteMany({ where: { goodsReceiptId: id } });
       return tx.goodsReceipt.update({
-        where: { id },
+        where: { id: locked.id },
         data: {
           warehouseId: dto.warehouseId,
           supplierDeliveryNoteRef: dto.supplierDeliveryNoteRef,
@@ -221,15 +229,17 @@ export class GoodsReceiptsService {
     });
   }
 
-  /** Only a DRAFT receipt may be abandoned — a posted one is immutable and
-   * must instead be reversed. */
+  /**
+   * Only a DRAFT receipt may be abandoned — a posted one is immutable and
+   * must instead be reversed. Same lock-then-recheck pattern as
+   * `updateDraft`, so a `post()` racing this delete cannot have its row
+   * vanish out from under it.
+   */
   async deleteDraft(id: string, actorUserId: string): Promise<void> {
-    const receipt = await this.findById(id);
-    if (receipt.status !== GoodsReceiptStatus.DRAFT) {
-      throw new ConflictException('Only a draft goods receipt can be deleted');
-    }
-
-    await this.prisma.goodsReceipt.delete({ where: { id } });
+    await this.prisma.$transaction(async (tx) => {
+      const locked = await this.lockAndRequireDraft(tx, id);
+      await tx.goodsReceipt.delete({ where: { id: locked.id } });
+    });
 
     await this.auditService.record({
       actorUserId,
@@ -237,6 +247,27 @@ export class GoodsReceiptsService {
       targetType: 'GoodsReceipt',
       targetId: id,
     });
+  }
+
+  /** Locks the receipt row and re-reads its status under that lock — used by
+   * both draft mutators so a concurrent `post()` can never race a draft edit
+   * or delete. */
+  private async lockAndRequireDraft(
+    tx: Prisma.TransactionClient,
+    id: string,
+  ): Promise<{ id: string; status: GoodsReceiptStatus }> {
+    await tx.$queryRaw`SELECT id FROM goods_receipts WHERE id = ${id}::uuid FOR UPDATE`;
+    const receipt = await tx.goodsReceipt.findUnique({
+      where: { id },
+      select: { id: true, status: true },
+    });
+    if (!receipt) throw new NotFoundException('Goods receipt not found');
+    if (receipt.status !== GoodsReceiptStatus.DRAFT) {
+      throw new ConflictException(
+        'Goods receipt is no longer a draft; reload and try again',
+      );
+    }
+    return receipt;
   }
 
   /**

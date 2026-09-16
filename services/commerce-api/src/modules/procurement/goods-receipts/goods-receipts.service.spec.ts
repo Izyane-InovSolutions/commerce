@@ -16,10 +16,12 @@ function buildTx(): {
     findUniqueOrThrow: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
+    delete: jest.Mock;
   };
   goodsReceiptLine: {
     create: jest.Mock;
     update: jest.Mock;
+    deleteMany: jest.Mock;
   };
   $queryRaw: jest.Mock;
 } {
@@ -30,10 +32,12 @@ function buildTx(): {
       findUniqueOrThrow: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
     },
     goodsReceiptLine: {
       create: jest.fn(),
       update: jest.fn(),
+      deleteMany: jest.fn(),
     },
     $queryRaw: jest.fn().mockResolvedValue([{ value: 1 }]),
   };
@@ -395,6 +399,68 @@ describe('GoodsReceiptsService', () => {
 
       await expect(service.post('gr-1', 'user-1', Role.STAFF)).rejects.toBeInstanceOf(
         BadRequestException,
+      );
+    });
+  });
+
+  describe('updateDraft / deleteDraft race with post', () => {
+    it('updateDraft aborts if the receipt was posted between the pre-check and the lock', async () => {
+      // Pre-check sees DRAFT...
+      prisma.goodsReceipt.findUnique.mockResolvedValue({
+        id: 'gr-1',
+        status: GoodsReceiptStatus.DRAFT,
+        purchaseOrderId: 'po-1',
+        lines: [],
+      });
+      // ...but a concurrent post() won the row lock first and committed.
+      prisma.tx.goodsReceipt.findUnique.mockResolvedValue({
+        id: 'gr-1',
+        status: GoodsReceiptStatus.POSTED,
+      });
+
+      await expect(
+        service.updateDraft(
+          'gr-1',
+          {
+            warehouseId: 'wh-1',
+            lines: [
+              { purchaseOrderLineId: 'pol-1', deliveredQuantity: 1, acceptedQuantity: 1 },
+            ],
+          } as never,
+          'user-1',
+          Role.STAFF,
+        ),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.tx.goodsReceiptLine.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.tx.goodsReceipt.update).not.toHaveBeenCalled();
+    });
+
+    it('deleteDraft aborts if the receipt was posted between the pre-check and the lock', async () => {
+      prisma.tx.goodsReceipt.findUnique.mockResolvedValue({
+        id: 'gr-1',
+        status: GoodsReceiptStatus.POSTED,
+      });
+
+      await expect(service.deleteDraft('gr-1', 'user-1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(prisma.tx.goodsReceipt.delete).not.toHaveBeenCalled();
+      expect(auditService.record).not.toHaveBeenCalled();
+    });
+
+    it('deleteDraft succeeds when the lock confirms the receipt is still DRAFT', async () => {
+      prisma.tx.goodsReceipt.findUnique.mockResolvedValue({
+        id: 'gr-1',
+        status: GoodsReceiptStatus.DRAFT,
+      });
+
+      await service.deleteDraft('gr-1', 'user-1');
+
+      expect(prisma.tx.goodsReceipt.delete).toHaveBeenCalledWith({
+        where: { id: 'gr-1' },
+      });
+      expect(auditService.record).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'procurement.goods_receipt.draft_deleted' }),
       );
     });
   });

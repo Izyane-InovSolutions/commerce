@@ -23,7 +23,8 @@
     "test": "jest --runInBand",
     "test:watch": "jest --watch",
     "pretest:e2e": "npm run swagger:check",
-    "test:e2e": "jest --config test/jest-e2e.json --runInBand"
+    "test:e2e": "jest --config test/jest-e2e.json --runInBand",
+    "test:integration": "jest --config test/jest-integration.json --runInBand"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
