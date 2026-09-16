@@ -6152,6 +6152,2004 @@
         }
       }
     },
+    "GoodsReceiptsController_findOne": {
+      "operationId": "GoodsReceiptsController_findOne",
+      "tags": [
+        "admin/procurement/goods-receipts"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/GoodsReceiptWithLines"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN."
+    },
+    "GoodsReceiptsController_updateDraft": {
+      "operationId": "GoodsReceiptsController_updateDraft",
+      "tags": [
+        "admin/procurement/goods-receipts"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/GoodsReceiptWithLines"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputCreateGoodsReceiptDto"
+            }
+          }
+        }
+      }
+    },
+    "GoodsReceiptsController_deleteDraft": {
+      "operationId": "GoodsReceiptsController_deleteDraft",
+      "tags": [
+        "admin/procurement/goods-receipts"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "204": {
+          "description": "No content"
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN."
+    },
+    "GoodsReceiptsController_post": {
+      "operationId": "GoodsReceiptsController_post",
+      "tags": [
+        "admin/procurement/goods-receipts"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "idempotency-key",
+          "in": "header",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/GoodsReceiptWithLines"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN."
+    },
+    "GoodsReceiptsController_reverse": {
+      "operationId": "GoodsReceiptsController_reverse",
+      "tags": [
+        "admin/procurement/goods-receipts"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/GoodsReceiptWithLines"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputReverseGoodsReceiptDto"
+            }
+          }
+        }
+      }
+    },
+    "PurchaseOrderReceiptsController_findAll": {
+      "operationId": "PurchaseOrderReceiptsController_findAll",
+      "tags": [
+        "admin/procurement/purchase-orders/:purchaseOrderId/receipts"
+      ],
+      "parameters": [
+        {
+          "name": "purchaseOrderId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/GoodsReceiptWithLines"
+                    }
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN."
+    },
+    "PurchaseOrderReceiptsController_create": {
+      "operationId": "PurchaseOrderReceiptsController_create",
+      "tags": [
+        "admin/procurement/purchase-orders/:purchaseOrderId/receipts"
+      ],
+      "parameters": [
+        {
+          "name": "purchaseOrderId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "idempotency-key",
+          "in": "header",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/GoodsReceiptWithLines"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputCreateGoodsReceiptDto"
+            }
+          }
+        }
+      }
+    },
+    "PurchaseOrdersController_findAll": {
+      "operationId": "PurchaseOrdersController_findAll",
+      "tags": [
+        "admin/procurement/purchase-orders"
+      ],
+      "parameters": [
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "CANCELLED",
+              "DRAFT",
+              "SUBMITTED",
+              "APPROVED",
+              "REJECTED",
+              "ORDERED",
+              "PARTIALLY_RECEIVED",
+              "RECEIVED",
+              "CLOSED_SHORT"
+            ],
+            "nullable": true
+          }
+        },
+        {
+          "name": "supplierId",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "warehouseId",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "overdue",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "boolean",
+            "nullable": true
+          }
+        },
+        {
+          "name": "awaitingApproval",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "boolean",
+            "nullable": true
+          }
+        },
+        {
+          "name": "page",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "default": 1
+          }
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/PurchaseOrderPage"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN."
+    },
+    "PurchaseOrdersController_findOne": {
+      "operationId": "PurchaseOrdersController_findOne",
+      "tags": [
+        "admin/procurement/purchase-orders"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/PurchaseOrderWithLines"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN."
+    },
+    "PurchaseOrdersController_create": {
+      "operationId": "PurchaseOrdersController_create",
+      "tags": [
+        "admin/procurement/purchase-orders"
+      ],
+      "parameters": [],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/PurchaseOrderWithLines"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputCreatePurchaseOrderDto"
+            }
+          }
+        }
+      }
+    },
+    "PurchaseOrdersController_update": {
+      "operationId": "PurchaseOrdersController_update",
+      "tags": [
+        "admin/procurement/purchase-orders"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/PurchaseOrderWithLines"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputUpdatePurchaseOrderDto"
+            }
+          }
+        }
+      }
+    },
+    "PurchaseOrdersController_submit": {
+      "operationId": "PurchaseOrdersController_submit",
+      "tags": [
+        "admin/procurement/purchase-orders"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/PurchaseOrderWithLines"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputVersionDto"
+            }
+          }
+        }
+      }
+    },
+    "PurchaseOrdersController_returnToDraft": {
+      "operationId": "PurchaseOrdersController_returnToDraft",
+      "tags": [
+        "admin/procurement/purchase-orders"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/PurchaseOrderWithLines"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputReasonActionDto"
+            }
+          }
+        }
+      }
+    },
+    "PurchaseOrdersController_approve": {
+      "operationId": "PurchaseOrdersController_approve",
+      "tags": [
+        "admin/procurement/purchase-orders"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/PurchaseOrderWithLines"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputVersionDto"
+            }
+          }
+        }
+      }
+    },
+    "PurchaseOrdersController_reject": {
+      "operationId": "PurchaseOrdersController_reject",
+      "tags": [
+        "admin/procurement/purchase-orders"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/PurchaseOrderWithLines"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputReasonActionDto"
+            }
+          }
+        }
+      }
+    },
+    "PurchaseOrdersController_place": {
+      "operationId": "PurchaseOrdersController_place",
+      "tags": [
+        "admin/procurement/purchase-orders"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/PurchaseOrderWithLines"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputVersionDto"
+            }
+          }
+        }
+      }
+    },
+    "PurchaseOrdersController_cancel": {
+      "operationId": "PurchaseOrdersController_cancel",
+      "tags": [
+        "admin/procurement/purchase-orders"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/PurchaseOrderWithLines"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputReasonActionDto"
+            }
+          }
+        }
+      }
+    },
+    "PurchaseOrdersController_closeShort": {
+      "operationId": "PurchaseOrdersController_closeShort",
+      "tags": [
+        "admin/procurement/purchase-orders"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/PurchaseOrderWithLines"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputReasonActionDto"
+            }
+          }
+        }
+      }
+    },
+    "PurchaseOrdersController_revise": {
+      "operationId": "PurchaseOrdersController_revise",
+      "tags": [
+        "admin/procurement/purchase-orders"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/PurchaseOrderWithLines"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN."
+    },
+    "SupplierProductsController_findAll": {
+      "operationId": "SupplierProductsController_findAll",
+      "tags": [
+        "admin/procurement/suppliers/:supplierId/products"
+      ],
+      "parameters": [
+        {
+          "name": "supplierId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/__type18"
+                    }
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN."
+    },
+    "SupplierProductsController_create": {
+      "operationId": "SupplierProductsController_create",
+      "tags": [
+        "admin/procurement/suppliers/:supplierId/products"
+      ],
+      "parameters": [
+        {
+          "name": "supplierId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/__type18"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputCreateSupplierProductDto"
+            }
+          }
+        }
+      }
+    },
+    "SupplierProductsController_update": {
+      "operationId": "SupplierProductsController_update",
+      "tags": [
+        "admin/procurement/suppliers/:supplierId/products"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/__type18"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputUpdateSupplierProductDto"
+            }
+          }
+        }
+      }
+    },
+    "SuppliersController_findAll": {
+      "operationId": "SuppliersController_findAll",
+      "tags": [
+        "admin/procurement/suppliers"
+      ],
+      "parameters": [
+        {
+          "name": "page",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "default": 1
+          }
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "INACTIVE"
+            ]
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/SupplierPage"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN."
+    },
+    "SuppliersController_findOne": {
+      "operationId": "SuppliersController_findOne",
+      "tags": [
+        "admin/procurement/suppliers"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/__type19"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN."
+    },
+    "SuppliersController_create": {
+      "operationId": "SuppliersController_create",
+      "tags": [
+        "admin/procurement/suppliers"
+      ],
+      "parameters": [],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/__type19"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputCreateSupplierDto"
+            }
+          }
+        }
+      }
+    },
+    "SuppliersController_update": {
+      "operationId": "SuppliersController_update",
+      "tags": [
+        "admin/procurement/suppliers"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/__type19"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputUpdateSupplierDto"
+            }
+          }
+        }
+      }
+    },
+    "SuppliersController_deactivate": {
+      "operationId": "SuppliersController_deactivate",
+      "tags": [
+        "admin/procurement/suppliers"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/__type19"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputDeactivateSupplierDto"
+            }
+          }
+        }
+      }
+    },
     "AdminProductsController_findAll": {
       "operationId": "AdminProductsController_findAll",
       "tags": [
@@ -7311,7 +9309,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type20"
+                    "$ref": "#/components/schemas/__type24"
                   },
                   "meta": {
                     "type": "object",
@@ -8037,7 +10035,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type22"
+                      "$ref": "#/components/schemas/__type26"
                     }
                   },
                   "meta": {
@@ -8102,7 +10100,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type22"
+                    "$ref": "#/components/schemas/__type26"
                   },
                   "meta": {
                     "type": "object",
@@ -8156,7 +10154,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type22"
+                    "$ref": "#/components/schemas/__type26"
                   },
                   "meta": {
                     "type": "object",
@@ -8230,7 +10228,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type22"
+                    "$ref": "#/components/schemas/__type26"
                   },
                   "meta": {
                     "type": "object",
@@ -8341,7 +10339,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type22"
+                    "$ref": "#/components/schemas/__type26"
                   },
                   "meta": {
                     "type": "object",
@@ -11856,6 +13854,1176 @@
         "last"
       ]
     },
+    "GoodsReceiptWithLines": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "DRAFT",
+            "POSTED",
+            "REVERSED"
+          ]
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "nullable": true
+        },
+        "warehouseId": {
+          "type": "string"
+        },
+        "receiptNumber": {
+          "type": "string"
+        },
+        "purchaseOrderId": {
+          "type": "string"
+        },
+        "supplierDeliveryNoteRef": {
+          "type": "string",
+          "nullable": true
+        },
+        "receivedByUserId": {
+          "type": "string"
+        },
+        "postedByUserId": {
+          "type": "string",
+          "nullable": true
+        },
+        "reversedByUserId": {
+          "type": "string",
+          "nullable": true
+        },
+        "reversalReason": {
+          "type": "string",
+          "nullable": true
+        },
+        "reversalOfId": {
+          "type": "string",
+          "nullable": true
+        },
+        "postedAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/__type16"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "updatedAt",
+        "status",
+        "idempotencyKey",
+        "warehouseId",
+        "receiptNumber",
+        "purchaseOrderId",
+        "supplierDeliveryNoteRef",
+        "receivedByUserId",
+        "postedByUserId",
+        "reversedByUserId",
+        "reversalReason",
+        "reversalOfId",
+        "postedAt",
+        "lines"
+      ]
+    },
+    "__type16": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "goodsReceiptId": {
+          "type": "string"
+        },
+        "purchaseOrderLineId": {
+          "type": "string"
+        },
+        "deliveredQuantity": {
+          "type": "number"
+        },
+        "acceptedQuantity": {
+          "type": "number"
+        },
+        "rejectedQuantity": {
+          "type": "number"
+        },
+        "damagedQuantity": {
+          "type": "number"
+        },
+        "authorizedExcessQty": {
+          "type": "number"
+        },
+        "discrepancyReason": {
+          "type": "string",
+          "nullable": true
+        },
+        "inventoryMovementId": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "goodsReceiptId",
+        "purchaseOrderLineId",
+        "deliveredQuantity",
+        "acceptedQuantity",
+        "rejectedQuantity",
+        "damagedQuantity",
+        "authorizedExcessQty",
+        "discrepancyReason",
+        "inventoryMovementId"
+      ]
+    },
+    "InputCreateGoodsReceiptDto": {
+      "type": "object",
+      "properties": {
+        "warehouseId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "supplierDeliveryNoteRef": {
+          "type": "string",
+          "nullable": true
+        },
+        "post": {
+          "type": "boolean",
+          "nullable": true
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/InputGoodsReceiptLineDto"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "warehouseId",
+        "lines"
+      ],
+      "additionalProperties": false
+    },
+    "InputGoodsReceiptLineDto": {
+      "type": "object",
+      "properties": {
+        "purchaseOrderLineId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "deliveredQuantity": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "acceptedQuantity": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rejectedQuantity": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 0
+        },
+        "damagedQuantity": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 0
+        },
+        "authorizedExcessQty": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 0
+        },
+        "discrepancyReason": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "required": [
+        "purchaseOrderLineId",
+        "deliveredQuantity",
+        "acceptedQuantity"
+      ],
+      "additionalProperties": false
+    },
+    "InputReverseGoodsReceiptDto": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "InputListPurchaseOrdersDto": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "CANCELLED",
+            "DRAFT",
+            "SUBMITTED",
+            "APPROVED",
+            "REJECTED",
+            "ORDERED",
+            "PARTIALLY_RECEIVED",
+            "RECEIVED",
+            "CLOSED_SHORT"
+          ],
+          "nullable": true
+        },
+        "supplierId": {
+          "type": "string",
+          "nullable": true,
+          "format": "uuid"
+        },
+        "warehouseId": {
+          "type": "string",
+          "nullable": true,
+          "format": "uuid"
+        },
+        "overdue": {
+          "type": "boolean",
+          "nullable": true
+        },
+        "awaitingApproval": {
+          "type": "boolean",
+          "nullable": true
+        },
+        "page": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1,
+          "default": 1
+        },
+        "limit": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        }
+      },
+      "additionalProperties": false
+    },
+    "PurchaseOrderPage": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/PurchaseOrderWithLines"
+          }
+        },
+        "total": {
+          "type": "number"
+        },
+        "page": {
+          "type": "number"
+        },
+        "limit": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "items",
+        "total",
+        "page",
+        "limit"
+      ]
+    },
+    "PurchaseOrderWithLines": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "CANCELLED",
+            "DRAFT",
+            "SUBMITTED",
+            "APPROVED",
+            "REJECTED",
+            "ORDERED",
+            "PARTIALLY_RECEIVED",
+            "RECEIVED",
+            "CLOSED_SHORT"
+          ]
+        },
+        "currency": {
+          "type": "string"
+        },
+        "shippingAmount": {
+          "type": "number"
+        },
+        "warehouseId": {
+          "type": "string"
+        },
+        "version": {
+          "type": "number"
+        },
+        "poNumber": {
+          "type": "string"
+        },
+        "supplierId": {
+          "type": "string"
+        },
+        "subtotalAmount": {
+          "type": "number"
+        },
+        "taxAmount": {
+          "type": "number"
+        },
+        "totalAmount": {
+          "type": "number"
+        },
+        "expectedDeliveryDate": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        },
+        "notes": {
+          "type": "string",
+          "nullable": true
+        },
+        "revisionNumber": {
+          "type": "number"
+        },
+        "supersedesId": {
+          "type": "string",
+          "nullable": true
+        },
+        "createdByUserId": {
+          "type": "string"
+        },
+        "approvedByUserId": {
+          "type": "string",
+          "nullable": true
+        },
+        "rejectedByUserId": {
+          "type": "string",
+          "nullable": true
+        },
+        "rejectionReason": {
+          "type": "string",
+          "nullable": true
+        },
+        "cancellationReason": {
+          "type": "string",
+          "nullable": true
+        },
+        "shortCloseReason": {
+          "type": "string",
+          "nullable": true
+        },
+        "submittedAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        },
+        "approvedAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        },
+        "orderedAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/__type17"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "updatedAt",
+        "status",
+        "currency",
+        "shippingAmount",
+        "warehouseId",
+        "version",
+        "poNumber",
+        "supplierId",
+        "subtotalAmount",
+        "taxAmount",
+        "totalAmount",
+        "expectedDeliveryDate",
+        "notes",
+        "revisionNumber",
+        "supersedesId",
+        "createdByUserId",
+        "approvedByUserId",
+        "rejectedByUserId",
+        "rejectionReason",
+        "cancellationReason",
+        "shortCloseReason",
+        "submittedAt",
+        "approvedAt",
+        "orderedAt",
+        "completedAt",
+        "lines"
+      ]
+    },
+    "__type17": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "grossAmount": {
+          "type": "number"
+        },
+        "netAmount": {
+          "type": "number"
+        },
+        "variantId": {
+          "type": "string"
+        },
+        "purchaseOrderId": {
+          "type": "string"
+        },
+        "taxAmount": {
+          "type": "number"
+        },
+        "supplierSku": {
+          "type": "string",
+          "nullable": true
+        },
+        "packSize": {
+          "type": "number"
+        },
+        "orderedQuantity": {
+          "type": "number"
+        },
+        "receivedQuantity": {
+          "type": "number"
+        },
+        "cancelledQuantity": {
+          "type": "number"
+        },
+        "unitCostAmount": {
+          "type": "number"
+        },
+        "discountAmount": {
+          "type": "number"
+        },
+        "taxRateBasisPoints": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "updatedAt",
+        "currency",
+        "grossAmount",
+        "netAmount",
+        "variantId",
+        "purchaseOrderId",
+        "taxAmount",
+        "supplierSku",
+        "packSize",
+        "orderedQuantity",
+        "receivedQuantity",
+        "cancelledQuantity",
+        "unitCostAmount",
+        "discountAmount",
+        "taxRateBasisPoints"
+      ]
+    },
+    "InputCreatePurchaseOrderDto": {
+      "type": "object",
+      "properties": {
+        "supplierId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "warehouseId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "shippingAmount": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 0
+        },
+        "expectedDeliveryDate": {
+          "type": "string",
+          "nullable": true
+        },
+        "notes": {
+          "type": "string",
+          "nullable": true
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/InputCreatePurchaseOrderLineDto"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "supplierId",
+        "warehouseId",
+        "currency",
+        "lines"
+      ],
+      "additionalProperties": false
+    },
+    "InputCreatePurchaseOrderLineDto": {
+      "type": "object",
+      "properties": {
+        "variantId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "supplierSku": {
+          "type": "string",
+          "nullable": true,
+          "minLength": 1
+        },
+        "packSize": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1
+        },
+        "orderedQuantity": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "unitCostAmount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "discountAmount": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 0
+        },
+        "taxRateBasisPoints": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 0,
+          "maximum": 10000
+        }
+      },
+      "required": [
+        "variantId",
+        "orderedQuantity",
+        "unitCostAmount"
+      ],
+      "additionalProperties": false
+    },
+    "InputUpdatePurchaseOrderDto": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer"
+        },
+        "supplierId": {
+          "type": "string",
+          "nullable": true,
+          "format": "uuid"
+        },
+        "warehouseId": {
+          "type": "string",
+          "nullable": true,
+          "format": "uuid"
+        },
+        "currency": {
+          "type": "string",
+          "nullable": true,
+          "pattern": "^[A-Z]{3}$"
+        },
+        "shippingAmount": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 0
+        },
+        "expectedDeliveryDate": {
+          "type": "string",
+          "nullable": true
+        },
+        "notes": {
+          "type": "string",
+          "nullable": true
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/InputCreatePurchaseOrderLineDto"
+          },
+          "nullable": true,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "InputVersionDto": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "InputReasonActionDto": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "version",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "__type18": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "description": {
+          "type": "string",
+          "nullable": true
+        },
+        "currency": {
+          "type": "string"
+        },
+        "variantId": {
+          "type": "string"
+        },
+        "isActive": {
+          "type": "boolean"
+        },
+        "supplierId": {
+          "type": "string"
+        },
+        "supplierSku": {
+          "type": "string"
+        },
+        "packSize": {
+          "type": "number"
+        },
+        "minimumOrderQty": {
+          "type": "number"
+        },
+        "unitOfMeasure": {
+          "type": "string"
+        },
+        "defaultUnitCost": {
+          "type": "number"
+        },
+        "lastUnitCost": {
+          "type": "number",
+          "nullable": true
+        },
+        "leadTimeDays": {
+          "type": "number",
+          "nullable": true
+        },
+        "isPreferred": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "updatedAt",
+        "description",
+        "currency",
+        "variantId",
+        "isActive",
+        "supplierId",
+        "supplierSku",
+        "packSize",
+        "minimumOrderQty",
+        "unitOfMeasure",
+        "defaultUnitCost",
+        "lastUnitCost",
+        "leadTimeDays",
+        "isPreferred"
+      ]
+    },
+    "InputCreateSupplierProductDto": {
+      "type": "object",
+      "properties": {
+        "variantId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "supplierSku": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "nullable": true
+        },
+        "packSize": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1
+        },
+        "minimumOrderQty": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1
+        },
+        "unitOfMeasure": {
+          "type": "string",
+          "nullable": true
+        },
+        "defaultUnitCost": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "leadTimeDays": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 0
+        },
+        "isPreferred": {
+          "type": "boolean",
+          "nullable": true
+        }
+      },
+      "required": [
+        "variantId",
+        "supplierSku",
+        "defaultUnitCost",
+        "currency"
+      ],
+      "additionalProperties": false
+    },
+    "InputUpdateSupplierProductDto": {
+      "type": "object",
+      "properties": {
+        "supplierSku": {
+          "type": "string",
+          "nullable": true,
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "nullable": true
+        },
+        "packSize": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1
+        },
+        "minimumOrderQty": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1
+        },
+        "unitOfMeasure": {
+          "type": "string",
+          "nullable": true
+        },
+        "defaultUnitCost": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 0
+        },
+        "leadTimeDays": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 0
+        },
+        "isPreferred": {
+          "type": "boolean",
+          "nullable": true
+        },
+        "isActive": {
+          "type": "boolean",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "SupplierPage": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/__type19"
+          }
+        },
+        "total": {
+          "type": "number"
+        },
+        "page": {
+          "type": "number"
+        },
+        "limit": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "items",
+        "total",
+        "page",
+        "limit"
+      ]
+    },
+    "__type19": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "ACTIVE",
+            "INACTIVE"
+          ]
+        },
+        "version": {
+          "type": "number"
+        },
+        "notes": {
+          "type": "string",
+          "nullable": true
+        },
+        "leadTimeDays": {
+          "type": "number"
+        },
+        "legalName": {
+          "type": "string"
+        },
+        "tradingName": {
+          "type": "string",
+          "nullable": true
+        },
+        "registrationNumber": {
+          "type": "string",
+          "nullable": true
+        },
+        "taxNumber": {
+          "type": "string",
+          "nullable": true
+        },
+        "contactEmail": {
+          "type": "string",
+          "nullable": true
+        },
+        "contactPhone": {
+          "type": "string",
+          "nullable": true
+        },
+        "billingAddress": {
+          "description": "JSON value; may be an object, array, scalar or null.",
+          "nullable": true
+        },
+        "physicalAddress": {
+          "description": "JSON value; may be an object, array, scalar or null.",
+          "nullable": true
+        },
+        "defaultCurrency": {
+          "type": "string"
+        },
+        "paymentTermsDays": {
+          "type": "number"
+        },
+        "minimumOrderAmount": {
+          "type": "number",
+          "nullable": true
+        },
+        "minimumOrderCurrency": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "required": [
+        "id",
+        "code",
+        "createdAt",
+        "updatedAt",
+        "status",
+        "version",
+        "notes",
+        "leadTimeDays",
+        "legalName",
+        "tradingName",
+        "registrationNumber",
+        "taxNumber",
+        "contactEmail",
+        "contactPhone",
+        "billingAddress",
+        "physicalAddress",
+        "defaultCurrency",
+        "paymentTermsDays",
+        "minimumOrderAmount",
+        "minimumOrderCurrency"
+      ]
+    },
+    "InputCreateSupplierDto": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z0-9_-]+$"
+        },
+        "legalName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tradingName": {
+          "type": "string",
+          "nullable": true
+        },
+        "registrationNumber": {
+          "type": "string",
+          "nullable": true
+        },
+        "taxNumber": {
+          "type": "string",
+          "nullable": true
+        },
+        "contactEmail": {
+          "type": "string",
+          "nullable": true,
+          "format": "email"
+        },
+        "contactPhone": {
+          "type": "string",
+          "nullable": true
+        },
+        "billingAddress": {
+          "$ref": "#/components/schemas/InputRecord",
+          "nullable": true
+        },
+        "physicalAddress": {
+          "$ref": "#/components/schemas/InputRecord",
+          "nullable": true
+        },
+        "defaultCurrency": {
+          "type": "string",
+          "nullable": true,
+          "pattern": "^[A-Z]{3}$"
+        },
+        "paymentTermsDays": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 0
+        },
+        "leadTimeDays": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 0
+        },
+        "minimumOrderAmount": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 0
+        },
+        "minimumOrderCurrency": {
+          "type": "string",
+          "nullable": true,
+          "pattern": "^[A-Z]{3}$"
+        },
+        "notes": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "required": [
+        "code",
+        "legalName"
+      ],
+      "additionalProperties": false
+    },
+    "InputRecord": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true
+    },
+    "InputUpdateSupplierDto": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer"
+        },
+        "legalName": {
+          "type": "string",
+          "nullable": true,
+          "minLength": 1
+        },
+        "tradingName": {
+          "type": "string",
+          "nullable": true
+        },
+        "registrationNumber": {
+          "type": "string",
+          "nullable": true
+        },
+        "taxNumber": {
+          "type": "string",
+          "nullable": true
+        },
+        "contactEmail": {
+          "type": "string",
+          "nullable": true,
+          "format": "email"
+        },
+        "contactPhone": {
+          "type": "string",
+          "nullable": true
+        },
+        "billingAddress": {
+          "$ref": "#/components/schemas/InputRecord",
+          "nullable": true
+        },
+        "physicalAddress": {
+          "$ref": "#/components/schemas/InputRecord",
+          "nullable": true
+        },
+        "paymentTermsDays": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 0
+        },
+        "leadTimeDays": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 0
+        },
+        "minimumOrderAmount": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 0
+        },
+        "minimumOrderCurrency": {
+          "type": "string",
+          "nullable": true,
+          "pattern": "^[A-Z]{3}$"
+        },
+        "notes": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "required": [
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "InputDeactivateSupplierDto": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version"
+      ],
+      "additionalProperties": false
+    },
     "ProductWithRelations": {
       "type": "object",
       "properties": {
@@ -12423,7 +15591,7 @@
           }
         },
         "meta": {
-          "$ref": "#/components/schemas/__type19"
+          "$ref": "#/components/schemas/__type23"
         }
       },
       "required": [
@@ -12476,7 +15644,7 @@
         "media": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type16"
+            "$ref": "#/components/schemas/__type20"
           }
         },
         "variants": {
@@ -12498,7 +15666,7 @@
         "variants"
       ]
     },
-    "__type16": {
+    "__type20": {
       "type": "object",
       "properties": {
         "id": {
@@ -12553,7 +15721,7 @@
         "attributes": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type17"
+            "$ref": "#/components/schemas/__type21"
           }
         },
         "offers": {
@@ -12572,7 +15740,7 @@
         "offers"
       ]
     },
-    "__type17": {
+    "__type21": {
       "type": "object",
       "properties": {
         "attributeId": {
@@ -12613,7 +15781,7 @@
           "type": "object",
           "allOf": [
             {
-              "$ref": "#/components/schemas/__type18"
+              "$ref": "#/components/schemas/__type22"
             }
           ],
           "nullable": true
@@ -12632,7 +15800,7 @@
         "currencies"
       ]
     },
-    "__type18": {
+    "__type22": {
       "type": "object",
       "properties": {
         "amount": {
@@ -12647,7 +15815,7 @@
         "currency"
       ]
     },
-    "__type19": {
+    "__type23": {
       "type": "object",
       "properties": {
         "page": {
@@ -12695,7 +15863,7 @@
       },
       "additionalProperties": false
     },
-    "__type20": {
+    "__type24": {
       "type": "object",
       "properties": {
         "items": {
@@ -12788,19 +15956,19 @@
         "ownerUserId": {
           "type": "string"
         },
-        "businessName": {
+        "registrationNumber": {
           "type": "string"
         },
-        "registrationNumber": {
+        "contactEmail": {
+          "type": "string"
+        },
+        "businessName": {
           "type": "string"
         },
         "country": {
           "type": "string"
         },
         "businessAddress": {
-          "type": "string"
-        },
-        "contactEmail": {
           "type": "string"
         },
         "reviewReason": {
@@ -12827,7 +15995,7 @@
         "documents": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type21"
+            "$ref": "#/components/schemas/__type25"
           }
         }
       },
@@ -12839,11 +16007,11 @@
         "status",
         "version",
         "ownerUserId",
-        "businessName",
         "registrationNumber",
+        "contactEmail",
+        "businessName",
         "country",
         "businessAddress",
-        "contactEmail",
         "reviewReason",
         "reviewedBy",
         "reviewedAt",
@@ -12852,7 +16020,7 @@
         "documents"
       ]
     },
-    "__type21": {
+    "__type25": {
       "type": "object",
       "properties": {
         "mediaAssetId": {
@@ -13001,7 +16169,7 @@
         "version"
       ]
     },
-    "__type22": {
+    "__type26": {
       "type": "object",
       "properties": {
         "id": {
@@ -13241,7 +16409,7 @@
           "type": "object",
           "allOf": [
             {
-              "$ref": "#/components/schemas/__type23"
+              "$ref": "#/components/schemas/__type27"
             }
           ],
           "nullable": true
@@ -13257,7 +16425,7 @@
         "isAvailable"
       ]
     },
-    "__type23": {
+    "__type27": {
       "type": "object",
       "properties": {
         "amount": {

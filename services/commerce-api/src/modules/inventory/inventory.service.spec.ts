@@ -607,4 +607,123 @@ describe('InventoryService', () => {
       expect(prisma.reservation.update).not.toHaveBeenCalled();
     });
   });
+
+  describe('receiveStockForReference', () => {
+    it('rejects a non-positive quantity', async () => {
+      await expect(
+        service.receiveStockForReference(
+          prisma as never,
+          'wh-1',
+          'v1',
+          0,
+          { referenceType: 'goods_receipt_line', referenceId: 'grl-1' },
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('increments on-hand and tags the movement with the caller reference', async () => {
+      prisma.inventoryRecord.findUnique.mockResolvedValue({
+        id: 'rec-1',
+        onHand: 5,
+        reserved: 0,
+      });
+      prisma.inventoryRecord.update.mockResolvedValue({
+        id: 'rec-1',
+        onHand: 8,
+        reserved: 0,
+      });
+      prisma.inventoryMovement.create.mockResolvedValue({
+        id: 'mv-1',
+        type: 'RECEIPT',
+      });
+
+      const { record, movement } = await service.receiveStockForReference(
+        prisma as never,
+        'wh-1',
+        'v1',
+        3,
+        { referenceType: 'goods_receipt_line', referenceId: 'grl-1' },
+      );
+
+      expect(record.onHand).toBe(8);
+      expect(prisma.inventoryMovement.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: 'RECEIPT',
+            quantity: 3,
+            referenceType: 'goods_receipt_line',
+            referenceId: 'grl-1',
+          }) as object,
+        }),
+      );
+      expect(movement).toBeDefined();
+    });
+  });
+
+  describe('reverseReceiptStock', () => {
+    it('rejects a non-positive quantity', async () => {
+      await expect(
+        service.reverseReceiptStock(
+          prisma as never,
+          'wh-1',
+          'v1',
+          0,
+          { referenceType: 'goods_receipt_reversal_line', referenceId: 'grl-1' },
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('refuses to push on-hand below zero', async () => {
+      prisma.inventoryRecord.findUnique.mockResolvedValue({
+        id: 'rec-1',
+        onHand: 2,
+        reserved: 0,
+      });
+      prisma.$executeRaw.mockResolvedValue(0);
+
+      await expect(
+        service.reverseReceiptStock(
+          prisma as never,
+          'wh-1',
+          'v1',
+          5,
+          { referenceType: 'goods_receipt_reversal_line', referenceId: 'grl-1' },
+        ),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('decrements on-hand and records an ADJUSTMENT movement', async () => {
+      prisma.inventoryRecord.findUnique.mockResolvedValue({
+        id: 'rec-1',
+        onHand: 10,
+        reserved: 0,
+      });
+      prisma.$executeRaw.mockResolvedValue(1);
+      prisma.inventoryRecord.findUniqueOrThrow.mockResolvedValue({
+        id: 'rec-1',
+        onHand: 7,
+        reserved: 0,
+      });
+
+      const { record } = await service.reverseReceiptStock(
+        prisma as never,
+        'wh-1',
+        'v1',
+        3,
+        { referenceType: 'goods_receipt_reversal_line', referenceId: 'grl-1' },
+      );
+
+      expect(record.onHand).toBe(7);
+      expect(prisma.inventoryMovement.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: 'ADJUSTMENT',
+            quantity: 3,
+            referenceType: 'goods_receipt_reversal_line',
+            referenceId: 'grl-1',
+          }) as object,
+        }),
+      );
+    });
+  });
 });

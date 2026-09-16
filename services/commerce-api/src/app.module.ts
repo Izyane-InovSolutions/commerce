@@ -30,6 +30,7 @@ import { MediaModule } from './modules/media/media.module';
 import { OffersModule } from './modules/offers/offers.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { ProcurementModule } from './modules/procurement/procurement.module';
 import { ProductsModule } from './modules/products/products.module';
 import { UsersModule } from './modules/users/users.module';
 import { WishlistModule } from './modules/wishlist/wishlist.module';
@@ -58,6 +59,7 @@ import { WorkersModule } from './infrastructure/workers/workers.module';
     ProductsModule,
     OffersModule,
     InventoryModule,
+    ProcurementModule,
     CartModule,
     WishlistModule,
     OrdersModule,

@@ -264,20 +264,21 @@ model OutboxEvent {
 }
 
 model MediaAsset {
-  id                 String           @id @default(uuid()) @db.Uuid
-  ownerUserId        String           @map("owner_user_id") @db.Uuid
-  ownerUser          User             @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
-  storageKey         String           @unique @map("storage_key")
-  originalFileName   String           @map("original_file_name")
-  mimeType           String           @map("mime_type") @db.VarChar(100)
-  byteSize           BigInt           @map("byte_size")
-  status             MediaStatus      @default(PENDING_UPLOAD)
-  createdAt          DateTime         @default(now()) @map("created_at")
-  updatedAt          DateTime         @updatedAt @map("updated_at")
-  deletedAt          DateTime?        @map("deleted_at")
-  productMedia       ProductMedia[]
-  sellerDocuments    SellerDocument[]
-  verificationLocked Boolean          @default(false) @map("verification_locked")
+  id                   String                @id @default(uuid()) @db.Uuid
+  ownerUserId          String                @map("owner_user_id") @db.Uuid
+  ownerUser            User                  @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  storageKey           String                @unique @map("storage_key")
+  originalFileName     String                @map("original_file_name")
+  mimeType             String                @map("mime_type") @db.VarChar(100)
+  byteSize             BigInt                @map("byte_size")
+  status               MediaStatus           @default(PENDING_UPLOAD)
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  deletedAt            DateTime?             @map("deleted_at")
+  productMedia         ProductMedia[]
+  sellerDocuments      SellerDocument[]
+  procurementDocuments ProcurementDocument[]
+  verificationLocked   Boolean               @default(false) @map("verification_locked")
 
   @@index([ownerUserId, status])
   @@map("media_assets")
@@ -357,17 +358,19 @@ model Product {
 }
 
 model ProductVariant {
-  id               String                         @id @default(uuid()) @db.Uuid
-  productId        String                         @map("product_id") @db.Uuid
-  product          Product                        @relation(fields: [productId], references: [id], onDelete: Cascade)
-  skuCode          String                         @unique @map("sku_code")
-  name             String?
-  status           ProductStatus                  @default(DRAFT)
-  attributeValues  ProductVariantAttributeValue[]
-  offers           Offer[]
-  inventoryRecords InventoryRecord[]
-  createdAt        DateTime                       @default(now()) @map("created_at")
-  updatedAt        DateTime                       @updatedAt @map("updated_at")
+  id                 String                         @id @default(uuid()) @db.Uuid
+  productId          String                         @map("product_id") @db.Uuid
+  product            Product                        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  skuCode            String                         @unique @map("sku_code")
+  name               String?
+  status             ProductStatus                  @default(DRAFT)
+  attributeValues    ProductVariantAttributeValue[]
+  offers             Offer[]
+  inventoryRecords   InventoryRecord[]
+  supplierProducts   SupplierProduct[]
+  purchaseOrderLines PurchaseOrderLine[]
+  createdAt          DateTime                       @default(now()) @map("created_at")
+  updatedAt          DateTime                       @updatedAt @map("updated_at")
 
   @@index([productId])
   @@map("product_variants")
@@ -458,13 +461,15 @@ enum ReservationStatus {
 }
 
 model Warehouse {
-  id        String            @id @default(uuid()) @db.Uuid
-  name      String
-  code      String            @unique
-  isActive  Boolean           @default(true) @map("is_active")
-  records   InventoryRecord[]
-  createdAt DateTime          @default(now()) @map("created_at")
-  updatedAt DateTime          @updatedAt @map("updated_at")
+  id             String            @id @default(uuid()) @db.Uuid
+  name           String
+  code           String            @unique
+  isActive       Boolean           @default(true) @map("is_active")
+  records        InventoryRecord[]
+  purchaseOrders PurchaseOrder[]
+  goodsReceipts  GoodsReceipt[]
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
 
   @@map("warehouses")
 }
@@ -863,4 +868,273 @@ model PaymentEvent {
 
   @@index([paymentId])
   @@map("payment_events")
+}
+
+// ---------------------------------------------------------------------------
+// Procurement (suppliers, purchase orders, goods receipts) — see
+// docs/procurement.md. Inventory remains authoritative for physical stock;
+// procurement only ever writes stock through InventoryService.
+// ---------------------------------------------------------------------------
+
+enum SupplierStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  ORDERED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CLOSED_SHORT
+  CANCELLED
+}
+
+enum GoodsReceiptStatus {
+  DRAFT
+  POSTED
+  REVERSED
+}
+
+enum ProcurementDocumentType {
+  SUPPLIER_QUOTATION
+  PURCHASE_ORDER
+  DELIVERY_NOTE
+  INSPECTION_REPORT
+  INVOICE
+  OTHER
+}
+
+// A generic atomic counter backing human-readable sequential codes (PO and
+// receipt numbers). Incremented with a single `INSERT ... ON CONFLICT DO
+// UPDATE ... RETURNING` per key, so concurrent requests never hand out the
+// same number without needing an explicit row lock.
+model SequenceCounter {
+  key       String   @id @db.VarChar(50)
+  value     Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("sequence_counters")
+}
+
+// Suppliers are deactivated (status = INACTIVE), never deleted, once
+// referenced by a purchase order — the PO history must keep resolving.
+model Supplier {
+  id                   String            @id @default(uuid()) @db.Uuid
+  code                 String            @unique
+  legalName            String            @map("legal_name")
+  tradingName          String?           @map("trading_name")
+  registrationNumber   String?           @map("registration_number")
+  taxNumber            String?           @map("tax_number")
+  contactEmail         String?           @map("contact_email")
+  contactPhone         String?           @map("contact_phone")
+  billingAddress       Json?             @map("billing_address")
+  physicalAddress      Json?             @map("physical_address")
+  defaultCurrency      String            @default("ZMW") @map("default_currency") @db.VarChar(3)
+  paymentTermsDays     Int               @default(30) @map("payment_terms_days")
+  leadTimeDays         Int               @default(0) @map("lead_time_days")
+  minimumOrderAmount   Int?              @map("minimum_order_amount")
+  minimumOrderCurrency String?           @map("minimum_order_currency") @db.VarChar(3)
+  status               SupplierStatus    @default(ACTIVE)
+  notes                String?
+  version              Int               @default(0)
+  products             SupplierProduct[]
+  purchaseOrders       PurchaseOrder[]
+  createdAt            DateTime          @default(now()) @map("created_at")
+  updatedAt            DateTime          @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("suppliers")
+}
+
+// Maps our ProductVariant to how a specific supplier sells it. packSize is
+// the conversion factor from the purchasing unit (e.g. a case) to inventory
+// units (each) — PO lines snapshot it so a later change here never rewrites
+// an already-ordered line's meaning.
+model SupplierProduct {
+  id              String         @id @default(uuid()) @db.Uuid
+  supplierId      String         @map("supplier_id") @db.Uuid
+  supplier        Supplier       @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  variantId       String         @map("variant_id") @db.Uuid
+  variant         ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  supplierSku     String         @map("supplier_sku")
+  description     String?
+  packSize        Int            @default(1) @map("pack_size")
+  minimumOrderQty Int            @default(1) @map("minimum_order_qty")
+  unitOfMeasure   String         @default("EACH") @map("unit_of_measure") @db.VarChar(20)
+  defaultUnitCost Int            @map("default_unit_cost")
+  lastUnitCost    Int?           @map("last_unit_cost")
+  currency        String         @db.VarChar(3)
+  leadTimeDays    Int?           @map("lead_time_days")
+  isPreferred     Boolean        @default(false) @map("is_preferred")
+  isActive        Boolean        @default(true) @map("is_active")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  @@unique([supplierId, variantId])
+  @@index([variantId])
+  @@map("supplier_products")
+}
+
+// Amending an APPROVED/ORDERED PO creates a new revision (supersedesId links
+// back to the one it replaces) rather than mutating history in place; a
+// DRAFT/SUBMITTED PO is edited or returned to DRAFT directly. currency is
+// immutable once a PO leaves DRAFT.
+model PurchaseOrder {
+  id                   String                @id @default(uuid()) @db.Uuid
+  poNumber             String                @unique @map("po_number")
+  supplierId           String                @map("supplier_id") @db.Uuid
+  supplier             Supplier              @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  warehouseId          String                @map("warehouse_id") @db.Uuid
+  warehouse            Warehouse             @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  status               PurchaseOrderStatus   @default(DRAFT)
+  currency             String                @db.VarChar(3)
+  subtotalAmount       Int                   @default(0) @map("subtotal_amount")
+  taxAmount            Int                   @default(0) @map("tax_amount")
+  shippingAmount       Int                   @default(0) @map("shipping_amount")
+  totalAmount          Int                   @default(0) @map("total_amount")
+  expectedDeliveryDate DateTime?             @map("expected_delivery_date")
+  notes                String?
+  version              Int                   @default(0)
+  revisionNumber       Int                   @default(0) @map("revision_number")
+  supersedesId         String?               @unique @map("supersedes_id") @db.Uuid
+  supersedes           PurchaseOrder?        @relation("PurchaseOrderRevision", fields: [supersedesId], references: [id], onDelete: SetNull)
+  supersededBy         PurchaseOrder?        @relation("PurchaseOrderRevision")
+  createdByUserId      String                @map("created_by_user_id") @db.Uuid
+  approvedByUserId     String?               @map("approved_by_user_id") @db.Uuid
+  rejectedByUserId     String?               @map("rejected_by_user_id") @db.Uuid
+  rejectionReason      String?               @map("rejection_reason")
+  cancellationReason   String?               @map("cancellation_reason")
+  shortCloseReason     String?               @map("short_close_reason")
+  submittedAt          DateTime?             @map("submitted_at")
+  approvedAt           DateTime?             @map("approved_at")
+  orderedAt            DateTime?             @map("ordered_at")
+  completedAt          DateTime?             @map("completed_at")
+  lines                PurchaseOrderLine[]
+  goodsReceipts        GoodsReceipt[]
+  documents            ProcurementDocument[]
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+
+  @@index([supplierId, status])
+  @@index([status, expectedDeliveryDate])
+  @@map("purchase_orders")
+}
+
+// Costs are snapshotted here at order time — never a live read of
+// SupplierProduct or storefront Price, which model different concepts
+// (supplier cost vs. customer selling price) and change independently.
+model PurchaseOrderLine {
+  id                 String             @id @default(uuid()) @db.Uuid
+  purchaseOrderId    String             @map("purchase_order_id") @db.Uuid
+  purchaseOrder      PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  variantId          String             @map("variant_id") @db.Uuid
+  variant            ProductVariant     @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  supplierSku        String?            @map("supplier_sku")
+  packSize           Int                @default(1) @map("pack_size")
+  orderedQuantity    Int                @map("ordered_quantity")
+  receivedQuantity   Int                @default(0) @map("received_quantity")
+  cancelledQuantity  Int                @default(0) @map("cancelled_quantity")
+  unitCostAmount     Int                @map("unit_cost_amount")
+  discountAmount     Int                @default(0) @map("discount_amount")
+  taxRateBasisPoints Int                @default(0) @map("tax_rate_basis_points")
+  taxAmount          Int                @default(0) @map("tax_amount")
+  netAmount          Int                @map("net_amount")
+  grossAmount        Int                @map("gross_amount")
+  currency           String             @db.VarChar(3)
+  goodsReceiptLines  GoodsReceiptLine[]
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  @@index([purchaseOrderId])
+  @@index([variantId])
+  @@map("purchase_order_lines")
+}
+
+// DRAFT lets staff key in or scan a delivery before committing it — only
+// POSTED affects inventory. A posted receipt is immutable; correcting one
+// means posting a REVERSED receipt (reversalOfId) with negative movements,
+// never editing the original rows.
+model GoodsReceipt {
+  id                      String                @id @default(uuid()) @db.Uuid
+  receiptNumber           String                @unique @map("receipt_number")
+  purchaseOrderId         String                @map("purchase_order_id") @db.Uuid
+  purchaseOrder           PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  warehouseId             String                @map("warehouse_id") @db.Uuid
+  warehouse               Warehouse             @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  status                  GoodsReceiptStatus    @default(DRAFT)
+  supplierDeliveryNoteRef String?               @map("supplier_delivery_note_ref")
+  receivedByUserId        String                @map("received_by_user_id") @db.Uuid
+  postedByUserId          String?               @map("posted_by_user_id") @db.Uuid
+  reversedByUserId        String?               @map("reversed_by_user_id") @db.Uuid
+  reversalReason          String?               @map("reversal_reason")
+  reversalOfId            String?               @unique @map("reversal_of_id") @db.Uuid
+  reversalOf              GoodsReceipt?         @relation("GoodsReceiptReversal", fields: [reversalOfId], references: [id], onDelete: SetNull)
+  reversedBy              GoodsReceipt?         @relation("GoodsReceiptReversal")
+  // Nullable: a DRAFT receipt may not carry a caller-supplied key yet: it is
+  // required and enforced at the service layer only once posting is requested.
+  idempotencyKey          String?               @unique @map("idempotency_key") @db.VarChar(64)
+  postedAt                DateTime?             @map("posted_at")
+  lines                   GoodsReceiptLine[]
+  documents               ProcurementDocument[]
+  createdAt               DateTime              @default(now()) @map("created_at")
+  updatedAt               DateTime              @updatedAt @map("updated_at")
+
+  @@index([purchaseOrderId])
+  @@index([warehouseId, status])
+  @@map("goods_receipts")
+}
+
+// Reconciliation is enforced in application code as
+// deliveredQuantity = acceptedQuantity + rejectedQuantity + damagedQuantity.
+// Only acceptedQuantity ever reaches InventoryService.receiveStock —
+// rejected/damaged stock never becomes sellable on-hand.
+// inventoryMovementId has no FK (same loose-reference convention as
+// InventoryMovement.referenceId) and is null until the line is posted.
+model GoodsReceiptLine {
+  id                  String            @id @default(uuid()) @db.Uuid
+  goodsReceiptId      String            @map("goods_receipt_id") @db.Uuid
+  goodsReceipt        GoodsReceipt      @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  purchaseOrderLineId String            @map("purchase_order_line_id") @db.Uuid
+  purchaseOrderLine   PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id], onDelete: Restrict)
+  deliveredQuantity   Int               @map("delivered_quantity")
+  acceptedQuantity    Int               @map("accepted_quantity")
+  rejectedQuantity    Int               @default(0) @map("rejected_quantity")
+  damagedQuantity     Int               @default(0) @map("damaged_quantity")
+  authorizedExcessQty Int               @default(0) @map("authorized_excess_qty")
+  discrepancyReason   String?           @map("discrepancy_reason")
+  inventoryMovementId String?           @map("inventory_movement_id")
+  createdAt           DateTime          @default(now()) @map("created_at")
+
+  // One line per PO line per receipt — without this, two lines on the same
+  // receipt referencing the same PO line would each pass the outstanding-
+  // quantity check independently (checked against the PO line's quantity
+  // as of the start of the transaction) while together over-receiving it.
+  @@unique([goodsReceiptId, purchaseOrderLineId])
+  @@index([goodsReceiptId])
+  @@index([purchaseOrderLineId])
+  @@map("goods_receipt_lines")
+}
+
+// Attachments reference an existing MediaAsset rather than storing files
+// here, same as SellerDocument. Exactly one of purchaseOrderId/goodsReceiptId
+// is set.
+model ProcurementDocument {
+  id               String                  @id @default(uuid()) @db.Uuid
+  purchaseOrderId  String?                 @map("purchase_order_id") @db.Uuid
+  purchaseOrder    PurchaseOrder?          @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  goodsReceiptId   String?                 @map("goods_receipt_id") @db.Uuid
+  goodsReceipt     GoodsReceipt?           @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  mediaAssetId     String                  @map("media_asset_id") @db.Uuid
+  mediaAsset       MediaAsset              @relation(fields: [mediaAssetId], references: [id], onDelete: Restrict)
+  type             ProcurementDocumentType @default(OTHER)
+  uploadedByUserId String                  @map("uploaded_by_user_id") @db.Uuid
+  createdAt        DateTime                @default(now()) @map("created_at")
+
+  @@index([purchaseOrderId])
+  @@index([goodsReceiptId])
+  @@map("procurement_documents")
 }
