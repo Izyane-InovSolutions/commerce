@@ -8,7 +8,11 @@ import { getCart, labelOffers } from '@/lib/cart';
 import { listAddresses } from '@/lib/orders';
 import { getCurrentUser } from '@/lib/session';
 
-import { createAddressAction, placeOrderAction } from './actions';
+import {
+  createAddressAction,
+  getCheckoutQuoteAction,
+  placeOrderAction,
+} from './actions';
 
 export const metadata: Metadata = {
   title: 'Checkout',
@@ -73,6 +77,7 @@ export default async function CheckoutPage({
           selectedItemIds={requestedIds}
           placeOrder={placeOrderAction}
           createAddress={createAddressAction}
+          getQuote={getCheckoutQuoteAction}
         />
       </div>
     </div>

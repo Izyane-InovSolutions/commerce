@@ -1,13 +1,12 @@
 import Link from 'next/link';
 
 import { AddressForm } from '@/components/address-form';
-import { CHECKOUT_FORM_ID, CheckoutForm } from '@/components/checkout-form';
+import { CHECKOUT_FORM_ID } from '@/components/checkout-form';
+import { CheckoutPanel } from '@/components/checkout-panel';
+import type { CheckoutQuoteResult } from '@/components/checkout-cost-summary';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import type { OfferLabel } from '@/lib/cart';
 import type { Address, CartView } from '@/lib/commerce-types';
-import { formatMinor } from '@/lib/currency';
 import type { FormState } from '@/lib/form';
 
 /**
@@ -23,6 +22,7 @@ export function CheckoutContent({
   selectedItemIds,
   placeOrder,
   createAddress,
+  getQuote,
 }: {
   cart: CartView;
   labels: Map<string, OfferLabel>;
@@ -35,6 +35,11 @@ export function CheckoutContent({
   selectedItemIds: string[] | null;
   placeOrder: (state: FormState, formData: FormData) => Promise<FormState>;
   createAddress: (state: FormState, formData: FormData) => Promise<FormState>;
+  getQuote: (input: {
+    shippingAddressId: string;
+    currency: string;
+    itemIds: string[];
+  }) => Promise<CheckoutQuoteResult>;
 }) {
   if (cart.items.length === 0) {
     return (
@@ -94,59 +99,35 @@ export function CheckoutContent({
     );
   }
 
+  const itemIds = selectedLines.map((line) => line.id);
+
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_340px]">
-      <CheckoutForm
+      <CheckoutPanel
         addresses={addresses}
         currency={currency}
         placeOrder={placeOrder}
+        getQuote={getQuote}
+        items={selectedLines.map((line) => ({
+          id: line.id,
+          name: labels.get(line.offerId)?.name ?? 'Item',
+          quantity: line.quantity,
+          lineTotal: line.lineTotal,
+        }))}
+        subtotal={subtotal}
+        itemIds={itemIds}
+        leftInCart={leftInCart}
       />
 
-      {selectedLines.map((line) => (
+      {itemIds.map((id) => (
         <input
-          key={line.id}
+          key={id}
           type="hidden"
           name="itemIds"
-          value={line.id}
+          value={id}
           form={CHECKOUT_FORM_ID}
         />
       ))}
-
-      <Card className="h-fit">
-        <CardContent className="space-y-4">
-          <h2 className="text-base font-semibold">Order summary</h2>
-          <ul className="space-y-3">
-            {selectedLines.map((line) => (
-              <li key={line.id} className="flex justify-between gap-3 text-sm">
-                <span className="text-muted-foreground">
-                  {labels.get(line.offerId)?.name ?? 'Item'} × {line.quantity}
-                </span>
-                <span className="font-medium">
-                  {formatMinor(line.lineTotal, currency)}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <Separator />
-          <div className="flex justify-between text-sm font-semibold">
-            <span>Total</span>
-            <span>{formatMinor(subtotal, currency)}</span>
-          </div>
-          <Button type="submit" form={CHECKOUT_FORM_ID} className="w-full">
-            Pay {formatMinor(subtotal, currency)}
-          </Button>
-          {leftInCart > 0 ? (
-            <p className="text-muted-foreground text-xs text-pretty">
-              {leftInCart} other item{leftInCart === 1 ? '' : 's'} left in your
-              cart, not part of this order.
-            </p>
-          ) : null}
-          <p className="text-muted-foreground text-xs text-pretty">
-            If the payment provider cannot be reached, the order is cancelled
-            and your cart is left as it is.
-          </p>
-        </CardContent>
-      </Card>
     </div>
   );
 }

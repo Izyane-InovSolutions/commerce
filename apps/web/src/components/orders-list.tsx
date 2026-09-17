@@ -91,6 +91,23 @@ export function OrdersList({
 
               <Separator />
 
+              <div className="space-y-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span>{formatMinor(order.subtotal, order.currency)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Shipping</span>
+                  <span>
+                    {order.shippingAmount === 0
+                      ? 'Free'
+                      : formatMinor(order.shippingAmount, order.currency)}
+                  </span>
+                </div>
+              </div>
+
+              <Separator />
+
               <div className="flex justify-between text-sm font-semibold">
                 <span>Total</span>
                 <span>{formatMinor(order.total, order.currency)}</span>

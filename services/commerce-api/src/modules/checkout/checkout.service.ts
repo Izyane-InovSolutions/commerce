@@ -7,7 +7,7 @@ import { CART_CLEANUP_JOB_TYPE } from '../cart/jobs/cart-cleanup.handler';
 import { OrdersService } from '../orders/orders.service';
 import { PaymentsService } from '../payments/payments.service';
 import type { PaymentWithRedirect } from '../payments/payments.service';
-import { CheckoutResult } from './checkout.types';
+import { CheckoutQuote, CheckoutResult } from './checkout.types';
 import type { PaymentDetailsDto } from '../payments/dto/payment-details.dto';
 
 /** A payment that will never accept a charge; nothing was taken from the customer. */
@@ -155,6 +155,38 @@ export class CheckoutService {
     }
 
     return { order, payment };
+  }
+
+  /** The cost breakdown a cart checkout would charge right now — no order is created. */
+  quote(
+    userId: string,
+    shippingAddressId: string,
+    currency: string,
+    itemIds?: string[],
+  ): Promise<CheckoutQuote> {
+    return this.ordersService.quoteFromCart(
+      userId,
+      shippingAddressId,
+      currency,
+      itemIds,
+    );
+  }
+
+  /** The cost breakdown a "buy now" checkout would charge right now. */
+  quoteOffer(
+    userId: string,
+    offerId: string,
+    quantity: number,
+    shippingAddressId: string,
+    currency: string,
+  ): Promise<CheckoutQuote> {
+    return this.ordersService.quoteFromOffer(
+      userId,
+      offerId,
+      quantity,
+      shippingAddressId,
+      currency,
+    );
   }
 
   /**

@@ -101,6 +101,8 @@ export type Order = {
   payment?: OrderPayment | null;
   currency: string;
   subtotal: number;
+  /** A flat, informational shipping cost — see `CheckoutQuote`. */
+  shippingAmount: number;
   total: number;
   items: OrderItem[];
   createdAt: string;
@@ -123,4 +125,16 @@ export type Address = {
 export type CheckoutResult = {
   order: Order;
   payment: { id: string; status: string; redirectUrl?: string };
+};
+
+/**
+ * The cost breakdown a checkout would charge right now, without creating an
+ * order — what lets the checkout page show shipping before the shopper pays.
+ * `total` is exactly what `Order.total` will read once the order exists.
+ */
+export type CheckoutQuote = {
+  currency: string;
+  subtotal: number;
+  shippingAmount: number;
+  total: number;
 };
