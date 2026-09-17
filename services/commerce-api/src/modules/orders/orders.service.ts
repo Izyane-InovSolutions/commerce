@@ -8,6 +8,7 @@ import {
   OrderStatus,
   Prisma,
   type Order,
+  type OfferFulfillmentMode,
   type PaymentStatus,
   type OrderItem,
   type SellerOrder,
@@ -94,6 +95,28 @@ type QuotedSellerGroup = SellerGroup & {
   subtotal: number;
   shippingAmount: number;
   total: number;
+};
+
+/**
+ * The same cost breakdown a checkout call will charge, without creating an
+ * order — what lets the checkout page show shipping before the shopper pays,
+ * rather than only after.
+ */
+export type CheckoutQuote = {
+  currency: string;
+  subtotal: number;
+  shippingAmount: number;
+  total: number;
+  shippingGroups: {
+    sellerId: string | null;
+    fulfillmentMode: OfferFulfillmentMode;
+    serviceLevel: string;
+    subtotal: number;
+    shippingAmount: number;
+    total: number;
+    estimatedDeliveryMinDays: number;
+    estimatedDeliveryMaxDays: number;
+  }[];
 };
 
 @Injectable()
@@ -187,6 +210,166 @@ export class OrdersService {
   }
 
   /**
+   * The cost breakdown a cart checkout would charge right now, without
+   * creating an order.
+   *
+   * Mirrors `createFromCart`'s own line selection and validation exactly, so
+   * a shopper is never quoted a total that checkout itself would then refuse
+   * to honor.
+   */
+  async quoteFromCart(
+    userId: string,
+    shippingAddressId: string,
+    currency: string,
+    itemIds?: string[],
+  ): Promise<CheckoutQuote> {
+    const cart = await this.cartService.getCartView({ userId }, currency);
+    const lines = itemIds
+      ? cart.items.filter((item) => itemIds.includes(item.id))
+      : cart.items;
+
+    if (itemIds && lines.length !== itemIds.length) {
+      throw new ConflictException(
+        'One or more selected items are no longer in your cart',
+      );
+    }
+
+    if (lines.length === 0) {
+      throw new ConflictException(
+        itemIds ? 'No items selected' : 'Cart is empty',
+      );
+    }
+
+    if (lines.some((item) => !item.isAvailable)) {
+      throw new ConflictException(
+        'Cart has unavailable items; revalidate the cart before checking out',
+      );
+    }
+
+    return this.quoteLines(userId, lines, shippingAddressId, currency);
+  }
+
+  /** The cost breakdown a "buy now" checkout would charge right now. */
+  async quoteFromOffer(
+    userId: string,
+    offerId: string,
+    quantity: number,
+    shippingAddressId: string,
+    currency: string,
+  ): Promise<CheckoutQuote> {
+    const line = await this.cartService.previewOfferLine(
+      offerId,
+      quantity,
+      currency,
+    );
+
+    if (!line.isAvailable) {
+      throw new ConflictException(
+        'This item is not available for purchase right now',
+      );
+    }
+
+    return this.quoteLines(userId, [line], shippingAddressId, currency);
+  }
+
+  private async quoteLines(
+    userId: string,
+    lines: CartLineView[],
+    shippingAddressId: string,
+    currency: string,
+  ): Promise<CheckoutQuote> {
+    const address = await this.addressesService.findOne(
+      userId,
+      shippingAddressId,
+    );
+    const shippingAddress = toAddressSnapshot(address);
+
+    const offers = await this.offers.findMany(
+      lines.map((item) => item.offerId),
+    );
+    const offerById = new Map(offers.map((offer) => [offer.id, offer]));
+
+    const { subtotal, shippingAmount, quotedGroups } =
+      await this.quoteSellerGroups(
+        lines,
+        offerById,
+        shippingAddress.country,
+        currency,
+      );
+
+    return {
+      currency,
+      subtotal,
+      shippingAmount,
+      total: subtotal + shippingAmount,
+      shippingGroups: quotedGroups.flatMap((group) =>
+        group.shippingGroups.map((shippingGroup) => ({
+          sellerId: group.sellerId,
+          fulfillmentMode: shippingGroup.fulfillmentMode,
+          serviceLevel: shippingGroup.serviceLevel,
+          subtotal: shippingGroup.subtotal,
+          shippingAmount: shippingGroup.shippingAmount,
+          total: shippingGroup.total,
+          estimatedDeliveryMinDays: shippingGroup.estimatedDeliveryMinDays,
+          estimatedDeliveryMaxDays: shippingGroup.estimatedDeliveryMaxDays,
+        })),
+      ),
+    };
+  }
+
+  /**
+   * Groups lines by seller and prices shipping for each group — the part of
+   * checkout that a preview quote and an actual order both need, so the two
+   * cannot drift apart.
+   */
+  private async quoteSellerGroups(
+    lines: CartLineView[],
+    offerById: Map<string, CommerceOffer>,
+    destinationCountry: string,
+    currency: string,
+  ): Promise<{
+    subtotal: number;
+    shippingAmount: number;
+    quotedGroups: QuotedSellerGroup[];
+  }> {
+    const groups = this.groupBySeller(lines, offerById);
+    const subtotal = lines.reduce((sum, item) => sum + item.lineTotal, 0);
+
+    const quotedGroups: QuotedSellerGroup[] = [];
+    for (const group of [...groups].sort((left, right) =>
+      (left.sellerId ?? '').localeCompare(right.sellerId ?? ''),
+    )) {
+      const shippingGroups = await this.shippingService.quoteSellerGroups(
+        group.sellerId,
+        group.items,
+        destinationCountry,
+        currency,
+      );
+      const groupSubtotal = shippingGroups.reduce(
+        (sum, shippingGroup) => sum + shippingGroup.subtotal,
+        0,
+      );
+      const groupShippingAmount = shippingGroups.reduce(
+        (sum, shippingGroup) => sum + shippingGroup.shippingAmount,
+        0,
+      );
+      quotedGroups.push({
+        ...group,
+        shippingGroups,
+        subtotal: groupSubtotal,
+        shippingAmount: groupShippingAmount,
+        total: groupSubtotal + groupShippingAmount,
+      });
+    }
+    const shippingAmount = quotedGroups.reduce(
+      (sum, group) => sum + group.shippingAmount,
+      0,
+    );
+
+    return { subtotal, shippingAmount, quotedGroups };
+  }
+
+  /**
    * The order a previous checkout call already created for this key, if any.
    *
    * Scoped to one user so two shoppers minting the same UUID never collide,
@@ -240,39 +423,14 @@ export class OrdersService {
       lines.map((item) => item.offerId),
     );
     const offerById = new Map(offers.map((offer) => [offer.id, offer]));
-    const groups = this.groupBySeller(lines, offerById);
-    const subtotal = lines.reduce((sum, item) => sum + item.lineTotal, 0);
 
-    const quotedGroups: QuotedSellerGroup[] = [];
-    for (const group of [...groups].sort((left, right) =>
-      (left.sellerId ?? '').localeCompare(right.sellerId ?? ''),
-    )) {
-      const shippingGroups = await this.shippingService.quoteSellerGroups(
-        group.sellerId,
-        group.items,
+    const { subtotal, shippingAmount, quotedGroups } =
+      await this.quoteSellerGroups(
+        lines,
+        offerById,
         shippingAddress.country,
         currency,
       );
-      const groupSubtotal = shippingGroups.reduce(
-        (sum, shippingGroup) => sum + shippingGroup.subtotal,
-        0,
-      );
-      const groupShippingAmount = shippingGroups.reduce(
-        (sum, shippingGroup) => sum + shippingGroup.shippingAmount,
-        0,
-      );
-      quotedGroups.push({
-        ...group,
-        shippingGroups,
-        subtotal: groupSubtotal,
-        shippingAmount: groupShippingAmount,
-        total: groupSubtotal + groupShippingAmount,
-      });
-    }
-    const shippingAmount = quotedGroups.reduce(
-      (sum, group) => sum + group.shippingAmount,
-      0,
-    );
 
     let createdOrderId: string;
     try {

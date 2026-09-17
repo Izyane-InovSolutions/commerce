@@ -1,6 +1,7 @@
 import type {
   BackendItemsPage,
   BackendReviewSellerInput,
+  BackendSellerApplicationInput,
   BackendSellerDetail,
   BackendSellerStatus,
   BackendSellerSummary,
@@ -87,6 +88,28 @@ export function backendGetOwnSeller(
   client: ApiClient,
 ): Promise<BackendSellerDetail> {
   return client.get('/sellers/me', { cache: 'no-store' });
+}
+
+/** Registers the caller as a seller applicant. One per user — the API rejects a second. */
+export function backendApplyAsSeller(
+  client: ApiClient,
+  input: BackendSellerApplicationInput,
+): Promise<BackendSellerDetail> {
+  return client.post('/sellers/applications', { body: input });
+}
+
+/**
+ * Resubmits a rejected application.
+ *
+ * Replaces the business details and every verification document at once —
+ * there is no endpoint to edit either individually — and only works from
+ * `REJECTED`.
+ */
+export function backendResubmitSellerApplication(
+  client: ApiClient,
+  input: BackendSellerApplicationInput,
+): Promise<BackendSellerDetail> {
+  return client.post('/sellers/me/resubmit', { body: input });
 }
 
 /**

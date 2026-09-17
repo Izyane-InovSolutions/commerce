@@ -10,7 +10,7 @@ import { isUUID } from 'class-validator';
 import type { AuthenticatedUser } from '../../common/auth/authenticated-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { CheckoutService } from './checkout.service';
-import { CheckoutResult } from './checkout.types';
+import { CheckoutQuote, CheckoutResult } from './checkout.types';
 import { CreateBuyNowCheckoutDto } from './dto/create-buy-now-checkout.dto';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
 
@@ -57,6 +57,39 @@ export class CheckoutController {
       dto.currency,
       dto.paymentDetails,
       idempotencyKey(key),
+    );
+  }
+
+  /**
+   * The cost breakdown — subtotal, shipping, total — a cart checkout would
+   * charge right now, without creating an order. Lets the checkout page show
+   * shipping before the shopper pays, once they have picked an address.
+   */
+  @Post('quote')
+  quote(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CreateCheckoutDto,
+  ): Promise<CheckoutQuote> {
+    return this.checkoutService.quote(
+      user.id,
+      dto.shippingAddressId,
+      dto.currency,
+      dto.itemIds,
+    );
+  }
+
+  /** The same preview, for a "buy now" checkout. */
+  @Post('buy-now/quote')
+  buyNowQuote(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CreateBuyNowCheckoutDto,
+  ): Promise<CheckoutQuote> {
+    return this.checkoutService.quoteOffer(
+      user.id,
+      dto.offerId,
+      dto.quantity,
+      dto.shippingAddressId,
+      dto.currency,
     );
   }
 }

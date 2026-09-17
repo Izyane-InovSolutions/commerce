@@ -16,6 +16,7 @@ import { Roles } from '../../common/auth/roles.decorator';
 import { UpdateStatusDto } from '../../common/catalog/dto/update-status.dto';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { CreatePriceDto } from './dto/create-price.dto';
+import { UpdateOfferShippingDto } from './dto/update-offer-shipping.dto';
 import { OffersService, OfferWithPrices } from './offers.service';
 
 @Roles(Role.STAFF, Role.ADMIN)
@@ -53,5 +54,13 @@ export class AdminOffersController {
     @Body() dto: CreatePriceDto,
   ): Promise<OfferWithPrices> {
     return this.offersService.addPrice(id, dto);
+  }
+
+  @Patch(':id/shipping')
+  updateShipping(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateOfferShippingDto,
+  ): Promise<OfferWithPrices> {
+    return this.offersService.updateShipping(id, dto);
   }
 }

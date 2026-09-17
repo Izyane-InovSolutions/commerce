@@ -11,6 +11,7 @@ import type { Address } from '@/lib/commerce-types';
 import { idleFormState, type FormState } from '@/lib/form';
 import {
   availablePaymentMethods,
+  detectMobileNetwork,
   unavailableReason,
   type PaymentMethod,
 } from '@/lib/payment-methods';
@@ -37,11 +38,20 @@ export function CheckoutForm({
   addresses,
   currency,
   placeOrder,
+  selectedAddressId,
+  onAddressChange,
 }: {
   addresses: Address[];
   /** The order's currency, which decides how it can be paid for. */
   currency: string;
   placeOrder: (state: FormState, formData: FormData) => Promise<FormState>;
+  /**
+   * Lifted to the parent rather than kept as internal state: the order
+   * summary alongside this form needs to know which address is selected too,
+   * to re-quote shipping when it changes.
+   */
+  selectedAddressId: string | undefined;
+  onAddressChange: (addressId: string) => void;
 }) {
   const available = availablePaymentMethods(currency);
   const [state, formAction] = useActionState(placeOrder, idleFormState);
@@ -57,13 +67,17 @@ export function CheckoutForm({
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvc, setCardCvc] = useState('');
   const [momoPhone, setMomoPhone] = useState('');
+  // Null until the shopper picks a network by hand — until then the select
+  // follows whatever the typed number detects as, rather than freezing on
+  // whatever it detected first.
+  const [manualNetwork, setManualNetwork] = useState<string | null>(null);
+  const detectedNetwork = detectMobileNetwork(momoPhone);
+  const momoProvider =
+    manualNetwork !== null ? manualNetwork : (detectedNetwork ?? '');
 
   // Minted once per mounted form, so a double submit or a retry after a
   // timeout is the same checkout rather than a second order.
   const idempotencyKey = useMemo(() => crypto.randomUUID(), []);
-
-  const defaultAddress =
-    addresses.find((address) => address.isDefault) ?? addresses[0];
 
   return (
     <form id={CHECKOUT_FORM_ID} action={formAction} className="space-y-6">
@@ -75,7 +89,8 @@ export function CheckoutForm({
         <legend className="text-sm font-medium">Deliver to</legend>
         <RadioGroup
           name="shippingAddressId"
-          defaultValue={defaultAddress?.id}
+          value={selectedAddressId}
+          onValueChange={onAddressChange}
           required
         >
           {addresses.map((address) => (
@@ -179,10 +194,10 @@ export function CheckoutForm({
               name="cardExpiry"
               inputMode="numeric"
               autoComplete="cc-exp"
-              placeholder="MM/YYYY"
-              pattern="\d{2}/\d{4}"
-              title="MM/YYYY"
-              maxLength={7}
+              placeholder="MM/YY"
+              pattern="\d{2}/\d{2}"
+              title="MM/YY"
+              maxLength={5}
               value={cardExpiry}
               onChange={(event) =>
                 setCardExpiry((previous) =>
@@ -202,9 +217,9 @@ export function CheckoutForm({
               name="cardCvc"
               inputMode="numeric"
               autoComplete="cc-csc"
-              pattern="\d{3,4}"
-              title="3 or 4 digits"
-              maxLength={4}
+              pattern="\d{3}"
+              title="3 digits"
+              maxLength={3}
               value={cardCvc}
               onChange={(event) => setCardCvc(formatCvc(event.target.value))}
               required
@@ -326,20 +341,6 @@ export function CheckoutForm({
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="momo-provider">Mobile network</Label>
-            <select
-              id="momo-provider"
-              name="momoProvider"
-              className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border bg-transparent px-2.5 text-sm outline-none focus-visible:ring-3"
-            >
-              {/* The gateway reads the network off the number and says to set
-                  this only to override it, so the default leaves it alone. */}
-              <option value="">Detect from my number</option>
-              <option value="MTN">MTN Money</option>
-              <option value="AIRTEL">Airtel Money</option>
-            </select>
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="momo-phone">Mobile money number</Label>
             <Input
               id="momo-phone"
@@ -357,6 +358,29 @@ export function CheckoutForm({
               required
             />
             <FieldError messages={state.fieldErrors?.phoneNumber} />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="momo-provider">Mobile network</Label>
+            <select
+              id="momo-provider"
+              name="momoProvider"
+              value={momoProvider}
+              onChange={(event) => setManualNetwork(event.target.value)}
+              className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border bg-transparent px-2.5 text-sm outline-none focus-visible:ring-3"
+            >
+              <option value="">
+                {momoPhone.replace(/\D/g, '').length >= 3
+                  ? 'Not recognised — choose manually'
+                  : 'Detected from your number'}
+              </option>
+              <option value="MTN">MTN Money</option>
+              <option value="AIRTEL">Airtel Money</option>
+            </select>
+            {manualNetwork === null && detectedNetwork ? (
+              <p className="text-muted-foreground text-xs">
+                Detected automatically from your number.
+              </p>
+            ) : null}
           </div>
         </div>
       )}

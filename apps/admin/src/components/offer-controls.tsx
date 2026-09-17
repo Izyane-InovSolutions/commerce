@@ -15,6 +15,8 @@ type OfferSummary = {
   status: string;
   /** One formatted price per currency the offer is currently priced in. */
   prices: string[];
+  /** Formatted, e.g. "K25.00 shipping" — null once none has been set. */
+  shipping: string | null;
 };
 
 /**
@@ -30,6 +32,7 @@ export function OfferControls({
   createOffer,
   addPrice,
   setOfferStatus,
+  setOfferShipping,
 }: {
   productId: string;
   variantId: string;
@@ -38,6 +41,10 @@ export function OfferControls({
   createOffer: (state: FormState, formData: FormData) => Promise<FormState>;
   addPrice: (state: FormState, formData: FormData) => Promise<FormState>;
   setOfferStatus: (state: FormState, formData: FormData) => Promise<FormState>;
+  setOfferShipping: (
+    state: FormState,
+    formData: FormData,
+  ) => Promise<FormState>;
 }) {
   const [createState, createAction] = useActionState(
     createOffer,
@@ -86,6 +93,7 @@ export function OfferControls({
           offer={offer}
           addPrice={addPrice}
           setStatus={setOfferStatus}
+          setShipping={setOfferShipping}
         />
       ))}
     </div>
@@ -96,12 +104,18 @@ function OfferRow({
   offer,
   addPrice,
   setStatus,
+  setShipping,
 }: {
   offer: OfferSummary;
   addPrice: (state: FormState, formData: FormData) => Promise<FormState>;
   setStatus: (state: FormState, formData: FormData) => Promise<FormState>;
+  setShipping: (state: FormState, formData: FormData) => Promise<FormState>;
 }) {
   const [priceState, priceAction] = useActionState(addPrice, idleFormState);
+  const [shippingState, shippingAction] = useActionState(
+    setShipping,
+    idleFormState,
+  );
 
   return (
     <div className="bg-muted/40 space-y-2 rounded-lg p-3">
@@ -149,6 +163,39 @@ function OfferRow({
         </SubmitButton>
         <FormError state={priceState} />
         <FieldError messages={priceState.fieldErrors?.amount} />
+      </form>
+
+      <form
+        action={shippingAction}
+        className="flex flex-wrap items-end gap-2"
+      >
+        <input type="hidden" name="offerId" value={offer.id} />
+        <div className="w-32 space-y-1.5">
+          <Label htmlFor={`shipping-${offer.id}`}>
+            Shipping cost{offer.shipping ? ` (${offer.shipping})` : ''}
+          </Label>
+          <Input
+            id={`shipping-${offer.id}`}
+            name="shippingAmount"
+            inputMode="decimal"
+            placeholder="Blank = none"
+          />
+        </div>
+        <div className="w-24 space-y-1.5">
+          <Label htmlFor={`shippingcur-${offer.id}`}>Currency</Label>
+          <Input
+            id={`shippingcur-${offer.id}`}
+            name="shippingCurrency"
+            defaultValue="ZMW"
+            maxLength={3}
+            className="uppercase"
+          />
+        </div>
+        <SubmitButton variant="secondary" pendingLabel="Saving…">
+          Save shipping cost
+        </SubmitButton>
+        <FormError state={shippingState} />
+        <FieldError messages={shippingState.fieldErrors?.shippingAmount} />
       </form>
     </div>
   );

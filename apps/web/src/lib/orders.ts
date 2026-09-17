@@ -1,6 +1,6 @@
 import { apiClient } from './api';
 import type { SuccessEnvelope } from './catalog-types';
-import type { Address, CheckoutResult, Order } from './commerce-types';
+import type { Address, CheckoutQuote, CheckoutResult, Order } from './commerce-types';
 
 /** A signed-in visitor's own orders, and the addresses they ship to. */
 
@@ -69,14 +69,58 @@ export async function listAddresses(): Promise<Address[]> {
   return response.data;
 }
 
-export async function createAddress(
-  input: Omit<Address, 'id' | 'isDefault'>,
-): Promise<Address> {
+export type AddressInput = Omit<Address, 'id' | 'isDefault'>;
+
+export async function createAddress(input: AddressInput): Promise<Address> {
   const response = await apiClient.post<SuccessEnvelope<Address>>(
     '/users/me/addresses',
     { body: input },
   );
   return response.data;
+}
+
+export async function updateAddress(
+  id: string,
+  input: AddressInput,
+): Promise<Address> {
+  const response = await apiClient.patch<SuccessEnvelope<Address>>(
+    `/users/me/addresses/${id}`,
+    { body: input },
+  );
+  return response.data;
+}
+
+export async function deleteAddress(id: string): Promise<void> {
+  await apiClient.delete(`/users/me/addresses/${id}`);
+}
+
+export async function setDefaultAddress(id: string): Promise<Address> {
+  const response = await apiClient.post<SuccessEnvelope<Address>>(
+    `/users/me/addresses/${id}/default`,
+  );
+  return response.data;
+}
+
+/** Every field the address forms collect, pulled out of one submission. */
+export function addressInputFromFormData(formData: FormData): AddressInput {
+  const optional = (name: string): string | null => {
+    const value = String(formData.get(name) ?? '').trim();
+    return value === '' ? null : value;
+  };
+
+  return {
+    label: optional('label'),
+    recipientName: String(formData.get('recipientName') ?? '').trim(),
+    phone: optional('phone'),
+    line1: String(formData.get('line1') ?? '').trim(),
+    line2: optional('line2'),
+    city: String(formData.get('city') ?? '').trim(),
+    region: optional('region'),
+    postalCode: String(formData.get('postalCode') ?? '').trim(),
+    country: String(formData.get('country') ?? 'ZM')
+      .trim()
+      .toUpperCase(),
+  };
 }
 
 /**
@@ -106,6 +150,37 @@ export async function checkout(
       body: { shippingAddressId, currency, paymentDetails, itemIds },
       idempotencyKey,
     },
+  );
+  return response.data;
+}
+
+/**
+ * The cost breakdown a cart checkout would charge right now, without
+ * creating an order — shipping depends on the chosen address, so this is
+ * called again whenever the shopper switches which one they are using.
+ */
+export async function getCheckoutQuote(
+  shippingAddressId: string,
+  currency: string,
+  itemIds: string[],
+): Promise<CheckoutQuote> {
+  const response = await apiClient.post<SuccessEnvelope<CheckoutQuote>>(
+    '/checkout/quote',
+    { body: { shippingAddressId, currency, itemIds } },
+  );
+  return response.data;
+}
+
+/** The same preview, for a "buy now" checkout. */
+export async function getBuyNowQuote(
+  offerId: string,
+  quantity: number,
+  shippingAddressId: string,
+  currency: string,
+): Promise<CheckoutQuote> {
+  const response = await apiClient.post<SuccessEnvelope<CheckoutQuote>>(
+    '/checkout/buy-now/quote',
+    { body: { offerId, quantity, shippingAddressId, currency } },
   );
   return response.data;
 }

@@ -15,10 +15,11 @@ import {
 import { listAddresses } from '@/lib/orders';
 import { getCurrentUser } from '@/lib/session';
 
-import { buyNowAction, createAddressAction } from '../actions';
-
-/** Buy now always checks out a single unit — same as "Add to cart" does. */
-const QUANTITY = 1;
+import {
+  buyNowAction,
+  createAddressAction,
+  getBuyNowQuoteAction,
+} from '../actions';
 
 type BuyNowPageProps = PageProps<'/buy-now/[slug]'>;
 
@@ -31,8 +32,19 @@ export async function generateMetadata({
   return { title: product ? `Buy ${product.name}` : 'Buy now' };
 }
 
-export default async function BuyNowPage({ params }: BuyNowPageProps) {
+/** Whatever the product page linked with, clamped to a positive integer. */
+function parseQuantity(raw: string | string[] | undefined): number {
+  const value = Number(Array.isArray(raw) ? raw[0] : raw);
+  return Number.isInteger(value) && value > 0 ? value : 1;
+}
+
+export default async function BuyNowPage({
+  params,
+  searchParams,
+}: BuyNowPageProps) {
   const { slug } = await params;
+  const { quantity: quantityParam } = await searchParams;
+  const quantity = parseQuantity(quantityParam);
   const product = await getProductBySlug(slug);
 
   if (!product) {
@@ -99,12 +111,13 @@ export default async function BuyNowPage({ params }: BuyNowPageProps) {
         <BuyNowContent
           name={product.name}
           imageUrl={getPrimaryImage(product)?.url ?? null}
-          quantity={QUANTITY}
+          quantity={quantity}
           unitAmount={price.amount}
           currency={price.currency}
           addresses={addresses}
-          placeOrder={buyNowAction.bind(null, offer.id, QUANTITY)}
+          placeOrder={buyNowAction.bind(null, offer.id, quantity)}
           createAddress={createAddressAction}
+          getQuote={getBuyNowQuoteAction.bind(null, offer.id, quantity)}
         />
       </div>
     </div>

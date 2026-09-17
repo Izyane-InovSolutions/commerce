@@ -413,25 +413,30 @@ model ProductMedia {
 
 // Null sellerId means first-party. Seller offers reference an approved merchant.
 model Offer {
-  id              String               @id @default(uuid()) @db.Uuid
-  variantId       String               @map("variant_id") @db.Uuid
-  variant         ProductVariant       @relation(fields: [variantId], references: [id], onDelete: Cascade)
-  sellerId        String?              @map("seller_id") @db.Uuid
-  seller          Seller?              @relation(fields: [sellerId], references: [id], onDelete: Restrict)
-  sellerSku       String?              @map("seller_sku") @db.VarChar(100)
-  listingTitle    String?              @map("listing_title") @db.VarChar(200)
-  condition       OfferCondition       @default(NEW)
-  stockSource     OfferStockSource     @default(PLATFORM) @map("stock_source")
-  fulfillmentMode OfferFulfillmentMode @default(PLATFORM) @map("fulfillment_mode")
-  version         Int                  @default(0)
-  status          ProductStatus        @default(DRAFT)
-  prices          Price[]
-  cartItems       CartItem[]
-  wishlistItems   WishlistItem[]
-  orderItems      OrderItem[]
-  inventoryRecord InventoryRecord?
-  createdAt       DateTime             @default(now()) @map("created_at")
-  updatedAt       DateTime             @updatedAt @map("updated_at")
+  id               String               @id @default(uuid()) @db.Uuid
+  variantId        String               @map("variant_id") @db.Uuid
+  variant          ProductVariant       @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  sellerId         String?              @map("seller_id") @db.Uuid
+  seller           Seller?              @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  sellerSku        String?              @map("seller_sku") @db.VarChar(100)
+  listingTitle     String?              @map("listing_title") @db.VarChar(200)
+  condition        OfferCondition       @default(NEW)
+  stockSource      OfferStockSource     @default(PLATFORM) @map("stock_source")
+  fulfillmentMode  OfferFulfillmentMode @default(PLATFORM) @map("fulfillment_mode")
+  version          Int                  @default(0)
+  status           ProductStatus        @default(DRAFT)
+  // Flat, informational cost shown to shoppers on the catalog — unrelated to
+  // the dynamic per-destination quotes ShippingService computes at checkout.
+  // Null means no shipping cost has been set for this offer yet.
+  shippingAmount   Int?                 @map("shipping_amount")
+  shippingCurrency String?              @map("shipping_currency") @db.VarChar(3)
+  prices           Price[]
+  cartItems        CartItem[]
+  wishlistItems    WishlistItem[]
+  orderItems       OrderItem[]
+  inventoryRecord  InventoryRecord?
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
 
   @@unique([sellerId, sellerSku])
   @@index([variantId])

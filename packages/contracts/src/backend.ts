@@ -119,6 +119,14 @@ export const backendAdminOfferSchema = z.object({
   sellerId: z.uuid().nullable(),
   status: backendProductStatusSchema,
   prices: z.array(backendPriceSchema).default([]),
+  /**
+   * A flat, informational shipping cost shown on the storefront — separate
+   * from the dynamic per-destination quote computed at checkout. The admin
+   * read hands back the raw offer row, so this is two plain columns rather
+   * than a nested `BackendMoney`; both are null until an admin sets one.
+   */
+  shippingAmount: z.int().nullable().default(null),
+  shippingCurrency: z.string().nullable().default(null),
 });
 export type BackendAdminOffer = z.infer<typeof backendAdminOfferSchema>;
 
@@ -399,6 +407,15 @@ export const backendCreatePriceSchema = z.object({
 });
 export type BackendCreatePriceInput = z.input<typeof backendCreatePriceSchema>;
 
+/** `amount: null` clears the offer's shipping cost. */
+export const backendUpdateOfferShippingSchema = z.object({
+  amount: z.int().min(0).nullable(),
+  currency: z.string().length(3).optional(),
+});
+export type BackendUpdateOfferShippingInput = z.input<
+  typeof backendUpdateOfferShippingSchema
+>;
+
 export const backendStockMovementSchema = z.object({
   warehouseId: z.uuid(),
   variantId: z.uuid(),
@@ -611,6 +628,37 @@ const backendSellerOfferDetails = {
   stockSource: backendOfferSourceSchema,
   fulfillmentMode: backendOfferSourceSchema,
 };
+
+/** A seller application, as `POST /sellers/applications` and `POST /sellers/me/resubmit` both take it. */
+export const backendSellerApplicationSchema = z.object({
+  businessName: z
+    .string()
+    .trim()
+    .min(2, 'Give the business a name.')
+    .max(200, 'Keep the business name under 200 characters.'),
+  registrationNumber: z
+    .string()
+    .trim()
+    .min(2, 'Enter a registration number.')
+    .max(100, 'Keep the registration number under 100 characters.'),
+  country: z
+    .string()
+    .trim()
+    .regex(/^[A-Z]{2}$/, 'Use a two-letter country code, such as ZM.'),
+  businessAddress: z
+    .string()
+    .trim()
+    .min(5, 'Enter the business address.')
+    .max(1000, 'Keep the address under 1000 characters.'),
+  contactEmail: z.email('Enter a valid contact email address.'),
+  documentIds: z
+    .array(z.uuid())
+    .min(1, 'Upload at least one verification document.')
+    .max(10, 'Upload at most 10 verification documents.'),
+});
+export type BackendSellerApplicationInput = z.input<
+  typeof backendSellerApplicationSchema
+>;
 
 export const backendCreateSellerOfferSchema = z.object({
   ...backendSellerOfferDetails,

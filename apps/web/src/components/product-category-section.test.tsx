@@ -26,6 +26,8 @@ function makeProduct(index: number): Product {
             status: 'PUBLISHED',
             currentPrice: { amount: (10 + index) * 100, currency: 'ZMW' },
             currencies: ['ZMW'],
+            inStock: true,
+            shippingCost: null,
           },
         ],
       },

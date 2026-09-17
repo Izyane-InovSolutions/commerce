@@ -2498,6 +2498,134 @@
         }
       }
     },
+    "CheckoutController_quote": {
+      "operationId": "CheckoutController_quote",
+      "tags": [
+        "checkout"
+      ],
+      "parameters": [],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/CheckoutQuote"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputCreateCheckoutDto"
+            }
+          }
+        }
+      }
+    },
+    "CheckoutController_buyNowQuote": {
+      "operationId": "CheckoutController_buyNowQuote",
+      "tags": [
+        "checkout"
+      ],
+      "parameters": [],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/CheckoutQuote"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputCreateBuyNowCheckoutDto"
+            }
+          }
+        }
+      }
+    },
     "AdminFinancialsController_balance": {
       "operationId": "AdminFinancialsController_balance",
       "tags": [
@@ -2685,7 +2813,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type9"
+                    "$ref": "#/components/schemas/__type10"
                   },
                   "meta": {
                     "type": "object",
@@ -5777,6 +5905,81 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/InputCreatePriceDto"
+            }
+          }
+        }
+      }
+    },
+    "AdminOffersController_updateShipping": {
+      "operationId": "AdminOffersController_updateShipping",
+      "tags": [
+        "admin/catalog/offers"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/OfferWithPrices"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputUpdateOfferShippingDto"
             }
           }
         }
@@ -14739,7 +14942,7 @@
         },
         "securityCode": {
           "type": "string",
-          "pattern": "^\\d{3,4}$"
+          "pattern": "^\\d{3}$"
         },
         "holderName": {
           "type": "string",
@@ -15294,6 +15497,80 @@
       ],
       "additionalProperties": false
     },
+    "CheckoutQuote": {
+      "type": "object",
+      "properties": {
+        "currency": {
+          "type": "string"
+        },
+        "subtotal": {
+          "type": "number"
+        },
+        "shippingAmount": {
+          "type": "number"
+        },
+        "total": {
+          "type": "number"
+        },
+        "shippingGroups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/__type8"
+          }
+        }
+      },
+      "required": [
+        "currency",
+        "subtotal",
+        "shippingAmount",
+        "total",
+        "shippingGroups"
+      ]
+    },
+    "__type8": {
+      "type": "object",
+      "properties": {
+        "sellerId": {
+          "type": "string",
+          "nullable": true
+        },
+        "fulfillmentMode": {
+          "type": "string",
+          "enum": [
+            "SELLER",
+            "PLATFORM"
+          ]
+        },
+        "serviceLevel": {
+          "type": "string"
+        },
+        "subtotal": {
+          "type": "number"
+        },
+        "shippingAmount": {
+          "type": "number"
+        },
+        "total": {
+          "type": "number"
+        },
+        "estimatedDeliveryMinDays": {
+          "type": "number"
+        },
+        "estimatedDeliveryMaxDays": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "sellerId",
+        "fulfillmentMode",
+        "serviceLevel",
+        "subtotal",
+        "shippingAmount",
+        "total",
+        "estimatedDeliveryMinDays",
+        "estimatedDeliveryMaxDays"
+      ]
+    },
     "SellerBalanceView": {
       "type": "object",
       "properties": {
@@ -15338,7 +15615,7 @@
         "items": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type8"
+            "$ref": "#/components/schemas/__type9"
           }
         },
         "total": {
@@ -15358,7 +15635,7 @@
         "limit"
       ]
     },
-    "__type8": {
+    "__type9": {
       "type": "object",
       "properties": {
         "id": {
@@ -15440,7 +15717,7 @@
       ],
       "additionalProperties": false
     },
-    "__type9": {
+    "__type10": {
       "type": "object",
       "properties": {
         "id": {
@@ -15484,7 +15761,7 @@
         "items": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type9"
+            "$ref": "#/components/schemas/__type10"
           }
         },
         "total": {
@@ -16778,6 +17055,10 @@
             "ARCHIVED"
           ]
         },
+        "shippingAmount": {
+          "type": "number",
+          "nullable": true
+        },
         "sellerId": {
           "type": "string",
           "nullable": true
@@ -16818,6 +17099,10 @@
             "PLATFORM"
           ]
         },
+        "shippingCurrency": {
+          "type": "string",
+          "nullable": true
+        },
         "prices": {
           "type": "array",
           "items": {
@@ -16830,6 +17115,7 @@
         "createdAt",
         "updatedAt",
         "status",
+        "shippingAmount",
         "sellerId",
         "fulfillmentMode",
         "version",
@@ -16838,6 +17124,7 @@
         "listingTitle",
         "condition",
         "stockSource",
+        "shippingCurrency",
         "prices"
       ]
     },
@@ -16937,6 +17224,26 @@
       "required": [
         "amount",
         "currency"
+      ],
+      "additionalProperties": false
+    },
+    "InputUpdateOfferShippingDto": {
+      "type": "object",
+      "properties": {
+        "amount": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "enum": [
+            "ZMW"
+          ]
+        }
+      },
+      "required": [
+        "amount"
       ],
       "additionalProperties": false
     },
@@ -17162,6 +17469,10 @@
             "ARCHIVED"
           ]
         },
+        "shippingAmount": {
+          "type": "number",
+          "nullable": true
+        },
         "sellerId": {
           "type": "string",
           "nullable": true
@@ -17202,6 +17513,10 @@
             "PLATFORM"
           ]
         },
+        "shippingCurrency": {
+          "type": "string",
+          "nullable": true
+        },
         "prices": {
           "type": "array",
           "items": {
@@ -17214,6 +17529,7 @@
         "createdAt",
         "updatedAt",
         "status",
+        "shippingAmount",
         "sellerId",
         "fulfillmentMode",
         "version",
@@ -17222,6 +17538,7 @@
         "listingTitle",
         "condition",
         "stockSource",
+        "shippingCurrency",
         "prices"
       ]
     },
@@ -19628,6 +19945,10 @@
             "ARCHIVED"
           ]
         },
+        "shippingAmount": {
+          "type": "number",
+          "nullable": true
+        },
         "sellerId": {
           "type": "string",
           "nullable": true
@@ -19668,6 +19989,10 @@
             "PLATFORM"
           ]
         },
+        "shippingCurrency": {
+          "type": "string",
+          "nullable": true
+        },
         "prices": {
           "type": "array",
           "items": {
@@ -19680,6 +20005,7 @@
         "createdAt",
         "updatedAt",
         "status",
+        "shippingAmount",
         "sellerId",
         "fulfillmentMode",
         "version",
@@ -19688,6 +20014,7 @@
         "listingTitle",
         "condition",
         "stockSource",
+        "shippingCurrency",
         "prices"
       ]
     },
@@ -20209,13 +20536,27 @@
           "items": {
             "type": "string"
           }
+        },
+        "inStock": {
+          "type": "boolean"
+        },
+        "shippingCost": {
+          "type": "object",
+          "allOf": [
+            {
+              "$ref": "#/components/schemas/__type20"
+            }
+          ],
+          "nullable": true
         }
       },
       "required": [
         "id",
         "status",
         "currentPrice",
-        "currencies"
+        "currencies",
+        "inStock",
+        "shippingCost"
       ]
     },
     "__type33": {
@@ -20233,7 +20574,22 @@
         "currency"
       ]
     },
-    "__type34": {
+    "__type20": {
+      "type": "object",
+      "properties": {
+        "amount": {
+          "type": "number"
+        },
+        "currency": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "amount",
+        "currency"
+      ]
+    },
+    "__type21": {
       "type": "object",
       "properties": {
         "page": {

@@ -1,9 +1,12 @@
+'use client';
+
+import { useState } from 'react';
+
 import { AddressForm } from '@/components/address-form';
-import { CHECKOUT_FORM_ID, CheckoutForm } from '@/components/checkout-form';
+import { CheckoutCostSummary, type CheckoutQuoteResult } from '@/components/checkout-cost-summary';
+import { CheckoutForm } from '@/components/checkout-form';
 import { ProductImage } from '@/components/product-image';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import type { Address } from '@/lib/commerce-types';
 import { formatMinor } from '@/lib/currency';
 import type { FormState } from '@/lib/form';
@@ -12,8 +15,9 @@ import type { FormState } from '@/lib/form';
  * Checkout for one product, bought directly rather than through the cart.
  *
  * Structurally the same as the cart's checkout (same address step, same
- * `CheckoutForm`) — only the order summary differs, since there is exactly
- * one line to show instead of whatever the cart holds.
+ * `CheckoutForm`, same shipping-aware cost summary) — only the order summary
+ * differs, since there is exactly one line to show instead of whatever the
+ * cart holds.
  */
 export function BuyNowContent({
   name,
@@ -24,6 +28,7 @@ export function BuyNowContent({
   addresses,
   placeOrder,
   createAddress,
+  getQuote,
 }: {
   name: string;
   imageUrl: string | null;
@@ -33,8 +38,24 @@ export function BuyNowContent({
   addresses: Address[];
   placeOrder: (state: FormState, formData: FormData) => Promise<FormState>;
   createAddress: (state: FormState, formData: FormData) => Promise<FormState>;
+  getQuote: (input: {
+    shippingAddressId: string;
+    currency: string;
+    itemIds: string[];
+  }) => Promise<CheckoutQuoteResult>;
 }) {
-  const total = unitAmount * quantity;
+  const subtotal = unitAmount * quantity;
+  const defaultAddress =
+    addresses.find((address) => address.isDefault) ?? addresses[0];
+  // Not initialized from `defaultAddress` directly: when this page starts
+  // with no addresses at all, the shopper adds one inline without this
+  // component ever remounting, and a `useState` initializer would never see
+  // it. Falling back to `defaultAddress` on every render instead keeps this
+  // in sync with a prop that can populate after the fact.
+  const [chosenAddressId, setChosenAddressId] = useState<
+    string | undefined
+  >(undefined);
+  const selectedAddressId = chosenAddressId ?? defaultAddress?.id;
 
   if (addresses.length === 0) {
     return (
@@ -57,6 +78,8 @@ export function BuyNowContent({
         addresses={addresses}
         currency={currency}
         placeOrder={placeOrder}
+        selectedAddressId={selectedAddressId}
+        onAddressChange={setChosenAddressId}
       />
 
       <Card className="h-fit">
@@ -74,20 +97,24 @@ export function BuyNowContent({
               <p className="truncate font-medium">{name}</p>
               <p className="text-muted-foreground">Qty {quantity}</p>
             </div>
-            <span className="font-medium">{formatMinor(total, currency)}</span>
+            <span className="font-medium">
+              {formatMinor(subtotal, currency)}
+            </span>
           </div>
-          <Separator />
-          <div className="flex justify-between text-sm font-semibold">
-            <span>Total</span>
-            <span>{formatMinor(total, currency)}</span>
-          </div>
-          <Button type="submit" form={CHECKOUT_FORM_ID} className="w-full">
-            Pay {formatMinor(total, currency)}
-          </Button>
-          <p className="text-muted-foreground text-xs text-pretty">
-            If the payment provider cannot be reached, the order is cancelled
-            and nothing is charged.
-          </p>
+
+          <CheckoutCostSummary
+            subtotal={subtotal}
+            currency={currency}
+            selectedAddressId={selectedAddressId}
+            itemIds={[]}
+            getQuote={getQuote}
+            footnote={
+              <p className="text-muted-foreground text-xs text-pretty">
+                If the payment provider cannot be reached, the order is
+                cancelled and nothing is charged.
+              </p>
+            }
+          />
         </CardContent>
       </Card>
     </div>

@@ -5,6 +5,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import {
   getDisplayPrice,
   getPrimaryImage,
+  getShippingCost,
+  isInStock,
   type Product,
 } from '@/lib/catalog-types';
 import { formatMinor } from '@/lib/currency';
@@ -17,6 +19,8 @@ export function ProductCard({
   badge?: string;
 }) {
   const price = getDisplayPrice(product);
+  const shippingCost = getShippingCost(product);
+  const outOfStock = price !== null && !isInStock(product);
 
   return (
     <Link href={`/products/${product.slug}`} className="group block h-full">
@@ -29,7 +33,11 @@ export function ProductCard({
               sizes="(min-width: 1024px) 25vw, 50vw"
               className="aspect-square rounded-lg transition-transform duration-300 group-hover:scale-105"
             />
-            {badge ? (
+            {outOfStock ? (
+              <span className="absolute top-2.5 left-2.5 inline-flex items-center rounded-full bg-destructive/90 px-2.5 py-0.5 text-xs font-medium text-white shadow-sm backdrop-blur-xs">
+                Out of stock
+              </span>
+            ) : badge ? (
               <span className="absolute top-2.5 left-2.5 inline-flex items-center rounded-full bg-background/90 px-2.5 py-0.5 text-xs font-medium text-foreground shadow-sm backdrop-blur-xs">
                 {badge}
               </span>
@@ -49,6 +57,13 @@ export function ProductCard({
                 ? formatMinor(price.amount, price.currency)
                 : 'Not sold in this currency'}
             </p>
+            {price !== null && shippingCost !== null ? (
+              <p className="text-xs text-muted-foreground">
+                {shippingCost.amount === 0
+                  ? 'Free shipping'
+                  : `+ ${formatMinor(shippingCost.amount, shippingCost.currency)} shipping`}
+              </p>
+            ) : null}
           </div>
         </CardContent>
       </Card>

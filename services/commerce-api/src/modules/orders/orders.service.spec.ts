@@ -611,6 +611,158 @@ describe('OrdersService', () => {
     });
   });
 
+  describe('quoteFromCart', () => {
+    it('rejects an empty cart without touching addresses or shipping', async () => {
+      cartService.getCartView.mockResolvedValue({
+        items: [],
+        subtotal: 0,
+        currency: null,
+      });
+
+      await expect(
+        service.quoteFromCart('user-1', 'addr-1', 'USD'),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(addressesService.findOne).not.toHaveBeenCalled();
+    });
+
+    it('rejects a cart with an unavailable line, same as createFromCart', async () => {
+      cartService.getCartView.mockResolvedValue({
+        items: [cartLine({ isAvailable: false })],
+        subtotal: 2000,
+        currency: 'USD',
+      });
+
+      await expect(
+        service.quoteFromCart('user-1', 'addr-1', 'USD'),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('returns subtotal, shipping, and a total that adds up, without creating anything', async () => {
+      cartService.getCartView.mockResolvedValue({
+        items: [cartLine()],
+        subtotal: 2000,
+        currency: 'USD',
+      });
+      prisma.offer.findMany.mockResolvedValue([
+        {
+          id: 'offer-1',
+          variantId: 'variant-1',
+          sellerId: null,
+          stockSource: 'PLATFORM',
+          fulfillmentMode: 'PLATFORM',
+        },
+      ]);
+      shippingService.quoteSellerGroups.mockResolvedValue([
+        {
+          fulfillmentMode: 'PLATFORM',
+          serviceLevel: 'STANDARD',
+          rateCode: 'DOMESTIC_FLAT_V1',
+          subtotal: 2000,
+          shippingAmount: 500,
+          total: 2500,
+          currency: 'USD',
+          items: [cartLine()],
+          quoteId: 'quote-1',
+          quoteExpiresAt: new Date(Date.now() + 60_000),
+          estimatedDeliveryMinDays: 2,
+          estimatedDeliveryMaxDays: 5,
+        },
+      ]);
+
+      const quote = await service.quoteFromCart('user-1', 'addr-1', 'USD');
+
+      expect(quote).toEqual({
+        currency: 'USD',
+        subtotal: 2000,
+        shippingAmount: 500,
+        total: 2500,
+        shippingGroups: [
+          {
+            sellerId: null,
+            fulfillmentMode: 'PLATFORM',
+            serviceLevel: 'STANDARD',
+            subtotal: 2000,
+            shippingAmount: 500,
+            total: 2500,
+            estimatedDeliveryMinDays: 2,
+            estimatedDeliveryMaxDays: 5,
+          },
+        ],
+      });
+      expect(prisma.order.create).not.toHaveBeenCalled();
+      expect(inventoryService.reserve).not.toHaveBeenCalled();
+    });
+
+    it('quotes only the selected lines, matching createFromCart\'s partial checkout', async () => {
+      cartService.getCartView.mockResolvedValue({
+        items: [
+          cartLine({ id: 'item-1', offerId: 'offer-1' }),
+          cartLine({ id: 'item-2', offerId: 'offer-2' }),
+        ],
+        subtotal: 4000,
+        currency: 'USD',
+      });
+      prisma.offer.findMany.mockResolvedValue([
+        {
+          id: 'offer-1',
+          variantId: 'variant-1',
+          sellerId: null,
+          stockSource: 'PLATFORM',
+          fulfillmentMode: 'PLATFORM',
+        },
+      ]);
+
+      const quote = await service.quoteFromCart('user-1', 'addr-1', 'USD', [
+        'item-1',
+      ]);
+
+      expect(quote.subtotal).toBe(2000);
+    });
+  });
+
+  describe('quoteFromOffer', () => {
+    it('rejects an offer previewOfferLine reports unavailable', async () => {
+      cartService.previewOfferLine.mockResolvedValue(
+        cartLine({ isAvailable: false }),
+      );
+
+      await expect(
+        service.quoteFromOffer('user-1', 'offer-1', 2, 'addr-1', 'USD'),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('quotes a single offer without ever reading the cart or creating an order', async () => {
+      cartService.previewOfferLine.mockResolvedValue(cartLine());
+      prisma.offer.findMany.mockResolvedValue([
+        {
+          id: 'offer-1',
+          variantId: 'variant-1',
+          sellerId: null,
+          stockSource: 'PLATFORM',
+          fulfillmentMode: 'PLATFORM',
+        },
+      ]);
+
+      const quote = await service.quoteFromOffer(
+        'user-1',
+        'offer-1',
+        2,
+        'addr-1',
+        'USD',
+      );
+
+      expect(cartService.previewOfferLine).toHaveBeenCalledWith(
+        'offer-1',
+        2,
+        'USD',
+      );
+      expect(cartService.getCartView).not.toHaveBeenCalled();
+      expect(quote.subtotal).toBe(2000);
+      expect(quote.total).toBe(quote.subtotal + quote.shippingAmount);
+      expect(prisma.order.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe('confirmPayment', () => {
     it('commits every reservation, marks the order and every SellerOrder PAID, and records a sale per seller order', async () => {
       const platformGroup = { id: 'so-platform', sellerId: null, total: 1000 };
