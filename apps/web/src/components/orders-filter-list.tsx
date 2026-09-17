@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { formatMinor } from '@/lib/currency';
-import type { OrderStatus } from '@/lib/commerce-types';
+import type { FulfillmentSummary, OrderStatus } from '@/lib/commerce-types';
 
 export const STATUS_LABELS: Record<OrderStatus, string> = {
   PENDING_PAYMENT: 'Awaiting payment',
@@ -26,6 +26,25 @@ const FILTERABLE_STATUSES: OrderStatus[] = [
   'PARTIALLY_REFUNDED',
   'REFUNDED',
 ];
+
+/** A shown badge only for the fulfillment states worth calling out — not the
+ * default "nothing has moved yet" or "cancelled" (already covered by the
+ * order's own status badge). */
+const FULFILLMENT_LABELS: Partial<Record<FulfillmentSummary, string>> = {
+  PARTIALLY_DISPATCHED: 'Partially shipped',
+  DISPATCHED: 'Shipped',
+};
+
+/** A distinct filter dimension from `OrderStatus`: an order can be PAID and
+ * still be preparing, partially shipped, or fully shipped. */
+type FilterValue = 'all' | OrderStatus | 'SHIPPED';
+
+function isShipped(order: OrderCard): boolean {
+  return (
+    order.fulfillmentSummary === 'DISPATCHED' ||
+    order.fulfillmentSummary === 'PARTIALLY_DISPATCHED'
+  );
+}
 
 export type OrderCardItem = {
   id: string;
@@ -48,6 +67,7 @@ export type OrderCard = {
   shippingAmount: number;
   total: number;
   currency: string;
+  fulfillmentSummary?: FulfillmentSummary;
 };
 
 function formatDatestamp(iso: string): string {
@@ -63,30 +83,34 @@ function formatDatestamp(iso: string): string {
 /** The orders list, filterable by status — shared by the standalone orders
  * page and the account page's Orders tab via `OrdersList`. */
 export function OrdersFilterList({ orders }: { orders: OrderCard[] }) {
-  const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>('all');
+  const [filter, setFilter] = useState<FilterValue>('all');
 
   const counts = useMemo(() => {
     const byStatus: Partial<Record<OrderStatus, number>> = {};
+    let shipped = 0;
     for (const order of orders) {
       byStatus[order.status] = (byStatus[order.status] ?? 0) + 1;
+      if (isShipped(order)) shipped += 1;
     }
-    return byStatus;
+    return { byStatus, shipped };
   }, [orders]);
 
   const filtered =
-    statusFilter === 'all'
+    filter === 'all'
       ? orders
-      : orders.filter((order) => order.status === statusFilter);
+      : filter === 'SHIPPED'
+        ? orders.filter(isShipped)
+        : orders.filter((order) => order.status === filter);
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-1.5">
         <Button
           type="button"
-          variant={statusFilter === 'all' ? 'secondary' : 'ghost'}
+          variant={filter === 'all' ? 'secondary' : 'ghost'}
           size="sm"
           className="h-8 text-xs font-medium"
-          onClick={() => setStatusFilter('all')}
+          onClick={() => setFilter('all')}
         >
           All ({orders.length})
         </Button>
@@ -94,14 +118,23 @@ export function OrdersFilterList({ orders }: { orders: OrderCard[] }) {
           <Button
             key={status}
             type="button"
-            variant={statusFilter === status ? 'secondary' : 'ghost'}
+            variant={filter === status ? 'secondary' : 'ghost'}
             size="sm"
             className="h-8 text-xs font-medium"
-            onClick={() => setStatusFilter(status)}
+            onClick={() => setFilter(status)}
           >
-            {STATUS_LABELS[status]} ({counts[status] ?? 0})
+            {STATUS_LABELS[status]} ({counts.byStatus[status] ?? 0})
           </Button>
         ))}
+        <Button
+          type="button"
+          variant={filter === 'SHIPPED' ? 'secondary' : 'ghost'}
+          size="sm"
+          className="h-8 text-xs font-medium"
+          onClick={() => setFilter('SHIPPED')}
+        >
+          Shipped ({counts.shipped})
+        </Button>
       </div>
 
       {filtered.length === 0 ? (
@@ -123,11 +156,21 @@ export function OrdersFilterList({ orders }: { orders: OrderCard[] }) {
                         {formatDatestamp(order.createdAt)}
                       </p>
                     </div>
-                    <Badge
-                      variant={order.status === 'PAID' ? 'default' : 'secondary'}
-                    >
-                      {STATUS_LABELS[order.status] ?? order.status}
-                    </Badge>
+                    <div className="flex items-center gap-1.5">
+                      {order.fulfillmentSummary &&
+                      FULFILLMENT_LABELS[order.fulfillmentSummary] ? (
+                        <Badge variant="outline">
+                          {FULFILLMENT_LABELS[order.fulfillmentSummary]}
+                        </Badge>
+                      ) : null}
+                      <Badge
+                        variant={
+                          order.status === 'PAID' ? 'default' : 'secondary'
+                        }
+                      >
+                        {STATUS_LABELS[order.status] ?? order.status}
+                      </Badge>
+                    </div>
                   </div>
 
                   {order.paymentNote ? (

@@ -38,4 +38,21 @@ describe('AccountTabs', () => {
     expect(screen.getByRole('tab', { name: 'Orders' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'My addresses' })).toBeInTheDocument();
   });
+
+  it('opens on the requested tab, for a link that points at Orders or Wishlist directly', () => {
+    render(
+      <AccountTabs
+        defaultTab="orders"
+        recentlyViewed={<p>Recently viewed panel</p>}
+        wishlist={<p>Wishlist panel</p>}
+        orders={<p>Orders panel</p>}
+        addresses={<p>Addresses panel</p>}
+      />,
+    );
+
+    expect(screen.getByText('Orders panel')).toBeVisible();
+    expect(
+      screen.queryByText('Recently viewed panel'),
+    ).not.toBeInTheDocument();
+  });
 });

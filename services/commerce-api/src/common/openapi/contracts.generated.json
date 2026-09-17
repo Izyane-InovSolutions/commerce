@@ -3288,7 +3288,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type13"
+                      "$ref": "#/components/schemas/__type14"
                     }
                   },
                   "meta": {
@@ -4535,7 +4535,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type15"
+                      "$ref": "#/components/schemas/__type16"
                     }
                   },
                   "meta": {
@@ -4603,7 +4603,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type16"
+                      "$ref": "#/components/schemas/__type17"
                     }
                   },
                   "meta": {
@@ -4872,7 +4872,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type15"
+                      "$ref": "#/components/schemas/__type16"
                     }
                   },
                   "meta": {
@@ -4930,7 +4930,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type17"
+                      "$ref": "#/components/schemas/__type18"
                     }
                   },
                   "meta": {
@@ -4996,7 +4996,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type17"
+                    "$ref": "#/components/schemas/__type18"
                   },
                   "meta": {
                     "type": "object",
@@ -5051,7 +5051,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type17"
+                    "$ref": "#/components/schemas/__type18"
                   },
                   "meta": {
                     "type": "object",
@@ -5126,7 +5126,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type17"
+                    "$ref": "#/components/schemas/__type18"
                   },
                   "meta": {
                     "type": "object",
@@ -7072,7 +7072,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type20"
+                    "$ref": "#/components/schemas/__type21"
                   },
                   "meta": {
                     "type": "object",
@@ -7147,7 +7147,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type20"
+                    "$ref": "#/components/schemas/__type21"
                   },
                   "meta": {
                     "type": "object",
@@ -9088,7 +9088,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type23"
+                      "$ref": "#/components/schemas/__type24"
                     }
                   },
                   "meta": {
@@ -9154,7 +9154,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type23"
+                    "$ref": "#/components/schemas/__type24"
                   },
                   "meta": {
                     "type": "object",
@@ -9229,7 +9229,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type23"
+                    "$ref": "#/components/schemas/__type24"
                   },
                   "meta": {
                     "type": "object",
@@ -9395,7 +9395,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type24"
+                    "$ref": "#/components/schemas/__type25"
                   },
                   "meta": {
                     "type": "object",
@@ -9450,7 +9450,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type24"
+                    "$ref": "#/components/schemas/__type25"
                   },
                   "meta": {
                     "type": "object",
@@ -9525,7 +9525,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type24"
+                    "$ref": "#/components/schemas/__type25"
                   },
                   "meta": {
                     "type": "object",
@@ -9600,7 +9600,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type24"
+                    "$ref": "#/components/schemas/__type25"
                   },
                   "meta": {
                     "type": "object",
@@ -10800,7 +10800,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type29"
+                    "$ref": "#/components/schemas/__type31"
                   },
                   "meta": {
                     "type": "object",
@@ -11722,7 +11722,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type32"
+                      "$ref": "#/components/schemas/__type34"
                     }
                   },
                   "meta": {
@@ -12002,7 +12002,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type32"
+                    "$ref": "#/components/schemas/__type34"
                   },
                   "meta": {
                     "type": "object",
@@ -12191,7 +12191,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type34"
+                      "$ref": "#/components/schemas/__type36"
                     }
                   },
                   "meta": {
@@ -12256,7 +12256,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type34"
+                    "$ref": "#/components/schemas/__type36"
                   },
                   "meta": {
                     "type": "object",
@@ -12310,7 +12310,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type34"
+                    "$ref": "#/components/schemas/__type36"
                   },
                   "meta": {
                     "type": "object",
@@ -12384,7 +12384,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type34"
+                    "$ref": "#/components/schemas/__type36"
                   },
                   "meta": {
                     "type": "object",
@@ -12495,7 +12495,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type34"
+                    "$ref": "#/components/schemas/__type36"
                   },
                   "meta": {
                     "type": "object",
@@ -14589,19 +14589,19 @@
         "lines": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type10"
+            "$ref": "#/components/schemas/__type11"
           }
         },
         "workItems": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type11"
+            "$ref": "#/components/schemas/__type12"
           }
         },
         "exceptions": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type12"
+            "$ref": "#/components/schemas/__type13"
           }
         }
       },
@@ -14623,7 +14623,7 @@
         "exceptions"
       ]
     },
-    "__type10": {
+    "__type11": {
       "type": "object",
       "properties": {
         "id": {
@@ -14690,7 +14690,7 @@
         "cancelledQuantity"
       ]
     },
-    "__type11": {
+    "__type12": {
       "type": "object",
       "properties": {
         "id": {
@@ -14754,7 +14754,7 @@
         "completedAt"
       ]
     },
-    "__type12": {
+    "__type13": {
       "type": "object",
       "properties": {
         "id": {
@@ -14819,7 +14819,7 @@
         "resolvedAt"
       ]
     },
-    "__type13": {
+    "__type14": {
       "type": "object",
       "properties": {
         "id": {
@@ -15004,8 +15004,7 @@
           "type": "string"
         },
         "shipmentId": {
-          "type": "string",
-          "nullable": true
+          "type": "string"
         },
         "dispatchNumber": {
           "type": "string"
@@ -15016,7 +15015,7 @@
         "lines": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type14"
+            "$ref": "#/components/schemas/__type15"
           }
         }
       },
@@ -15031,7 +15030,7 @@
         "lines"
       ]
     },
-    "__type14": {
+    "__type15": {
       "type": "object",
       "properties": {
         "id": {
@@ -15277,7 +15276,7 @@
       ],
       "additionalProperties": false
     },
-    "__type15": {
+    "__type16": {
       "type": "object",
       "properties": {
         "id": {
@@ -15328,7 +15327,7 @@
         "inventoryRecordId"
       ]
     },
-    "__type16": {
+    "__type17": {
       "type": "object",
       "properties": {
         "id": {
@@ -15504,7 +15503,7 @@
       ],
       "additionalProperties": false
     },
-    "__type17": {
+    "__type18": {
       "type": "object",
       "properties": {
         "name": {
@@ -15766,7 +15765,7 @@
         "prices": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type18"
+            "$ref": "#/components/schemas/__type19"
           }
         }
       },
@@ -15788,7 +15787,7 @@
         "prices"
       ]
     },
-    "__type18": {
+    "__type19": {
       "type": "object",
       "properties": {
         "id": {
@@ -16011,7 +16010,7 @@
           "type": "object",
           "allOf": [
             {
-              "$ref": "#/components/schemas/__type19"
+              "$ref": "#/components/schemas/__type20"
             }
           ],
           "nullable": true
@@ -16066,7 +16065,7 @@
         "description"
       ]
     },
-    "__type19": {
+    "__type20": {
       "type": "object",
       "properties": {
         "amount": {
@@ -16180,7 +16179,7 @@
         "prices": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type18"
+            "$ref": "#/components/schemas/__type19"
           }
         }
       },
@@ -16599,7 +16598,7 @@
       ],
       "additionalProperties": false
     },
-    "__type20": {
+    "__type21": {
       "type": "object",
       "properties": {
         "id": {
@@ -16898,7 +16897,7 @@
         "lines": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type21"
+            "$ref": "#/components/schemas/__type22"
           }
         }
       },
@@ -16921,7 +16920,7 @@
         "lines"
       ]
     },
-    "__type21": {
+    "__type22": {
       "type": "object",
       "properties": {
         "id": {
@@ -17254,7 +17253,7 @@
         "lines": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type22"
+            "$ref": "#/components/schemas/__type23"
           }
         }
       },
@@ -17289,7 +17288,7 @@
         "lines"
       ]
     },
-    "__type22": {
+    "__type23": {
       "type": "object",
       "properties": {
         "id": {
@@ -17532,7 +17531,7 @@
       ],
       "additionalProperties": false
     },
-    "__type23": {
+    "__type24": {
       "type": "object",
       "properties": {
         "id": {
@@ -17716,7 +17715,7 @@
         "items": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type24"
+            "$ref": "#/components/schemas/__type25"
           }
         },
         "total": {
@@ -17736,7 +17735,7 @@
         "limit"
       ]
     },
-    "__type24": {
+    "__type25": {
       "type": "object",
       "properties": {
         "id": {
@@ -18266,7 +18265,7 @@
         "prices": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type18"
+            "$ref": "#/components/schemas/__type19"
           }
         }
       },
@@ -18579,7 +18578,7 @@
           }
         },
         "meta": {
-          "$ref": "#/components/schemas/__type28"
+          "$ref": "#/components/schemas/__type30"
         }
       },
       "required": [
@@ -18632,7 +18631,7 @@
         "media": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type25"
+            "$ref": "#/components/schemas/__type26"
           }
         },
         "variants": {
@@ -18654,7 +18653,7 @@
         "variants"
       ]
     },
-    "__type25": {
+    "__type26": {
       "type": "object",
       "properties": {
         "id": {
@@ -18709,7 +18708,7 @@
         "attributes": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type26"
+            "$ref": "#/components/schemas/__type27"
           }
         },
         "offers": {
@@ -18728,7 +18727,7 @@
         "offers"
       ]
     },
-    "__type26": {
+    "__type27": {
       "type": "object",
       "properties": {
         "attributeId": {
@@ -18769,7 +18768,7 @@
           "type": "object",
           "allOf": [
             {
-              "$ref": "#/components/schemas/__type27"
+              "$ref": "#/components/schemas/__type28"
             }
           ],
           "nullable": true
@@ -18787,7 +18786,7 @@
           "type": "object",
           "allOf": [
             {
-              "$ref": "#/components/schemas/__type20"
+              "$ref": "#/components/schemas/__type29"
             }
           ],
           "nullable": true
@@ -18802,7 +18801,7 @@
         "shippingCost"
       ]
     },
-    "__type27": {
+    "__type28": {
       "type": "object",
       "properties": {
         "amount": {
@@ -18817,7 +18816,22 @@
         "currency"
       ]
     },
-    "__type28": {
+    "__type29": {
+      "type": "object",
+      "properties": {
+        "amount": {
+          "type": "number"
+        },
+        "currency": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "amount",
+        "currency"
+      ]
+    },
+    "__type30": {
       "type": "object",
       "properties": {
         "page": {
@@ -18865,7 +18879,7 @@
       },
       "additionalProperties": false
     },
-    "__type29": {
+    "__type31": {
       "type": "object",
       "properties": {
         "items": {
@@ -18997,7 +19011,7 @@
         "documents": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type30"
+            "$ref": "#/components/schemas/__type32"
           }
         }
       },
@@ -19022,7 +19036,7 @@
         "documents"
       ]
     },
-    "__type30": {
+    "__type32": {
       "type": "object",
       "properties": {
         "mediaAssetId": {
@@ -19338,7 +19352,7 @@
         "lines": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type31"
+            "$ref": "#/components/schemas/__type33"
           }
         }
       },
@@ -19367,7 +19381,7 @@
         "lines"
       ]
     },
-    "__type31": {
+    "__type33": {
       "type": "object",
       "properties": {
         "id": {
@@ -19399,7 +19413,7 @@
         "shipmentId"
       ]
     },
-    "__type32": {
+    "__type34": {
       "type": "object",
       "properties": {
         "id": {
@@ -19627,7 +19641,7 @@
         "events": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type33"
+            "$ref": "#/components/schemas/__type35"
           }
         }
       },
@@ -19641,7 +19655,7 @@
         "events"
       ]
     },
-    "__type33": {
+    "__type35": {
       "type": "object",
       "properties": {
         "normalizedStatus": {
@@ -19687,7 +19701,7 @@
         "type": "string"
       }
     },
-    "__type34": {
+    "__type36": {
       "type": "object",
       "properties": {
         "id": {
@@ -19927,7 +19941,7 @@
           "type": "object",
           "allOf": [
             {
-              "$ref": "#/components/schemas/__type35"
+              "$ref": "#/components/schemas/__type37"
             }
           ],
           "nullable": true
@@ -19943,7 +19957,7 @@
         "isAvailable"
       ]
     },
-    "__type35": {
+    "__type37": {
       "type": "object",
       "properties": {
         "amount": {

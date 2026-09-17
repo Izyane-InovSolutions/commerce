@@ -52,6 +52,7 @@ export function OrdersList({
     shippingAmount: order.shippingAmount,
     total: order.total,
     currency: order.currency,
+    fulfillmentSummary: order.fulfillmentSummary,
   }));
 
   return <OrdersFilterList orders={cards} />;

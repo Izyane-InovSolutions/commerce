@@ -69,7 +69,7 @@ export function SideNav({ categories = [] }: { categories?: Category[] }) {
       <ul>
         <li>
           <Link
-            href="/wishlist"
+            href="/account?tab=wishlist"
             className={`${linkClasses} flex items-center gap-2 font-medium`}
           >
             <Heart className="size-4" aria-hidden="true" />
@@ -78,7 +78,7 @@ export function SideNav({ categories = [] }: { categories?: Category[] }) {
         </li>
         <li>
           <Link
-            href="/orders"
+            href="/account?tab=orders"
             className={`${linkClasses} flex items-center gap-2 font-medium`}
           >
             <Package className="size-4" aria-hidden="true" />
