@@ -5,12 +5,22 @@ import { PrismaService } from '../../database/prisma.service';
 import { redact } from '../../infrastructure/logging/redact';
 import { RecordAuditEventInput } from './audit-event';
 
+type AuditClient = Pick<Prisma.TransactionClient, 'auditEvent'>;
+
 @Injectable()
 export class AuditService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async record(event: RecordAuditEventInput): Promise<void> {
-    await this.prisma.auditEvent.create({
+  /**
+   * `client`, when given, writes the audit row inside the caller's own
+   * transaction — used by procurement so a posted receipt and the audit
+   * event that explains it commit or roll back together.
+   */
+  async record(
+    event: RecordAuditEventInput,
+    client: AuditClient = this.prisma,
+  ): Promise<void> {
+    await client.auditEvent.create({
       data: {
         actorUserId: event.actorUserId,
         action: event.action,

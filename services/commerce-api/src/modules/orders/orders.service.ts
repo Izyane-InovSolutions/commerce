@@ -16,11 +16,23 @@ import {
 } from '@prisma/client';
 
 import { toAddressSnapshot } from '../../common/addresses/address-snapshot';
+import {
+  DEFAULT_PAGE,
+  DEFAULT_PAGE_SIZE,
+  PaginationQueryDto,
+} from '../../common/pagination/pagination-query.dto';
 import { OfferReadService } from '../offers/offer-read.service';
 import { PrismaService } from '../../database/prisma.service';
+import { BackgroundJobsService } from '../../infrastructure/jobs/background-jobs.service';
+import { OutboxService } from '../../infrastructure/jobs/outbox.service';
 import { AddressesService } from '../users/addresses/addresses.service';
 import { CartLineView } from '../cart/cart.types';
 import { CartService } from '../cart/cart.service';
+import {
+  CustomerFulfillmentSummary,
+  deriveCustomerFulfillmentSummary,
+} from '../fulfillment/customer-fulfillment-summary';
+import { FULFILLMENT_PROVISION_JOB_TYPE } from '../fulfillment/jobs/fulfillment-provision.handler';
 import { LedgerService } from '../financials/ledger.service';
 import { InventoryService } from '../inventory/inventory.service';
 import type { CommerceOffer } from '../offers/offer-read.service';
@@ -49,6 +61,20 @@ export type OrderWithItems = Order & {
     status: PaymentStatus;
     failureReason: string | null;
   } | null;
+  /**
+   * A small customer-facing vocabulary over the order's fulfillment orders
+   * (warehouse/staff detail never leaks here) — see
+   * deriveCustomerFulfillmentSummary. Undefined on admin reads that don't
+   * need it (findAny/listAll), present on customer-facing ones.
+   */
+  fulfillmentSummary?: CustomerFulfillmentSummary;
+};
+
+export type OrderPage = {
+  items: OrderWithItems[];
+  total: number;
+  page: number;
+  limit: number;
 };
 
 /** What a customer is shown about the payment behind their order. */
@@ -103,6 +129,8 @@ export class OrdersService {
     private readonly ledgerService: LedgerService,
     private readonly offers: OfferReadService,
     private readonly shippingService: ShippingService,
+    private readonly backgroundJobsService: BackgroundJobsService,
+    private readonly outboxService: OutboxService,
   ) {}
 
   /**
@@ -449,6 +477,10 @@ export class OrdersService {
                 fulfillmentMode: shippingGroup.fulfillmentMode,
                 serviceLevel: shippingGroup.serviceLevel,
                 rateCode: shippingGroup.rateCode,
+                providerCode: shippingGroup.providerCode,
+                carrierCode: shippingGroup.carrierCode,
+                methodCode: shippingGroup.methodCode,
+                methodName: shippingGroup.methodName,
                 subtotal: shippingGroup.subtotal,
                 shippingAmount: shippingGroup.shippingAmount,
                 total: shippingGroup.total,
@@ -564,10 +596,31 @@ export class OrdersService {
       (a.sellerId ?? '').localeCompare(b.sellerId ?? ''),
     ))
       await this.ledgerService.recordSale(sellerOrder, tx);
-    return tx.order.update({
+    const paid = await tx.order.update({
       where: { id: orderId },
       data: { status: OrderStatus.PAID },
     });
+
+    // Enqueued directly (not driven by the outbox, which has no consumer
+    // yet — see BackgroundJobsService.enqueue usage elsewhere, e.g.
+    // InventoryService's reservation-expiry job) so provisioning is
+    // reliably retried on failure without needing a separate relay. The
+    // outbox write alongside it is for external/downstream listeners only.
+    await this.backgroundJobsService.enqueue(
+      { type: FULFILLMENT_PROVISION_JOB_TYPE, payload: { orderId } },
+      tx,
+    );
+    await this.outboxService.record(
+      {
+        topic: 'order.paid',
+        aggregateType: 'Order',
+        aggregateId: orderId,
+        payload: { orderId },
+      },
+      tx,
+    );
+
+    return paid;
   }
 
   async getSellerOrderForPayment(
@@ -664,8 +717,8 @@ export class OrdersService {
     });
   }
 
-  listOwn(userId: string): Promise<OrderWithItems[]> {
-    return this.prisma.order.findMany({
+  async listOwn(userId: string): Promise<OrderWithItems[]> {
+    const orders = await this.prisma.order.findMany({
       where: { userId },
       include: {
         items: true,
@@ -679,6 +732,8 @@ export class OrdersService {
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    return this.attachFulfillmentSummaries(orders);
   }
 
   async findOwn(userId: string, orderId: string): Promise<OrderWithItems> {
@@ -688,7 +743,68 @@ export class OrdersService {
       throw new NotFoundException('Order not found');
     }
 
-    return order;
+    const withSummary = await this.attachFulfillmentSummaries([order]);
+    return withSummary[0] ?? order;
+  }
+
+  /** Admin read — no ownership check, no fulfillmentSummary (staff use the
+   * dedicated fulfillment endpoints for warehouse/staff detail instead). */
+  async findAny(orderId: string): Promise<OrderWithItems> {
+    return this.findByIdOrThrow(orderId);
+  }
+
+  async listAll(
+    query: PaginationQueryDto & { status?: OrderStatus },
+  ): Promise<OrderPage> {
+    const page = query.page ?? DEFAULT_PAGE;
+    const limit = query.limit ?? DEFAULT_PAGE_SIZE;
+    const where = query.status ? { status: query.status } : {};
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.order.findMany({
+        where,
+        include: {
+          items: true,
+          sellerOrders: {
+            include: {
+              items: true,
+              shippingGroups: { include: { items: true } },
+            },
+          },
+          payment: CUSTOMER_PAYMENT_SELECT,
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.order.count({ where }),
+    ]);
+
+    return { items, total, page, limit };
+  }
+
+  private async attachFulfillmentSummaries(
+    orders: OrderWithItems[],
+  ): Promise<OrderWithItems[]> {
+    if (orders.length === 0) return orders;
+
+    const fulfillmentOrders = await this.prisma.fulfillmentOrder.findMany({
+      where: { orderId: { in: orders.map((order) => order.id) } },
+      select: { orderId: true, status: true },
+    });
+    const statusesByOrderId = new Map<string, (typeof fulfillmentOrders)[number]['status'][]>();
+    for (const fo of fulfillmentOrders) {
+      const list = statusesByOrderId.get(fo.orderId) ?? [];
+      list.push(fo.status);
+      statusesByOrderId.set(fo.orderId, list);
+    }
+
+    return orders.map((order) => ({
+      ...order,
+      fulfillmentSummary: deriveCustomerFulfillmentSummary(
+        statusesByOrderId.get(order.id) ?? [],
+      ),
+    }));
   }
 
   // sellerId: null is the platform/first-party group - every order gets at

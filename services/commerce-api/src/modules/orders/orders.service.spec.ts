@@ -7,6 +7,8 @@ import { CartService } from '../cart/cart.service';
 import { LedgerService } from '../financials/ledger.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { PrismaService } from '../../database/prisma.service';
+import { BackgroundJobsService } from '../../infrastructure/jobs/background-jobs.service';
+import { OutboxService } from '../../infrastructure/jobs/outbox.service';
 import { ShippingService } from '../shipping/shipping.service';
 import { OrdersService } from './orders.service';
 
@@ -19,6 +21,7 @@ function buildPrisma(): {
     findMany: jest.Mock;
   };
   orderItem: { update: jest.Mock; findUnique: jest.Mock };
+  fulfillmentOrder: { findMany: jest.Mock };
   sellerOrder: {
     create: jest.Mock;
     updateMany: jest.Mock;
@@ -42,6 +45,7 @@ function buildPrisma(): {
       findMany: jest.fn(),
     },
     orderItem: { update: jest.fn(), findUnique: jest.fn() },
+    fulfillmentOrder: { findMany: jest.fn().mockResolvedValue([]) },
     sellerOrder: {
       create: jest
         .fn()
@@ -201,6 +205,8 @@ describe('OrdersService', () => {
       ledgerService as unknown as LedgerService,
       new OfferReadService(prisma as unknown as PrismaService),
       shippingService as unknown as ShippingService,
+      { enqueue: jest.fn().mockResolvedValue(undefined) } as unknown as BackgroundJobsService,
+      { record: jest.fn().mockResolvedValue(undefined) } as unknown as OutboxService,
     );
   });
 
