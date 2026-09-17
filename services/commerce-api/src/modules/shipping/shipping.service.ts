@@ -15,6 +15,10 @@ export type ShippingQuoteGroup = {
   fulfillmentMode: OfferFulfillmentMode;
   serviceLevel: string;
   rateCode: string;
+  providerCode: string;
+  carrierCode: string;
+  methodCode: string;
+  methodName: string;
   subtotal: number;
   shippingAmount: number;
   total: number;
@@ -81,6 +85,10 @@ export class ShippingService {
         fulfillmentMode,
         serviceLevel: rate.serviceLevel,
         rateCode: rate.rateCode,
+        providerCode: rate.providerCode,
+        carrierCode: rate.carrierCode,
+        methodCode: rate.methodCode,
+        methodName: rate.methodName,
         subtotal,
         shippingAmount: rate.amount,
         total: subtotal + rate.amount,

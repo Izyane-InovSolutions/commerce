@@ -108,7 +108,15 @@ export class InventoryService {
     warehouseId: string,
     variantId: string,
   ): Promise<InventoryRecord> {
-    const existing = await this.prisma.inventoryRecord.findUnique({
+    return this.getOrCreateRecordWithClient(this.prisma, warehouseId, variantId);
+  }
+
+  private async getOrCreateRecordWithClient(
+    client: Pick<Prisma.TransactionClient, 'inventoryRecord'>,
+    warehouseId: string,
+    variantId: string,
+  ): Promise<InventoryRecord> {
+    const existing = await client.inventoryRecord.findUnique({
       where: { warehouseId_variantId: { warehouseId, variantId } },
     });
 
@@ -117,7 +125,7 @@ export class InventoryService {
     }
 
     try {
-      return await this.prisma.inventoryRecord.create({
+      return await client.inventoryRecord.create({
         data: { warehouseId, variantId },
       });
     } catch (error) {
@@ -126,7 +134,7 @@ export class InventoryService {
       }
 
       // Lost a create race; the winner's row exists now.
-      return this.prisma.inventoryRecord.findUniqueOrThrow({
+      return client.inventoryRecord.findUniqueOrThrow({
         where: { warehouseId_variantId: { warehouseId, variantId } },
       });
     }
@@ -160,6 +168,141 @@ export class InventoryService {
     });
 
     return this.toView(updated);
+  }
+
+  /**
+   * Transaction-scoped receiving for callers (procurement) that must post
+   * stock, their own domain rows, and an audit trail atomically. Unlike
+   * `receiveStock`, this never opens its own transaction and always tags the
+   * movement with the caller's reference, so a posted goods-receipt line can
+   * be traced back to the exact movement it created.
+   */
+  async receiveStockForReference(
+    tx: Prisma.TransactionClient,
+    warehouseId: string,
+    variantId: string,
+    quantity: number,
+    reference: { referenceType: string; referenceId: string },
+    note?: string,
+  ): Promise<{ record: InventoryRecord; movement: InventoryMovement }> {
+    if (quantity <= 0) {
+      throw new BadRequestException('quantity must be positive');
+    }
+
+    const record = await this.getOrCreateRecordWithClient(
+      tx,
+      warehouseId,
+      variantId,
+    );
+    const updated = await tx.inventoryRecord.update({
+      where: { id: record.id },
+      data: { onHand: { increment: quantity } },
+    });
+    const movement = await this.recordMovement(
+      tx,
+      record.id,
+      InventoryMovementType.RECEIPT,
+      quantity,
+      note,
+      reference,
+    );
+
+    return { record: updated, movement };
+  }
+
+  /**
+   * Returns previously-committed stock to on-hand for a cancelled
+   * fulfillment quantity. Picking/packing/dispatch never touch inventory —
+   * payment already committed and deducted it via `commit()` — so
+   * cancelling a fulfillment line is the only fulfillment-side write this
+   * module makes, and it is always a RETURN, the same movement type
+   * `restock()` uses for a released reservation's stock coming back.
+   */
+  async returnCancelledStock(
+    tx: Prisma.TransactionClient,
+    warehouseId: string,
+    variantId: string,
+    quantity: number,
+    reference: { referenceType: string; referenceId: string },
+    note?: string,
+  ): Promise<{ record: InventoryRecord; movement: InventoryMovement }> {
+    if (quantity <= 0) {
+      throw new BadRequestException('quantity must be positive');
+    }
+
+    const record = await this.getOrCreateRecordWithClient(
+      tx,
+      warehouseId,
+      variantId,
+    );
+    const updated = await tx.inventoryRecord.update({
+      where: { id: record.id },
+      data: { onHand: { increment: quantity } },
+    });
+    const movement = await this.recordMovement(
+      tx,
+      record.id,
+      InventoryMovementType.RETURN,
+      quantity,
+      note,
+      reference,
+    );
+
+    return { record: updated, movement };
+  }
+
+  /**
+   * The inverse of `receiveStockForReference`, for reversing a posted goods
+   * receipt. Decrements on-hand with the same floor check as `adjustStock`
+   * and tags the movement with the reversal's own reference, so the original
+   * receipt line's rows stay untouched (posted receipts are immutable) while
+   * the stock effect is fully undone.
+   */
+  async reverseReceiptStock(
+    tx: Prisma.TransactionClient,
+    warehouseId: string,
+    variantId: string,
+    quantity: number,
+    reference: { referenceType: string; referenceId: string },
+    note?: string,
+  ): Promise<{ record: InventoryRecord; movement: InventoryMovement }> {
+    if (quantity <= 0) {
+      throw new BadRequestException('quantity must be positive');
+    }
+
+    const record = await this.getOrCreateRecordWithClient(
+      tx,
+      warehouseId,
+      variantId,
+    );
+    // Floors at `reserved`, not zero: on-hand backs active reservations too,
+    // and a reversal must never leave less on-hand than is already promised
+    // to a reservation holder.
+    const affected = await tx.$executeRaw`
+      UPDATE inventory_records
+      SET on_hand = on_hand - ${quantity}, updated_at = now()
+      WHERE id = ${record.id}::uuid AND on_hand - ${quantity} >= reserved
+    `;
+
+    if (affected === 0) {
+      throw new ConflictException(
+        'Reversal would leave on-hand stock below reserved quantity',
+      );
+    }
+
+    const updated = await tx.inventoryRecord.findUniqueOrThrow({
+      where: { id: record.id },
+    });
+    const movement = await this.recordMovement(
+      tx,
+      record.id,
+      InventoryMovementType.ADJUSTMENT,
+      quantity,
+      note,
+      reference,
+    );
+
+    return { record: updated, movement };
   }
 
   async adjustStock(

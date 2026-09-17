@@ -24,13 +24,16 @@ import { CartModule } from './modules/cart/cart.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { CheckoutModule } from './modules/checkout/checkout.module';
 import { FinancialsModule } from './modules/financials/financials.module';
+import { FulfillmentModule } from './modules/fulfillment/fulfillment.module';
 import { HealthModule } from './modules/health/health.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { MediaModule } from './modules/media/media.module';
 import { OffersModule } from './modules/offers/offers.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { ProcurementModule } from './modules/procurement/procurement.module';
 import { ProductsModule } from './modules/products/products.module';
+import { ShipmentsModule } from './modules/shipments/shipments.module';
 import { UsersModule } from './modules/users/users.module';
 import { WishlistModule } from './modules/wishlist/wishlist.module';
 import { SellersModule } from './modules/sellers/sellers.module';
@@ -58,6 +61,7 @@ import { WorkersModule } from './infrastructure/workers/workers.module';
     ProductsModule,
     OffersModule,
     InventoryModule,
+    ProcurementModule,
     CartModule,
     WishlistModule,
     OrdersModule,
@@ -65,6 +69,8 @@ import { WorkersModule } from './infrastructure/workers/workers.module';
     SellersModule,
     WorkersModule,
     FinancialsModule,
+    FulfillmentModule,
+    ShipmentsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

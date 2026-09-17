@@ -1009,6 +1009,7 @@ export class FakePrismaService {
   >();
   private readonly reservations = new Map<string, Record<string, unknown>>();
   private readonly backgroundJobs = new Map<string, Record<string, unknown>>();
+  private readonly outboxEvents = new Map<string, Record<string, unknown>>();
 
   warehouse = {
     findMany: (): Promise<Record<string, unknown>[]> =>
@@ -1384,6 +1385,40 @@ export class FakePrismaService {
     }): Promise<Record<string, unknown>> => {
       const row = this.backgroundJobs.get(where.id)!;
       Object.assign(row, data, { updatedAt: new Date() });
+      return Promise.resolve(row);
+    },
+  };
+
+  // No e2e spec provisions fulfillment through this fake yet — only
+  // OrdersService's fulfillmentSummary lookup (always an empty result,
+  // i.e. "still PREPARING") needs a fake here.
+  fulfillmentOrder = {
+    findMany: (): Promise<Record<string, unknown>[]> => Promise.resolve([]),
+  };
+
+  // Write-only here: nothing in the app yet consumes pending outbox rows
+  // (see OutboxService), so only `create` — what OutboxService.record()
+  // calls — needs a fake.
+  outboxEvent = {
+    create: ({
+      data,
+    }: {
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const now = new Date();
+      const row = {
+        id: randomUUID(),
+        status: 'PENDING',
+        attempts: 0,
+        maxAttempts: 10,
+        availableAt: now,
+        publishedAt: null,
+        lastError: null,
+        createdAt: now,
+        updatedAt: now,
+        ...data,
+      };
+      this.outboxEvents.set(row.id as string, row);
       return Promise.resolve(row);
     },
   };
