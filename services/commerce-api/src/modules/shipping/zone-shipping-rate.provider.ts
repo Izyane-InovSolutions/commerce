@@ -52,7 +52,14 @@ export class ZoneShippingRateProvider implements ShippingRateProvider {
     subtotal: number,
   ): Pick<
     ShippingRate,
-    'serviceLevel' | 'rateCode' | 'amount' | 'estimatedDeliveryDays'
+    | 'serviceLevel'
+    | 'rateCode'
+    | 'amount'
+    | 'estimatedDeliveryDays'
+    | 'providerCode'
+    | 'carrierCode'
+    | 'methodCode'
+    | 'methodName'
   > {
     const freeThreshold = this.config.get<number>(
       'SHIPPING_DOMESTIC_FREE_THRESHOLD_MINOR',
@@ -63,27 +70,45 @@ export class ZoneShippingRateProvider implements ShippingRateProvider {
       3_000,
     );
     const free = subtotal >= freeThreshold;
+    const rateCode = free ? 'DOMESTIC_STANDARD_FREE_V1' : 'DOMESTIC_STANDARD_V1';
 
     return {
       serviceLevel: 'STANDARD',
-      rateCode: free ? 'DOMESTIC_STANDARD_FREE_V1' : 'DOMESTIC_STANDARD_V1',
+      rateCode,
       amount: free ? 0 : flatRate,
       estimatedDeliveryDays: { min: 2, max: 5 },
+      providerCode: 'ZONE',
+      carrierCode: 'MANUAL',
+      methodCode: rateCode,
+      methodName: free ? 'Standard Shipping (Free)' : 'Standard Shipping',
     };
   }
 
   private internationalRate(): Pick<
     ShippingRate,
-    'serviceLevel' | 'rateCode' | 'amount' | 'estimatedDeliveryDays'
+    | 'serviceLevel'
+    | 'rateCode'
+    | 'amount'
+    | 'estimatedDeliveryDays'
+    | 'providerCode'
+    | 'carrierCode'
+    | 'methodCode'
+    | 'methodName'
   > {
+    const rateCode = 'INTERNATIONAL_STANDARD_V1';
+
     return {
       serviceLevel: 'STANDARD',
-      rateCode: 'INTERNATIONAL_STANDARD_V1',
+      rateCode,
       amount: this.config.get<number>(
         'SHIPPING_INTERNATIONAL_RATE_MINOR',
         15_000,
       ),
       estimatedDeliveryDays: { min: 7, max: 14 },
+      providerCode: 'ZONE',
+      carrierCode: 'MANUAL',
+      methodCode: rateCode,
+      methodName: 'International Standard Shipping',
     };
   }
 

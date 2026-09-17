@@ -2937,6 +2937,1135 @@
         }
       }
     },
+    "AdminFulfillmentsController_findAll": {
+      "operationId": "AdminFulfillmentsController_findAll",
+      "tags": [
+        "admin/fulfillments"
+      ],
+      "parameters": [
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "CANCELLED",
+              "PARTIALLY_DISPATCHED",
+              "DISPATCHED",
+              "READY_TO_PICK",
+              "PICKING",
+              "PARTIALLY_PICKED",
+              "PICKED",
+              "PACKING",
+              "PARTIALLY_PACKED",
+              "PACKED",
+              "ON_HOLD",
+              "PARTIALLY_CANCELLED"
+            ],
+            "nullable": true
+          }
+        },
+        {
+          "name": "warehouseId",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "assignedUserId",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "page",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "default": 1
+          }
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/FulfillmentOrderPage"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN."
+    },
+    "AdminFulfillmentsController_findOne": {
+      "operationId": "AdminFulfillmentsController_findOne",
+      "tags": [
+        "admin/fulfillments"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/FulfillmentOrderWithDetail"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN."
+    },
+    "AdminFulfillmentsController_listEvents": {
+      "operationId": "AdminFulfillmentsController_listEvents",
+      "tags": [
+        "admin/fulfillments"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/__type13"
+                    }
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN."
+    },
+    "AdminFulfillmentsController_assignWorkItem": {
+      "operationId": "AdminFulfillmentsController_assignWorkItem",
+      "tags": [
+        "admin/fulfillments"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "type",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/FulfillmentOrderWithDetail"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputAssignWorkItemDto"
+            }
+          }
+        }
+      }
+    },
+    "AdminFulfillmentsController_startPicking": {
+      "operationId": "AdminFulfillmentsController_startPicking",
+      "tags": [
+        "admin/fulfillments"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/FulfillmentOrderWithDetail"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputVersionDto"
+            }
+          }
+        }
+      }
+    },
+    "AdminFulfillmentsController_recordPicks": {
+      "operationId": "AdminFulfillmentsController_recordPicks",
+      "tags": [
+        "admin/fulfillments"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "idempotency-key",
+          "in": "header",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/FulfillmentOrderWithDetail"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputRecordQuantitiesDto"
+            }
+          }
+        }
+      }
+    },
+    "AdminFulfillmentsController_completePicking": {
+      "operationId": "AdminFulfillmentsController_completePicking",
+      "tags": [
+        "admin/fulfillments"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/FulfillmentOrderWithDetail"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputVersionDto"
+            }
+          }
+        }
+      }
+    },
+    "AdminFulfillmentsController_startPacking": {
+      "operationId": "AdminFulfillmentsController_startPacking",
+      "tags": [
+        "admin/fulfillments"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/FulfillmentOrderWithDetail"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputVersionDto"
+            }
+          }
+        }
+      }
+    },
+    "AdminFulfillmentsController_recordPacks": {
+      "operationId": "AdminFulfillmentsController_recordPacks",
+      "tags": [
+        "admin/fulfillments"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "idempotency-key",
+          "in": "header",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/FulfillmentOrderWithDetail"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputRecordQuantitiesDto"
+            }
+          }
+        }
+      }
+    },
+    "AdminFulfillmentsController_completePacking": {
+      "operationId": "AdminFulfillmentsController_completePacking",
+      "tags": [
+        "admin/fulfillments"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/FulfillmentOrderWithDetail"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputVersionDto"
+            }
+          }
+        }
+      }
+    },
+    "AdminFulfillmentsController_createException": {
+      "operationId": "AdminFulfillmentsController_createException",
+      "tags": [
+        "admin/fulfillments"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/FulfillmentOrderWithDetail"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputCreateExceptionDto"
+            }
+          }
+        }
+      }
+    },
+    "AdminFulfillmentsController_resolveException": {
+      "operationId": "AdminFulfillmentsController_resolveException",
+      "tags": [
+        "admin/fulfillments"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "exceptionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/FulfillmentOrderWithDetail"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputResolveExceptionDto"
+            }
+          }
+        }
+      }
+    },
+    "AdminFulfillmentsController_dispatch": {
+      "operationId": "AdminFulfillmentsController_dispatch",
+      "tags": [
+        "admin/fulfillments"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "idempotency-key",
+          "in": "header",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/FulfillmentDispatchWithLines"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputDispatchDto"
+            }
+          }
+        }
+      }
+    },
+    "AdminFulfillmentsController_cancel": {
+      "operationId": "AdminFulfillmentsController_cancel",
+      "tags": [
+        "admin/fulfillments"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "idempotency-key",
+          "in": "header",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/FulfillmentOrderWithDetail"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputCancelLinesDto"
+            }
+          }
+        }
+      }
+    },
     "HealthController_getHealth": {
       "operationId": "HealthController_getHealth",
       "tags": [
@@ -3278,7 +4407,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type10"
+                      "$ref": "#/components/schemas/__type15"
                     }
                   },
                   "meta": {
@@ -3346,7 +4475,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type11"
+                      "$ref": "#/components/schemas/__type16"
                     }
                   },
                   "meta": {
@@ -3615,7 +4744,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type10"
+                      "$ref": "#/components/schemas/__type15"
                     }
                   },
                   "meta": {
@@ -3673,7 +4802,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type12"
+                      "$ref": "#/components/schemas/__type17"
                     }
                   },
                   "meta": {
@@ -3739,7 +4868,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type12"
+                    "$ref": "#/components/schemas/__type17"
                   },
                   "meta": {
                     "type": "object",
@@ -3794,7 +4923,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type12"
+                    "$ref": "#/components/schemas/__type17"
                   },
                   "meta": {
                     "type": "object",
@@ -3869,7 +4998,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type12"
+                    "$ref": "#/components/schemas/__type17"
                   },
                   "meta": {
                     "type": "object",
@@ -5276,6 +6405,165 @@
         }
       }
     },
+    "AdminOrdersController_findAll": {
+      "operationId": "AdminOrdersController_findAll",
+      "tags": [
+        "admin/orders"
+      ],
+      "parameters": [
+        {
+          "name": "page",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "default": 1
+          }
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "PENDING_PAYMENT",
+              "PAID",
+              "CANCELLED",
+              "PARTIALLY_REFUNDED",
+              "REFUNDED"
+            ]
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/OrderPage"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN."
+    },
+    "AdminOrdersController_findOne": {
+      "operationId": "AdminOrdersController_findOne",
+      "tags": [
+        "admin/orders"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/OrderWithItems"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN."
+    },
     "OrdersController_list": {
       "operationId": "OrdersController_list",
       "tags": [
@@ -5581,7 +6869,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type15"
+                    "$ref": "#/components/schemas/__type20"
                   },
                   "meta": {
                     "type": "object",
@@ -5656,7 +6944,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type15"
+                    "$ref": "#/components/schemas/__type20"
                   },
                   "meta": {
                     "type": "object",
@@ -7040,7 +8328,7 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/InputVersionDto"
+              "$ref": "#/components/schemas/InputVersionDto2"
             }
           }
         }
@@ -7190,7 +8478,7 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/InputVersionDto"
+              "$ref": "#/components/schemas/InputVersionDto2"
             }
           }
         }
@@ -7340,7 +8628,7 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/InputVersionDto"
+              "$ref": "#/components/schemas/InputVersionDto2"
             }
           }
         }
@@ -7597,7 +8885,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type18"
+                      "$ref": "#/components/schemas/__type23"
                     }
                   },
                   "meta": {
@@ -7663,7 +8951,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type18"
+                    "$ref": "#/components/schemas/__type23"
                   },
                   "meta": {
                     "type": "object",
@@ -7738,7 +9026,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type18"
+                    "$ref": "#/components/schemas/__type23"
                   },
                   "meta": {
                     "type": "object",
@@ -7904,7 +9192,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type19"
+                    "$ref": "#/components/schemas/__type24"
                   },
                   "meta": {
                     "type": "object",
@@ -7959,7 +9247,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type19"
+                    "$ref": "#/components/schemas/__type24"
                   },
                   "meta": {
                     "type": "object",
@@ -8034,7 +9322,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type19"
+                    "$ref": "#/components/schemas/__type24"
                   },
                   "meta": {
                     "type": "object",
@@ -8109,7 +9397,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type19"
+                    "$ref": "#/components/schemas/__type24"
                   },
                   "meta": {
                     "type": "object",
@@ -9309,7 +10597,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type24"
+                    "$ref": "#/components/schemas/__type29"
                   },
                   "meta": {
                     "type": "object",
@@ -10009,6 +11297,671 @@
         }
       }
     },
+    "AdminShipmentsController_findAll": {
+      "operationId": "AdminShipmentsController_findAll",
+      "tags": [
+        "admin/shipments"
+      ],
+      "parameters": [
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "CANCELLED",
+              "DISPATCHED",
+              "PENDING_BOOKING",
+              "BOOKED",
+              "IN_TRANSIT",
+              "OUT_FOR_DELIVERY",
+              "DELIVERED",
+              "DELIVERY_FAILED",
+              "EXCEPTION",
+              "RETURN_TO_SENDER",
+              "RETURNED"
+            ],
+            "nullable": true
+          }
+        },
+        {
+          "name": "warehouseId",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "fulfillmentOrderId",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "page",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "default": 1
+          }
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/ShipmentPage"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN."
+    },
+    "AdminShipmentsController_findOne": {
+      "operationId": "AdminShipmentsController_findOne",
+      "tags": [
+        "admin/shipments"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/ShipmentWithLines"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN."
+    },
+    "AdminShipmentsController_listTrackingEvents": {
+      "operationId": "AdminShipmentsController_listTrackingEvents",
+      "tags": [
+        "admin/shipments"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/__type32"
+                    }
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN."
+    },
+    "AdminShipmentsController_create": {
+      "operationId": "AdminShipmentsController_create",
+      "tags": [
+        "admin/shipments"
+      ],
+      "parameters": [
+        {
+          "name": "idempotency-key",
+          "in": "header",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/ShipmentWithLines"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputCreateShipmentDto"
+            }
+          }
+        }
+      }
+    },
+    "AdminShipmentsController_book": {
+      "operationId": "AdminShipmentsController_book",
+      "tags": [
+        "admin/shipments"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/ShipmentWithLines"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN."
+    },
+    "AdminShipmentsController_cancel": {
+      "operationId": "AdminShipmentsController_cancel",
+      "tags": [
+        "admin/shipments"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/ShipmentWithLines"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputCancelShipmentDto"
+            }
+          }
+        }
+      }
+    },
+    "AdminShipmentsController_addTrackingEvent": {
+      "operationId": "AdminShipmentsController_addTrackingEvent",
+      "tags": [
+        "admin/shipments"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/__type32"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputAddTrackingEventDto"
+            }
+          }
+        }
+      }
+    },
+    "CustomerShipmentsController_findForOrder": {
+      "operationId": "CustomerShipmentsController_findForOrder",
+      "tags": [
+        "orders/:orderId/shipments"
+      ],
+      "parameters": [
+        {
+          "name": "orderId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/CustomerShipmentView"
+                    }
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      }
+    },
+    "ShippingWebhooksController_webhook": {
+      "operationId": "ShippingWebhooksController_webhook",
+      "tags": [
+        "webhooks/shipping"
+      ],
+      "parameters": [
+        {
+          "name": "providerCode",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "security": [],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "meta"
+                ],
+                "properties": {
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      }
+    },
     "AddressesController_findAll": {
       "operationId": "AddressesController_findAll",
       "tags": [
@@ -10035,7 +11988,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type26"
+                      "$ref": "#/components/schemas/__type34"
                     }
                   },
                   "meta": {
@@ -10100,7 +12053,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type26"
+                    "$ref": "#/components/schemas/__type34"
                   },
                   "meta": {
                     "type": "object",
@@ -10154,7 +12107,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type26"
+                    "$ref": "#/components/schemas/__type34"
                   },
                   "meta": {
                     "type": "object",
@@ -10228,7 +12181,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type26"
+                    "$ref": "#/components/schemas/__type34"
                   },
                   "meta": {
                     "type": "object",
@@ -10339,7 +12292,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type26"
+                    "$ref": "#/components/schemas/__type34"
                   },
                   "meta": {
                     "type": "object",
@@ -11620,6 +13573,15 @@
             }
           ],
           "nullable": true
+        },
+        "fulfillmentSummary": {
+          "type": "string",
+          "enum": [
+            "CANCELLED",
+            "PREPARING",
+            "PARTIALLY_DISPATCHED",
+            "DISPATCHED"
+          ]
         }
       },
       "required": [
@@ -11809,6 +13771,18 @@
         "rateCode": {
           "type": "string"
         },
+        "providerCode": {
+          "type": "string"
+        },
+        "carrierCode": {
+          "type": "string"
+        },
+        "methodCode": {
+          "type": "string"
+        },
+        "methodName": {
+          "type": "string"
+        },
         "quoteId": {
           "type": "string"
         },
@@ -11841,6 +13815,10 @@
         "fulfillmentMode",
         "serviceLevel",
         "rateCode",
+        "providerCode",
+        "carrierCode",
+        "methodCode",
+        "methodName",
         "quoteId",
         "quoteExpiresAt",
         "estimatedDeliveryMinDays",
@@ -12202,6 +14180,647 @@
         "limit"
       ]
     },
+    "InputListFulfillmentsDto": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "CANCELLED",
+            "PARTIALLY_DISPATCHED",
+            "DISPATCHED",
+            "READY_TO_PICK",
+            "PICKING",
+            "PARTIALLY_PICKED",
+            "PICKED",
+            "PACKING",
+            "PARTIALLY_PACKED",
+            "PACKED",
+            "ON_HOLD",
+            "PARTIALLY_CANCELLED"
+          ],
+          "nullable": true
+        },
+        "warehouseId": {
+          "type": "string",
+          "nullable": true,
+          "format": "uuid"
+        },
+        "assignedUserId": {
+          "type": "string",
+          "nullable": true,
+          "format": "uuid"
+        },
+        "page": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1,
+          "default": 1
+        },
+        "limit": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        }
+      },
+      "additionalProperties": false
+    },
+    "FulfillmentOrderPage": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/FulfillmentOrderWithDetail"
+          }
+        },
+        "total": {
+          "type": "number"
+        },
+        "page": {
+          "type": "number"
+        },
+        "limit": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "items",
+        "total",
+        "page",
+        "limit"
+      ]
+    },
+    "FulfillmentOrderWithDetail": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "CANCELLED",
+            "PARTIALLY_DISPATCHED",
+            "DISPATCHED",
+            "READY_TO_PICK",
+            "PICKING",
+            "PARTIALLY_PICKED",
+            "PICKED",
+            "PACKING",
+            "PARTIALLY_PACKED",
+            "PACKED",
+            "ON_HOLD",
+            "PARTIALLY_CANCELLED"
+          ]
+        },
+        "orderId": {
+          "type": "string"
+        },
+        "sellerOrderId": {
+          "type": "string"
+        },
+        "shippingGroupId": {
+          "type": "string"
+        },
+        "fulfillmentNumber": {
+          "type": "string"
+        },
+        "warehouseId": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "number"
+        },
+        "version": {
+          "type": "number"
+        },
+        "heldReason": {
+          "type": "string",
+          "nullable": true
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/__type10"
+          }
+        },
+        "workItems": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/__type11"
+          }
+        },
+        "exceptions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/__type12"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "updatedAt",
+        "status",
+        "orderId",
+        "sellerOrderId",
+        "shippingGroupId",
+        "fulfillmentNumber",
+        "warehouseId",
+        "priority",
+        "version",
+        "heldReason",
+        "lines",
+        "workItems",
+        "exceptions"
+      ]
+    },
+    "__type10": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reservationId": {
+          "type": "string",
+          "nullable": true
+        },
+        "fulfillmentOrderId": {
+          "type": "string"
+        },
+        "orderItemId": {
+          "type": "string"
+        },
+        "variantId": {
+          "type": "string"
+        },
+        "inventoryRecordId": {
+          "type": "string",
+          "nullable": true
+        },
+        "allocatedQuantity": {
+          "type": "number"
+        },
+        "pickedQuantity": {
+          "type": "number"
+        },
+        "packedQuantity": {
+          "type": "number"
+        },
+        "shipmentAssignedQuantity": {
+          "type": "number"
+        },
+        "dispatchedQuantity": {
+          "type": "number"
+        },
+        "cancelledQuantity": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "updatedAt",
+        "reservationId",
+        "fulfillmentOrderId",
+        "orderItemId",
+        "variantId",
+        "inventoryRecordId",
+        "allocatedQuantity",
+        "pickedQuantity",
+        "packedQuantity",
+        "shipmentAssignedQuantity",
+        "dispatchedQuantity",
+        "cancelledQuantity"
+      ]
+    },
+    "__type11": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "CANCELLED",
+            "PENDING",
+            "IN_PROGRESS",
+            "COMPLETED"
+          ]
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "PICK",
+            "PACK"
+          ]
+        },
+        "version": {
+          "type": "number"
+        },
+        "fulfillmentOrderId": {
+          "type": "string"
+        },
+        "assignedUserId": {
+          "type": "string",
+          "nullable": true
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "updatedAt",
+        "status",
+        "type",
+        "version",
+        "fulfillmentOrderId",
+        "assignedUserId",
+        "startedAt",
+        "completedAt"
+      ]
+    },
+    "__type12": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "OPEN",
+            "RESOLVED"
+          ]
+        },
+        "quantity": {
+          "type": "number"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "SHORT_PICK",
+            "DAMAGED",
+            "MISSING"
+          ]
+        },
+        "fulfillmentOrderId": {
+          "type": "string"
+        },
+        "fulfillmentLineId": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "resolvedByUserId": {
+          "type": "string",
+          "nullable": true
+        },
+        "resolution": {
+          "type": "string",
+          "nullable": true
+        },
+        "resolvedAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "status",
+        "quantity",
+        "type",
+        "fulfillmentOrderId",
+        "fulfillmentLineId",
+        "reason",
+        "resolvedByUserId",
+        "resolution",
+        "resolvedAt"
+      ]
+    },
+    "__type13": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "nullable": true
+        },
+        "type": {
+          "type": "string"
+        },
+        "fulfillmentOrderId": {
+          "type": "string"
+        },
+        "actorUserId": {
+          "type": "string",
+          "nullable": true
+        },
+        "metadata": {
+          "description": "JSON value; may be an object, array, scalar or null.",
+          "nullable": true
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "idempotencyKey",
+        "type",
+        "fulfillmentOrderId",
+        "actorUserId",
+        "metadata"
+      ]
+    },
+    "InputAssignWorkItemDto": {
+      "type": "object",
+      "properties": {
+        "assigneeUserId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "assigneeUserId",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "InputVersionDto": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "InputRecordQuantitiesDto": {
+      "type": "object",
+      "properties": {
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/InputQuantityLineDto"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "lines"
+      ],
+      "additionalProperties": false
+    },
+    "InputQuantityLineDto": {
+      "type": "object",
+      "properties": {
+        "fulfillmentLineId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "fulfillmentLineId",
+        "quantity"
+      ],
+      "additionalProperties": false
+    },
+    "InputCreateExceptionDto": {
+      "type": "object",
+      "properties": {
+        "fulfillmentLineId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "SHORT_PICK",
+            "DAMAGED",
+            "MISSING"
+          ]
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "fulfillmentLineId",
+        "type",
+        "quantity",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "InputResolveExceptionDto": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "resume",
+            "cancel_quantity"
+          ]
+        },
+        "resolution": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "action",
+        "resolution"
+      ],
+      "additionalProperties": false
+    },
+    "InputDispatchDto": {
+      "type": "object",
+      "properties": {
+        "shipmentId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "shipmentId"
+      ],
+      "additionalProperties": false
+    },
+    "FulfillmentDispatchWithLines": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "idempotencyKey": {
+          "type": "string"
+        },
+        "fulfillmentOrderId": {
+          "type": "string"
+        },
+        "shipmentId": {
+          "type": "string",
+          "nullable": true
+        },
+        "dispatchNumber": {
+          "type": "string"
+        },
+        "dispatchedByUserId": {
+          "type": "string"
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/__type14"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "idempotencyKey",
+        "fulfillmentOrderId",
+        "shipmentId",
+        "dispatchNumber",
+        "dispatchedByUserId",
+        "lines"
+      ]
+    },
+    "__type14": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "quantity": {
+          "type": "number"
+        },
+        "fulfillmentLineId": {
+          "type": "string"
+        },
+        "fulfillmentDispatchId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "quantity",
+        "fulfillmentLineId",
+        "fulfillmentDispatchId"
+      ]
+    },
+    "InputCancelLinesDto": {
+      "type": "object",
+      "properties": {
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/InputCancelLineDto"
+          },
+          "minItems": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "lines",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "InputCancelLineDto": {
+      "type": "object",
+      "properties": {
+        "fulfillmentLineId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "fulfillmentLineId",
+        "quantity"
+      ],
+      "additionalProperties": false
+    },
     "HealthResponse": {
       "type": "object",
       "properties": {
@@ -12294,6 +14913,9 @@
           "type": "string",
           "nullable": true
         },
+        "version": {
+          "type": "number"
+        },
         "variantId": {
           "type": "string"
         },
@@ -12301,9 +14923,6 @@
           "type": "number"
         },
         "reserved": {
-          "type": "number"
-        },
-        "version": {
           "type": "number"
         },
         "available": {
@@ -12316,10 +14935,10 @@
         "updatedAt",
         "offerId",
         "warehouseId",
+        "version",
         "variantId",
         "onHand",
         "reserved",
-        "version",
         "available"
       ]
     },
@@ -12381,7 +15000,7 @@
       ],
       "additionalProperties": false
     },
-    "__type10": {
+    "__type15": {
       "type": "object",
       "properties": {
         "id": {
@@ -12432,7 +15051,7 @@
         "inventoryRecordId"
       ]
     },
-    "__type11": {
+    "__type16": {
       "type": "object",
       "properties": {
         "id": {
@@ -12608,7 +15227,7 @@
       ],
       "additionalProperties": false
     },
-    "__type12": {
+    "__type17": {
       "type": "object",
       "properties": {
         "name": {
@@ -12830,11 +15449,11 @@
             "PLATFORM"
           ]
         },
-        "variantId": {
-          "type": "string"
-        },
         "version": {
           "type": "number"
+        },
+        "variantId": {
+          "type": "string"
         },
         "sellerSku": {
           "type": "string",
@@ -12862,7 +15481,7 @@
         "prices": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type13"
+            "$ref": "#/components/schemas/__type18"
           }
         }
       },
@@ -12873,8 +15492,8 @@
         "status",
         "sellerId",
         "fulfillmentMode",
-        "variantId",
         "version",
+        "variantId",
         "sellerSku",
         "listingTitle",
         "condition",
@@ -12882,7 +15501,7 @@
         "prices"
       ]
     },
-    "__type13": {
+    "__type18": {
       "type": "object",
       "properties": {
         "id": {
@@ -13085,7 +15704,7 @@
           "type": "object",
           "allOf": [
             {
-              "$ref": "#/components/schemas/__type14"
+              "$ref": "#/components/schemas/__type19"
             }
           ],
           "nullable": true
@@ -13140,7 +15759,7 @@
         "description"
       ]
     },
-    "__type14": {
+    "__type19": {
       "type": "object",
       "properties": {
         "amount": {
@@ -13214,11 +15833,11 @@
             "PLATFORM"
           ]
         },
-        "variantId": {
-          "type": "string"
-        },
         "version": {
           "type": "number"
+        },
+        "variantId": {
+          "type": "string"
         },
         "sellerSku": {
           "type": "string",
@@ -13246,7 +15865,7 @@
         "prices": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type13"
+            "$ref": "#/components/schemas/__type18"
           }
         }
       },
@@ -13257,8 +15876,8 @@
         "status",
         "sellerId",
         "fulfillmentMode",
-        "variantId",
         "version",
+        "variantId",
         "sellerSku",
         "listingTitle",
         "condition",
@@ -13419,6 +16038,32 @@
       ],
       "additionalProperties": false
     },
+    "OrderPage": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/OrderWithItems"
+          }
+        },
+        "total": {
+          "type": "number"
+        },
+        "page": {
+          "type": "number"
+        },
+        "limit": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "items",
+        "total",
+        "page",
+        "limit"
+      ]
+    },
     "SellerOrderPage": {
       "type": "object",
       "properties": {
@@ -13561,6 +16206,18 @@
         "rateCode": {
           "type": "string"
         },
+        "providerCode": {
+          "type": "string"
+        },
+        "carrierCode": {
+          "type": "string"
+        },
+        "methodCode": {
+          "type": "string"
+        },
+        "methodName": {
+          "type": "string"
+        },
         "quoteId": {
           "type": "string"
         },
@@ -13593,6 +16250,10 @@
         "fulfillmentMode",
         "serviceLevel",
         "rateCode",
+        "providerCode",
+        "carrierCode",
+        "methodCode",
+        "methodName",
         "quoteId",
         "quoteExpiresAt",
         "estimatedDeliveryMinDays",
@@ -13621,7 +16282,7 @@
       ],
       "additionalProperties": false
     },
-    "__type15": {
+    "__type20": {
       "type": "object",
       "properties": {
         "id": {
@@ -13665,10 +16326,10 @@
           "type": "string",
           "nullable": true
         },
-        "paymentId": {
+        "reason": {
           "type": "string"
         },
-        "reason": {
+        "paymentId": {
           "type": "string"
         }
       },
@@ -13683,8 +16344,8 @@
         "providerReference",
         "amount",
         "failureReason",
-        "paymentId",
-        "reason"
+        "reason",
+        "paymentId"
       ]
     },
     "PaymentSnapshot": {
@@ -13920,7 +16581,7 @@
         "lines": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type16"
+            "$ref": "#/components/schemas/__type21"
           }
         }
       },
@@ -13943,7 +16604,7 @@
         "lines"
       ]
     },
-    "__type16": {
+    "__type21": {
       "type": "object",
       "properties": {
         "id": {
@@ -14199,6 +16860,11 @@
         "version": {
           "type": "number"
         },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        },
         "poNumber": {
           "type": "string"
         },
@@ -14268,15 +16934,10 @@
           "format": "date-time",
           "nullable": true
         },
-        "completedAt": {
-          "type": "string",
-          "format": "date-time",
-          "nullable": true
-        },
         "lines": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type17"
+            "$ref": "#/components/schemas/__type22"
           }
         }
       },
@@ -14289,6 +16950,7 @@
         "shippingAmount",
         "warehouseId",
         "version",
+        "completedAt",
         "poNumber",
         "supplierId",
         "subtotalAmount",
@@ -14307,11 +16969,10 @@
         "submittedAt",
         "approvedAt",
         "orderedAt",
-        "completedAt",
         "lines"
       ]
     },
-    "__type17": {
+    "__type22": {
       "type": "object",
       "properties": {
         "id": {
@@ -14337,6 +16998,9 @@
         "variantId": {
           "type": "string"
         },
+        "cancelledQuantity": {
+          "type": "number"
+        },
         "purchaseOrderId": {
           "type": "string"
         },
@@ -14354,9 +17018,6 @@
           "type": "number"
         },
         "receivedQuantity": {
-          "type": "number"
-        },
-        "cancelledQuantity": {
           "type": "number"
         },
         "unitCostAmount": {
@@ -14377,13 +17038,13 @@
         "grossAmount",
         "netAmount",
         "variantId",
+        "cancelledQuantity",
         "purchaseOrderId",
         "taxAmount",
         "supplierSku",
         "packSize",
         "orderedQuantity",
         "receivedQuantity",
-        "cancelledQuantity",
         "unitCostAmount",
         "discountAmount",
         "taxRateBasisPoints"
@@ -14525,7 +17186,7 @@
       ],
       "additionalProperties": false
     },
-    "InputVersionDto": {
+    "InputVersionDto2": {
       "type": "object",
       "properties": {
         "version": {
@@ -14554,7 +17215,7 @@
       ],
       "additionalProperties": false
     },
-    "__type18": {
+    "__type23": {
       "type": "object",
       "properties": {
         "id": {
@@ -14738,7 +17399,7 @@
         "items": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type19"
+            "$ref": "#/components/schemas/__type24"
           }
         },
         "total": {
@@ -14758,7 +17419,7 @@
         "limit"
       ]
     },
-    "__type19": {
+    "__type24": {
       "type": "object",
       "properties": {
         "id": {
@@ -15248,11 +17909,11 @@
             "PLATFORM"
           ]
         },
-        "variantId": {
-          "type": "string"
-        },
         "version": {
           "type": "number"
+        },
+        "variantId": {
+          "type": "string"
         },
         "sellerSku": {
           "type": "string",
@@ -15280,7 +17941,7 @@
         "prices": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type13"
+            "$ref": "#/components/schemas/__type18"
           }
         }
       },
@@ -15291,8 +17952,8 @@
         "status",
         "sellerId",
         "fulfillmentMode",
-        "variantId",
         "version",
+        "variantId",
         "sellerSku",
         "listingTitle",
         "condition",
@@ -15591,7 +18252,7 @@
           }
         },
         "meta": {
-          "$ref": "#/components/schemas/__type23"
+          "$ref": "#/components/schemas/__type28"
         }
       },
       "required": [
@@ -15644,7 +18305,7 @@
         "media": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type20"
+            "$ref": "#/components/schemas/__type25"
           }
         },
         "variants": {
@@ -15666,7 +18327,7 @@
         "variants"
       ]
     },
-    "__type20": {
+    "__type25": {
       "type": "object",
       "properties": {
         "id": {
@@ -15721,7 +18382,7 @@
         "attributes": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type21"
+            "$ref": "#/components/schemas/__type26"
           }
         },
         "offers": {
@@ -15740,7 +18401,7 @@
         "offers"
       ]
     },
-    "__type21": {
+    "__type26": {
       "type": "object",
       "properties": {
         "attributeId": {
@@ -15781,7 +18442,7 @@
           "type": "object",
           "allOf": [
             {
-              "$ref": "#/components/schemas/__type22"
+              "$ref": "#/components/schemas/__type27"
             }
           ],
           "nullable": true
@@ -15800,7 +18461,7 @@
         "currencies"
       ]
     },
-    "__type22": {
+    "__type27": {
       "type": "object",
       "properties": {
         "amount": {
@@ -15815,7 +18476,7 @@
         "currency"
       ]
     },
-    "__type23": {
+    "__type28": {
       "type": "object",
       "properties": {
         "page": {
@@ -15863,7 +18524,7 @@
       },
       "additionalProperties": false
     },
-    "__type24": {
+    "__type29": {
       "type": "object",
       "properties": {
         "items": {
@@ -15995,7 +18656,7 @@
         "documents": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type25"
+            "$ref": "#/components/schemas/__type30"
           }
         }
       },
@@ -16020,7 +18681,7 @@
         "documents"
       ]
     },
-    "__type25": {
+    "__type30": {
       "type": "object",
       "properties": {
         "mediaAssetId": {
@@ -16169,7 +18830,523 @@
         "version"
       ]
     },
-    "__type26": {
+    "InputListShipmentsDto": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "CANCELLED",
+            "DISPATCHED",
+            "PENDING_BOOKING",
+            "BOOKED",
+            "IN_TRANSIT",
+            "OUT_FOR_DELIVERY",
+            "DELIVERED",
+            "DELIVERY_FAILED",
+            "EXCEPTION",
+            "RETURN_TO_SENDER",
+            "RETURNED"
+          ],
+          "nullable": true
+        },
+        "warehouseId": {
+          "type": "string",
+          "nullable": true,
+          "format": "uuid"
+        },
+        "fulfillmentOrderId": {
+          "type": "string",
+          "nullable": true,
+          "format": "uuid"
+        },
+        "page": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1,
+          "default": 1
+        },
+        "limit": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        }
+      },
+      "additionalProperties": false
+    },
+    "ShipmentPage": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/ShipmentWithLines"
+          }
+        },
+        "total": {
+          "type": "number"
+        },
+        "page": {
+          "type": "number"
+        },
+        "limit": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "items",
+        "total",
+        "page",
+        "limit"
+      ]
+    },
+    "ShipmentWithLines": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "CANCELLED",
+            "DISPATCHED",
+            "PENDING_BOOKING",
+            "BOOKED",
+            "IN_TRANSIT",
+            "OUT_FOR_DELIVERY",
+            "DELIVERED",
+            "DELIVERY_FAILED",
+            "EXCEPTION",
+            "RETURN_TO_SENDER",
+            "RETURNED"
+          ]
+        },
+        "orderId": {
+          "type": "string"
+        },
+        "sellerOrderId": {
+          "type": "string"
+        },
+        "shippingGroupId": {
+          "type": "string"
+        },
+        "providerCode": {
+          "type": "string"
+        },
+        "carrierCode": {
+          "type": "string"
+        },
+        "methodCode": {
+          "type": "string"
+        },
+        "warehouseId": {
+          "type": "string"
+        },
+        "version": {
+          "type": "number"
+        },
+        "fulfillmentOrderId": {
+          "type": "string"
+        },
+        "shipmentNumber": {
+          "type": "string"
+        },
+        "trackingReference": {
+          "type": "string",
+          "nullable": true
+        },
+        "estimatedDeliveryAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        },
+        "bookingIdempotencyKey": {
+          "type": "string"
+        },
+        "bookedAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        },
+        "dispatchedAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        },
+        "deliveredAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        },
+        "cancelledAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/__type31"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "updatedAt",
+        "status",
+        "orderId",
+        "sellerOrderId",
+        "shippingGroupId",
+        "providerCode",
+        "carrierCode",
+        "methodCode",
+        "warehouseId",
+        "version",
+        "fulfillmentOrderId",
+        "shipmentNumber",
+        "trackingReference",
+        "estimatedDeliveryAt",
+        "bookingIdempotencyKey",
+        "bookedAt",
+        "dispatchedAt",
+        "deliveredAt",
+        "cancelledAt",
+        "lines"
+      ]
+    },
+    "__type31": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "quantity": {
+          "type": "number"
+        },
+        "orderItemId": {
+          "type": "string"
+        },
+        "fulfillmentLineId": {
+          "type": "string"
+        },
+        "shipmentId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "quantity",
+        "orderItemId",
+        "fulfillmentLineId",
+        "shipmentId"
+      ]
+    },
+    "__type32": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "description": {
+          "type": "string",
+          "nullable": true
+        },
+        "actorUserId": {
+          "type": "string",
+          "nullable": true
+        },
+        "metadata": {
+          "description": "JSON value; may be an object, array, scalar or null.",
+          "nullable": true
+        },
+        "shipmentId": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "CARRIER_WEBHOOK",
+            "CARRIER_POLL",
+            "ADMIN_MANUAL",
+            "ADMIN_CORRECTION"
+          ]
+        },
+        "providerEventKey": {
+          "type": "string",
+          "nullable": true
+        },
+        "rawStatus": {
+          "type": "string",
+          "nullable": true
+        },
+        "normalizedStatus": {
+          "type": "string",
+          "enum": [
+            "CANCELLED",
+            "DISPATCHED",
+            "PENDING_BOOKING",
+            "BOOKED",
+            "IN_TRANSIT",
+            "OUT_FOR_DELIVERY",
+            "DELIVERED",
+            "DELIVERY_FAILED",
+            "EXCEPTION",
+            "RETURN_TO_SENDER",
+            "RETURNED"
+          ]
+        },
+        "location": {
+          "type": "string",
+          "nullable": true
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "isCorrection": {
+          "type": "boolean"
+        },
+        "correctionReason": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "description",
+        "actorUserId",
+        "metadata",
+        "shipmentId",
+        "source",
+        "providerEventKey",
+        "rawStatus",
+        "normalizedStatus",
+        "location",
+        "occurredAt",
+        "isCorrection",
+        "correctionReason"
+      ]
+    },
+    "InputCreateShipmentDto": {
+      "type": "object",
+      "properties": {
+        "fulfillmentOrderId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/InputShipmentLineDto"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "fulfillmentOrderId",
+        "lines"
+      ],
+      "additionalProperties": false
+    },
+    "InputShipmentLineDto": {
+      "type": "object",
+      "properties": {
+        "fulfillmentLineId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "fulfillmentLineId",
+        "quantity"
+      ],
+      "additionalProperties": false
+    },
+    "InputCancelShipmentDto": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "InputAddTrackingEventDto": {
+      "type": "object",
+      "properties": {
+        "normalizedStatus": {
+          "type": "string",
+          "enum": [
+            "CANCELLED",
+            "DISPATCHED",
+            "PENDING_BOOKING",
+            "BOOKED",
+            "IN_TRANSIT",
+            "OUT_FOR_DELIVERY",
+            "DELIVERED",
+            "DELIVERY_FAILED",
+            "EXCEPTION",
+            "RETURN_TO_SENDER",
+            "RETURNED"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "nullable": true
+        },
+        "location": {
+          "type": "string",
+          "nullable": true
+        },
+        "occurredAt": {
+          "type": "string",
+          "nullable": true
+        },
+        "isCorrection": {
+          "type": "boolean",
+          "nullable": true
+        },
+        "correctionReason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "normalizedStatus"
+      ],
+      "additionalProperties": false
+    },
+    "CustomerShipmentView": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "shipmentNumber": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "CANCELLED",
+            "DISPATCHED",
+            "PENDING_BOOKING",
+            "BOOKED",
+            "IN_TRANSIT",
+            "OUT_FOR_DELIVERY",
+            "DELIVERED",
+            "DELIVERY_FAILED",
+            "EXCEPTION",
+            "RETURN_TO_SENDER",
+            "RETURNED"
+          ]
+        },
+        "methodName": {
+          "type": "string"
+        },
+        "trackingReference": {
+          "type": "string",
+          "nullable": true
+        },
+        "estimatedDeliveryAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/__type33"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "shipmentNumber",
+        "status",
+        "methodName",
+        "trackingReference",
+        "estimatedDeliveryAt",
+        "events"
+      ]
+    },
+    "__type33": {
+      "type": "object",
+      "properties": {
+        "normalizedStatus": {
+          "type": "string",
+          "enum": [
+            "CANCELLED",
+            "DISPATCHED",
+            "PENDING_BOOKING",
+            "BOOKED",
+            "IN_TRANSIT",
+            "OUT_FOR_DELIVERY",
+            "DELIVERED",
+            "DELIVERY_FAILED",
+            "EXCEPTION",
+            "RETURN_TO_SENDER",
+            "RETURNED"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "nullable": true
+        },
+        "location": {
+          "type": "string",
+          "nullable": true
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "normalizedStatus",
+        "description",
+        "location",
+        "occurredAt"
+      ]
+    },
+    "InputRecord2": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "__type34": {
       "type": "object",
       "properties": {
         "id": {
@@ -16409,7 +19586,7 @@
           "type": "object",
           "allOf": [
             {
-              "$ref": "#/components/schemas/__type27"
+              "$ref": "#/components/schemas/__type35"
             }
           ],
           "nullable": true
@@ -16425,7 +19602,7 @@
         "isAvailable"
       ]
     },
-    "__type27": {
+    "__type35": {
       "type": "object",
       "properties": {
         "amount": {

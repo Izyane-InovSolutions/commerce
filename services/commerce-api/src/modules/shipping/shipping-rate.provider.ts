@@ -20,6 +20,16 @@ export type ShippingRate = {
   /** Business days, inclusive, counted from the day the order ships. */
   estimatedDeliveryDays: { min: number; max: number };
   expiresAt: Date;
+  /**
+   * Carrier identity a shipment booked against this quote (#29) must book
+   * through. providerCode selects the CarrierProvider from its registry;
+   * methodCode is the provider's own rate/method identifier (may equal
+   * rateCode); methodName is shown to the customer.
+   */
+  providerCode: string;
+  carrierCode: string;
+  methodCode: string;
+  methodName: string;
 };
 
 export interface ShippingRateProvider {

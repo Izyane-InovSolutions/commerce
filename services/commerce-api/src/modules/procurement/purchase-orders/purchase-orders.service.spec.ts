@@ -5,7 +5,7 @@ import { PrismaService } from '../../../database/prisma.service';
 import { OutboxService } from '../../../infrastructure/jobs/outbox.service';
 import { AuditService } from '../../audit/audit.service';
 import { WarehousesService } from '../../inventory/warehouses/warehouses.service';
-import { NumberingService } from '../numbering.service';
+import { NumberingService } from '../../../common/numbering/numbering.service';
 import { SuppliersService } from '../suppliers/suppliers.service';
 import { PurchaseOrdersService } from './purchase-orders.service';
 

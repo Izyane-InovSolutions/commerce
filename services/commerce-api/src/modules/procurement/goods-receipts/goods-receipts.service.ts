@@ -16,7 +16,7 @@ import { PrismaService } from '../../../database/prisma.service';
 import { OutboxService } from '../../../infrastructure/jobs/outbox.service';
 import { AuditService } from '../../audit/audit.service';
 import { InventoryService } from '../../inventory/inventory.service';
-import { NumberingService } from '../numbering.service';
+import { NumberingService } from '../../../common/numbering/numbering.service';
 import { PurchaseOrdersService } from '../purchase-orders/purchase-orders.service';
 import { PurchaseOrderWithLines } from '../purchase-orders/purchase-orders.types';
 import { CreateGoodsReceiptDto } from './dto/create-goods-receipt.dto';

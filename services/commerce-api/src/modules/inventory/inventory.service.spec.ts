@@ -608,6 +608,57 @@ describe('InventoryService', () => {
     });
   });
 
+  describe('returnCancelledStock', () => {
+    it('rejects a non-positive quantity', async () => {
+      await expect(
+        service.returnCancelledStock(
+          prisma as never,
+          'wh-1',
+          'v1',
+          0,
+          { referenceType: 'fulfillment_cancellation', referenceId: 'fe-1' },
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('increments on-hand and records a RETURN movement', async () => {
+      prisma.inventoryRecord.findUnique.mockResolvedValue({
+        id: 'rec-1',
+        onHand: 2,
+        reserved: 0,
+      });
+      prisma.inventoryRecord.update.mockResolvedValue({
+        id: 'rec-1',
+        onHand: 5,
+        reserved: 0,
+      });
+      prisma.inventoryMovement.create.mockResolvedValue({
+        id: 'mv-1',
+        type: 'RETURN',
+      });
+
+      const { record } = await service.returnCancelledStock(
+        prisma as never,
+        'wh-1',
+        'v1',
+        3,
+        { referenceType: 'fulfillment_cancellation', referenceId: 'fe-1' },
+      );
+
+      expect(record.onHand).toBe(5);
+      expect(prisma.inventoryMovement.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: 'RETURN',
+            quantity: 3,
+            referenceType: 'fulfillment_cancellation',
+            referenceId: 'fe-1',
+          }) as object,
+        }),
+      );
+    });
+  });
+
   describe('receiveStockForReference', () => {
     it('rejects a non-positive quantity', async () => {
       await expect(

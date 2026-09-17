@@ -99,7 +99,7 @@ describe('Commerce API (e2e)', () => {
         return operation ? [operation] : [];
       }),
     );
-    expect(operations).toHaveLength(157);
+    expect(operations).toHaveLength(182);
     for (const operation of operations) {
       expect(operation.security).toBeDefined();
       expect(operation.responses.default).toBeDefined();

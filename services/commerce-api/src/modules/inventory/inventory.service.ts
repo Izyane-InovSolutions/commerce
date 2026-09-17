@@ -211,6 +211,47 @@ export class InventoryService {
   }
 
   /**
+   * Returns previously-committed stock to on-hand for a cancelled
+   * fulfillment quantity. Picking/packing/dispatch never touch inventory —
+   * payment already committed and deducted it via `commit()` — so
+   * cancelling a fulfillment line is the only fulfillment-side write this
+   * module makes, and it is always a RETURN, the same movement type
+   * `restock()` uses for a released reservation's stock coming back.
+   */
+  async returnCancelledStock(
+    tx: Prisma.TransactionClient,
+    warehouseId: string,
+    variantId: string,
+    quantity: number,
+    reference: { referenceType: string; referenceId: string },
+    note?: string,
+  ): Promise<{ record: InventoryRecord; movement: InventoryMovement }> {
+    if (quantity <= 0) {
+      throw new BadRequestException('quantity must be positive');
+    }
+
+    const record = await this.getOrCreateRecordWithClient(
+      tx,
+      warehouseId,
+      variantId,
+    );
+    const updated = await tx.inventoryRecord.update({
+      where: { id: record.id },
+      data: { onHand: { increment: quantity } },
+    });
+    const movement = await this.recordMovement(
+      tx,
+      record.id,
+      InventoryMovementType.RETURN,
+      quantity,
+      note,
+      reference,
+    );
+
+    return { record: updated, movement };
+  }
+
+  /**
    * The inverse of `receiveStockForReference`, for reversing a posted goods
    * receipt. Decrements on-hand with the same floor check as `adjustStock`
    * and tags the movement with the reversal's own reference, so the original

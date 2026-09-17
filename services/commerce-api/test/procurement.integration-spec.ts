@@ -10,7 +10,7 @@ import { PrismaService } from '../src/database/prisma.service';
 import { InventoryService } from '../src/modules/inventory/inventory.service';
 import { WarehousesService } from '../src/modules/inventory/warehouses/warehouses.service';
 import { GoodsReceiptsService } from '../src/modules/procurement/goods-receipts/goods-receipts.service';
-import { NumberingService } from '../src/modules/procurement/numbering.service';
+import { NumberingService } from '../src/common/numbering/numbering.service';
 import { PurchaseOrdersService } from '../src/modules/procurement/purchase-orders/purchase-orders.service';
 import { SuppliersService } from '../src/modules/procurement/suppliers/suppliers.service';
 
