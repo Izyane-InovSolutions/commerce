@@ -13,6 +13,7 @@ import {
   ScrollText,
   ShieldCheck,
   ShoppingCart,
+  RotateCcw,
   Store,
   Tag,
   Truck,
@@ -71,6 +72,11 @@ export const navigation: NavItem[] = [
     href: '/fulfillment',
     label: 'Fulfillment',
     icon: Truck,
+  },
+  {
+    href: '/operations',
+    label: 'Operations',
+    icon: RotateCcw,
   },
   {
     href: '/promotions',

@@ -22,9 +22,11 @@ import {
 } from '../../common/pagination/pagination-query.dto';
 import { NumberingService } from '../../common/numbering/numbering.service';
 import { PrismaService } from '../../database/prisma.service';
+import { BackgroundJobsService } from '../../infrastructure/jobs/background-jobs.service';
 import { OutboxService } from '../../infrastructure/jobs/outbox.service';
 import { AuditService } from '../audit/audit.service';
 import { InventoryService } from '../inventory/inventory.service';
+import { FULFILLMENT_CANCELLATION_REFUND_JOB_TYPE } from '../payments/jobs/fulfillment-cancellation-refund.handler';
 import { CancelLinesDto } from './dto/cancel-lines.dto';
 import { CreateExceptionDto } from './dto/create-exception.dto';
 import { ListFulfillmentsDto } from './dto/list-fulfillments.dto';
@@ -72,6 +74,7 @@ export class FulfillmentsService {
     private readonly numberingService: NumberingService,
     private readonly auditService: AuditService,
     private readonly outboxService: OutboxService,
+    private readonly backgroundJobsService: BackgroundJobsService,
   ) {}
 
   async findAll(query: ListFulfillmentsDto): Promise<FulfillmentOrderPage> {
@@ -692,21 +695,32 @@ export class FulfillmentsService {
       );
     }
 
+    const refundRequiredPayload = {
+      orderId: fo.orderId,
+      sellerOrderId: fo.sellerOrderId,
+      lines: entries.map((entry) => ({
+        fulfillmentLineId: entry.line.id,
+        orderItemId: entry.line.orderItemId,
+        quantity: entry.quantity,
+      })),
+      reason,
+    };
     await this.outboxService.record(
       {
         topic: 'fulfillment.refund_required',
         aggregateType: 'FulfillmentOrder',
         aggregateId: fo.id,
-        payload: {
-          orderId: fo.orderId,
-          sellerOrderId: fo.sellerOrderId,
-          lines: entries.map((entry) => ({
-            fulfillmentLineId: entry.line.id,
-            orderItemId: entry.line.orderItemId,
-            quantity: entry.quantity,
-          })),
-          reason,
-        },
+        payload: refundRequiredPayload,
+      },
+      tx,
+    );
+    // The outbox has no consumer (see OrdersService.confirmPayment for the
+    // same convention) — enqueued directly so the refund obligation is
+    // reliably created and retried on failure.
+    await this.backgroundJobsService.enqueue(
+      {
+        type: FULFILLMENT_CANCELLATION_REFUND_JOB_TYPE,
+        payload: refundRequiredPayload,
       },
       tx,
     );

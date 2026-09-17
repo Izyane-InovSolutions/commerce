@@ -29,10 +29,12 @@ import { HealthModule } from './modules/health/health.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { MediaModule } from './modules/media/media.module';
 import { OffersModule } from './modules/offers/offers.module';
+import { OperationsModule } from './modules/operations/operations.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { ProcurementModule } from './modules/procurement/procurement.module';
 import { ProductsModule } from './modules/products/products.module';
+import { ReturnsModule } from './modules/returns/returns.module';
 import { ShipmentsModule } from './modules/shipments/shipments.module';
 import { UsersModule } from './modules/users/users.module';
 import { WishlistModule } from './modules/wishlist/wishlist.module';
@@ -71,6 +73,8 @@ import { WorkersModule } from './infrastructure/workers/workers.module';
     FinancialsModule,
     FulfillmentModule,
     ShipmentsModule,
+    OperationsModule,
+    ReturnsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

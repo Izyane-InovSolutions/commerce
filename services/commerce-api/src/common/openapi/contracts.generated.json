@@ -4439,6 +4439,81 @@
       },
       "description": "Required role: STAFF or ADMIN."
     },
+    "AdminInventoryController_updateReorderPoint": {
+      "operationId": "AdminInventoryController_updateReorderPoint",
+      "tags": [
+        "admin/inventory"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/InventoryRecordView"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputUpdateReorderPointDto"
+            }
+          }
+        }
+      }
+    },
     "AdminInventoryController_reservations": {
       "operationId": "AdminInventoryController_reservations",
       "tags": [
@@ -6405,6 +6480,167 @@
         }
       }
     },
+    "OperationsMetricsController_getMetrics": {
+      "operationId": "OperationsMetricsController_getMetrics",
+      "tags": [
+        "admin/operations"
+      ],
+      "parameters": [
+        {
+          "name": "from",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        {
+          "name": "to",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        {
+          "name": "warehouseId",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "orderStatuses",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "PENDING_PAYMENT",
+                "PAID",
+                "CANCELLED",
+                "PARTIALLY_REFUNDED",
+                "REFUNDED"
+              ]
+            },
+            "nullable": true
+          },
+          "style": "form",
+          "explode": true
+        },
+        {
+          "name": "fulfillmentStatuses",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "CANCELLED",
+                "PARTIALLY_DISPATCHED",
+                "DISPATCHED",
+                "READY_TO_PICK",
+                "PICKING",
+                "PARTIALLY_PICKED",
+                "PICKED",
+                "PACKING",
+                "PARTIALLY_PACKED",
+                "PACKED",
+                "ON_HOLD",
+                "PARTIALLY_CANCELLED"
+              ]
+            },
+            "nullable": true
+          },
+          "style": "form",
+          "explode": true
+        },
+        {
+          "name": "returnStatuses",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "CANCELLED",
+                "PARTIALLY_REFUNDED",
+                "REFUNDED",
+                "REQUESTED",
+                "APPROVED",
+                "REJECTED",
+                "RECEIVING",
+                "RECEIVED",
+                "INSPECTING",
+                "CLOSED_NO_REFUND",
+                "REFUND_PENDING",
+                "REFUND_FAILED"
+              ]
+            },
+            "nullable": true
+          },
+          "style": "form",
+          "explode": true
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/OperationsMetricsDto"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: ADMIN."
+    },
     "AdminOrdersController_findAll": {
       "operationId": "AdminOrdersController_findAll",
       "tags": [
@@ -6869,7 +7105,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type20"
+                    "$ref": "#/components/schemas/__type26"
                   },
                   "meta": {
                     "type": "object",
@@ -6944,7 +7180,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type20"
+                    "$ref": "#/components/schemas/__type26"
                   },
                   "meta": {
                     "type": "object",
@@ -7932,12 +8168,12 @@
             "enum": [
               "CANCELLED",
               "DRAFT",
-              "SUBMITTED",
               "APPROVED",
               "REJECTED",
+              "RECEIVED",
+              "SUBMITTED",
               "ORDERED",
               "PARTIALLY_RECEIVED",
-              "RECEIVED",
               "CLOSED_SHORT"
             ],
             "nullable": true
@@ -8885,7 +9121,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type23"
+                      "$ref": "#/components/schemas/__type29"
                     }
                   },
                   "meta": {
@@ -8951,7 +9187,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type23"
+                    "$ref": "#/components/schemas/__type29"
                   },
                   "meta": {
                     "type": "object",
@@ -9026,7 +9262,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type23"
+                    "$ref": "#/components/schemas/__type29"
                   },
                   "meta": {
                     "type": "object",
@@ -9192,7 +9428,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type24"
+                    "$ref": "#/components/schemas/__type30"
                   },
                   "meta": {
                     "type": "object",
@@ -9247,7 +9483,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type24"
+                    "$ref": "#/components/schemas/__type30"
                   },
                   "meta": {
                     "type": "object",
@@ -9322,7 +9558,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type24"
+                    "$ref": "#/components/schemas/__type30"
                   },
                   "meta": {
                     "type": "object",
@@ -9397,7 +9633,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type24"
+                    "$ref": "#/components/schemas/__type30"
                   },
                   "meta": {
                     "type": "object",
@@ -10534,6 +10770,1094 @@
         }
       }
     },
+    "AdminReturnsController_create": {
+      "operationId": "AdminReturnsController_create",
+      "tags": [
+        "admin/returns"
+      ],
+      "parameters": [
+        {
+          "name": "idempotency-key",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/Object4"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputAdminCreateReturnDto"
+            }
+          }
+        }
+      }
+    },
+    "AdminReturnsController_findAll": {
+      "operationId": "AdminReturnsController_findAll",
+      "tags": [
+        "admin/returns"
+      ],
+      "parameters": [
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "CANCELLED",
+              "PARTIALLY_REFUNDED",
+              "REFUNDED",
+              "REQUESTED",
+              "APPROVED",
+              "REJECTED",
+              "RECEIVING",
+              "RECEIVED",
+              "INSPECTING",
+              "CLOSED_NO_REFUND",
+              "REFUND_PENDING",
+              "REFUND_FAILED"
+            ],
+            "nullable": true
+          }
+        },
+        {
+          "name": "warehouseId",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "assignedStaffId",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "dateFrom",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        {
+          "name": "dateTo",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        {
+          "name": "page",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "default": 1
+          }
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/ReturnPage"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN."
+    },
+    "AdminReturnsController_findOne": {
+      "operationId": "AdminReturnsController_findOne",
+      "tags": [
+        "admin/returns"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/Object4"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN."
+    },
+    "AdminReturnsController_approve": {
+      "operationId": "AdminReturnsController_approve",
+      "tags": [
+        "admin/returns"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/Object4"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputApproveReturnDto"
+            }
+          }
+        }
+      }
+    },
+    "AdminReturnsController_reject": {
+      "operationId": "AdminReturnsController_reject",
+      "tags": [
+        "admin/returns"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/Object4"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputRejectReturnDto"
+            }
+          }
+        }
+      }
+    },
+    "AdminReturnsController_postReceipt": {
+      "operationId": "AdminReturnsController_postReceipt",
+      "tags": [
+        "admin/returns"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "idempotency-key",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/Object4"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputPostReceiptDto"
+            }
+          }
+        }
+      }
+    },
+    "AdminReturnsController_postInspection": {
+      "operationId": "AdminReturnsController_postInspection",
+      "tags": [
+        "admin/returns"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "idempotency-key",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/Object4"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputPostInspectionDto"
+            }
+          }
+        }
+      }
+    },
+    "AdminReturnsController_finalizeInspection": {
+      "operationId": "AdminReturnsController_finalizeInspection",
+      "tags": [
+        "admin/returns"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/Object4"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputFinalizeInspectionDto"
+            }
+          }
+        }
+      }
+    },
+    "AdminReturnsController_retryRefundCase": {
+      "operationId": "AdminReturnsController_retryRefundCase",
+      "tags": [
+        "admin/returns"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "refundCaseId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/__type35"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: ADMIN."
+    },
+    "CustomerReturnsController_getEligibility": {
+      "operationId": "CustomerReturnsController_getEligibility",
+      "tags": [
+        "CustomerReturnsController"
+      ],
+      "parameters": [
+        {
+          "name": "orderId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ItemEligibilityView"
+                    }
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      }
+    },
+    "CustomerReturnsController_create": {
+      "operationId": "CustomerReturnsController_create",
+      "tags": [
+        "CustomerReturnsController"
+      ],
+      "parameters": [
+        {
+          "name": "orderId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "idempotency-key",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/Object4"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputCreateReturnDto"
+            }
+          }
+        }
+      }
+    },
+    "CustomerReturnsController_list": {
+      "operationId": "CustomerReturnsController_list",
+      "tags": [
+        "CustomerReturnsController"
+      ],
+      "parameters": [],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Object4"
+                    }
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      }
+    },
+    "CustomerReturnsController_findOne": {
+      "operationId": "CustomerReturnsController_findOne",
+      "tags": [
+        "CustomerReturnsController"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/Object4"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      }
+    },
+    "CustomerReturnsController_cancel": {
+      "operationId": "CustomerReturnsController_cancel",
+      "tags": [
+        "CustomerReturnsController"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/Object4"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputCancelReturnDto"
+            }
+          }
+        }
+      }
+    },
     "AdminSellersController_list": {
       "operationId": "AdminSellersController_list",
       "tags": [
@@ -10597,7 +11921,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type29"
+                    "$ref": "#/components/schemas/__type37"
                   },
                   "meta": {
                     "type": "object",
@@ -11257,7 +12581,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/Object4"
+                    "$ref": "#/components/schemas/Object5"
                   },
                   "meta": {
                     "type": "object",
@@ -11519,7 +12843,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type32"
+                      "$ref": "#/components/schemas/__type40"
                     }
                   },
                   "meta": {
@@ -11799,7 +13123,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type32"
+                    "$ref": "#/components/schemas/__type40"
                   },
                   "meta": {
                     "type": "object",
@@ -11988,7 +13312,7 @@
                   "data": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/__type34"
+                      "$ref": "#/components/schemas/__type42"
                     }
                   },
                   "meta": {
@@ -12053,7 +13377,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type34"
+                    "$ref": "#/components/schemas/__type42"
                   },
                   "meta": {
                     "type": "object",
@@ -12107,7 +13431,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type34"
+                    "$ref": "#/components/schemas/__type42"
                   },
                   "meta": {
                     "type": "object",
@@ -12181,7 +13505,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type34"
+                    "$ref": "#/components/schemas/__type42"
                   },
                   "meta": {
                     "type": "object",
@@ -12292,7 +13616,7 @@
                 ],
                 "properties": {
                   "data": {
-                    "$ref": "#/components/schemas/__type34"
+                    "$ref": "#/components/schemas/__type42"
                   },
                   "meta": {
                     "type": "object",
@@ -14727,8 +16051,7 @@
           "type": "string"
         },
         "shipmentId": {
-          "type": "string",
-          "nullable": true
+          "type": "string"
         },
         "dispatchNumber": {
           "type": "string"
@@ -14925,6 +16248,9 @@
         "reserved": {
           "type": "number"
         },
+        "reorderPoint": {
+          "type": "number"
+        },
         "available": {
           "type": "number"
         }
@@ -14939,6 +16265,7 @@
         "variantId",
         "onHand",
         "reserved",
+        "reorderPoint",
         "available"
       ]
     },
@@ -15050,6 +16377,19 @@
         "note",
         "inventoryRecordId"
       ]
+    },
+    "InputUpdateReorderPointDto": {
+      "type": "object",
+      "properties": {
+        "reorderPoint": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "reorderPoint"
+      ],
+      "additionalProperties": false
     },
     "__type16": {
       "type": "object",
@@ -16038,6 +17378,382 @@
       ],
       "additionalProperties": false
     },
+    "InputOperationsMetricsQueryDto": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string",
+          "nullable": true
+        },
+        "to": {
+          "type": "string",
+          "nullable": true
+        },
+        "warehouseId": {
+          "type": "string",
+          "nullable": true,
+          "format": "uuid"
+        },
+        "orderStatuses": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "PENDING_PAYMENT",
+              "PAID",
+              "CANCELLED",
+              "PARTIALLY_REFUNDED",
+              "REFUNDED"
+            ]
+          },
+          "nullable": true
+        },
+        "fulfillmentStatuses": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "CANCELLED",
+              "PARTIALLY_DISPATCHED",
+              "DISPATCHED",
+              "READY_TO_PICK",
+              "PICKING",
+              "PARTIALLY_PICKED",
+              "PICKED",
+              "PACKING",
+              "PARTIALLY_PACKED",
+              "PACKED",
+              "ON_HOLD",
+              "PARTIALLY_CANCELLED"
+            ]
+          },
+          "nullable": true
+        },
+        "returnStatuses": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "CANCELLED",
+              "PARTIALLY_REFUNDED",
+              "REFUNDED",
+              "REQUESTED",
+              "APPROVED",
+              "REJECTED",
+              "RECEIVING",
+              "RECEIVED",
+              "INSPECTING",
+              "CLOSED_NO_REFUND",
+              "REFUND_PENDING",
+              "REFUND_FAILED"
+            ]
+          },
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "OperationsMetricsDto": {
+      "type": "object",
+      "properties": {
+        "range": {
+          "$ref": "#/components/schemas/OperationsMetricsRange"
+        },
+        "sales": {
+          "$ref": "#/components/schemas/SalesMetrics"
+        },
+        "ordersByStatus": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/__type20"
+          }
+        },
+        "fulfillment": {
+          "$ref": "#/components/schemas/FulfillmentMetrics"
+        },
+        "inventory": {
+          "$ref": "#/components/schemas/InventoryMetrics"
+        },
+        "returns": {
+          "$ref": "#/components/schemas/ReturnsMetrics"
+        }
+      },
+      "required": [
+        "range",
+        "sales",
+        "ordersByStatus",
+        "fulfillment",
+        "inventory",
+        "returns"
+      ]
+    },
+    "OperationsMetricsRange": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ]
+    },
+    "SalesMetrics": {
+      "type": "object",
+      "properties": {
+        "paidOrderCount": {
+          "type": "number"
+        },
+        "grossSales": {
+          "type": "number"
+        },
+        "itemRefunds": {
+          "type": "number"
+        },
+        "shippingRefunds": {
+          "type": "number"
+        },
+        "netSales": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "paidOrderCount",
+        "grossSales",
+        "itemRefunds",
+        "shippingRefunds",
+        "netSales"
+      ]
+    },
+    "__type20": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "PENDING_PAYMENT",
+            "PAID",
+            "CANCELLED",
+            "PARTIALLY_REFUNDED",
+            "REFUNDED"
+          ]
+        },
+        "count": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "status",
+        "count"
+      ]
+    },
+    "FulfillmentMetrics": {
+      "type": "object",
+      "properties": {
+        "backlogCount": {
+          "type": "number"
+        },
+        "statusTotals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/__type21"
+          }
+        },
+        "aging": {
+          "$ref": "#/components/schemas/__type22"
+        }
+      },
+      "required": [
+        "backlogCount",
+        "statusTotals",
+        "aging"
+      ]
+    },
+    "__type21": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "CANCELLED",
+            "PARTIALLY_DISPATCHED",
+            "DISPATCHED",
+            "READY_TO_PICK",
+            "PICKING",
+            "PARTIALLY_PICKED",
+            "PICKED",
+            "PACKING",
+            "PARTIALLY_PACKED",
+            "PACKED",
+            "ON_HOLD",
+            "PARTIALLY_CANCELLED"
+          ]
+        },
+        "count": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "status",
+        "count"
+      ]
+    },
+    "__type22": {
+      "type": "object",
+      "properties": {
+        "averageAgeHours": {
+          "type": "number",
+          "nullable": true
+        },
+        "maxAgeHours": {
+          "type": "number",
+          "nullable": true
+        }
+      },
+      "required": [
+        "averageAgeHours",
+        "maxAgeHours"
+      ]
+    },
+    "InventoryMetrics": {
+      "type": "object",
+      "properties": {
+        "onHand": {
+          "type": "number"
+        },
+        "reserved": {
+          "type": "number"
+        },
+        "available": {
+          "type": "number"
+        },
+        "outOfStockCount": {
+          "type": "number"
+        },
+        "lowStockCount": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "onHand",
+        "reserved",
+        "available",
+        "outOfStockCount",
+        "lowStockCount"
+      ]
+    },
+    "ReturnsMetrics": {
+      "type": "object",
+      "properties": {
+        "countsByStatus": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/__type23"
+          }
+        },
+        "countsByReasonCode": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/__type24"
+          }
+        },
+        "returnedQuantity": {
+          "type": "number"
+        },
+        "refundValue": {
+          "type": "number"
+        },
+        "returnRate": {
+          "type": "number",
+          "nullable": true
+        },
+        "processingAgeHours": {
+          "$ref": "#/components/schemas/__type25"
+        }
+      },
+      "required": [
+        "countsByStatus",
+        "countsByReasonCode",
+        "returnedQuantity",
+        "refundValue",
+        "returnRate",
+        "processingAgeHours"
+      ]
+    },
+    "__type23": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "CANCELLED",
+            "PARTIALLY_REFUNDED",
+            "REFUNDED",
+            "REQUESTED",
+            "APPROVED",
+            "REJECTED",
+            "RECEIVING",
+            "RECEIVED",
+            "INSPECTING",
+            "CLOSED_NO_REFUND",
+            "REFUND_PENDING",
+            "REFUND_FAILED"
+          ]
+        },
+        "count": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "status",
+        "count"
+      ]
+    },
+    "__type24": {
+      "type": "object",
+      "properties": {
+        "reasonCode": {
+          "type": "string",
+          "enum": [
+            "DAMAGED",
+            "CUSTOMER_REMORSE",
+            "WRONG_ITEM",
+            "DEFECTIVE",
+            "NOT_AS_DESCRIBED",
+            "SIZE_FIT",
+            "OTHER"
+          ]
+        },
+        "count": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "reasonCode",
+        "count"
+      ]
+    },
+    "__type25": {
+      "type": "object",
+      "properties": {
+        "openAverageAgeHours": {
+          "type": "number",
+          "nullable": true
+        },
+        "closedAverageAgeHours": {
+          "type": "number",
+          "nullable": true
+        }
+      },
+      "required": [
+        "openAverageAgeHours",
+        "closedAverageAgeHours"
+      ]
+    },
     "OrderPage": {
       "type": "object",
       "properties": {
@@ -16282,7 +17998,7 @@
       ],
       "additionalProperties": false
     },
-    "__type20": {
+    "__type26": {
       "type": "object",
       "properties": {
         "id": {
@@ -16331,6 +18047,10 @@
         },
         "paymentId": {
           "type": "string"
+        },
+        "refundCaseId": {
+          "type": "string",
+          "nullable": true
         }
       },
       "required": [
@@ -16345,7 +18065,8 @@
         "amount",
         "failureReason",
         "reason",
-        "paymentId"
+        "paymentId",
+        "refundCaseId"
       ]
     },
     "PaymentSnapshot": {
@@ -16581,7 +18302,7 @@
         "lines": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type21"
+            "$ref": "#/components/schemas/__type27"
           }
         }
       },
@@ -16604,7 +18325,7 @@
         "lines"
       ]
     },
-    "__type21": {
+    "__type27": {
       "type": "object",
       "properties": {
         "id": {
@@ -16750,12 +18471,12 @@
           "enum": [
             "CANCELLED",
             "DRAFT",
-            "SUBMITTED",
             "APPROVED",
             "REJECTED",
+            "RECEIVED",
+            "SUBMITTED",
             "ORDERED",
             "PARTIALLY_RECEIVED",
-            "RECEIVED",
             "CLOSED_SHORT"
           ],
           "nullable": true
@@ -16839,12 +18560,12 @@
           "enum": [
             "CANCELLED",
             "DRAFT",
-            "SUBMITTED",
             "APPROVED",
             "REJECTED",
+            "RECEIVED",
+            "SUBMITTED",
             "ORDERED",
             "PARTIALLY_RECEIVED",
-            "RECEIVED",
             "CLOSED_SHORT"
           ]
         },
@@ -16937,7 +18658,7 @@
         "lines": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type22"
+            "$ref": "#/components/schemas/__type28"
           }
         }
       },
@@ -16972,7 +18693,7 @@
         "lines"
       ]
     },
-    "__type22": {
+    "__type28": {
       "type": "object",
       "properties": {
         "id": {
@@ -17215,7 +18936,7 @@
       ],
       "additionalProperties": false
     },
-    "__type23": {
+    "__type29": {
       "type": "object",
       "properties": {
         "id": {
@@ -17399,7 +19120,7 @@
         "items": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type24"
+            "$ref": "#/components/schemas/__type30"
           }
         },
         "total": {
@@ -17419,7 +19140,7 @@
         "limit"
       ]
     },
-    "__type24": {
+    "__type30": {
       "type": "object",
       "properties": {
         "id": {
@@ -17743,6 +19464,13 @@
           "type": "string",
           "nullable": true
         },
+        "isReturnable": {
+          "type": "boolean"
+        },
+        "returnWindowDays": {
+          "type": "number",
+          "nullable": true
+        },
         "variants": {
           "type": "array",
           "items": {
@@ -17768,6 +19496,8 @@
         "status",
         "brandId",
         "categoryId",
+        "isReturnable",
+        "returnWindowDays",
         "variants",
         "media"
       ]
@@ -18054,6 +19784,15 @@
           "type": "string",
           "nullable": true,
           "format": "uuid"
+        },
+        "isReturnable": {
+          "type": "boolean",
+          "nullable": true
+        },
+        "returnWindowDays": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 0
         }
       },
       "required": [
@@ -18088,6 +19827,15 @@
           "type": "string",
           "nullable": true,
           "format": "uuid"
+        },
+        "isReturnable": {
+          "type": "boolean",
+          "nullable": true
+        },
+        "returnWindowDays": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 0
         }
       },
       "additionalProperties": false
@@ -18252,7 +20000,7 @@
           }
         },
         "meta": {
-          "$ref": "#/components/schemas/__type28"
+          "$ref": "#/components/schemas/__type34"
         }
       },
       "required": [
@@ -18284,6 +20032,13 @@
             "ARCHIVED"
           ]
         },
+        "isReturnable": {
+          "type": "boolean"
+        },
+        "returnWindowDays": {
+          "type": "number",
+          "nullable": true
+        },
         "brand": {
           "type": "object",
           "allOf": [
@@ -18305,7 +20060,7 @@
         "media": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type25"
+            "$ref": "#/components/schemas/__type31"
           }
         },
         "variants": {
@@ -18321,13 +20076,15 @@
         "slug",
         "description",
         "status",
+        "isReturnable",
+        "returnWindowDays",
         "brand",
         "category",
         "media",
         "variants"
       ]
     },
-    "__type25": {
+    "__type31": {
       "type": "object",
       "properties": {
         "id": {
@@ -18382,7 +20139,7 @@
         "attributes": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type26"
+            "$ref": "#/components/schemas/__type32"
           }
         },
         "offers": {
@@ -18401,7 +20158,7 @@
         "offers"
       ]
     },
-    "__type26": {
+    "__type32": {
       "type": "object",
       "properties": {
         "attributeId": {
@@ -18442,7 +20199,7 @@
           "type": "object",
           "allOf": [
             {
-              "$ref": "#/components/schemas/__type27"
+              "$ref": "#/components/schemas/__type33"
             }
           ],
           "nullable": true
@@ -18461,7 +20218,7 @@
         "currencies"
       ]
     },
-    "__type27": {
+    "__type33": {
       "type": "object",
       "properties": {
         "amount": {
@@ -18476,7 +20233,7 @@
         "currency"
       ]
     },
-    "__type28": {
+    "__type34": {
       "type": "object",
       "properties": {
         "page": {
@@ -18494,6 +20251,578 @@
         "limit",
         "total"
       ]
+    },
+    "InputAdminCreateReturnDto": {
+      "type": "object",
+      "properties": {
+        "orderId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "userId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/InputCreateReturnItemDto"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "orderId",
+        "userId",
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "InputCreateReturnItemDto": {
+      "type": "object",
+      "properties": {
+        "orderItemId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reasonCode": {
+          "type": "string",
+          "enum": [
+            "DAMAGED",
+            "CUSTOMER_REMORSE",
+            "WRONG_ITEM",
+            "DEFECTIVE",
+            "NOT_AS_DESCRIBED",
+            "SIZE_FIT",
+            "OTHER"
+          ]
+        },
+        "note": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "required": [
+        "orderItemId",
+        "quantity",
+        "reasonCode"
+      ],
+      "additionalProperties": false
+    },
+    "Object4": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "CANCELLED",
+            "PARTIALLY_REFUNDED",
+            "REFUNDED",
+            "REQUESTED",
+            "APPROVED",
+            "REJECTED",
+            "RECEIVING",
+            "RECEIVED",
+            "INSPECTING",
+            "CLOSED_NO_REFUND",
+            "REFUND_PENDING",
+            "REFUND_FAILED"
+          ]
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "nullable": true
+        },
+        "orderId": {
+          "type": "string"
+        },
+        "warehouseId": {
+          "type": "string",
+          "nullable": true
+        },
+        "version": {
+          "type": "number"
+        },
+        "rejectionReason": {
+          "type": "string",
+          "nullable": true
+        },
+        "assignedStaffId": {
+          "type": "string",
+          "nullable": true
+        },
+        "rmaNumber": {
+          "type": "string",
+          "nullable": true
+        },
+        "rmaInstructions": {
+          "type": "string",
+          "nullable": true
+        },
+        "requestHash": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "updatedAt",
+        "userId",
+        "status",
+        "idempotencyKey",
+        "orderId",
+        "warehouseId",
+        "version",
+        "rejectionReason",
+        "assignedStaffId",
+        "rmaNumber",
+        "rmaInstructions",
+        "requestHash"
+      ]
+    },
+    "InputListReturnsDto": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "CANCELLED",
+            "PARTIALLY_REFUNDED",
+            "REFUNDED",
+            "REQUESTED",
+            "APPROVED",
+            "REJECTED",
+            "RECEIVING",
+            "RECEIVED",
+            "INSPECTING",
+            "CLOSED_NO_REFUND",
+            "REFUND_PENDING",
+            "REFUND_FAILED"
+          ],
+          "nullable": true
+        },
+        "warehouseId": {
+          "type": "string",
+          "nullable": true,
+          "format": "uuid"
+        },
+        "assignedStaffId": {
+          "type": "string",
+          "nullable": true,
+          "format": "uuid"
+        },
+        "dateFrom": {
+          "type": "string",
+          "nullable": true
+        },
+        "dateTo": {
+          "type": "string",
+          "nullable": true
+        },
+        "page": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1,
+          "default": 1
+        },
+        "limit": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        }
+      },
+      "additionalProperties": false
+    },
+    "ReturnPage": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Object4"
+          }
+        },
+        "total": {
+          "type": "number"
+        },
+        "page": {
+          "type": "number"
+        },
+        "limit": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "items",
+        "total",
+        "page",
+        "limit"
+      ]
+    },
+    "InputApproveReturnDto": {
+      "type": "object",
+      "properties": {
+        "warehouseId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "assignedStaffId": {
+          "type": "string",
+          "nullable": true,
+          "format": "uuid"
+        },
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "warehouseId",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "InputRejectReturnDto": {
+      "type": "object",
+      "properties": {
+        "rejectionReason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "rejectionReason",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "InputPostReceiptDto": {
+      "type": "object",
+      "properties": {
+        "warehouseId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/InputReceiptLineDto"
+          },
+          "minItems": 1
+        },
+        "isClosing": {
+          "type": "boolean",
+          "nullable": true
+        }
+      },
+      "required": [
+        "warehouseId",
+        "lines"
+      ],
+      "additionalProperties": false
+    },
+    "InputReceiptLineDto": {
+      "type": "object",
+      "properties": {
+        "returnItemId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "returnItemId",
+        "quantity"
+      ],
+      "additionalProperties": false
+    },
+    "InputPostInspectionDto": {
+      "type": "object",
+      "properties": {
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/InputInspectionLineDto"
+          },
+          "minItems": 1
+        },
+        "isFinal": {
+          "type": "boolean",
+          "nullable": true
+        },
+        "shippingRefunds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/InputShippingRefundDto"
+          },
+          "nullable": true
+        }
+      },
+      "required": [
+        "lines"
+      ],
+      "additionalProperties": false
+    },
+    "InputInspectionLineDto": {
+      "type": "object",
+      "properties": {
+        "returnItemId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "warehouseId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "acceptedQuantity": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "disposition": {
+          "type": "string",
+          "enum": [
+            "DAMAGED",
+            "RESTOCK",
+            "QUARANTINE",
+            "DISPOSE"
+          ],
+          "nullable": true
+        },
+        "rejectedQuantity": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rejectionReason": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "required": [
+        "returnItemId",
+        "warehouseId",
+        "acceptedQuantity",
+        "rejectedQuantity"
+      ],
+      "additionalProperties": false
+    },
+    "InputShippingRefundDto": {
+      "type": "object",
+      "properties": {
+        "sellerOrderId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "amount": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "sellerOrderId",
+        "amount"
+      ],
+      "additionalProperties": false
+    },
+    "InputFinalizeInspectionDto": {
+      "type": "object",
+      "properties": {
+        "shippingRefunds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/InputShippingRefundDto"
+          },
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "__type35": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "CANCELLED",
+            "PENDING",
+            "PROCESSING",
+            "SUCCEEDED",
+            "FAILED",
+            "PARTIALLY_SUCCEEDED",
+            "RECONCILIATION_REQUIRED"
+          ]
+        },
+        "currency": {
+          "type": "string"
+        },
+        "shippingAmount": {
+          "type": "number"
+        },
+        "idempotencyKey": {
+          "type": "string"
+        },
+        "sellerOrderId": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "number"
+        },
+        "version": {
+          "type": "number"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "ADMIN",
+            "RETURN",
+            "FULFILLMENT_CANCELLATION"
+          ]
+        },
+        "returnRequestId": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "updatedAt",
+        "status",
+        "currency",
+        "shippingAmount",
+        "idempotencyKey",
+        "sellerOrderId",
+        "amount",
+        "version",
+        "reason",
+        "source",
+        "returnRequestId"
+      ]
+    },
+    "ItemEligibilityView": {
+      "type": "object",
+      "properties": {
+        "orderItemId": {
+          "type": "string"
+        },
+        "returnable": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "returnWindowDays": {
+          "type": "number"
+        },
+        "totalRemainingQuantity": {
+          "type": "number"
+        },
+        "chunks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/__type36"
+          }
+        }
+      },
+      "required": [
+        "orderItemId",
+        "returnable",
+        "returnWindowDays",
+        "totalRemainingQuantity",
+        "chunks"
+      ]
+    },
+    "__type36": {
+      "type": "object",
+      "properties": {
+        "shipmentLineId": {
+          "type": "string"
+        },
+        "deliveredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "eligibleUntil": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "remainingQuantity": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "shipmentLineId",
+        "deliveredAt",
+        "eligibleUntil",
+        "remainingQuantity"
+      ]
+    },
+    "InputCreateReturnDto": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/InputCreateReturnItemDto"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "InputCancelReturnDto": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version"
+      ],
+      "additionalProperties": false
     },
     "InputSellerQueryDto": {
       "type": "object",
@@ -18524,7 +20853,7 @@
       },
       "additionalProperties": false
     },
-    "__type29": {
+    "__type37": {
       "type": "object",
       "properties": {
         "items": {
@@ -18656,7 +20985,7 @@
         "documents": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type30"
+            "$ref": "#/components/schemas/__type38"
           }
         }
       },
@@ -18681,7 +21010,7 @@
         "documents"
       ]
     },
-    "__type30": {
+    "__type38": {
       "type": "object",
       "properties": {
         "mediaAssetId": {
@@ -18800,7 +21129,7 @@
       ],
       "additionalProperties": false
     },
-    "Object4": {
+    "Object5": {
       "type": "object",
       "properties": {
         "id": {
@@ -18997,7 +21326,7 @@
         "lines": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type31"
+            "$ref": "#/components/schemas/__type39"
           }
         }
       },
@@ -19026,7 +21355,7 @@
         "lines"
       ]
     },
-    "__type31": {
+    "__type39": {
       "type": "object",
       "properties": {
         "id": {
@@ -19058,7 +21387,7 @@
         "shipmentId"
       ]
     },
-    "__type32": {
+    "__type40": {
       "type": "object",
       "properties": {
         "id": {
@@ -19286,7 +21615,7 @@
         "events": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/__type33"
+            "$ref": "#/components/schemas/__type41"
           }
         }
       },
@@ -19300,7 +21629,7 @@
         "events"
       ]
     },
-    "__type33": {
+    "__type41": {
       "type": "object",
       "properties": {
         "normalizedStatus": {
@@ -19346,7 +21675,7 @@
         "type": "string"
       }
     },
-    "__type34": {
+    "__type42": {
       "type": "object",
       "properties": {
         "id": {
@@ -19586,7 +21915,7 @@
           "type": "object",
           "allOf": [
             {
-              "$ref": "#/components/schemas/__type35"
+              "$ref": "#/components/schemas/__type43"
             }
           ],
           "nullable": true
@@ -19602,7 +21931,7 @@
         "isAvailable"
       ]
     },
-    "__type35": {
+    "__type43": {
       "type": "object",
       "properties": {
         "amount": {

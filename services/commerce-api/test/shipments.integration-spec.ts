@@ -47,6 +47,7 @@ describe('Shipments (integration, real Postgres)', () => {
     numberingService,
     auditService,
     outboxService,
+    backgroundJobsServiceStub,
   );
   const carrierProviderRegistry = new CarrierProviderRegistry([new ManualCarrierProvider()]);
   const shipmentsService = new ShipmentsService(

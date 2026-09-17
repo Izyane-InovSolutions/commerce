@@ -489,7 +489,6 @@ export class OrdersService {
     await this.lockForPayment(initial.orderId, tx);
     const sellerOrder = await tx.sellerOrder.findUniqueOrThrow({
       where: { id: sellerOrderId },
-      include: { items: true },
     });
     if (
       !Number.isSafeInteger(amount) ||
@@ -513,13 +512,14 @@ export class OrdersService {
           : OrderStatus.PARTIALLY_REFUNDED,
       },
     });
-    if (fullyRefunded) {
-      for (const item of [...sellerOrder.items].sort((a, b) =>
-        a.id.localeCompare(b.id),
-      ))
-        if (item.reservationId)
-          await this.inventoryService.restock(item.reservationId, tx);
-    }
+    // Reservation stock is no longer auto-restocked here on full refund — a
+    // refund is a money event, not proof the physical item came back.
+    // Restocking now only happens through the Returns module, once
+    // inspected quantity is actually dispositioned RESTOCK (see
+    // InventoryService.receiveReturnedStock), so a refund issued before the
+    // item is returned (or one that never gets a physical return, e.g. an
+    // admin goodwill refund) can never double-restock alongside a later
+    // accepted return.
     const groups = await tx.sellerOrder.findMany({
       where: { orderId: sellerOrder.orderId },
     });

@@ -14,6 +14,7 @@ import {
 
 import { NumberingService } from '../../common/numbering/numbering.service';
 import { PrismaService } from '../../database/prisma.service';
+import { BackgroundJobsService } from '../../infrastructure/jobs/background-jobs.service';
 import { OutboxService } from '../../infrastructure/jobs/outbox.service';
 import { AuditService } from '../audit/audit.service';
 import { InventoryService } from '../inventory/inventory.service';
@@ -136,6 +137,7 @@ describe('FulfillmentsService', () => {
   let numberingService: { nextFulfillmentDispatchNumber: jest.Mock };
   let auditService: { record: jest.Mock };
   let outboxService: { record: jest.Mock };
+  let backgroundJobsService: { enqueue: jest.Mock };
   let service: FulfillmentsService;
 
   beforeEach(() => {
@@ -152,12 +154,14 @@ describe('FulfillmentsService', () => {
     };
     auditService = { record: jest.fn().mockResolvedValue(undefined) };
     outboxService = { record: jest.fn().mockResolvedValue(undefined) };
+    backgroundJobsService = { enqueue: jest.fn().mockResolvedValue(undefined) };
     service = new FulfillmentsService(
       prisma as unknown as PrismaService,
       inventoryService as unknown as InventoryService,
       numberingService as unknown as NumberingService,
       auditService as unknown as AuditService,
       outboxService as unknown as OutboxService,
+      backgroundJobsService as unknown as BackgroundJobsService,
     );
   });
 

@@ -497,6 +497,8 @@ export class ProductsService {
       slug: product.slug,
       description: product.description,
       status: product.status,
+      isReturnable: product.isReturnable,
+      returnWindowDays: product.returnWindowDays,
       brand: product.brand,
       category: product.category,
       // An asset that is still uploading, or has been deleted, has nothing to

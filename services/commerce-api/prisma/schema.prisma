@@ -119,24 +119,29 @@ enum ProductStatus {
 }
 
 model User {
-  id                  String               @id @default(uuid()) @db.Uuid
-  email               String               @unique
-  passwordHash        String               @map("password_hash")
-  firstName           String?              @map("first_name")
-  lastName            String?              @map("last_name")
-  phone               String?
-  role                Role                 @default(CUSTOMER)
-  isActive            Boolean              @default(true) @map("is_active")
-  createdAt           DateTime             @default(now()) @map("created_at")
-  updatedAt           DateTime             @updatedAt @map("updated_at")
-  sessions            Session[]
-  passwordResetTokens PasswordResetToken[]
-  mediaAssets         MediaAsset[]
-  addresses           Address[]
-  cart                Cart?
-  wishlistItems       WishlistItem[]
-  orders              Order[]
-  seller              Seller?
+  id                   String               @id @default(uuid()) @db.Uuid
+  email                String               @unique
+  passwordHash         String               @map("password_hash")
+  firstName            String?              @map("first_name")
+  lastName             String?              @map("last_name")
+  phone                String?
+  role                 Role                 @default(CUSTOMER)
+  isActive             Boolean              @default(true) @map("is_active")
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
+  sessions             Session[]
+  passwordResetTokens  PasswordResetToken[]
+  mediaAssets          MediaAsset[]
+  addresses            Address[]
+  cart                 Cart?
+  wishlistItems        WishlistItem[]
+  orders               Order[]
+  seller               Seller?
+  returnRequests       ReturnRequest[]      @relation("ReturnRequestCustomer")
+  assignedReturns      ReturnRequest[]      @relation("ReturnAssignedStaff")
+  postedReturnReceipts ReturnReceipt[]
+  returnInspections    ReturnInspection[]
+  returnEvents         ReturnEvent[]
 
   @@map("users")
 }
@@ -337,19 +342,24 @@ model AttributeValue {
 }
 
 model Product {
-  id          String           @id @default(uuid()) @db.Uuid
-  name        String
-  slug        String           @unique
-  description String?
-  brandId     String?          @map("brand_id") @db.Uuid
-  brand       Brand?           @relation(fields: [brandId], references: [id], onDelete: SetNull)
-  categoryId  String?          @map("category_id") @db.Uuid
-  category    Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  status      ProductStatus    @default(DRAFT)
-  variants    ProductVariant[]
-  media       ProductMedia[]
-  createdAt   DateTime         @default(now()) @map("created_at")
-  updatedAt   DateTime         @updatedAt @map("updated_at")
+  id               String           @id @default(uuid()) @db.Uuid
+  name             String
+  slug             String           @unique
+  description      String?
+  brandId          String?          @map("brand_id") @db.Uuid
+  brand            Brand?           @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  categoryId       String?          @map("category_id") @db.Uuid
+  category         Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  status           ProductStatus    @default(DRAFT)
+  // Return policy: isReturnable gates whether the item can be returned at
+  // all; returnWindowDays overrides the platform default (30 days, applied
+  // in application code when null) for this product specifically.
+  isReturnable     Boolean          @default(true) @map("is_returnable")
+  returnWindowDays Int?             @map("return_window_days")
+  variants         ProductVariant[]
+  media            ProductMedia[]
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
 
   @@index([brandId])
   @@index([categoryId])
@@ -462,17 +472,20 @@ enum ReservationStatus {
 }
 
 model Warehouse {
-  id                String             @id @default(uuid()) @db.Uuid
-  name              String
-  code              String             @unique
-  isActive          Boolean            @default(true) @map("is_active")
-  records           InventoryRecord[]
-  purchaseOrders    PurchaseOrder[]
-  goodsReceipts     GoodsReceipt[]
-  fulfillmentOrders FulfillmentOrder[]
-  shipments         Shipment[]
-  createdAt         DateTime           @default(now()) @map("created_at")
-  updatedAt         DateTime           @updatedAt @map("updated_at")
+  id                    String                 @id @default(uuid()) @db.Uuid
+  name                  String
+  code                  String                 @unique
+  isActive              Boolean                @default(true) @map("is_active")
+  records               InventoryRecord[]
+  purchaseOrders        PurchaseOrder[]
+  goodsReceipts         GoodsReceipt[]
+  fulfillmentOrders     FulfillmentOrder[]
+  shipments             Shipment[]
+  returnRequests        ReturnRequest[]
+  returnReceipts        ReturnReceipt[]
+  returnInspectionLines ReturnInspectionLine[]
+  createdAt             DateTime               @default(now()) @map("created_at")
+  updatedAt             DateTime               @updatedAt @map("updated_at")
 
   @@map("warehouses")
 }
@@ -488,6 +501,9 @@ model InventoryRecord {
   variant      ProductVariant      @relation(fields: [variantId], references: [id], onDelete: Cascade)
   onHand       Int                 @default(0) @map("on_hand")
   reserved     Int                 @default(0)
+  // Low stock means available (onHand - reserved) <= reorderPoint. 0 means
+  // no replenishment threshold has been configured for this record.
+  reorderPoint Int                 @default(0) @map("reorder_point")
   version      Int                 @default(0)
   movements    InventoryMovement[]
   reservations Reservation[]
@@ -636,6 +652,7 @@ model Order {
   payment           Payment?
   fulfillmentOrders FulfillmentOrder[]
   shipments         Shipment[]
+  returnRequests    ReturnRequest[]
   createdAt         DateTime           @default(now()) @map("created_at")
   updatedAt         DateTime           @updatedAt @map("updated_at")
 
@@ -674,6 +691,7 @@ model SellerOrder {
   items             OrderItem[]
   shippingGroups    ShippingGroup[]
   refunds           Refund[]
+  refundCases       RefundCase[]
   fulfillmentOrders FulfillmentOrder[]
   shipments         Shipment[]
   createdAt         DateTime           @default(now()) @map("created_at")
@@ -750,6 +768,8 @@ model OrderItem {
   reservationId   String?          @map("reservation_id")
   fulfillmentLine FulfillmentLine?
   shipmentLines   ShipmentLine[]
+  returnItems     ReturnItem[]
+  refundCaseItems RefundCaseItem[]
   createdAt       DateTime         @default(now()) @map("created_at")
 
   @@index([orderId])
@@ -799,12 +819,17 @@ model PaymentSettlement {
 // whole order" action creates one Refund row per seller group - the gateway
 // refunds against the parent Payment (it has no seller-order concept), but
 // locally we need to know whose commission/balance to reverse.
+// refundCaseId is nullable at the schema level only — pre-existing rows are
+// backfilled into legacy ADMIN RefundCases by migration, application code
+// always sets it going forward (same convention as OrderItem.sellerOrderId).
 model Refund {
   id                String       @id @default(uuid()) @db.Uuid
   paymentId         String       @map("payment_id") @db.Uuid
   payment           Payment      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
   sellerOrderId     String       @map("seller_order_id") @db.Uuid
   sellerOrder       SellerOrder  @relation(fields: [sellerOrderId], references: [id], onDelete: Cascade)
+  refundCaseId      String?      @map("refund_case_id") @db.Uuid
+  refundCase        RefundCase?  @relation(fields: [refundCaseId], references: [id], onDelete: SetNull)
   amount            Int
   currency          String       @db.VarChar(3)
   reason            String
@@ -817,6 +842,7 @@ model Refund {
 
   @@index([paymentId])
   @@index([sellerOrderId])
+  @@index([refundCaseId])
   @@map("refunds")
 }
 
@@ -1459,15 +1485,16 @@ model Shipment {
 // (same convention as OrderItem.orderId/sellerOrderId), so customer-facing
 // tracking queries never need to join through FulfillmentLine.
 model ShipmentLine {
-  id                String          @id @default(uuid()) @db.Uuid
-  shipmentId        String          @map("shipment_id") @db.Uuid
-  shipment          Shipment        @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
-  fulfillmentLineId String          @map("fulfillment_line_id") @db.Uuid
-  fulfillmentLine   FulfillmentLine @relation(fields: [fulfillmentLineId], references: [id], onDelete: Restrict)
-  orderItemId       String          @map("order_item_id") @db.Uuid
-  orderItem         OrderItem       @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  id                String                 @id @default(uuid()) @db.Uuid
+  shipmentId        String                 @map("shipment_id") @db.Uuid
+  shipment          Shipment               @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  fulfillmentLineId String                 @map("fulfillment_line_id") @db.Uuid
+  fulfillmentLine   FulfillmentLine        @relation(fields: [fulfillmentLineId], references: [id], onDelete: Restrict)
+  orderItemId       String                 @map("order_item_id") @db.Uuid
+  orderItem         OrderItem              @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
   quantity          Int
-  createdAt         DateTime        @default(now()) @map("created_at")
+  returnAllocations ReturnItemAllocation[]
+  createdAt         DateTime               @default(now()) @map("created_at")
 
   @@unique([shipmentId, fulfillmentLineId])
   @@index([fulfillmentLineId])
@@ -1522,4 +1549,312 @@ model CarrierWebhookDelivery {
   @@unique([providerCode, providerDeliveryId])
   @@unique([providerCode, payloadHash])
   @@map("carrier_webhook_deliveries")
+}
+
+// ---------------------------------------------------------------------------
+// Returns, RMA, and refund-case domain (#30)
+// ---------------------------------------------------------------------------
+
+enum ReturnReasonCode {
+  CUSTOMER_REMORSE
+  WRONG_ITEM
+  DAMAGED
+  DEFECTIVE
+  NOT_AS_DESCRIBED
+  SIZE_FIT
+  OTHER
+}
+
+// REQUESTED -> APPROVED | REJECTED | CANCELLED
+// APPROVED -> RECEIVING -> RECEIVED -> INSPECTING
+// INSPECTING -> CLOSED_NO_REFUND | REFUND_PENDING
+// REFUND_PENDING -> PARTIALLY_REFUNDED | REFUNDED | REFUND_FAILED
+enum ReturnStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  CANCELLED
+  RECEIVING
+  RECEIVED
+  INSPECTING
+  CLOSED_NO_REFUND
+  REFUND_PENDING
+  PARTIALLY_REFUNDED
+  REFUNDED
+  REFUND_FAILED
+}
+
+// Only RESTOCK increments sellable InventoryRecord.onHand. QUARANTINE,
+// DAMAGED and DISPOSE record where accepted-but-unsellable stock went
+// without affecting availability.
+enum ReturnDisposition {
+  RESTOCK
+  QUARANTINE
+  DAMAGED
+  DISPOSE
+}
+
+enum RefundCaseSource {
+  RETURN
+  FULFILLMENT_CANCELLATION
+  ADMIN
+}
+
+// RECONCILIATION_REQUIRED means the provider gave an ambiguous outcome for a
+// refund attempt — money is never reported as refunded, and the case cannot
+// be retried until an operator reconciles it out-of-band. A definitive
+// FAILED case can be retried (a new Refund attempt row is created).
+enum RefundCaseStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  PARTIALLY_SUCCEEDED
+  FAILED
+  RECONCILIATION_REQUIRED
+  CANCELLED
+}
+
+// The customer/staff-facing return request, scoped to one Order but spanning
+// however many SellerOrders its ReturnItems' OrderItems belong to — the
+// resulting refund obligations are split one RefundCase per SellerOrder (see
+// RefundCase.source = RETURN). warehouseId is the single admin-selected
+// receiving warehouse for this RMA, independent of where the item originally
+// shipped from (see docs on the workflow). rmaNumber is the human-facing
+// reference handed to the customer alongside rmaInstructions.
+model ReturnRequest {
+  id              String             @id @default(uuid()) @db.Uuid
+  orderId         String             @map("order_id") @db.Uuid
+  order           Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId          String             @map("user_id") @db.Uuid
+  user            User               @relation("ReturnRequestCustomer", fields: [userId], references: [id], onDelete: Cascade)
+  status          ReturnStatus       @default(REQUESTED)
+  warehouseId     String?            @map("warehouse_id") @db.Uuid
+  warehouse       Warehouse?         @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  assignedStaffId String?            @map("assigned_staff_id") @db.Uuid
+  assignedStaff   User?              @relation("ReturnAssignedStaff", fields: [assignedStaffId], references: [id], onDelete: SetNull)
+  rmaNumber       String?            @unique @map("rma_number")
+  rmaInstructions String?            @map("rma_instructions")
+  rejectionReason String?            @map("rejection_reason")
+  version         Int                @default(0)
+  idempotencyKey  String?            @unique @map("idempotency_key")
+  requestHash     String?            @map("request_hash") @db.VarChar(64)
+  items           ReturnItem[]
+  receipts        ReturnReceipt[]
+  inspections     ReturnInspection[]
+  events          ReturnEvent[]
+  refundCases     RefundCase[]
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([assignedStaffId])
+  @@index([status])
+  @@map("return_requests")
+}
+
+// unitAmount/currency/returnWindowDays/eligibleUntil/deliveredAt are snapshot
+// at request time from the immutable OrderItem and the product's return
+// policy in effect then, so a later policy change never retroactively
+// changes an already-requested return's eligibility or refund math.
+model ReturnItem {
+  id               String                 @id @default(uuid()) @db.Uuid
+  returnRequestId  String                 @map("return_request_id") @db.Uuid
+  returnRequest    ReturnRequest          @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  orderItemId      String                 @map("order_item_id") @db.Uuid
+  orderItem        OrderItem              @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  quantity         Int
+  reasonCode       ReturnReasonCode       @map("reason_code")
+  note             String?
+  unitAmount       Int                    @map("unit_amount")
+  currency         String                 @db.VarChar(3)
+  returnWindowDays Int                    @map("return_window_days")
+  eligibleUntil    DateTime               @map("eligible_until")
+  deliveredAt      DateTime               @map("delivered_at")
+  allocations      ReturnItemAllocation[]
+  receiptLines     ReturnReceiptLine[]
+  inspectionLines  ReturnInspectionLine[]
+  refundCaseItems  RefundCaseItem[]
+  createdAt        DateTime               @default(now()) @map("created_at")
+
+  @@index([returnRequestId])
+  @@index([orderItemId])
+  @@unique([returnRequestId, orderItemId])
+  @@map("return_items")
+}
+
+// Ties a requested return quantity back to the specific delivered
+// ShipmentLine(s) it was allocated against, oldest-delivery-first, so
+// concurrent return requests against the same OrderItem can never
+// double-claim the same delivered unit.
+model ReturnItemAllocation {
+  id             String       @id @default(uuid()) @db.Uuid
+  returnItemId   String       @map("return_item_id") @db.Uuid
+  returnItem     ReturnItem   @relation(fields: [returnItemId], references: [id], onDelete: Cascade)
+  shipmentLineId String       @map("shipment_line_id") @db.Uuid
+  shipmentLine   ShipmentLine @relation(fields: [shipmentLineId], references: [id], onDelete: Restrict)
+  quantity       Int
+  releasedQuantity Int        @default(0) @map("released_quantity")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@index([returnItemId])
+  @@index([shipmentLineId])
+  @@unique([returnItemId, shipmentLineId])
+  @@map("return_item_allocations")
+}
+
+// Posted receipts are immutable — never updated after creation. isClosing
+// marks the receipt that releases any unreceived quantities still
+// outstanding on the RMA (partial receipts are otherwise allowed and leave
+// the return in RECEIVING). Admin corrections use a new compensating
+// ReturnEvent rather than mutating a posted receipt.
+model ReturnReceipt {
+  id              String              @id @default(uuid()) @db.Uuid
+  returnRequestId String              @map("return_request_id") @db.Uuid
+  returnRequest   ReturnRequest       @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  warehouseId     String              @map("warehouse_id") @db.Uuid
+  warehouse       Warehouse           @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  postedByUserId  String              @map("posted_by_user_id") @db.Uuid
+  postedBy        User                @relation(fields: [postedByUserId], references: [id], onDelete: Restrict)
+  isClosing       Boolean             @default(false) @map("is_closing")
+  idempotencyKey  String              @unique @map("idempotency_key")
+  requestHash     String?             @map("request_hash") @db.VarChar(64)
+  lines           ReturnReceiptLine[]
+  createdAt       DateTime            @default(now()) @map("created_at")
+
+  @@index([returnRequestId])
+  @@map("return_receipts")
+}
+
+model ReturnReceiptLine {
+  id           String        @id @default(uuid()) @db.Uuid
+  receiptId    String        @map("receipt_id") @db.Uuid
+  receipt      ReturnReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  returnItemId String        @map("return_item_id") @db.Uuid
+  returnItem   ReturnItem    @relation(fields: [returnItemId], references: [id], onDelete: Cascade)
+  quantity     Int
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  @@index([receiptId])
+  @@index([returnItemId])
+  @@unique([receiptId, returnItemId])
+  @@map("return_receipt_lines")
+}
+
+// Posted inspections are immutable. isFinal marks the inspection that closes
+// out a ReturnItem's disposition — final inspection requires every received
+// unit across the RMA to be either dispositioned (acceptedQuantity with a
+// disposition) or rejected (rejectedQuantity with rejectionReason).
+model ReturnInspection {
+  id                String                 @id @default(uuid()) @db.Uuid
+  returnRequestId   String                 @map("return_request_id") @db.Uuid
+  returnRequest     ReturnRequest          @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  inspectedByUserId String                 @map("inspected_by_user_id") @db.Uuid
+  inspectedBy       User                   @relation(fields: [inspectedByUserId], references: [id], onDelete: Restrict)
+  isFinal           Boolean                @default(false) @map("is_final")
+  idempotencyKey    String                 @unique @map("idempotency_key")
+  requestHash       String?                @map("request_hash") @db.VarChar(64)
+  lines             ReturnInspectionLine[]
+  createdAt         DateTime               @default(now()) @map("created_at")
+
+  @@index([returnRequestId])
+  @@map("return_inspections")
+}
+
+model ReturnInspectionLine {
+  id               String             @id @default(uuid()) @db.Uuid
+  inspectionId     String             @map("inspection_id") @db.Uuid
+  inspection       ReturnInspection   @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  returnItemId     String             @map("return_item_id") @db.Uuid
+  returnItem       ReturnItem         @relation(fields: [returnItemId], references: [id], onDelete: Cascade)
+  warehouseId      String             @map("warehouse_id") @db.Uuid
+  warehouse        Warehouse          @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  acceptedQuantity Int                @default(0) @map("accepted_quantity")
+  disposition      ReturnDisposition?
+  rejectedQuantity Int                @default(0) @map("rejected_quantity")
+  rejectionReason  String?            @map("rejection_reason")
+  createdAt        DateTime           @default(now()) @map("created_at")
+
+  @@index([inspectionId])
+  @@index([returnItemId])
+  @@unique([inspectionId, returnItemId])
+  @@map("return_inspection_lines")
+}
+
+// Append-only audit trail for a return's lifecycle, including admin
+// corrections (type: "CORRECTION") which compensate for a posted receipt or
+// inspection rather than mutating it.
+model ReturnEvent {
+  id              String        @id @default(uuid()) @db.Uuid
+  returnRequestId String        @map("return_request_id") @db.Uuid
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  type            String
+  actorUserId     String?       @map("actor_user_id") @db.Uuid
+  actor           User?         @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  data            Json?
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  @@index([returnRequestId])
+  @@map("return_events")
+}
+
+// RefundCase is the business obligation to refund a SellerOrder by some
+// amount, for some reason (RETURN / FULFILLMENT_CANCELLATION / ADMIN);
+// Refund rows underneath it are individual provider attempts. Existing
+// pre-#30 Refund rows are backfilled into legacy source: ADMIN cases by
+// migration so all refund money flows through one obligation model.
+model RefundCase {
+  id              String           @id @default(uuid()) @db.Uuid
+  sellerOrderId   String           @map("seller_order_id") @db.Uuid
+  sellerOrder     SellerOrder      @relation(fields: [sellerOrderId], references: [id], onDelete: Cascade)
+  source          RefundCaseSource
+  returnRequestId String?          @map("return_request_id") @db.Uuid
+  returnRequest   ReturnRequest?   @relation(fields: [returnRequestId], references: [id], onDelete: SetNull)
+  status          RefundCaseStatus @default(PENDING)
+  amount          Int
+  shippingAmount  Int              @default(0) @map("shipping_amount")
+  currency        String           @db.VarChar(3)
+  reason          String
+  version         Int              @default(0)
+  idempotencyKey  String           @unique @map("idempotency_key")
+  items           RefundCaseItem[]
+  refunds         Refund[]
+  events          RefundEvent[]
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  @@index([sellerOrderId])
+  @@index([returnRequestId])
+  @@index([status])
+  @@map("refund_cases")
+}
+
+model RefundCaseItem {
+  id           String      @id @default(uuid()) @db.Uuid
+  refundCaseId String      @map("refund_case_id") @db.Uuid
+  refundCase   RefundCase  @relation(fields: [refundCaseId], references: [id], onDelete: Cascade)
+  orderItemId  String      @map("order_item_id") @db.Uuid
+  orderItem    OrderItem   @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  returnItemId String?     @map("return_item_id") @db.Uuid
+  returnItem   ReturnItem? @relation(fields: [returnItemId], references: [id], onDelete: SetNull)
+  quantity     Int
+  amount       Int
+  currency     String      @db.VarChar(3)
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  @@index([refundCaseId])
+  @@map("refund_case_items")
+}
+
+// Append-only — never updated or deleted, same convention as PaymentEvent /
+// InventoryMovement.
+model RefundEvent {
+  id           String     @id @default(uuid()) @db.Uuid
+  refundCaseId String     @map("refund_case_id") @db.Uuid
+  refundCase   RefundCase @relation(fields: [refundCaseId], references: [id], onDelete: Cascade)
+  type         String
+  data         Json?
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@index([refundCaseId])
+  @@map("refund_events")
 }

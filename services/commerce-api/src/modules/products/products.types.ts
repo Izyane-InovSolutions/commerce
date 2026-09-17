@@ -91,6 +91,8 @@ export type PublicProduct = {
   slug: string;
   description: string | null;
   status: Product['status'];
+  isReturnable: boolean;
+  returnWindowDays: number | null;
   brand: Brand | null;
   category: Category | null;
   media: {

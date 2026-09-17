@@ -717,7 +717,7 @@ describe('OrdersService', () => {
       expect(inventoryService.restock).not.toHaveBeenCalled();
     });
 
-    it('marks REFUNDED and restocks every reserved item once fully refunded', async () => {
+    it('marks REFUNDED without restocking reservation stock once fully refunded', async () => {
       prisma.sellerOrder.findUnique.mockResolvedValue({
         id: 'so-1',
         orderId: 'order-1',
@@ -740,11 +740,9 @@ describe('OrdersService', () => {
         where: { id: 'so-1' },
         data: { refundedAmount: 1000, status: OrderStatus.REFUNDED },
       });
-      expect(inventoryService.restock).toHaveBeenCalledWith(
-        'reservation-1',
-        prisma,
-      );
-      expect(inventoryService.restock).toHaveBeenCalledTimes(1);
+      // A refund is a money event only now — restocking happens through the
+      // Returns module once inspected quantity is dispositioned RESTOCK.
+      expect(inventoryService.restock).not.toHaveBeenCalled();
     });
   });
 

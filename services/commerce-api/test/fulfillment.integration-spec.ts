@@ -46,6 +46,7 @@ describe('Fulfillment (integration, real Postgres)', () => {
     numberingService,
     auditService,
     outboxService,
+    backgroundJobsServiceStub,
   );
 
   const suffix = randomUUID().slice(0, 8);

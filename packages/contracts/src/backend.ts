@@ -89,6 +89,8 @@ export type BackendBrand = z.infer<typeof backendBrandSchema>;
 export const backendOfferSchema = z.object({
   id: z.uuid(),
   status: backendProductStatusSchema,
+  isReturnable: z.boolean(),
+  returnWindowDays: z.int().nullable(),
   /** Resolved in the requested currency; null when it has no price in it. */
   currentPrice: backendMoneySchema.nullable(),
   /** Every currency this offer currently carries a price in. */
@@ -335,6 +337,7 @@ export const backendInventoryRecordSchema = z.object({
   onHand: z.int(),
   reserved: z.int(),
   available: z.int(),
+  reorderPoint: z.int(),
   updatedAt: z.iso.datetime(),
 });
 export type BackendInventoryRecord = z.infer<
@@ -375,6 +378,8 @@ export const backendCreateProductSchema = z.object({
   description: z.string().trim().optional(),
   brandId: z.uuid().optional(),
   categoryId: z.uuid().optional(),
+  isReturnable: z.boolean().optional(),
+  returnWindowDays: z.int().min(0).optional(),
 });
 export type BackendCreateProductInput = z.input<
   typeof backendCreateProductSchema
@@ -660,3 +665,200 @@ export const backendRecordPayoutSchema = z.object({
 export type BackendRecordPayoutInput = z.input<
   typeof backendRecordPayoutSchema
 >;
+
+/* ---- returns and retail operations (#30) ---- */
+
+export const backendReturnStatuses = [
+  'REQUESTED',
+  'APPROVED',
+  'REJECTED',
+  'CANCELLED',
+  'RECEIVING',
+  'RECEIVED',
+  'INSPECTING',
+  'CLOSED_NO_REFUND',
+  'REFUND_PENDING',
+  'PARTIALLY_REFUNDED',
+  'REFUNDED',
+  'REFUND_FAILED',
+] as const;
+export const backendReturnStatusSchema = z.enum(backendReturnStatuses);
+export type BackendReturnStatus = z.infer<typeof backendReturnStatusSchema>;
+
+export const backendReturnReasonCodes = [
+  'CUSTOMER_REMORSE',
+  'WRONG_ITEM',
+  'DAMAGED',
+  'DEFECTIVE',
+  'NOT_AS_DESCRIBED',
+  'SIZE_FIT',
+  'OTHER',
+] as const;
+export const backendReturnReasonCodeSchema = z.enum(backendReturnReasonCodes);
+export type BackendReturnReasonCode = z.infer<
+  typeof backendReturnReasonCodeSchema
+>;
+
+export const backendReturnDispositions = [
+  'RESTOCK',
+  'QUARANTINE',
+  'DAMAGED',
+  'DISPOSE',
+] as const;
+export const backendReturnDispositionSchema = z.enum(backendReturnDispositions);
+export type BackendReturnDisposition = z.infer<
+  typeof backendReturnDispositionSchema
+>;
+
+export const backendReturnItemSchema = z.object({
+  id: z.uuid(),
+  returnRequestId: z.uuid(),
+  orderItemId: z.uuid(),
+  quantity: z.int(),
+  reasonCode: backendReturnReasonCodeSchema,
+  note: z.string().nullable(),
+  unitAmount: z.int(),
+  currency: z.string(),
+  returnWindowDays: z.int(),
+  eligibleUntil: z.iso.datetime(),
+  deliveredAt: z.iso.datetime(),
+  createdAt: z.iso.datetime(),
+});
+export type BackendReturnItem = z.infer<typeof backendReturnItemSchema>;
+
+export const backendRefundCaseSchema = z.object({
+  id: z.uuid(),
+  sellerOrderId: z.uuid(),
+  returnRequestId: z.uuid().nullable(),
+  source: z.enum(['RETURN', 'FULFILLMENT_CANCELLATION', 'ADMIN']),
+  status: z.enum([
+    'PENDING',
+    'PROCESSING',
+    'SUCCEEDED',
+    'PARTIALLY_SUCCEEDED',
+    'FAILED',
+    'RECONCILIATION_REQUIRED',
+    'CANCELLED',
+  ]),
+  amount: z.int(),
+  shippingAmount: z.int(),
+  currency: z.string(),
+  reason: z.string(),
+  version: z.int(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+export type BackendRefundCase = z.infer<typeof backendRefundCaseSchema>;
+
+export const backendReturnRequestSchema = z.object({
+  id: z.uuid(),
+  orderId: z.uuid(),
+  userId: z.uuid(),
+  status: backendReturnStatusSchema,
+  warehouseId: z.uuid().nullable(),
+  assignedStaffId: z.uuid().nullable(),
+  rmaNumber: z.string().nullable(),
+  rmaInstructions: z.string().nullable(),
+  rejectionReason: z.string().nullable(),
+  version: z.int(),
+  items: z.array(backendReturnItemSchema).default([]),
+  refundCases: z.array(backendRefundCaseSchema).default([]),
+  receipts: z.array(z.unknown()).default([]),
+  inspections: z.array(z.unknown()).default([]),
+  events: z.array(z.unknown()).default([]),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+export type BackendReturnRequest = z.infer<typeof backendReturnRequestSchema>;
+
+export const backendReturnEligibilitySchema = z.object({
+  orderItemId: z.uuid(),
+  returnable: z.boolean(),
+  reason: z.string().optional(),
+  returnWindowDays: z.int(),
+  totalRemainingQuantity: z.int(),
+  chunks: z.array(
+    z.object({
+      shipmentLineId: z.uuid(),
+      deliveredAt: z.iso.datetime(),
+      eligibleUntil: z.iso.datetime(),
+      remainingQuantity: z.int(),
+    }),
+  ),
+});
+export type BackendReturnEligibility = z.infer<
+  typeof backendReturnEligibilitySchema
+>;
+
+export type BackendCreateReturnInput = {
+  items: {
+    orderItemId: string;
+    quantity: number;
+    reasonCode: BackendReturnReasonCode;
+    note?: string;
+  }[];
+};
+export type BackendApproveReturnInput = {
+  warehouseId: string;
+  assignedStaffId?: string;
+  version: number;
+};
+export type BackendRejectReturnInput = {
+  rejectionReason: string;
+  version: number;
+};
+export type BackendPostReturnReceiptInput = {
+  warehouseId: string;
+  lines: { returnItemId: string; quantity: number }[];
+  isClosing?: boolean;
+};
+export type BackendPostReturnInspectionInput = {
+  lines: {
+    returnItemId: string;
+    warehouseId: string;
+    acceptedQuantity: number;
+    disposition?: BackendReturnDisposition;
+    rejectedQuantity: number;
+    rejectionReason?: string;
+  }[];
+  isFinal?: boolean;
+  shippingRefunds?: { sellerOrderId: string; amount: number }[];
+};
+
+export type BackendOperationsMetrics = {
+  range: { from: string; to: string };
+  sales: {
+    paidOrderCount: number;
+    grossSales: number;
+    itemRefunds: number;
+    shippingRefunds: number;
+    netSales: number;
+  };
+  ordersByStatus: { status: string; count: number }[];
+  fulfillment: {
+    backlogCount: number;
+    statusTotals: { status: string; count: number }[];
+    aging: { averageAgeHours: number | null; maxAgeHours: number | null };
+  };
+  inventory: {
+    onHand: number;
+    reserved: number;
+    available: number;
+    outOfStockCount: number;
+    lowStockCount: number;
+  };
+  returns: {
+    countsByStatus: { status: BackendReturnStatus; count: number }[];
+    countsByReasonCode: {
+      reasonCode: BackendReturnReasonCode;
+      count: number;
+    }[];
+    returnedQuantity: number;
+    refundValue: number;
+    returnRate: number | null;
+    processingAgeHours: {
+      openAverageAgeHours: number | null;
+      closedAverageAgeHours: number | null;
+    };
+  };
+};

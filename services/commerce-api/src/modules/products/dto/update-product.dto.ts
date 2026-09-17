@@ -1,8 +1,11 @@
 import {
   IsOptional,
+  IsBoolean,
+  IsInt,
   IsString,
   IsUUID,
   MinLength,
+  Min,
   ValidateIf,
 } from 'class-validator';
 
@@ -32,4 +35,14 @@ export class UpdateProductDto {
   @ValidateIf((_object, value: unknown) => value !== null)
   @IsUUID()
   categoryId?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  isReturnable?: boolean;
+
+  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== null)
+  @IsInt()
+  @Min(0)
+  returnWindowDays?: number | null;
 }

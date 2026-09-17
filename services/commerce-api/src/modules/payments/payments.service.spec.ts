@@ -1,9 +1,8 @@
-import { PaymentStatus } from '@prisma/client';
-import { ConflictException, NotImplementedException } from '@nestjs/common';
-import { LedgerService } from '../financials/ledger.service';
+import { PaymentStatus, RefundCaseSource } from '@prisma/client';
 import { OrdersService } from '../orders/orders.service';
 import { PrismaService } from '../../database/prisma.service';
 import { PaymentsService } from './payments.service';
+import { RefundCasesService } from './refund-cases.service';
 import type { InitializePaymentInput } from './payment-provider';
 import { PaymentOutcomeUnknownException } from './gateway-errors';
 
@@ -13,10 +12,7 @@ function buildPrisma(): {
     jest.Mock
   >;
   paymentEvent: Record<'create' | 'findUnique', jest.Mock>;
-  refund: Record<
-    'create' | 'update' | 'findUnique' | 'findUniqueOrThrow' | 'findMany',
-    jest.Mock
-  >;
+  refund: Record<'findUnique' | 'findUniqueOrThrow' | 'findMany', jest.Mock>;
   $transaction: jest.Mock;
 } {
   const p = {
@@ -28,8 +24,6 @@ function buildPrisma(): {
     },
     paymentEvent: { create: jest.fn(), findUnique: jest.fn() },
     refund: {
-      create: jest.fn(),
-      update: jest.fn(),
       findUnique: jest.fn(),
       findUniqueOrThrow: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
@@ -60,7 +54,7 @@ describe('PaymentsService', () => {
     getSellerOrderForPayment: jest.Mock;
     applyRefund: jest.Mock;
   };
-  let ledgerService: { recordRefundReversal: jest.Mock };
+  let refundCasesService: { createCase: jest.Mock; reconcile: jest.Mock };
   let service: PaymentsService;
   const payment = {
     id: 'payment-1',
@@ -84,6 +78,7 @@ describe('PaymentsService', () => {
     id: 'refund-1',
     paymentId: 'payment-1',
     sellerOrderId: 'so-1',
+    refundCaseId: 'case-1',
     amount: 400,
     reason: 'Customer request',
     currency: 'USD',
@@ -110,20 +105,19 @@ describe('PaymentsService', () => {
       getSellerOrderForPayment: jest.fn().mockResolvedValue(sellerOrder),
       applyRefund: jest.fn(),
     };
-    ledgerService = { recordRefundReversal: jest.fn() };
+    refundCasesService = {
+      createCase: jest.fn(),
+      reconcile: jest.fn(),
+    };
     service = new PaymentsService(
       prisma as unknown as PrismaService,
       provider,
       ordersService as unknown as OrdersService,
-      ledgerService as unknown as LedgerService,
+      refundCasesService as unknown as RefundCasesService,
     );
     prisma.payment.findUnique.mockResolvedValue(payment);
     prisma.payment.findUniqueOrThrow.mockResolvedValue(payment);
-    prisma.refund.create.mockResolvedValue(pending);
     prisma.refund.findUniqueOrThrow.mockResolvedValue({ ...pending, payment });
-    prisma.refund.update.mockImplementation(({ data }: { data: object }) =>
-      Promise.resolve({ ...pending, ...data }),
-    );
   });
   describe('initializeForOrder', () => {
     it('persists a private settlement quote while keeping the payment in ZMW', async () => {
@@ -288,111 +282,66 @@ describe('PaymentsService', () => {
   });
 
   describe('refundSellerOrder', () => {
-    it.each(['PENDING', 'PROCESSING', 'FAILED', 'CANCELLED'] as const)(
-      'does not apply a %s refund to balances or inventory',
-      async (status) => {
-        provider.refund.mockResolvedValue({
-          providerReference: 'remote-refund',
-          status,
-        });
-        await expect(
-          service.refundSellerOrder('so-1', 400, 'Customer request', 'key'),
-        ).resolves.toMatchObject({ status });
-        expect(ordersService.applyRefund).not.toHaveBeenCalled();
-        expect(ledgerService.recordRefundReversal).not.toHaveBeenCalled();
-        expect(prisma.payment.update).not.toHaveBeenCalled();
-      },
-    );
-    it('uses the same transaction for every successful local effect', async () => {
-      provider.refund.mockResolvedValue({
-        providerReference: 'remote-refund',
-        status: 'SUCCEEDED',
-      });
-      await expect(
-        service.refundSellerOrder('so-1', 400, 'Customer request', 'key'),
-      ).resolves.toMatchObject({ status: 'SUCCEEDED' });
-      expect(ordersService.applyRefund).toHaveBeenCalledWith(
-        'so-1',
-        400,
-        prisma,
-      );
-      expect(ledgerService.recordRefundReversal).toHaveBeenCalledWith(
-        sellerOrder,
-        400,
-        'refund-1',
-        prisma,
-      );
-      expect(prisma.payment.update).toHaveBeenCalledWith({
-        where: { id: 'payment-1' },
-        data: { refundedAmount: 400, status: 'PARTIALLY_REFUNDED' },
-      });
-    });
-    it('counts pending refunds against available capacity before contacting the provider', async () => {
-      prisma.refund.findMany.mockResolvedValue([
-        { sellerOrderId: 'so-1', amount: 700 },
-      ]);
-      await expect(
-        service.refundSellerOrder('so-1', 400, 'Customer request', 'key'),
-      ).rejects.toThrow('remaining refundable balance');
-      expect(refundCall).not.toHaveBeenCalled();
-    });
-    it('returns the existing request on an idempotent retry without a second provider call', async () => {
-      prisma.refund.findUnique.mockResolvedValue(pending);
+    // PaymentsService delegates the whole obligation to RefundCasesService
+    // (see RefundCasesService for the actual create/attempt/finalize logic
+    // and its own spec); this just has to keep the admin route's existing
+    // response shape of a single Refund row.
+    it('delegates to RefundCasesService and returns the resulting attempt', async () => {
+      refundCasesService.createCase.mockResolvedValue({ id: 'case-1' });
+      prisma.refund.findMany.mockResolvedValue([pending]);
       await expect(
         service.refundSellerOrder('so-1', 400, 'Customer request', 'key'),
       ).resolves.toEqual(pending);
-      expect(refundCall).not.toHaveBeenCalled();
-      expect(prisma.refund.create).not.toHaveBeenCalled();
-    });
-    it('rejects reuse of an idempotency key for different input', async () => {
-      prisma.refund.findUnique.mockResolvedValue({ ...pending, amount: 200 });
-      await expect(
-        service.refundSellerOrder('so-1', 400, 'Customer request', 'key'),
-      ).rejects.toBeInstanceOf(ConflictException);
-      expect(refundCall).not.toHaveBeenCalled();
-    });
-    it('keeps refund capacity reserved after a timeout', async () => {
-      provider.refund.mockRejectedValue(new PaymentOutcomeUnknownException());
-      await expect(
-        service.refundSellerOrder('so-1', 400, 'Customer request', 'key'),
-      ).rejects.toBeInstanceOf(PaymentOutcomeUnknownException);
-      expect(prisma.refund.update).toHaveBeenCalledWith({
-        where: { id: 'refund-1' },
-        data: {
-          status: 'PENDING',
-          failureReason: 'Refund outcome requires reconciliation',
-        },
+      expect(refundCasesService.createCase).toHaveBeenCalledWith({
+        sellerOrderId: 'so-1',
+        source: RefundCaseSource.ADMIN,
+        amount: 400,
+        currency: sellerOrder.currency,
+        reason: 'Customer request',
+        idempotencyKey: 'key',
+      });
+      expect(prisma.refund.findMany).toHaveBeenCalledWith({
+        where: { refundCaseId: 'case-1' },
+        orderBy: { createdAt: 'asc' },
       });
     });
-    it('releases refund capacity for a definitively unsupported operation', async () => {
-      provider.refund.mockRejectedValue(new NotImplementedException());
+    it('returns the failed attempt when the provider rejects the refund', async () => {
+      refundCasesService.createCase.mockResolvedValue({
+        id: 'case-1',
+        status: 'FAILED',
+      });
+      prisma.refund.findMany.mockResolvedValue([
+        { ...pending, status: 'FAILED' },
+      ]);
       await expect(
         service.refundSellerOrder('so-1', 400, 'Customer request', 'key'),
-      ).rejects.toBeInstanceOf(NotImplementedException);
-      expect(prisma.refund.update).toHaveBeenCalledWith({
-        where: { id: 'refund-1' },
-        data: {
-          status: 'FAILED',
-          failureReason: 'Provider rejected this refund operation',
-        },
-      });
+      ).resolves.toMatchObject({ status: 'FAILED' });
     });
-    it('retains the provider reference for reconciliation when local finalization fails', async () => {
-      provider.refund.mockResolvedValue({
-        providerReference: 'remote-refund',
+    it('returns the pending attempt when the provider outcome is ambiguous', async () => {
+      refundCasesService.createCase.mockResolvedValue({
+        id: 'case-1',
+        status: 'RECONCILIATION_REQUIRED',
+      });
+      prisma.refund.findMany.mockResolvedValue([
+        { ...pending, status: 'PENDING' },
+      ]);
+      await expect(
+        service.refundSellerOrder('so-1', 400, 'Customer request', 'key'),
+      ).resolves.toMatchObject({ status: 'PENDING' });
+    });
+  });
+
+  describe('reconcileRefund', () => {
+    it('delegates to RefundCasesService.reconcile using the attempt case id', async () => {
+      prisma.refund.findUnique.mockResolvedValue(pending);
+      prisma.refund.findUniqueOrThrow.mockResolvedValue({
+        ...pending,
         status: 'SUCCEEDED',
       });
-      ordersService.applyRefund.mockRejectedValue(
-        new Error('Stock unavailable'),
-      );
       await expect(
-        service.refundSellerOrder('so-1', 400, 'Customer request', 'key'),
-      ).rejects.toThrow('Stock unavailable');
-      expect(prisma.refund.update).toHaveBeenCalledTimes(1);
-      expect(prisma.refund.update).toHaveBeenCalledWith({
-        where: { id: 'refund-1' },
-        data: { providerReference: 'remote-refund' },
-      });
+        service.reconcileRefund('refund-1'),
+      ).resolves.toMatchObject({ status: 'SUCCEEDED' });
+      expect(refundCasesService.reconcile).toHaveBeenCalledWith('case-1');
     });
   });
   describe('handleWebhook', () => {
