@@ -4,6 +4,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Patch,
   Query,
   Body,
 } from '@nestjs/common';
@@ -14,6 +15,7 @@ import { AdjustStockDto } from './dto/adjust-stock.dto';
 import { ReceiveStockDto } from './dto/receive-stock.dto';
 import { InventoryService } from './inventory.service';
 import { InventoryRecordView } from './inventory.types';
+import { UpdateReorderPointDto } from './dto/update-reorder-point.dto';
 
 @Roles(Role.STAFF, Role.ADMIN)
 @Controller('admin/inventory')
@@ -53,6 +55,14 @@ export class AdminInventoryController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<InventoryMovement[]> {
     return this.inventoryService.listMovements(id);
+  }
+
+  @Patch(':id/reorder-point')
+  updateReorderPoint(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateReorderPointDto,
+  ): Promise<InventoryRecordView> {
+    return this.inventoryService.updateReorderPoint(id, dto.reorderPoint);
   }
 
   @Get(':id/reservations')

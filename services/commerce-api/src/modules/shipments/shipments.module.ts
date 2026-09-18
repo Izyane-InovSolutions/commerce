@@ -3,20 +3,23 @@ import { Module } from '@nestjs/common';
 import { NumberingModule } from '../../common/numbering/numbering.module';
 import { AuditModule } from '../audit/audit.module';
 import { FulfillmentModule } from '../fulfillment/fulfillment.module';
+import { SellersModule } from '../sellers/sellers.module';
 import { AdminShipmentsController } from './admin-shipments.controller';
 import { CARRIER_PROVIDERS } from './carrier-provider.interface';
 import { CarrierProviderRegistry } from './carrier-provider.registry';
 import { CustomerShipmentsController } from './customer-shipments.controller';
 import { ManualCarrierProvider } from './providers/manual-carrier.provider';
+import { SellerShipmentsController } from './seller-shipments.controller';
 import { ShipmentTrackingPollerService } from './shipment-tracking-poller.service';
 import { ShipmentsService } from './shipments.service';
 import { ShippingWebhooksController } from './shipping-webhooks.controller';
 
 @Module({
-  imports: [AuditModule, NumberingModule, FulfillmentModule],
+  imports: [AuditModule, NumberingModule, FulfillmentModule, SellersModule],
   controllers: [
     AdminShipmentsController,
     CustomerShipmentsController,
+    SellerShipmentsController,
     ShippingWebhooksController,
   ],
   providers: [

@@ -12,6 +12,8 @@ export * from './financials.ts';
 export * from './fulfillment.ts';
 export * from './inventory.ts';
 export * from './media.ts';
+export * from './operations.ts';
+export * from './returns.ts';
 export * from './seller-offers.ts';
 export * from './seller-orders.ts';
 export * from './sellers.ts';

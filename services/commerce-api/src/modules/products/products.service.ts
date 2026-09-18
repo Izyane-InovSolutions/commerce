@@ -7,7 +7,9 @@ import {
 import {
   MediaStatus,
   OfferStockSource,
+  ProductRatingSummary,
   ProductStatus,
+  ReviewVisibility,
   type Prisma,
   type ProductVariant,
 } from '@prisma/client';
@@ -24,6 +26,13 @@ import {
   currentPrices,
   pickCurrentPrice,
 } from '../../common/catalog/current-price';
+import {
+  averageRatingFromSummary,
+  ratingHistogramFromSummary,
+} from '../reviews/rating-summary.util';
+import { formatReviewerLabel } from '../reviews/reviewer-label';
+import { reviewOrderBy } from '../reviews/review-sort';
+import { ReviewListQueryDto } from '../reviews/dto/review-list-query.dto';
 import { AttachMediaDto } from './dto/attach-media.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { CreateVariantDto } from './dto/create-variant.dto';
@@ -36,6 +45,7 @@ import {
   ProductRowWithRelations,
   ProductWithRelations,
   PublicProduct,
+  PublicProductReview,
   VariantWithRelations,
 } from './products.types';
 
@@ -114,11 +124,19 @@ export class ProductsService {
       this.prisma.product.count({ where }),
     ]);
 
-    const stock = await this.loadStock(products);
+    const [stock, ratingSummaries] = await Promise.all([
+      this.loadStock(products),
+      this.loadRatingSummaries(products),
+    ]);
 
     return paginatedResult(
       products.map((product) =>
-        this.toPublicProduct(product, query.currency, stock),
+        this.toPublicProduct(
+          product,
+          query.currency,
+          stock,
+          ratingSummaries.get(product.id),
+        ),
       ),
       query.page,
       query.limit,
@@ -155,9 +173,89 @@ export class ProductsService {
       throw new NotFoundException('Product not found');
     }
 
-    const stock = await this.loadStock([product]);
+    const [stock, ratingSummaries] = await Promise.all([
+      this.loadStock([product]),
+      this.loadRatingSummaries([product]),
+    ]);
 
-    return this.toPublicProduct(product, currency, stock);
+    return this.toPublicProduct(
+      product,
+      currency,
+      stock,
+      ratingSummaries.get(product.id),
+    );
+  }
+
+  /**
+   * Public reviews for a product's page — PUBLISHED only, regardless of
+   * moderationState (a PENDING/FLAGGED review still shows publicly under the
+   * publish-then-moderate policy; only HIDDEN/REMOVED/WITHDRAWN are excluded).
+   * Never projects authorUserId, orderItemId, moderationState, reports, or
+   * revision history — see PublicProductReview.
+   */
+  async findPublicReviews(
+    slug: string,
+    query: ReviewListQueryDto,
+  ): Promise<PaginatedResult<PublicProductReview>> {
+    const product = await this.prisma.product.findFirst({
+      where: { slug, status: ProductStatus.PUBLISHED },
+      select: { id: true, name: true, slug: true },
+    });
+
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    const where: Prisma.ProductReviewWhereInput = {
+      productId: product.id,
+      visibility: ReviewVisibility.PUBLISHED,
+      ...(query.rating ? { rating: query.rating } : {}),
+    };
+
+    const [reviews, total] = await Promise.all([
+      this.prisma.productReview.findMany({
+        where,
+        orderBy: reviewOrderBy(query.sort),
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+        select: {
+          id: true,
+          rating: true,
+          title: true,
+          body: true,
+          createdAt: true,
+          updatedAt: true,
+          author: { select: { firstName: true, lastName: true } },
+          seller: { select: { id: true, displayName: true } },
+        },
+      }),
+      this.prisma.productReview.count({ where }),
+    ]);
+
+    return paginatedResult(
+      reviews.map(
+        (review): PublicProductReview => ({
+          id: review.id,
+          rating: review.rating,
+          title: review.title,
+          body: review.body,
+          reviewerLabel: formatReviewerLabel(
+            review.author.firstName,
+            review.author.lastName,
+          ),
+          verifiedPurchase: true,
+          createdAt: review.createdAt,
+          updatedAt: review.updatedAt,
+          product: { id: product.id, name: product.name, slug: product.slug },
+          seller: review.seller
+            ? { id: review.seller.id, displayName: review.seller.displayName }
+            : null,
+        }),
+      ),
+      query.page,
+      query.limit,
+      total,
+    );
   }
 
   async findAllAdmin(): Promise<ProductWithRelations[]> {
@@ -533,10 +631,23 @@ export class ProductsService {
     return { byVariant, byOffer };
   }
 
+  /** Read straight from ProductRatingSummary — never recomputed here, and
+   * never created on read: a product with no row yet just has no entry in
+   * the returned map, which toPublicProduct treats as all-zero. */
+  private async loadRatingSummaries(
+    products: { id: string }[],
+  ): Promise<Map<string, ProductRatingSummary>> {
+    const summaries = await this.prisma.productRatingSummary.findMany({
+      where: { productId: { in: products.map((product) => product.id) } },
+    });
+    return new Map(summaries.map((summary) => [summary.productId, summary]));
+  }
+
   private toPublicProduct(
     product: ProductRowWithRelations,
     currency: string,
     stock: { byVariant: Map<string, number>; byOffer: Map<string, number> },
+    ratingSummary: ProductRatingSummary | undefined,
   ): PublicProduct {
     return {
       id: product.id,
@@ -544,6 +655,8 @@ export class ProductsService {
       slug: product.slug,
       description: product.description,
       status: product.status,
+      isReturnable: product.isReturnable,
+      returnWindowDays: product.returnWindowDays,
       brand: product.brand,
       category: product.category,
       // An asset that is still uploading, or has been deleted, has nothing to
@@ -594,6 +707,9 @@ export class ProductsService {
           };
         }),
       })),
+      averageRating: averageRatingFromSummary(ratingSummary),
+      ratingCount: ratingSummary?.ratingCount ?? 0,
+      ratingHistogram: ratingHistogramFromSummary(ratingSummary),
     };
   }
 

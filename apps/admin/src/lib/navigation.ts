@@ -13,6 +13,7 @@ import {
   ScrollText,
   ShieldCheck,
   ShoppingCart,
+  RotateCcw,
   Store,
   Tag,
   type LucideIcon,
@@ -65,6 +66,16 @@ export const navigation: NavItem[] = [
     href: '/inventory',
     label: 'Inventory',
     icon: Boxes,
+  },
+  {
+    href: '/fulfillment',
+    label: 'Fulfillment',
+    icon: Truck,
+  },
+  {
+    href: '/operations',
+    label: 'Operations',
+    icon: RotateCcw,
   },
   {
     href: '/promotions',

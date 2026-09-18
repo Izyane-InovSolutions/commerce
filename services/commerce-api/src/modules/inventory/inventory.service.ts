@@ -52,6 +52,22 @@ export class InventoryService {
     );
   }
 
+  async updateReorderPoint(
+    id: string,
+    reorderPoint: number,
+  ): Promise<InventoryRecordView> {
+    const existing = await this.prisma.inventoryRecord.findUnique({
+      where: { id },
+    });
+    if (!existing || existing.offerId)
+      throw new NotFoundException('Inventory record not found');
+    const updated = await this.prisma.inventoryRecord.update({
+      where: { id },
+      data: { reorderPoint },
+    });
+    return this.toView(updated);
+  }
+
   async getAvailableQuantities(
     variantIds: string[],
   ): Promise<Map<string, number>> {
@@ -108,7 +124,11 @@ export class InventoryService {
     warehouseId: string,
     variantId: string,
   ): Promise<InventoryRecord> {
-    return this.getOrCreateRecordWithClient(this.prisma, warehouseId, variantId);
+    return this.getOrCreateRecordWithClient(
+      this.prisma,
+      warehouseId,
+      variantId,
+    );
   }
 
   private async getOrCreateRecordWithClient(
@@ -229,6 +249,96 @@ export class InventoryService {
     if (quantity <= 0) {
       throw new BadRequestException('quantity must be positive');
     }
+
+    const record = await this.getOrCreateRecordWithClient(
+      tx,
+      warehouseId,
+      variantId,
+    );
+    const updated = await tx.inventoryRecord.update({
+      where: { id: record.id },
+      data: { onHand: { increment: quantity } },
+    });
+    const movement = await this.recordMovement(
+      tx,
+      record.id,
+      InventoryMovementType.RETURN,
+      quantity,
+      note,
+      reference,
+    );
+
+    return { record: updated, movement };
+  }
+
+  /**
+   * The offer-scoped counterpart to `returnCancelledStock` for a #37
+   * seller-fulfilled (no-warehouse) committed line — cannot reuse
+   * `returnCancelledStock` (requires a warehouseId) or `restock` (restocks a
+   * reservation's whole quantity, not an arbitrary partial amount). The
+   * InventoryRecord must already exist (a committed seller offer always has
+   * one from checkout's InventoryService.reserveOffer/commit), so a missing
+   * record is a genuine error, not a lazily-created row.
+   */
+  async returnCancelledOfferStock(
+    tx: Prisma.TransactionClient,
+    offerId: string,
+    quantity: number,
+    reference: { referenceType: string; referenceId: string },
+    note?: string,
+  ): Promise<{ record: InventoryRecord; movement: InventoryMovement }> {
+    if (quantity <= 0) {
+      throw new BadRequestException('quantity must be positive');
+    }
+
+    const record = await tx.inventoryRecord.findUnique({ where: { offerId } });
+    if (!record) {
+      throw new NotFoundException('No inventory record exists for this offer');
+    }
+    const updated = await tx.inventoryRecord.update({
+      where: { id: record.id },
+      data: { onHand: { increment: quantity } },
+    });
+    const movement = await this.recordMovement(
+      tx,
+      record.id,
+      InventoryMovementType.RETURN,
+      quantity,
+      note,
+      reference,
+    );
+
+    return { record: updated, movement };
+  }
+
+  /**
+   * Adds accepted-and-RESTOCK-dispositioned return quantity back onto
+   * sellable on-hand. This is the only path by which a customer return
+   * increases inventory — QUARANTINE/DAMAGED/DISPOSE dispositions and
+   * rejected quantities never call this. Idempotent per `reference` (a
+   * return inspection line), same guard `restock()` uses, so retrying a
+   * finalize-inspection request never double-counts.
+   */
+  async receiveReturnedStock(
+    tx: Prisma.TransactionClient,
+    warehouseId: string,
+    variantId: string,
+    quantity: number,
+    reference: { referenceType: string; referenceId: string },
+    note?: string,
+  ): Promise<{ record: InventoryRecord; movement: InventoryMovement } | null> {
+    if (quantity <= 0) {
+      throw new BadRequestException('quantity must be positive');
+    }
+
+    const existing = await tx.inventoryMovement.findFirst({
+      where: {
+        type: InventoryMovementType.RETURN,
+        referenceType: reference.referenceType,
+        referenceId: reference.referenceId,
+      },
+    });
+    if (existing) return null;
 
     const record = await this.getOrCreateRecordWithClient(
       tx,

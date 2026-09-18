@@ -1,4 +1,12 @@
-import { IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Min,
+  MinLength,
+} from 'class-validator';
 
 import { IsSlug } from '../../../common/catalog/slug';
 
@@ -22,4 +30,13 @@ export class CreateProductDto {
   @IsOptional()
   @IsUUID()
   categoryId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isReturnable?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  returnWindowDays?: number;
 }

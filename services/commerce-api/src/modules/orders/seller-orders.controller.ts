@@ -2,12 +2,13 @@ import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 
 import type { AuthenticatedUser } from '../../common/auth/authenticated-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
-import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
+import { ListSellerOrdersDto } from './dto/list-seller-orders.dto';
+import { SellerOrdersService } from './seller-orders.service';
 import {
+  SellerOrderDetail,
+  SellerOrderListItem,
   SellerOrderPage,
-  SellerOrdersService,
-  SellerOrderWithItems,
-} from './seller-orders.service';
+} from './seller-orders.types';
 
 @Controller('sellers/me/orders')
 export class SellerOrdersController {
@@ -16,8 +17,8 @@ export class SellerOrdersController {
   @Get()
   list(
     @CurrentUser() user: AuthenticatedUser,
-    @Query() query: PaginationQueryDto,
-  ): Promise<SellerOrderPage<SellerOrderWithItems>> {
+    @Query() query: ListSellerOrdersDto,
+  ): Promise<SellerOrderPage<SellerOrderListItem>> {
     return this.sellerOrdersService.listOwn(user.id, query);
   }
 
@@ -25,7 +26,7 @@ export class SellerOrdersController {
   findOne(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<SellerOrderWithItems> {
+  ): Promise<SellerOrderDetail> {
     return this.sellerOrdersService.findOwn(user.id, id);
   }
 }

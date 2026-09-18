@@ -7,6 +7,8 @@ import { AdminSellersController } from './admin-sellers.controller';
 import { SellersService } from './sellers.service';
 import { StorefrontsService } from './storefronts.service';
 import { StorefrontsController } from './storefronts.controller';
+import { SellerReviewsController } from './seller-reviews.controller';
+import { SellerReviewsService } from './seller-reviews.service';
 
 @Module({
   imports: [ProductReferencesModule, UsersModule, MediaModule],
@@ -14,8 +16,9 @@ import { StorefrontsController } from './storefronts.controller';
     SellersController,
     AdminSellersController,
     StorefrontsController,
+    SellerReviewsController,
   ],
-  providers: [SellersService, StorefrontsService],
+  providers: [SellersService, StorefrontsService, SellerReviewsService],
   exports: [SellersService, StorefrontsService],
 })
 export class SellersModule {}

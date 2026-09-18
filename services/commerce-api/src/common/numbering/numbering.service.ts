@@ -32,6 +32,10 @@ export class NumberingService {
     return this.nextNumber(tx, 'shipment', 'SH');
   }
 
+  async nextReturnRmaNumber(tx: Prisma.TransactionClient): Promise<string> {
+    return this.nextNumber(tx, 'return_rma', 'RMA');
+  }
+
   private async nextNumber(
     tx: Prisma.TransactionClient,
     sequenceKey: string,

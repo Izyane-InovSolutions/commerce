@@ -6,6 +6,8 @@ import { FulfillmentModule } from '../../modules/fulfillment/fulfillment.module'
 import { FulfillmentProvisionHandler } from '../../modules/fulfillment/jobs/fulfillment-provision.handler';
 import { InventoryModule } from '../../modules/inventory/inventory.module';
 import { InventoryExpireReservationHandler } from '../../modules/inventory/jobs/inventory-expire-reservation.handler';
+import { PaymentsModule } from '../../modules/payments/payments.module';
+import { FulfillmentCancellationRefundHandler } from '../../modules/payments/jobs/fulfillment-cancellation-refund.handler';
 import { JobsModule } from '../jobs/jobs.module';
 import { JobWorkerService } from '../jobs/job-worker.service';
 
@@ -14,7 +16,7 @@ import { JobWorkerService } from '../jobs/job-worker.service';
 // mutually unaware of each other — mirrors how AppModule composes feature
 // modules.
 @Module({
-  imports: [JobsModule, InventoryModule, CartModule, FulfillmentModule],
+  imports: [JobsModule, InventoryModule, CartModule, FulfillmentModule, PaymentsModule],
 })
 export class WorkersModule implements OnModuleInit {
   constructor(
@@ -22,6 +24,7 @@ export class WorkersModule implements OnModuleInit {
     private readonly inventoryExpireReservationHandler: InventoryExpireReservationHandler,
     private readonly cartCleanupHandler: CartCleanupHandler,
     private readonly fulfillmentProvisionHandler: FulfillmentProvisionHandler,
+    private readonly fulfillmentCancellationRefundHandler: FulfillmentCancellationRefundHandler,
   ) {}
 
   onModuleInit(): void {
@@ -30,5 +33,8 @@ export class WorkersModule implements OnModuleInit {
     );
     this.jobWorkerService.registerHandler(this.cartCleanupHandler);
     this.jobWorkerService.registerHandler(this.fulfillmentProvisionHandler);
+    this.jobWorkerService.registerHandler(
+      this.fulfillmentCancellationRefundHandler,
+    );
   }
 }
