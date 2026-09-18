@@ -5,3 +5,5 @@ export type CheckoutResult = {
   order: OrderWithItems;
   payment: PaymentWithRedirect;
 };
+
+export type { CheckoutQuote } from '../orders/orders.service';

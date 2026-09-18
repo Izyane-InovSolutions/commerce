@@ -20,7 +20,12 @@ export type LedgerPage<T> = {
 
 export type SellerBalanceView = {
   sellerId: string;
+  /** @deprecated `balance` remains as an alias for availableBalance. */
   balance: number;
+  availableBalance: number;
+  heldBalance: number;
+  pendingPayoutBalance: number;
+  paidBalance: number;
   currency: string;
 };
 
@@ -62,6 +67,8 @@ export class LedgerService {
         this.recordSale(sellerOrder, client),
       );
     const commissionAmount = this.applyBps(sellerOrder.total);
+    const holdDays = this.config.get<number>('SELLER_PAYOUT_HOLD_DAYS', 0);
+    const availableAt = new Date(Date.now() + holdDays * 24 * 60 * 60 * 1_000);
     await this.appendEntry(
       {
         sellerId: sellerOrder.sellerId,
@@ -73,6 +80,8 @@ export class LedgerService {
         netAmount: sellerOrder.total - commissionAmount,
         currency: sellerOrder.currency,
         description: `Sale for seller order ${sellerOrder.id}`,
+        availableAt,
+        ...(holdDays === 0 ? { releasedAt: new Date() } : {}),
       },
       tx,
     );
@@ -144,28 +153,62 @@ export class LedgerService {
   async recordPayout(
     sellerId: string,
     amount: number,
+    idempotencyKey: string,
+    recordedByUserId: string,
     reference?: string,
     note?: string,
   ): Promise<Payout> {
     if (!Number.isSafeInteger(amount) || amount <= 0)
       throw new ConflictException('Payout amount must be positive minor units');
     return this.prisma.$transaction(async (tx) => {
+      // Locked first so a replay check and a concurrent fresh payout for the
+      // same seller can never interleave — whichever request gets here first
+      // decides the outcome for every request behind it.
       await tx.$queryRaw`SELECT seller_id FROM seller_balances WHERE seller_id = ${sellerId}::uuid FOR UPDATE`;
+
+      const existing = await tx.payout.findUnique({
+        where: { idempotencyKey },
+      });
+      if (existing) {
+        if (
+          existing.sellerId !== sellerId ||
+          existing.amount !== amount ||
+          (existing.reference ?? null) !== (reference ?? null) ||
+          (existing.note ?? null) !== (note ?? null)
+        )
+          throw new ConflictException(
+            'Idempotency key already belongs to a different payout request',
+          );
+        return existing;
+      }
+
       const balance = await tx.sellerBalance.findUnique({
         where: { sellerId },
       });
-      if (!balance || amount > balance.balance)
-        throw new ConflictException('Payout amount exceeds the seller balance');
+      if (!balance) throw new ConflictException('Seller has no balance record');
       if (balance.currency !== 'ZMW')
         throw new ConflictException('Payouts require a ZMW seller account');
+      if (amount > balance.balance)
+        throw new ConflictException('Payout amount exceeds the seller balance');
       const changed = await tx.sellerBalance.updateMany({
         where: { sellerId, balance: { gte: amount } },
-        data: { balance: { decrement: amount } },
+        data: {
+          balance: { decrement: amount },
+          paidBalance: { increment: amount },
+        },
       });
       if (changed.count !== 1)
         throw new ConflictException('Payout amount exceeds the seller balance');
       const payout = await tx.payout.create({
-        data: { sellerId, amount, currency: balance.currency, reference, note },
+        data: {
+          sellerId,
+          amount,
+          currency: balance.currency,
+          reference,
+          note,
+          idempotencyKey,
+          recordedByUserId,
+        },
       });
       await tx.ledgerEntry.create({
         data: {
@@ -193,9 +236,56 @@ export class LedgerService {
       ? {
           sellerId: balance.sellerId,
           balance: balance.balance,
+          availableBalance: balance.balance,
+          heldBalance: balance.heldBalance,
+          pendingPayoutBalance: balance.pendingPayoutBalance,
+          paidBalance: balance.paidBalance,
           currency: balance.currency,
         }
-      : { sellerId, balance: 0, currency: 'ZMW' };
+      : {
+          sellerId,
+          balance: 0,
+          availableBalance: 0,
+          heldBalance: 0,
+          pendingPayoutBalance: 0,
+          paidBalance: 0,
+          currency: 'ZMW',
+        };
+  }
+
+  /** Moves matured SALE proceeds from held to available exactly once. */
+  async releaseMaturedFunds(limit = 100): Promise<number> {
+    const candidates = await this.prisma.ledgerEntry.findMany({
+      where: {
+        type: LedgerEntryType.SALE,
+        releasedAt: null,
+        availableAt: { lte: new Date() },
+      },
+      orderBy: [{ availableAt: 'asc' }, { id: 'asc' }],
+      take: limit,
+    });
+
+    let released = 0;
+    for (const entry of candidates) {
+      const changed = await this.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT seller_id FROM seller_balances WHERE seller_id = ${entry.sellerId}::uuid FOR UPDATE`;
+        const marked = await tx.ledgerEntry.updateMany({
+          where: { id: entry.id, releasedAt: null },
+          data: { releasedAt: new Date() },
+        });
+        if (marked.count !== 1) return false;
+        await tx.sellerBalance.update({
+          where: { sellerId: entry.sellerId },
+          data: {
+            heldBalance: { decrement: entry.netAmount },
+            balance: { increment: entry.netAmount },
+          },
+        });
+        return true;
+      });
+      if (changed) released += 1;
+    }
+    return released;
   }
 
   async listEntries(
@@ -250,6 +340,7 @@ export class LedgerService {
     if (existing) {
       if (
         existing.grossAmount !== data.grossAmount ||
+        existing.commissionAmount !== data.commissionAmount ||
         existing.netAmount !== data.netAmount ||
         existing.currency !== data.currency
       )
@@ -259,9 +350,16 @@ export class LedgerService {
       return;
     }
     await tx.ledgerEntry.create({ data });
+    const isHeldSale =
+      data.type === LedgerEntryType.SALE &&
+      data.availableAt instanceof Date &&
+      data.availableAt.getTime() > Date.now() &&
+      !data.releasedAt;
     await tx.sellerBalance.update({
       where: { sellerId: data.sellerId },
-      data: { balance: { increment: data.netAmount } },
+      data: isHeldSale
+        ? { heldBalance: { increment: data.netAmount } }
+        : { balance: { increment: data.netAmount } },
     });
   }
 }

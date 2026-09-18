@@ -3,8 +3,9 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
+import type { CheckoutQuoteResult } from '@/components/checkout-cost-summary';
 import { readCurrency } from '@/lib/currency-cookie';
-import { checkoutOffer, createAddress } from '@/lib/orders';
+import { checkoutOffer, createAddress, getBuyNowQuote } from '@/lib/orders';
 import { toFormState, type FormState } from '@/lib/form';
 import { buildPaymentDetails } from '@/lib/payment-details';
 
@@ -43,8 +44,30 @@ export async function buyNowAction(
     return toFormState(error);
   }
 
-  revalidatePath('/orders');
-  redirect(`/orders?placed=${orderId}`);
+  revalidatePath('/account');
+  redirect(`/account?tab=orders&placed=${orderId}`);
+}
+
+/** The cost breakdown this "buy now" checkout would charge right now. */
+export async function getBuyNowQuoteAction(
+  offerId: string,
+  quantity: number,
+  input: { shippingAddressId: string; currency: string },
+): Promise<CheckoutQuoteResult> {
+  try {
+    const quote = await getBuyNowQuote(
+      offerId,
+      quantity,
+      input.shippingAddressId,
+      input.currency,
+    );
+    return { status: 'ok', quote };
+  } catch (error) {
+    return {
+      status: 'error',
+      message: toFormState(error).message ?? 'Could not estimate shipping.',
+    };
+  }
 }
 
 export async function createAddressAction(

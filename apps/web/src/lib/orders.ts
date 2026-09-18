@@ -1,6 +1,6 @@
 import { apiClient } from './api';
 import type { SuccessEnvelope } from './catalog-types';
-import type { Address, CheckoutResult, Order } from './commerce-types';
+import type { Address, CheckoutQuote, CheckoutResult, Order } from './commerce-types';
 
 /** A signed-in visitor's own orders, and the addresses they ship to. */
 
@@ -150,6 +150,37 @@ export async function checkout(
       body: { shippingAddressId, currency, paymentDetails, itemIds },
       idempotencyKey,
     },
+  );
+  return response.data;
+}
+
+/**
+ * The cost breakdown a cart checkout would charge right now, without
+ * creating an order — shipping depends on the chosen address, so this is
+ * called again whenever the shopper switches which one they are using.
+ */
+export async function getCheckoutQuote(
+  shippingAddressId: string,
+  currency: string,
+  itemIds: string[],
+): Promise<CheckoutQuote> {
+  const response = await apiClient.post<SuccessEnvelope<CheckoutQuote>>(
+    '/checkout/quote',
+    { body: { shippingAddressId, currency, itemIds } },
+  );
+  return response.data;
+}
+
+/** The same preview, for a "buy now" checkout. */
+export async function getBuyNowQuote(
+  offerId: string,
+  quantity: number,
+  shippingAddressId: string,
+  currency: string,
+): Promise<CheckoutQuote> {
+  const response = await apiClient.post<SuccessEnvelope<CheckoutQuote>>(
+    '/checkout/buy-now/quote',
+    { body: { offerId, quantity, shippingAddressId, currency } },
   );
   return response.data;
 }

@@ -6,6 +6,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { OutboxService } from '../../infrastructure/jobs/outbox.service';
 import { AuditService } from '../audit/audit.service';
 import { FulfillmentsService } from '../fulfillment/fulfillments.service';
+import { SellersService } from '../sellers/sellers.service';
 import { CarrierProviderRegistry } from './carrier-provider.registry';
 import { ShipmentsService } from './shipments.service';
 
@@ -18,8 +19,9 @@ function buildTx(): {
     update: jest.Mock;
   };
   order: { findUniqueOrThrow: jest.Mock };
+  sellerOrder: { findUniqueOrThrow: jest.Mock };
   shippingGroup: { findUniqueOrThrow: jest.Mock };
-  trackingEvent: { findFirst: jest.Mock; create: jest.Mock };
+  trackingEvent: { findFirst: jest.Mock; findUnique: jest.Mock; create: jest.Mock };
   carrierWebhookDelivery: { create: jest.Mock; update: jest.Mock };
   $queryRaw: jest.Mock;
 } {
@@ -32,6 +34,9 @@ function buildTx(): {
       update: jest.fn(),
     },
     order: { findUniqueOrThrow: jest.fn() },
+    sellerOrder: {
+      findUniqueOrThrow: jest.fn().mockResolvedValue({ sellerId: 'seller-1' }),
+    },
     shippingGroup: {
       findUniqueOrThrow: jest.fn().mockResolvedValue({
         providerCode: 'ZONE',
@@ -39,7 +44,11 @@ function buildTx(): {
         methodCode: 'DOMESTIC_STANDARD_V1',
       }),
     },
-    trackingEvent: { findFirst: jest.fn().mockResolvedValue(null), create: jest.fn() },
+    trackingEvent: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      findUnique: jest.fn().mockResolvedValue(null),
+      create: jest.fn(),
+    },
     carrierWebhookDelivery: { create: jest.fn(), update: jest.fn() },
     $queryRaw: jest.fn().mockResolvedValue([]),
   };
@@ -84,6 +93,7 @@ describe('ShipmentsService', () => {
   let carrierProviderRegistry: { get: jest.Mock };
   let auditService: { record: jest.Mock };
   let outboxService: { record: jest.Mock };
+  let sellersService: { lockApproved: jest.Mock };
   let manualProvider: {
     providerCode: string;
     book: jest.Mock;
@@ -109,6 +119,9 @@ describe('ShipmentsService', () => {
     carrierProviderRegistry = { get: jest.fn().mockReturnValue(manualProvider) };
     auditService = { record: jest.fn().mockResolvedValue(undefined) };
     outboxService = { record: jest.fn().mockResolvedValue(undefined) };
+    sellersService = {
+      lockApproved: jest.fn().mockResolvedValue({ id: 'seller-1' }),
+    };
     service = new ShipmentsService(
       prisma as unknown as PrismaService,
       fulfillmentsService as unknown as FulfillmentsService,
@@ -116,6 +129,7 @@ describe('ShipmentsService', () => {
       carrierProviderRegistry as unknown as CarrierProviderRegistry,
       auditService as unknown as AuditService,
       outboxService as unknown as OutboxService,
+      sellersService as unknown as SellersService,
     );
   });
 
@@ -417,6 +431,113 @@ describe('ShipmentsService', () => {
         ),
       ).rejects.toBeInstanceOf(ForbiddenException);
       expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('addSellerTrackingEvent (#37)', () => {
+    it('rejects a status a seller may not report', async () => {
+      await expect(
+        service.addSellerTrackingEvent(
+          'ship-1',
+          'user-1',
+          { normalizedStatus: ShipmentStatus.DISPATCHED, occurredAt: new Date() },
+          'user-1',
+          'idem-1',
+        ),
+      ).rejects.toBeInstanceOf(Error);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('404s a shipment belonging to a different seller', async () => {
+      prisma.tx.shipment.findUnique.mockResolvedValue({
+        id: 'ship-1',
+        warehouseId: null,
+        sellerOrderId: 'so-1',
+        status: ShipmentStatus.DISPATCHED,
+      });
+      prisma.tx.sellerOrder.findUniqueOrThrow.mockResolvedValue({ sellerId: 'someone-else' });
+
+      await expect(
+        service.addSellerTrackingEvent(
+          'ship-1',
+          'user-1',
+          { normalizedStatus: ShipmentStatus.IN_TRANSIT, occurredAt: new Date() },
+          'user-1',
+          'idem-2',
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('404s a platform-mode shipment (warehouseId set)', async () => {
+      prisma.tx.shipment.findUnique.mockResolvedValue({
+        id: 'ship-1',
+        warehouseId: 'wh-1',
+        sellerOrderId: 'so-1',
+        status: ShipmentStatus.DISPATCHED,
+      });
+
+      await expect(
+        service.addSellerTrackingEvent(
+          'ship-1',
+          'user-1',
+          { normalizedStatus: ShipmentStatus.IN_TRANSIT, occurredAt: new Date() },
+          'user-1',
+          'idem-3',
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('records a seller-manual event through the same status projection', async () => {
+      prisma.tx.shipment.findUnique.mockResolvedValue({
+        id: 'ship-1',
+        warehouseId: null,
+        sellerOrderId: 'so-1',
+        status: ShipmentStatus.DISPATCHED,
+      });
+      prisma.tx.trackingEvent.create.mockResolvedValue({ id: 'te-1' });
+
+      await service.addSellerTrackingEvent(
+        'ship-1',
+        'user-1',
+        { normalizedStatus: ShipmentStatus.IN_TRANSIT, occurredAt: new Date() },
+        'user-1',
+        'idem-4',
+      );
+
+      expect(prisma.tx.trackingEvent.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            source: TrackingEventSource.SELLER_MANUAL,
+            isCorrection: false,
+            idempotencyKey: 'idem-4',
+          }) as object,
+        }),
+      );
+      expect(prisma.tx.shipment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: ShipmentStatus.IN_TRANSIT }) as object,
+        }),
+      );
+    });
+
+    it('never regresses a terminal status even from a seller event', async () => {
+      prisma.tx.shipment.findUnique.mockResolvedValue({
+        id: 'ship-1',
+        warehouseId: null,
+        sellerOrderId: 'so-1',
+        status: ShipmentStatus.DELIVERED,
+      });
+      prisma.tx.trackingEvent.create.mockResolvedValue({ id: 'te-1' });
+
+      await service.addSellerTrackingEvent(
+        'ship-1',
+        'user-1',
+        { normalizedStatus: ShipmentStatus.IN_TRANSIT, occurredAt: new Date() },
+        'user-1',
+        'idem-5',
+      );
+
+      expect(prisma.tx.shipment.update).not.toHaveBeenCalled();
     });
   });
 

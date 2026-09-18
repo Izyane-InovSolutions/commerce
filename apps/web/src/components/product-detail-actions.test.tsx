@@ -11,6 +11,7 @@ describe('ProductDetailActions quantity', () => {
         name="Widget"
         slug="widget"
         available={true}
+        inStock={true}
         addToCart={vi.fn().mockResolvedValue(idleFormState)}
         addToWishlist={vi.fn().mockResolvedValue(idleFormState)}
       />,
@@ -32,6 +33,7 @@ describe('ProductDetailActions quantity', () => {
         name="Widget"
         slug="widget"
         available={true}
+        inStock={true}
         addToCart={vi.fn().mockResolvedValue(idleFormState)}
         addToWishlist={vi.fn().mockResolvedValue(idleFormState)}
       />,
@@ -57,6 +59,7 @@ describe('ProductDetailActions quantity', () => {
         name="Widget"
         slug="widget"
         available={true}
+        inStock={true}
         addToCart={vi.fn().mockResolvedValue(idleFormState)}
         addToWishlist={vi.fn().mockResolvedValue(idleFormState)}
       />,
@@ -70,5 +73,64 @@ describe('ProductDetailActions quantity', () => {
       'input[type="hidden"][name="quantity"]',
     );
     expect(hiddenQuantity).toHaveValue('1');
+  });
+});
+
+describe('ProductDetailActions availability', () => {
+  it('shows an out-of-stock message and disables buying, without touching add-to-cart', () => {
+    render(
+      <ProductDetailActions
+        name="Widget"
+        slug="widget"
+        available={true}
+        inStock={false}
+        addToCart={vi.fn().mockResolvedValue(idleFormState)}
+        addToWishlist={vi.fn().mockResolvedValue(idleFormState)}
+      />,
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent('Out of stock');
+    expect(
+      screen.getByRole('button', { name: 'Out of stock' }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByRole('link', { name: 'Buy it now' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Add to cart' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('still lets a shopper add an out-of-stock product to their wishlist', async () => {
+    const addToWishlist = vi.fn().mockResolvedValue(idleFormState);
+    render(
+      <ProductDetailActions
+        name="Widget"
+        slug="widget"
+        available={true}
+        inStock={false}
+        addToCart={vi.fn().mockResolvedValue(idleFormState)}
+        addToWishlist={addToWishlist}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add to wishlist' }));
+
+    await vi.waitFor(() => expect(addToWishlist).toHaveBeenCalledTimes(1));
+  });
+
+  it('shows "Currently unavailable" when the product has no sellable offer at all, even if inStock is true', () => {
+    render(
+      <ProductDetailActions
+        name="Widget"
+        slug="widget"
+        available={false}
+        inStock={true}
+        addToCart={vi.fn().mockResolvedValue(idleFormState)}
+        addToWishlist={vi.fn().mockResolvedValue(idleFormState)}
+      />,
+    );
+
+    expect(screen.getByText('Currently unavailable')).toBeInTheDocument();
   });
 });

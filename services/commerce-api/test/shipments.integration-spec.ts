@@ -19,6 +19,7 @@ import { InventoryService } from '../src/modules/inventory/inventory.service';
 import { CarrierProviderRegistry } from '../src/modules/shipments/carrier-provider.registry';
 import { ManualCarrierProvider } from '../src/modules/shipments/providers/manual-carrier.provider';
 import { ShipmentsService } from '../src/modules/shipments/shipments.service';
+import type { SellersService } from '../src/modules/sellers/sellers.service';
 
 /**
  * Exercises shipment booking, cancellation, webhook dedup and tracking
@@ -41,12 +42,18 @@ describe('Shipments (integration, real Postgres)', () => {
     auditService,
     outboxService,
   );
+  // This suite is admin/platform-path only (#37 seller commands have their
+  // own dedicated suite) — a minimal stub is enough to satisfy the
+  // constructor.
+  const sellersServiceStub = { lockApproved: jest.fn() } as unknown as SellersService;
   const fulfillmentsService = new FulfillmentsService(
     prisma,
     inventoryService,
     numberingService,
     auditService,
     outboxService,
+    backgroundJobsServiceStub,
+    sellersServiceStub,
   );
   const carrierProviderRegistry = new CarrierProviderRegistry([new ManualCarrierProvider()]);
   const shipmentsService = new ShipmentsService(
@@ -56,6 +63,7 @@ describe('Shipments (integration, real Postgres)', () => {
     carrierProviderRegistry,
     auditService,
     outboxService,
+    sellersServiceStub,
   );
 
   const suffix = randomUUID().slice(0, 8);
@@ -394,6 +402,7 @@ describe('Shipments (integration, real Postgres)', () => {
       stubRegistry,
       auditService,
       outboxService,
+      sellersServiceStub,
     );
 
     await stubService.ingestWebhook(stubProviderCode, { event: 'out_for_delivery' }, {});

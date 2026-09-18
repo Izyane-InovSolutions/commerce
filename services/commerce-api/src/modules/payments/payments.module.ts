@@ -13,6 +13,8 @@ import type { PaymentProvider } from './payment-provider';
 import { UnifiedPaymentProvider } from './unified-payment.provider';
 import { GatewayPaymentsService } from './gateway-payments.service';
 import { GatewayPaymentsController } from './gateway-payments.controller';
+import { RefundCasesService } from './refund-cases.service';
+import { FulfillmentCancellationRefundHandler } from './jobs/fulfillment-cancellation-refund.handler';
 
 // Extracted from the provider factory below so the toggle logic itself is a
 // plain, directly unit-testable function rather than only reachable by
@@ -44,7 +46,14 @@ export function resolvePaymentProvider(
       useFactory: resolvePaymentProvider,
     },
     PaymentsService,
+    RefundCasesService,
+    FulfillmentCancellationRefundHandler,
   ],
-  exports: [PAYMENT_PROVIDER, PaymentsService],
+  exports: [
+    PAYMENT_PROVIDER,
+    PaymentsService,
+    RefundCasesService,
+    FulfillmentCancellationRefundHandler,
+  ],
 })
 export class PaymentsModule {}

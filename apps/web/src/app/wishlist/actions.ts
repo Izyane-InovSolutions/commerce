@@ -13,7 +13,7 @@ export async function addToWishlistAction(offerId: string): Promise<FormState> {
     return toFormState(error);
   }
 
-  revalidatePath('/wishlist');
+  revalidatePath('/account');
   return { status: 'idle', message: 'Saved to your wishlist.' };
 }
 
@@ -26,7 +26,7 @@ export async function removeFromWishlistAction(
     return toFormState(error);
   }
 
-  revalidatePath('/wishlist');
+  revalidatePath('/account');
   return { status: 'idle', message: 'Removed.' };
 }
 

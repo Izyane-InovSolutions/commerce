@@ -3,8 +3,9 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
+import type { CheckoutQuoteResult } from '@/components/checkout-cost-summary';
 import { readCurrency } from '@/lib/currency-cookie';
-import { checkout, createAddress } from '@/lib/orders';
+import { checkout, createAddress, getCheckoutQuote } from '@/lib/orders';
 import { toFormState, type FormState } from '@/lib/form';
 import { buildPaymentDetails } from '@/lib/payment-details';
 
@@ -51,8 +52,36 @@ export async function placeOrderAction(
   }
 
   revalidatePath('/cart');
-  revalidatePath('/orders');
-  redirect(`/orders?placed=${orderId}`);
+  revalidatePath('/account');
+  redirect(`/account?tab=orders&placed=${orderId}`);
+}
+
+/**
+ * The cost breakdown checkout would charge right now, for whichever address
+ * the shopper has currently selected.
+ *
+ * Called directly from the order summary rather than through
+ * `useActionState`, which only ever hands back a pass/fail `FormState` — the
+ * caller needs the quoted numbers themselves.
+ */
+export async function getCheckoutQuoteAction(input: {
+  shippingAddressId: string;
+  currency: string;
+  itemIds: string[];
+}): Promise<CheckoutQuoteResult> {
+  try {
+    const quote = await getCheckoutQuote(
+      input.shippingAddressId,
+      input.currency,
+      input.itemIds,
+    );
+    return { status: 'ok', quote };
+  } catch (error) {
+    return {
+      status: 'error',
+      message: toFormState(error).message ?? 'Could not estimate shipping.',
+    };
+  }
 }
 
 export async function createAddressAction(

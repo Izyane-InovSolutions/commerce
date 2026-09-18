@@ -126,6 +126,22 @@ class EnvironmentVariables {
   @Max(10000)
   MARKETPLACE_COMMISSION_BPS = 1000;
 
+  // Seller payout policy. Sale proceeds remain in the held bucket until the
+  // reserve window expires; a request must meet the minimum and use a
+  // verified destination before funds can move to pending payout.
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  SELLER_PAYOUT_HOLD_DAYS = 0;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  SELLER_PAYOUT_MINIMUM_MINOR = 1;
+
+  @IsIn(['manual'])
+  SELLER_PAYOUT_PROVIDER = 'manual';
+
   // JSON keyed by target currency; see PaymentCurrencyConverter. Left
   // unvalidated beyond "is a string" — a missing, expired or malformed quote
   // safely disables foreign settlement at request time rather than failing

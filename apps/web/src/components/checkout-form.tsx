@@ -38,11 +38,20 @@ export function CheckoutForm({
   addresses,
   currency,
   placeOrder,
+  selectedAddressId,
+  onAddressChange,
 }: {
   addresses: Address[];
   /** The order's currency, which decides how it can be paid for. */
   currency: string;
   placeOrder: (state: FormState, formData: FormData) => Promise<FormState>;
+  /**
+   * Lifted to the parent rather than kept as internal state: the order
+   * summary alongside this form needs to know which address is selected too,
+   * to re-quote shipping when it changes.
+   */
+  selectedAddressId: string | undefined;
+  onAddressChange: (addressId: string) => void;
 }) {
   const available = availablePaymentMethods(currency);
   const [state, formAction] = useActionState(placeOrder, idleFormState);
@@ -70,9 +79,6 @@ export function CheckoutForm({
   // timeout is the same checkout rather than a second order.
   const idempotencyKey = useMemo(() => crypto.randomUUID(), []);
 
-  const defaultAddress =
-    addresses.find((address) => address.isDefault) ?? addresses[0];
-
   return (
     <form id={CHECKOUT_FORM_ID} action={formAction} className="space-y-6">
       <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
@@ -83,7 +89,8 @@ export function CheckoutForm({
         <legend className="text-sm font-medium">Deliver to</legend>
         <RadioGroup
           name="shippingAddressId"
-          defaultValue={defaultAddress?.id}
+          value={selectedAddressId}
+          onValueChange={onAddressChange}
           required
         >
           {addresses.map((address) => (

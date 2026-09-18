@@ -56,3 +56,13 @@ export function backendAdjustStock(
 ): Promise<BackendInventoryRecord> {
   return client.post('/admin/inventory/adjust', { body: input });
 }
+
+export function backendUpdateReorderPoint(
+  client: ApiClient,
+  inventoryRecordId: string,
+  reorderPoint: number,
+): Promise<BackendInventoryRecord> {
+  return client.patch(`/admin/inventory/${inventoryRecordId}/reorder-point`, {
+    body: { reorderPoint },
+  });
+}

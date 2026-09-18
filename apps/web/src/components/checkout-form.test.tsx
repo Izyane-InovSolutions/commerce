@@ -27,6 +27,8 @@ function renderForm() {
       addresses={addresses}
       currency="ZMW"
       placeOrder={vi.fn().mockResolvedValue(idleFormState)}
+      selectedAddressId={addresses[0]?.id}
+      onAddressChange={vi.fn()}
     />,
   );
 }

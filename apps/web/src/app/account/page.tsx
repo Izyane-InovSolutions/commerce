@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { AccountTabs } from '@/components/account-tabs';
+import { AccountTabs, type AccountTabValue } from '@/components/account-tabs';
 import { AddressesSection } from '@/components/addresses-section';
 import { ApiErrorNotice } from '@/components/api-error-notice';
 import { OrderStatusPoller } from '@/components/order-status-poller';
@@ -41,7 +41,23 @@ export const metadata: Metadata = {
   title: 'Account',
 };
 
-export default async function AccountPage() {
+const TAB_VALUES: AccountTabValue[] = [
+  'recently-viewed',
+  'wishlist',
+  'orders',
+  'addresses',
+];
+
+function readTab(value: string | string[] | undefined): AccountTabValue {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return TAB_VALUES.includes(candidate as AccountTabValue)
+    ? (candidate as AccountTabValue)
+    : 'recently-viewed';
+}
+
+export default async function AccountPage({
+  searchParams,
+}: PageProps<'/account'>) {
   const user = await getCurrentUser();
 
   if (!user) {
@@ -112,6 +128,11 @@ export default async function AccountPage() {
     (order) => order.status === 'PENDING_PAYMENT',
   );
 
+  const params = await searchParams;
+  const defaultTab = readTab(params.tab);
+  const justPlaced =
+    typeof params.placed === 'string' ? params.placed : undefined;
+
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-12">
       <Card className="max-w-md">
@@ -132,6 +153,7 @@ export default async function AccountPage() {
       </Card>
 
       <AccountTabs
+        defaultTab={defaultTab}
         recentlyViewed={<RecentlyViewedSection />}
         wishlist={
           <WishlistList
@@ -144,6 +166,19 @@ export default async function AccountPage() {
         orders={
           <div className="space-y-4">
             {awaitingPayment ? <OrderStatusPoller /> : null}
+            {justPlaced ? (
+              <div
+                role="status"
+                className="rounded-2xl border border-dashed px-4 py-3 text-sm"
+              >
+                <p className="font-medium">Order placed</p>
+                <p className="text-muted-foreground text-pretty">
+                  It is the first one below, under reference{' '}
+                  <span className="font-mono">{justPlaced.slice(0, 8)}</span>.
+                  Your payment status will update automatically.
+                </p>
+              </div>
+            ) : null}
             <OrdersList orders={orders} labels={labels} />
           </div>
         }

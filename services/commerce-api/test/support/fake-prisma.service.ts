@@ -2228,4 +2228,16 @@ export class FakePrismaService {
       ),
     count: (): Promise<number> => Promise.resolve(this.payoutRows.size),
   };
+
+  // No e2e fixture ever seeds a review, so both rating-summary reads always
+  // come back empty/null here — the real-Postgres integration suite
+  // (test/reviews.integration-spec.ts) is what exercises the populated case.
+  productRatingSummary = {
+    findMany: (): Promise<Record<string, unknown>[]> => Promise.resolve([]),
+  };
+
+  sellerRatingSummary = {
+    findUnique: (): Promise<Record<string, unknown> | null> =>
+      Promise.resolve(null),
+  };
 }

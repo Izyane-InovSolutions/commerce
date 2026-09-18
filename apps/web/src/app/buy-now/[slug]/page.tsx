@@ -15,7 +15,11 @@ import {
 import { listAddresses } from '@/lib/orders';
 import { getCurrentUser } from '@/lib/session';
 
-import { buyNowAction, createAddressAction } from '../actions';
+import {
+  buyNowAction,
+  createAddressAction,
+  getBuyNowQuoteAction,
+} from '../actions';
 
 type BuyNowPageProps = PageProps<'/buy-now/[slug]'>;
 
@@ -113,6 +117,7 @@ export default async function BuyNowPage({
           addresses={addresses}
           placeOrder={buyNowAction.bind(null, offer.id, quantity)}
           createAddress={createAddressAction}
+          getQuote={getBuyNowQuoteAction.bind(null, offer.id, quantity)}
         />
       </div>
     </div>

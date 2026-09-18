@@ -5,15 +5,21 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import {
   FulfillmentExceptionStatus,
   FulfillmentLine,
+  FulfillmentStatus,
   FulfillmentWorkItem,
   FulfillmentWorkItemStatus,
   FulfillmentWorkItemType,
   Prisma,
   Role,
   ShipmentStatus,
+  TrackingEventSource,
+  type FulfillmentOrder,
+  type Shipment,
+  type ShipmentLine,
 } from '@prisma/client';
 
 import {
@@ -22,9 +28,12 @@ import {
 } from '../../common/pagination/pagination-query.dto';
 import { NumberingService } from '../../common/numbering/numbering.service';
 import { PrismaService } from '../../database/prisma.service';
+import { BackgroundJobsService } from '../../infrastructure/jobs/background-jobs.service';
 import { OutboxService } from '../../infrastructure/jobs/outbox.service';
 import { AuditService } from '../audit/audit.service';
 import { InventoryService } from '../inventory/inventory.service';
+import { FULFILLMENT_CANCELLATION_REFUND_JOB_TYPE } from '../payments/jobs/fulfillment-cancellation-refund.handler';
+import { SellersService } from '../sellers/sellers.service';
 import { CancelLinesDto } from './dto/cancel-lines.dto';
 import { CreateExceptionDto } from './dto/create-exception.dto';
 import { ListFulfillmentsDto } from './dto/list-fulfillments.dto';
@@ -42,9 +51,23 @@ export type LockedFulfillmentOrder = {
   orderId: string;
   sellerOrderId: string;
   shippingGroupId: string;
-  warehouseId: string;
+  // Null for a #37 SELLER-mode fulfillment order — the seller fulfills from
+  // their own stock, not a platform warehouse.
+  warehouseId: string | null;
+  status: FulfillmentStatus;
+  version: number;
+  acceptedAt: Date | null;
   lines: FulfillmentLine[];
   workItems: FulfillmentWorkItem[];
+  sellerOrder: { sellerId: string | null };
+};
+
+/** A seller-fulfillment command's atomic result, including the shipment(s)
+ * a dispatch creates — the read-side agent's controllers depend on this
+ * exact shape (see FulfillmentsService.dispatchSellerFulfillment). */
+export type SellerFulfillmentOrderWithShipments = FulfillmentOrder & {
+  lines: FulfillmentLine[];
+  shipments: Shipment[];
 };
 
 /**
@@ -72,6 +95,8 @@ export class FulfillmentsService {
     private readonly numberingService: NumberingService,
     private readonly auditService: AuditService,
     private readonly outboxService: OutboxService,
+    private readonly backgroundJobsService: BackgroundJobsService,
+    private readonly sellersService: SellersService,
   ) {}
 
   async findAll(query: ListFulfillmentsDto): Promise<FulfillmentOrderPage> {
@@ -79,6 +104,7 @@ export class FulfillmentsService {
     const limit = query.limit ?? DEFAULT_PAGE_SIZE;
     const where: Prisma.FulfillmentOrderWhereInput = {
       ...(query.status ? { status: query.status } : {}),
+      ...(query.orderId ? { orderId: query.orderId } : {}),
       ...(query.warehouseId ? { warehouseId: query.warehouseId } : {}),
       ...(query.assignedUserId
         ? { workItems: { some: { assignedUserId: query.assignedUserId } } }
@@ -655,6 +681,563 @@ export class FulfillmentsService {
     });
   }
 
+  // -----------------------------------------------------------------------
+  // #37 seller-facing lifecycle commands. Every method here locks the
+  // fulfillment order first (lockFulfillmentOrder), then locks the calling
+  // seller's row (sellersService.lockApproved) — same lock order as
+  // RefundCasesService (order before the seller-order-adjacent balance) —
+  // then verifies ownership + seller-mode via assertSellerOwnsFulfillmentOrder,
+  // which 404s (never 403s) on any mismatch, mirroring
+  // SellerOrdersService.findOwn's cross-tenant-invisible convention.
+  // -----------------------------------------------------------------------
+
+  async acceptSellerFulfillment(
+    fulfillmentOrderId: string,
+    sellerCallerUserId: string,
+    version: number,
+  ): Promise<FulfillmentOrderWithDetail> {
+    return this.prisma.$transaction(async (tx) => {
+      const fo = await this.lockFulfillmentOrder(tx, fulfillmentOrderId);
+      const seller = await this.sellersService.lockApproved(sellerCallerUserId, tx);
+      this.assertSellerOwnsFulfillmentOrder(fo, seller.id);
+
+      if (fo.status !== FulfillmentStatus.AWAITING_ACCEPTANCE) {
+        throw new ConflictException(
+          `Cannot accept a fulfillment order with status ${fo.status}`,
+        );
+      }
+
+      // No Idempotency-Key for accept (only `version`) — a second accept
+      // call against an already-consumed version is a genuine client bug,
+      // not a legitimate retry, so it must ConflictException, not no-op.
+      const result = await tx.fulfillmentOrder.updateMany({
+        where: { id: fulfillmentOrderId, version, status: FulfillmentStatus.AWAITING_ACCEPTANCE },
+        data: {
+          acceptedAt: new Date(),
+          acceptedByUserId: sellerCallerUserId,
+          version: { increment: 1 },
+        },
+      });
+      if (result.count !== 1) {
+        throw new ConflictException('Fulfillment order changed; reload and try again');
+      }
+
+      // Auto-completes the internal pick stage: there is no real pick step
+      // for a seller's own stock, so every active unit is marked fully
+      // picked here, landing deriveFulfillmentStatus on the pack-ready state
+      // once acceptance is recorded instead of implying a pick stage exists.
+      for (const line of fo.lines) {
+        const activeQuantity = line.allocatedQuantity - line.cancelledQuantity;
+        if (activeQuantity > 0 && line.pickedQuantity !== activeQuantity) {
+          await tx.fulfillmentLine.update({
+            where: { id: line.id },
+            data: { pickedQuantity: activeQuantity },
+          });
+        }
+      }
+
+      await this.recomputeStatus(tx, fulfillmentOrderId);
+      await this.recordEvent(tx, fulfillmentOrderId, 'seller.accepted', sellerCallerUserId, {});
+
+      return this.reload(tx, fulfillmentOrderId);
+    });
+  }
+
+  async rejectSellerFulfillment(
+    fulfillmentOrderId: string,
+    sellerCallerUserId: string,
+    version: number,
+    reason: string,
+    actorUserId: string,
+    idempotencyKey: string,
+  ): Promise<FulfillmentOrderWithDetail> {
+    return this.prisma.$transaction(async (tx) => {
+      const fo = await this.lockFulfillmentOrder(tx, fulfillmentOrderId);
+      const seller = await this.sellersService.lockApproved(sellerCallerUserId, tx);
+      this.assertSellerOwnsFulfillmentOrder(fo, seller.id);
+
+      const requestHash = this.hashRequest({ fulfillmentOrderId, reason });
+      const replay = await this.checkSellerIdempotentReplay(
+        tx,
+        fulfillmentOrderId,
+        idempotencyKey,
+        requestHash,
+      );
+      if (replay) return replay;
+
+      if (fo.version !== version) {
+        throw new ConflictException('Fulfillment order changed; reload and try again');
+      }
+
+      const totalDispatched = sum(fo.lines, (l) => l.dispatchedQuantity);
+      if (totalDispatched > 0) {
+        throw new ConflictException(
+          'Cannot reject a fulfillment order once any quantity has been dispatched',
+        );
+      }
+
+      const entries = fo.lines
+        .map((line) => ({
+          line,
+          quantity: line.allocatedQuantity - line.cancelledQuantity - line.dispatchedQuantity,
+        }))
+        .filter((entry) => entry.quantity > 0);
+
+      await this.applySellerCancellation(tx, fo, entries, reason);
+
+      try {
+        await tx.fulfillmentEvent.create({
+          data: {
+            fulfillmentOrderId,
+            type: 'seller.rejected',
+            actorUserId,
+            idempotencyKey,
+            requestHash,
+            metadata: { reason } as unknown as Prisma.InputJsonValue,
+          },
+        });
+      } catch (error) {
+        throw this.mapWriteError(error);
+      }
+
+      await this.recomputeStatus(tx, fulfillmentOrderId);
+      return this.reload(tx, fulfillmentOrderId);
+    });
+  }
+
+  async recordSellerPack(
+    fulfillmentOrderId: string,
+    sellerCallerUserId: string,
+    lines: { fulfillmentLineId: string; quantity: number }[],
+    actorUserId: string,
+    idempotencyKey: string,
+  ): Promise<FulfillmentOrderWithDetail> {
+    return this.prisma.$transaction(async (tx) => {
+      const fo = await this.lockFulfillmentOrder(tx, fulfillmentOrderId);
+      const seller = await this.sellersService.lockApproved(sellerCallerUserId, tx);
+      this.assertSellerOwnsFulfillmentOrder(fo, seller.id);
+
+      const requestHash = this.hashRequest({
+        fulfillmentOrderId,
+        lines: [...lines].sort((a, b) => a.fulfillmentLineId.localeCompare(b.fulfillmentLineId)),
+      });
+      const replay = await this.checkSellerIdempotentReplay(
+        tx,
+        fulfillmentOrderId,
+        idempotencyKey,
+        requestHash,
+      );
+      if (replay) return replay;
+
+      if (fo.status === FulfillmentStatus.AWAITING_ACCEPTANCE) {
+        throw new ConflictException('Fulfillment order must be accepted before packing');
+      }
+
+      const linesById = new Map(fo.lines.map((line) => [line.id, line]));
+      for (const delta of lines) {
+        const line = linesById.get(delta.fulfillmentLineId);
+        if (!line) {
+          throw new BadRequestException(
+            `Fulfillment line ${delta.fulfillmentLineId} does not belong to this fulfillment order`,
+          );
+        }
+        // "active allocated quantity not yet packed" — mirrors
+        // recordQuantities's pick-ceiling shape, scoped to packedQuantity.
+        const ceiling = line.allocatedQuantity - line.cancelledQuantity - line.packedQuantity;
+        if (delta.quantity > ceiling) {
+          throw new ConflictException(
+            `Packing line ${line.id} would exceed the remaining active, unpacked quantity`,
+          );
+        }
+        await tx.fulfillmentLine.update({
+          where: { id: line.id },
+          data: { packedQuantity: { increment: delta.quantity } },
+        });
+      }
+
+      try {
+        await tx.fulfillmentEvent.create({
+          data: {
+            fulfillmentOrderId,
+            type: 'seller.packed',
+            actorUserId,
+            idempotencyKey,
+            requestHash,
+            metadata: { lines } as unknown as Prisma.InputJsonValue,
+          },
+        });
+      } catch (error) {
+        throw this.mapWriteError(error);
+      }
+
+      await this.recomputeStatus(tx, fulfillmentOrderId);
+      return this.reload(tx, fulfillmentOrderId);
+    });
+  }
+
+  async cancelSellerFulfillment(
+    fulfillmentOrderId: string,
+    sellerCallerUserId: string,
+    lines: { fulfillmentLineId: string; quantity: number }[],
+    reason: string,
+    actorUserId: string,
+    idempotencyKey: string,
+  ): Promise<FulfillmentOrderWithDetail> {
+    return this.prisma.$transaction(async (tx) => {
+      const fo = await this.lockFulfillmentOrder(tx, fulfillmentOrderId);
+      const seller = await this.sellersService.lockApproved(sellerCallerUserId, tx);
+      this.assertSellerOwnsFulfillmentOrder(fo, seller.id);
+
+      const requestHash = this.hashRequest({
+        fulfillmentOrderId,
+        reason,
+        lines: [...lines].sort((a, b) => a.fulfillmentLineId.localeCompare(b.fulfillmentLineId)),
+      });
+      const replay = await this.checkSellerIdempotentReplay(
+        tx,
+        fulfillmentOrderId,
+        idempotencyKey,
+        requestHash,
+      );
+      if (replay) return replay;
+
+      const linesById = new Map(fo.lines.map((line) => [line.id, line]));
+      const entries = lines.map((requested) => {
+        const line = linesById.get(requested.fulfillmentLineId);
+        if (!line) {
+          throw new BadRequestException(
+            `Fulfillment line ${requested.fulfillmentLineId} does not belong to this fulfillment order`,
+          );
+        }
+        // Not-yet-dispatched AND not yet claimed by an unshipped shipment:
+        // shipmentAssignedQuantity already dominates dispatchedQuantity per
+        // the 0<=dispatched<=shipmentAssigned<=packed<=... CHECK invariant,
+        // so subtracting it alone covers both.
+        const ceiling =
+          line.allocatedQuantity - line.cancelledQuantity - line.shipmentAssignedQuantity;
+        if (requested.quantity > ceiling) {
+          throw new ConflictException(
+            `Cannot cancel more than the undispatched, unclaimed quantity for line ${line.id}`,
+          );
+        }
+        return { line, quantity: requested.quantity };
+      });
+
+      await this.applySellerCancellation(tx, fo, entries, reason);
+
+      try {
+        await tx.fulfillmentEvent.create({
+          data: {
+            fulfillmentOrderId,
+            type: 'seller.cancelled',
+            actorUserId,
+            idempotencyKey,
+            requestHash,
+            metadata: { lines, reason } as unknown as Prisma.InputJsonValue,
+          },
+        });
+      } catch (error) {
+        throw this.mapWriteError(error);
+      }
+
+      await this.recomputeStatus(tx, fulfillmentOrderId);
+      return this.reload(tx, fulfillmentOrderId);
+    });
+  }
+
+  /**
+   * Atomic external dispatch (#37): one transaction creates the Shipment
+   * (warehouseId: null — no platform carrier integration, so
+   * CarrierProviderRegistry is deliberately skipped and status is set to
+   * DISPATCHED directly), assigns packed quantity straight to
+   * dispatchedQuantity (skipping the admin path's intermediate "assigned but
+   * undispatched" state, since this is a single atomic external-dispatch
+   * action rather than book-then-dispatch-later), records a
+   * FulfillmentDispatch for audit/history parity with the admin path, and
+   * adds the initial SELLER_MANUAL tracking event — all four effects
+   * together or not at all.
+   */
+  async dispatchSellerFulfillment(
+    fulfillmentOrderId: string,
+    sellerCallerUserId: string,
+    input: {
+      lines: { fulfillmentLineId: string; quantity: number }[];
+      carrierCode: string;
+      trackingReference?: string;
+      estimatedDeliveryAt?: Date;
+    },
+    actorUserId: string,
+    idempotencyKey: string,
+  ): Promise<SellerFulfillmentOrderWithShipments> {
+    return this.prisma.$transaction(async (tx) => {
+      const fo = await this.lockFulfillmentOrder(tx, fulfillmentOrderId);
+      const seller = await this.sellersService.lockApproved(sellerCallerUserId, tx);
+      this.assertSellerOwnsFulfillmentOrder(fo, seller.id);
+
+      const requestHash = this.hashRequest({
+        fulfillmentOrderId,
+        carrierCode: input.carrierCode,
+        trackingReference: input.trackingReference ?? null,
+        estimatedDeliveryAt: input.estimatedDeliveryAt?.toISOString() ?? null,
+        lines: [...input.lines].sort((a, b) =>
+          a.fulfillmentLineId.localeCompare(b.fulfillmentLineId),
+        ),
+      });
+
+      const existingDispatch = await tx.fulfillmentDispatch.findUnique({
+        where: { idempotencyKey },
+      });
+      if (existingDispatch) {
+        if (
+          existingDispatch.fulfillmentOrderId !== fulfillmentOrderId ||
+          existingDispatch.requestHash !== requestHash
+        ) {
+          throw new ConflictException('Idempotency-Key already used for a different request');
+        }
+        return this.reloadWithShipments(tx, fulfillmentOrderId);
+      }
+
+      const linesById = new Map(fo.lines.map((line) => [line.id, line]));
+      const dispatchEntries: { line: FulfillmentLine; quantity: number }[] = [];
+      for (const requested of input.lines) {
+        const line = linesById.get(requested.fulfillmentLineId);
+        if (!line) {
+          throw new BadRequestException(
+            `Fulfillment line ${requested.fulfillmentLineId} does not belong to this fulfillment order`,
+          );
+        }
+        const dispatchable = line.packedQuantity - line.dispatchedQuantity;
+        if (requested.quantity > dispatchable) {
+          throw new ConflictException(
+            `Line ${line.id} does not have enough packed-but-undispatched quantity`,
+          );
+        }
+        dispatchEntries.push({ line, quantity: requested.quantity });
+      }
+      if (dispatchEntries.length === 0) {
+        throw new BadRequestException('At least one line must be dispatched');
+      }
+
+      // Skip the "assigned but not yet dispatched" *business* state entirely
+      // — a seller's external dispatch is a single atomic action, not
+      // book-then-dispatch-later like the admin/carrier path.
+      // shipmentAssignedQuantity is still bumped alongside dispatchedQuantity
+      // in the same update: the DB CHECK constraint (0<=dispatched<=
+      // shipmentAssigned<=packed<=...) requires it, even though nothing ever
+      // observes an assigned-but-undispatched moment for a seller line.
+      for (const entry of dispatchEntries) {
+        await tx.fulfillmentLine.update({
+          where: { id: entry.line.id },
+          data: {
+            shipmentAssignedQuantity: { increment: entry.quantity },
+            dispatchedQuantity: { increment: entry.quantity },
+          },
+        });
+      }
+
+      const shipmentNumber = await this.numberingService.nextShipmentNumber(tx);
+      const dispatchNumber = await this.numberingService.nextFulfillmentDispatchNumber(tx);
+      // The bookingIdempotencyKey column is required + unique; derive it
+      // deterministically from the caller's own Idempotency-Key rather than
+      // asking the seller to mint a second one.
+      const bookingIdempotencyKey = `seller-dispatch:${idempotencyKey}`;
+      const now = new Date();
+
+      let shipment: Shipment & { lines: ShipmentLine[] };
+      try {
+        shipment = await tx.shipment.create({
+          data: {
+            shipmentNumber,
+            orderId: fo.orderId,
+            sellerOrderId: fo.sellerOrderId,
+            shippingGroupId: fo.shippingGroupId,
+            fulfillmentOrderId,
+            warehouseId: null,
+            providerCode: 'SELLER',
+            carrierCode: input.carrierCode,
+            methodCode: input.carrierCode,
+            trackingReference: input.trackingReference,
+            status: ShipmentStatus.DISPATCHED,
+            estimatedDeliveryAt: input.estimatedDeliveryAt,
+            bookingIdempotencyKey,
+            bookedAt: now,
+            dispatchedAt: now,
+            lines: {
+              create: dispatchEntries.map((entry) => ({
+                fulfillmentLineId: entry.line.id,
+                orderItemId: entry.line.orderItemId,
+                quantity: entry.quantity,
+              })),
+            },
+          },
+          include: { lines: true },
+        });
+      } catch (error) {
+        throw this.mapWriteError(error);
+      }
+
+      let dispatch: FulfillmentDispatchWithLines;
+      try {
+        dispatch = await tx.fulfillmentDispatch.create({
+          data: {
+            fulfillmentOrderId,
+            shipmentId: shipment.id,
+            dispatchNumber,
+            idempotencyKey,
+            requestHash,
+            dispatchedByUserId: actorUserId,
+            lines: {
+              create: dispatchEntries.map((entry) => ({
+                fulfillmentLineId: entry.line.id,
+                quantity: entry.quantity,
+              })),
+            },
+          },
+          include: { lines: true },
+        });
+      } catch (error) {
+        throw this.mapWriteError(error);
+      }
+
+      // Initial status is DISPATCHED, not IN_TRANSIT — it mirrors the
+      // Shipment row's own just-set status rather than presuming physical
+      // movement has already begun; a seller adds IN_TRANSIT/etc. themselves
+      // via addSellerTrackingEvent as it actually happens.
+      await tx.trackingEvent.create({
+        data: {
+          shipmentId: shipment.id,
+          source: TrackingEventSource.SELLER_MANUAL,
+          normalizedStatus: ShipmentStatus.DISPATCHED,
+          occurredAt: now,
+          actorUserId,
+          isCorrection: false,
+          idempotencyKey: `seller-dispatch-tracking:${idempotencyKey}`,
+          requestHash: this.hashRequest({ shipmentId: shipment.id, kind: 'initial-dispatch' }),
+        },
+      });
+
+      await this.recomputeStatus(tx, fulfillmentOrderId);
+      await this.recordEvent(tx, fulfillmentOrderId, 'seller.dispatched', actorUserId, {
+        dispatchId: dispatch.id,
+        dispatchNumber,
+        shipmentId: shipment.id,
+      });
+
+      return this.reloadWithShipments(tx, fulfillmentOrderId);
+    });
+  }
+
+  /** Seller-command idempotency using the requestHash column (#37) — the
+   * ReturnsService.hashRequest pattern, not FulfillmentsService's existing
+   * stableStringify(metadata) comparison. */
+  private hashRequest(value: unknown): string {
+    return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  }
+
+  private async checkSellerIdempotentReplay(
+    tx: Prisma.TransactionClient,
+    fulfillmentOrderId: string,
+    idempotencyKey: string,
+    requestHash: string,
+  ): Promise<FulfillmentOrderWithDetail | null> {
+    const existing = await tx.fulfillmentEvent.findUnique({ where: { idempotencyKey } });
+    if (!existing) return null;
+    if (existing.fulfillmentOrderId !== fulfillmentOrderId || existing.requestHash !== requestHash) {
+      throw new ConflictException('Idempotency-Key already used for a different request');
+    }
+    return this.reload(tx, fulfillmentOrderId);
+  }
+
+  /** Seller-fulfillment commands 404 (never 403) on any mismatch — an
+   * unknown id, a platform-mode order, or another seller's order are all
+   * indistinguishable to the caller, mirroring
+   * SellerOrdersService.findOwn's cross-tenant-invisible convention. */
+  private assertSellerOwnsFulfillmentOrder(
+    fo: LockedFulfillmentOrder,
+    sellerId: string,
+  ): void {
+    if (fo.warehouseId !== null || fo.sellerOrder.sellerId !== sellerId) {
+      throw new NotFoundException('Fulfillment order not found');
+    }
+  }
+
+  /**
+   * The #37 seller-scoped counterpart to `applyCancellation`: restores
+   * offer-scoped (no-warehouse) stock via `returnCancelledOfferStock`
+   * instead of `returnCancelledStock`, resolving each line's offerId
+   * through its OrderItem. Same refund-obligation wiring as the admin path.
+   */
+  private async applySellerCancellation(
+    tx: Prisma.TransactionClient,
+    fo: LockedFulfillmentOrder,
+    entries: { line: FulfillmentLine; quantity: number }[],
+    reason: string,
+  ): Promise<void> {
+    if (entries.length === 0) return;
+
+    const orderItems = await tx.orderItem.findMany({
+      where: { id: { in: entries.map((entry) => entry.line.orderItemId) } },
+      select: { id: true, offerId: true },
+    });
+    const offerIdByOrderItemId = new Map(orderItems.map((item) => [item.id, item.offerId]));
+
+    for (const { line, quantity } of entries) {
+      await tx.fulfillmentLine.update({
+        where: { id: line.id },
+        data: { cancelledQuantity: { increment: quantity } },
+      });
+
+      const offerId = offerIdByOrderItemId.get(line.orderItemId);
+      if (!offerId) {
+        throw new ConflictException(`Order item ${line.orderItemId} is missing its offer`);
+      }
+      await this.inventoryService.returnCancelledOfferStock(
+        tx,
+        offerId,
+        quantity,
+        { referenceType: 'fulfillment_cancellation_line', referenceId: line.id },
+        reason,
+      );
+    }
+
+    const refundRequiredPayload = {
+      orderId: fo.orderId,
+      sellerOrderId: fo.sellerOrderId,
+      lines: entries.map((entry) => ({
+        fulfillmentLineId: entry.line.id,
+        orderItemId: entry.line.orderItemId,
+        quantity: entry.quantity,
+      })),
+      reason,
+    };
+    await this.outboxService.record(
+      {
+        topic: 'fulfillment.refund_required',
+        aggregateType: 'FulfillmentOrder',
+        aggregateId: fo.id,
+        payload: refundRequiredPayload,
+      },
+      tx,
+    );
+    await this.backgroundJobsService.enqueue(
+      {
+        type: FULFILLMENT_CANCELLATION_REFUND_JOB_TYPE,
+        payload: refundRequiredPayload,
+      },
+      tx,
+    );
+  }
+
+  private reloadWithShipments(
+    tx: Prisma.TransactionClient,
+    id: string,
+  ): Promise<SellerFulfillmentOrderWithShipments> {
+    return tx.fulfillmentOrder.findUniqueOrThrow({
+      where: { id },
+      include: { lines: true, shipments: true },
+    });
+  }
+
   /**
    * Shared by `cancel()` and exception resolution's `cancel_quantity` path.
    * Only the cancelled delta ever moves — picked/packed counters are left as
@@ -682,9 +1265,13 @@ export class FulfillmentsService {
         data: { cancelledQuantity: { increment: quantity } },
       });
 
+      // Admin cancellation only ever targets a PLATFORM-mode fulfillment
+      // order (seller-fulfillment cancellation goes through
+      // applySellerCancellation/returnCancelledOfferStock instead), so
+      // warehouseId is always set here.
       await this.inventoryService.returnCancelledStock(
         tx,
-        fo.warehouseId,
+        fo.warehouseId!,
         line.variantId,
         quantity,
         { referenceType: 'fulfillment_cancellation_line', referenceId: line.id },
@@ -692,21 +1279,32 @@ export class FulfillmentsService {
       );
     }
 
+    const refundRequiredPayload = {
+      orderId: fo.orderId,
+      sellerOrderId: fo.sellerOrderId,
+      lines: entries.map((entry) => ({
+        fulfillmentLineId: entry.line.id,
+        orderItemId: entry.line.orderItemId,
+        quantity: entry.quantity,
+      })),
+      reason,
+    };
     await this.outboxService.record(
       {
         topic: 'fulfillment.refund_required',
         aggregateType: 'FulfillmentOrder',
         aggregateId: fo.id,
-        payload: {
-          orderId: fo.orderId,
-          sellerOrderId: fo.sellerOrderId,
-          lines: entries.map((entry) => ({
-            fulfillmentLineId: entry.line.id,
-            orderItemId: entry.line.orderItemId,
-            quantity: entry.quantity,
-          })),
-          reason,
-        },
+        payload: refundRequiredPayload,
+      },
+      tx,
+    );
+    // The outbox has no consumer (see OrdersService.confirmPayment for the
+    // same convention) — enqueued directly so the refund obligation is
+    // reliably created and retried on failure.
+    await this.backgroundJobsService.enqueue(
+      {
+        type: FULFILLMENT_CANCELLATION_REFUND_JOB_TYPE,
+        payload: refundRequiredPayload,
       },
       tx,
     );
@@ -769,7 +1367,11 @@ export class FulfillmentsService {
     await tx.$queryRaw`SELECT id FROM fulfillment_orders WHERE id = ${id}::uuid FOR UPDATE`;
     const fo = await tx.fulfillmentOrder.findUnique({
       where: { id },
-      include: { lines: true, workItems: true },
+      include: {
+        lines: true,
+        workItems: true,
+        sellerOrder: { select: { sellerId: true } },
+      },
     });
     if (!fo) throw new NotFoundException('Fulfillment order not found');
     return fo;
@@ -779,6 +1381,10 @@ export class FulfillmentsService {
     tx: Prisma.TransactionClient,
     fulfillmentOrderId: string,
   ): Promise<void> {
+    const fo = await tx.fulfillmentOrder.findUniqueOrThrow({
+      where: { id: fulfillmentOrderId },
+      select: { warehouseId: true, acceptedAt: true },
+    });
     const lines = await tx.fulfillmentLine.findMany({ where: { fulfillmentOrderId } });
     const workItems = await tx.fulfillmentWorkItem.findMany({ where: { fulfillmentOrderId } });
     const openExceptionCount = await tx.fulfillmentException.count({
@@ -792,6 +1398,10 @@ export class FulfillmentsService {
       pickWorkItemStatus: pickWorkItem?.status ?? FulfillmentWorkItemStatus.PENDING,
       packWorkItemStatus: packWorkItem?.status ?? FulfillmentWorkItemStatus.PENDING,
       hasOpenException: openExceptionCount > 0,
+      // Only a SELLER-mode order (warehouseId null) requires acceptance —
+      // see deriveFulfillmentStatus's doc comment.
+      requiresAcceptance: fo.warehouseId === null,
+      acceptedAt: fo.acceptedAt,
     });
 
     await tx.fulfillmentOrder.update({
