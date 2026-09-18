@@ -12,7 +12,7 @@ function buildPrisma(): {
     'findUnique' | 'findUniqueOrThrow' | 'upsert' | 'update' | 'updateMany',
     jest.Mock
   >;
-  payout: { create: jest.Mock };
+  payout: Record<'create' | 'findUnique', jest.Mock>;
 } {
   const p = {
     $queryRaw: jest.fn().mockResolvedValue([]),
@@ -29,7 +29,10 @@ function buildPrisma(): {
       update: jest.fn(),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
-    payout: { create: jest.fn().mockResolvedValue({ id: 'payout-1' }) },
+    payout: {
+      create: jest.fn().mockResolvedValue({ id: 'payout-1' }),
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
   };
   p.$transaction.mockImplementation((fn: (tx: typeof p) => unknown) => fn(p));
   return p;
@@ -71,12 +74,24 @@ describe('LedgerService', () => {
   it('does not credit the same sale twice', async () => {
     prisma.ledgerEntry.findFirst.mockResolvedValue({
       grossAmount: 10,
+      commissionAmount: 1,
       netAmount: 9,
       currency: 'USD',
     });
     await service.recordSale(order);
     expect(prisma.ledgerEntry.create).not.toHaveBeenCalled();
     expect(prisma.sellerBalance.update).not.toHaveBeenCalled();
+  });
+  it('conflicts on a replayed sale reference with a different commission amount', async () => {
+    prisma.ledgerEntry.findFirst.mockResolvedValue({
+      grossAmount: 10,
+      commissionAmount: 2,
+      netAmount: 8,
+      currency: 'USD',
+    });
+    await expect(service.recordSale(order)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
   });
   it('rejects mixed settlement currencies', async () => {
     prisma.sellerBalance.findUniqueOrThrow.mockResolvedValue({
@@ -110,14 +125,40 @@ describe('LedgerService', () => {
       service.recordRefundReversal(order, 5, 'refund-1'),
     ).rejects.toBeInstanceOf(ConflictException);
   });
+  it('rejects zero and negative payout amounts', async () => {
+    await expect(
+      service.recordPayout('seller-1', 0, 'key-1', 'admin-1'),
+    ).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      service.recordPayout('seller-1', -5, 'key-1', 'admin-1'),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.payout.create).not.toHaveBeenCalled();
+  });
+  it('rejects a payout when the seller has no balance record', async () => {
+    prisma.sellerBalance.findUnique.mockResolvedValue(null);
+    await expect(
+      service.recordPayout('seller-1', 50, 'key-1', 'admin-1'),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.payout.create).not.toHaveBeenCalled();
+  });
+  it('rejects a payout against a non-ZMW balance', async () => {
+    prisma.sellerBalance.findUnique.mockResolvedValue({
+      balance: 100,
+      currency: 'USD',
+    });
+    await expect(
+      service.recordPayout('seller-1', 50, 'key-1', 'admin-1'),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.payout.create).not.toHaveBeenCalled();
+  });
   it('rejects payouts exceeding a locked balance', async () => {
     prisma.sellerBalance.findUnique.mockResolvedValue({
       balance: 100,
       currency: 'ZMW',
     });
-    await expect(service.recordPayout('seller-1', 200)).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    await expect(
+      service.recordPayout('seller-1', 200, 'key-1', 'admin-1'),
+    ).rejects.toBeInstanceOf(ConflictException);
     expect(prisma.payout.create).not.toHaveBeenCalled();
   });
   it('checks the conditional debit before recording a payout', async () => {
@@ -126,9 +167,9 @@ describe('LedgerService', () => {
       currency: 'ZMW',
     });
     prisma.sellerBalance.updateMany.mockResolvedValue({ count: 0 });
-    await expect(service.recordPayout('seller-1', 80)).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    await expect(
+      service.recordPayout('seller-1', 80, 'key-1', 'admin-1'),
+    ).rejects.toBeInstanceOf(ConflictException);
     expect(prisma.payout.create).not.toHaveBeenCalled();
   });
   it('records a payout and guarded debit in one transaction', async () => {
@@ -136,10 +177,30 @@ describe('LedgerService', () => {
       balance: 100,
       currency: 'ZMW',
     });
-    await service.recordPayout('seller-1', 80);
+    await service.recordPayout(
+      'seller-1',
+      80,
+      'key-1',
+      'admin-1',
+      'ref-1',
+      'note-1',
+    );
     expect(prisma.sellerBalance.updateMany).toHaveBeenCalledWith({
       where: { sellerId: 'seller-1', balance: { gte: 80 } },
-      data: { balance: { decrement: 80 } },
+      data: {
+        balance: { decrement: 80 },
+        paidBalance: { increment: 80 },
+      },
+    });
+    expect(prisma.payout.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        sellerId: 'seller-1',
+        amount: 80,
+        idempotencyKey: 'key-1',
+        recordedByUserId: 'admin-1',
+        reference: 'ref-1',
+        note: 'note-1',
+      }) as object,
     });
     expect(prisma.ledgerEntry.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -147,5 +208,47 @@ describe('LedgerService', () => {
         type: 'PAYOUT',
       }) as object,
     });
+  });
+  it('replays an identical payout retry as a single no-op debit', async () => {
+    const existing = {
+      id: 'payout-existing',
+      sellerId: 'seller-1',
+      amount: 80,
+      reference: 'ref-1',
+      note: 'note-1',
+    };
+    prisma.payout.findUnique.mockResolvedValue(existing);
+    const result = await service.recordPayout(
+      'seller-1',
+      80,
+      'key-1',
+      'admin-1',
+      'ref-1',
+      'note-1',
+    );
+    expect(result).toBe(existing);
+    expect(prisma.payout.create).not.toHaveBeenCalled();
+    expect(prisma.sellerBalance.updateMany).not.toHaveBeenCalled();
+    expect(prisma.ledgerEntry.create).not.toHaveBeenCalled();
+  });
+  it('rejects reusing an idempotency key for a different payout', async () => {
+    prisma.payout.findUnique.mockResolvedValue({
+      id: 'payout-existing',
+      sellerId: 'seller-1',
+      amount: 80,
+      reference: 'ref-1',
+      note: 'note-1',
+    });
+    await expect(
+      service.recordPayout(
+        'seller-1',
+        120,
+        'key-1',
+        'admin-1',
+        'ref-1',
+        'note-1',
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.payout.create).not.toHaveBeenCalled();
   });
 });

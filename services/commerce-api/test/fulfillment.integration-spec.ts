@@ -11,6 +11,7 @@ import { AuditService } from '../src/modules/audit/audit.service';
 import { FulfillmentsService } from '../src/modules/fulfillment/fulfillments.service';
 import { FulfillmentProvisioningService } from '../src/modules/fulfillment/provisioning/fulfillment-provisioning.service';
 import { InventoryService } from '../src/modules/inventory/inventory.service';
+import type { SellersService } from '../src/modules/sellers/sellers.service';
 
 /**
  * Exercises fulfillment provisioning, picking, packing, dispatch and
@@ -40,6 +41,12 @@ describe('Fulfillment (integration, real Postgres)', () => {
     auditService,
     outboxService,
   );
+  // This suite is admin/platform-path only (#37 seller commands have their
+  // own dedicated suite) — a minimal stub is enough to satisfy the
+  // constructor.
+  const sellersServiceStub = {
+    lockApproved: jest.fn(),
+  } as unknown as SellersService;
   const fulfillmentsService = new FulfillmentsService(
     prisma,
     inventoryService,
@@ -47,6 +54,7 @@ describe('Fulfillment (integration, real Postgres)', () => {
     auditService,
     outboxService,
     backgroundJobsServiceStub,
+    sellersServiceStub,
   );
 
   const suffix = randomUUID().slice(0, 8);

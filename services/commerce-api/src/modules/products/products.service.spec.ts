@@ -5,7 +5,7 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
-import { ProductStatus } from '@prisma/client';
+import { ProductStatus, ReviewVisibility } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import type { InventoryService } from '../inventory/inventory.service';
@@ -49,6 +49,8 @@ function buildPrisma(): {
     delete: jest.Mock;
   };
   mediaAsset: { findUnique: jest.Mock; updateMany: jest.Mock };
+  productRatingSummary: { findMany: jest.Mock };
+  productReview: { findMany: jest.Mock; count: jest.Mock };
   $transaction: jest.Mock;
 } {
   const prisma = {
@@ -60,6 +62,13 @@ function buildPrisma(): {
       update: jest.fn(),
       delete: jest.fn(),
       count: jest.fn(),
+    },
+    productRatingSummary: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    productReview: {
+      findMany: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0),
     },
     productVariant: {
       findUnique: jest.fn(),
@@ -256,6 +265,210 @@ describe('ProductsService', () => {
       await expect(
         service.findPublishedBySlug('missing', 'USD'),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    const baseProduct = {
+      id: 'p1',
+      name: 'Widget',
+      slug: 'widget',
+      description: null,
+      status: ProductStatus.PUBLISHED,
+      brand: null,
+      category: null,
+      media: [],
+      variants: [],
+    };
+
+    it('defaults to null average and zero counts when no summary row exists', async () => {
+      prisma.product.findFirst.mockResolvedValue(baseProduct);
+      prisma.productRatingSummary.findMany.mockResolvedValue([]);
+
+      const result = await service.findPublishedBySlug('widget', 'USD');
+
+      expect(result.averageRating).toBeNull();
+      expect(result.ratingCount).toBe(0);
+      expect(result.ratingHistogram).toEqual({
+        1: 0,
+        2: 0,
+        3: 0,
+        4: 0,
+        5: 0,
+      });
+    });
+
+    it('computes averageRating from ratingSum/ratingCount and reports the histogram', async () => {
+      prisma.product.findFirst.mockResolvedValue(baseProduct);
+      prisma.productRatingSummary.findMany.mockResolvedValue([
+        {
+          productId: 'p1',
+          ratingCount: 4,
+          ratingSum: 18,
+          star1Count: 0,
+          star2Count: 1,
+          star3Count: 0,
+          star4Count: 1,
+          star5Count: 2,
+          version: 0,
+          recalculatedAt: new Date(),
+        },
+      ]);
+
+      const result = await service.findPublishedBySlug('widget', 'USD');
+
+      expect(result.averageRating).toBe(4.5);
+      expect(result.ratingCount).toBe(4);
+      expect(result.ratingHistogram).toEqual({
+        1: 0,
+        2: 1,
+        3: 0,
+        4: 1,
+        5: 2,
+      });
+    });
+  });
+
+  describe('findPublicReviews', () => {
+    it('throws not found when no published product matches the slug', async () => {
+      prisma.product.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.findPublicReviews('missing', { page: 1, limit: 20 }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('projects only the public shape and never leaks private fields', async () => {
+      prisma.product.findFirst.mockResolvedValue({
+        id: 'p1',
+        name: 'Widget',
+        slug: 'widget',
+      });
+      prisma.productReview.findMany.mockResolvedValue([
+        {
+          id: 'r1',
+          rating: 5,
+          title: 'Great',
+          body: 'Loved it',
+          createdAt: new Date('2026-01-01T00:00:00Z'),
+          updatedAt: new Date('2026-01-02T00:00:00Z'),
+          author: { firstName: 'Jane', lastName: 'Doe' },
+          seller: { id: 's1', displayName: 'Acme Co' },
+        },
+      ]);
+      prisma.productReview.count.mockResolvedValue(1);
+
+      const result = await service.findPublicReviews('widget', {
+        page: 1,
+        limit: 20,
+      });
+
+      expect(prisma.productReview.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            productId: 'p1',
+            visibility: ReviewVisibility.PUBLISHED,
+          }) as object,
+        }),
+      );
+      expect(result.data).toEqual([
+        {
+          id: 'r1',
+          rating: 5,
+          title: 'Great',
+          body: 'Loved it',
+          reviewerLabel: 'Jane D.',
+          verifiedPurchase: true,
+          createdAt: new Date('2026-01-01T00:00:00Z'),
+          updatedAt: new Date('2026-01-02T00:00:00Z'),
+          product: { id: 'p1', name: 'Widget', slug: 'widget' },
+          seller: { id: 's1', displayName: 'Acme Co' },
+        },
+      ]);
+      const leaked = result.data[0] as unknown as Record<string, unknown>;
+      expect(leaked.authorUserId).toBeUndefined();
+      expect(leaked.orderItemId).toBeUndefined();
+      expect(leaked.moderationState).toBeUndefined();
+      expect(leaked.version).toBeUndefined();
+    });
+
+    it('excludes HIDDEN/REMOVED/WITHDRAWN reviews via the visibility filter', async () => {
+      prisma.product.findFirst.mockResolvedValue({
+        id: 'p1',
+        name: 'Widget',
+        slug: 'widget',
+      });
+      prisma.productReview.findMany.mockResolvedValue([]);
+      prisma.productReview.count.mockResolvedValue(0);
+
+      await service.findPublicReviews('widget', { page: 1, limit: 20 });
+
+      const where = (
+        prisma.productReview.findMany.mock.calls[0] as [
+          { where: { visibility: ReviewVisibility } },
+        ]
+      )[0].where;
+      expect(where.visibility).toBe(ReviewVisibility.PUBLISHED);
+      expect(where.visibility).not.toBe(ReviewVisibility.HIDDEN);
+      expect(where.visibility).not.toBe(ReviewVisibility.REMOVED);
+      expect(where.visibility).not.toBe(ReviewVisibility.WITHDRAWN);
+    });
+
+    it('applies an exact-match star filter when rating is given', async () => {
+      prisma.product.findFirst.mockResolvedValue({
+        id: 'p1',
+        name: 'Widget',
+        slug: 'widget',
+      });
+      prisma.productReview.findMany.mockResolvedValue([]);
+      prisma.productReview.count.mockResolvedValue(0);
+
+      await service.findPublicReviews('widget', {
+        page: 1,
+        limit: 20,
+        rating: 4,
+      });
+
+      expect(prisma.productReview.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ rating: 4 }) as object,
+        }),
+      );
+    });
+
+    it.each([
+      ['newest', [{ createdAt: 'desc' }]],
+      ['oldest', [{ createdAt: 'asc' }]],
+      ['highest', [{ rating: 'desc' }, { createdAt: 'desc' }]],
+      ['lowest', [{ rating: 'asc' }, { createdAt: 'desc' }]],
+    ] as const)('maps sort=%s to the expected orderBy', async (sort, expected) => {
+      prisma.product.findFirst.mockResolvedValue({
+        id: 'p1',
+        name: 'Widget',
+        slug: 'widget',
+      });
+      prisma.productReview.findMany.mockResolvedValue([]);
+      prisma.productReview.count.mockResolvedValue(0);
+
+      await service.findPublicReviews('widget', { page: 1, limit: 20, sort });
+
+      expect(prisma.productReview.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: expected }),
+      );
+    });
+
+    it('paginates using page/limit for skip/take', async () => {
+      prisma.product.findFirst.mockResolvedValue({
+        id: 'p1',
+        name: 'Widget',
+        slug: 'widget',
+      });
+      prisma.productReview.findMany.mockResolvedValue([]);
+      prisma.productReview.count.mockResolvedValue(0);
+
+      await service.findPublicReviews('widget', { page: 3, limit: 10 });
+
+      expect(prisma.productReview.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 20, take: 10 }),
+      );
     });
   });
 

@@ -451,16 +451,11 @@ export class RefundCasesService {
       const refundCase = await tx.refundCase.findUniqueOrThrow({
         where: { id: refundCaseId },
       });
-      const refund = await tx.refund.findUniqueOrThrow({
-        where: { id: refundId },
-      });
-      if (
-        !(
-          [RefundStatus.PENDING, RefundStatus.PROCESSING] as RefundStatus[]
-        ).includes(refund.status)
-      )
-        return refundCase;
-
+      // Lock before the status check, not after: two concurrent outcomes for
+      // the same attempt (e.g. two racing reconcile calls) must serialize
+      // here so the second one re-reads a status the first one already
+      // resolved, instead of both acting on the same stale "still pending"
+      // snapshot taken before either held the lock.
       await this.ordersService.lockForPayment(
         (
           await this.ordersService.getSellerOrderForPayment(
@@ -470,6 +465,15 @@ export class RefundCasesService {
         ).orderId,
         tx,
       );
+      const refund = await tx.refund.findUniqueOrThrow({
+        where: { id: refundId },
+      });
+      if (
+        !(
+          [RefundStatus.PENDING, RefundStatus.PROCESSING] as RefundStatus[]
+        ).includes(refund.status)
+      )
+        return refundCase;
 
       if (result.status === 'SUCCEEDED') {
         const payment = await tx.payment.findUniqueOrThrow({

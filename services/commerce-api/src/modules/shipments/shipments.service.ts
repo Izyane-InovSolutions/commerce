@@ -24,6 +24,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { OutboxService } from '../../infrastructure/jobs/outbox.service';
 import { AuditService } from '../audit/audit.service';
 import { FulfillmentsService } from '../fulfillment/fulfillments.service';
+import { SellersService } from '../sellers/sellers.service';
 import { CarrierProviderRegistry } from './carrier-provider.registry';
 import { AddTrackingEventDto } from './dto/add-tracking-event.dto';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
@@ -43,7 +44,24 @@ type RecordEventInput = {
   isCorrection: boolean;
   correctionReason?: string;
   actorUserId?: string;
+  /** Only a seller-submitted event (#37) sets these — see
+   * addSellerTrackingEvent. */
+  idempotencyKey?: string;
+  requestHash?: string;
 };
+
+/** Seller-postable statuses (#37) — a seller can report real-world carrier
+ * progress but never the internal PENDING_BOOKING/BOOKED/DISPATCHED/
+ * CANCELLED states, which have no meaning coming from them. */
+const SELLER_POSTABLE_STATUSES: ShipmentStatus[] = [
+  ShipmentStatus.IN_TRANSIT,
+  ShipmentStatus.OUT_FOR_DELIVERY,
+  ShipmentStatus.DELIVERED,
+  ShipmentStatus.DELIVERY_FAILED,
+  ShipmentStatus.EXCEPTION,
+  ShipmentStatus.RETURN_TO_SENDER,
+  ShipmentStatus.RETURNED,
+];
 
 const NON_TERMINAL_STATUSES = Object.values(ShipmentStatus).filter(
   (status) => !isTerminalShipmentStatus(status),
@@ -58,6 +76,7 @@ export class ShipmentsService {
     private readonly carrierProviderRegistry: CarrierProviderRegistry,
     private readonly auditService: AuditService,
     private readonly outboxService: OutboxService,
+    private readonly sellersService: SellersService,
   ) {}
 
   async findAll(query: ListShipmentsDto): Promise<ShipmentPage> {
@@ -371,6 +390,85 @@ export class ShipmentsService {
   }
 
   /**
+   * #37: a seller-submitted tracking event for their own (warehouseId null)
+   * shipment. Ownership 404s (never 403s) on any mismatch, mirroring
+   * FulfillmentsService's seller-command convention. Routes through the same
+   * recordTrackingEvent choke point as every other source, so
+   * projectShipmentStatus's terminal/occurredAt-ordering rules apply
+   * unchanged — a seller can never regress status or override a terminal
+   * delivery state, since isCorrection is never true here (only
+   * ADMIN_CORRECTION may supersede an invalid terminal event). The
+   * [shipmentId, source, providerEventKey] dedup index still applies
+   * (providerEventKey stays null for SELLER_MANUAL, same as ADMIN_MANUAL);
+   * the idempotencyKey/requestHash columns are an *additional* guard layered
+   * on top, not a replacement for it.
+   */
+  async addSellerTrackingEvent(
+    shipmentId: string,
+    sellerCallerUserId: string,
+    input: {
+      normalizedStatus: ShipmentStatus;
+      description?: string;
+      location?: string;
+      occurredAt: Date;
+    },
+    actorUserId: string,
+    idempotencyKey: string,
+  ): Promise<Shipment> {
+    if (!SELLER_POSTABLE_STATUSES.includes(input.normalizedStatus)) {
+      throw new BadRequestException(
+        `A seller may not report shipment status ${input.normalizedStatus}`,
+      );
+    }
+
+    const requestHash = createHash('sha256')
+      .update(
+        JSON.stringify({
+          shipmentId,
+          normalizedStatus: input.normalizedStatus,
+          description: input.description ?? null,
+          location: input.location ?? null,
+          occurredAt: input.occurredAt.toISOString(),
+        }),
+      )
+      .digest('hex');
+
+    return this.prisma.$transaction(async (tx) => {
+      const shipment = await this.lockShipment(tx, shipmentId);
+      const sellerOrder = await tx.sellerOrder.findUniqueOrThrow({
+        where: { id: shipment.sellerOrderId },
+        select: { sellerId: true },
+      });
+      const seller = await this.sellersService.lockApproved(sellerCallerUserId, tx);
+      if (shipment.warehouseId !== null || sellerOrder.sellerId !== seller.id) {
+        throw new NotFoundException('Shipment not found');
+      }
+
+      const existing = await tx.trackingEvent.findUnique({ where: { idempotencyKey } });
+      if (existing) {
+        if (existing.shipmentId !== shipmentId || existing.requestHash !== requestHash) {
+          throw new ConflictException('Idempotency-Key already used for a different request');
+        }
+        return tx.shipment.findUniqueOrThrow({ where: { id: shipmentId } });
+      }
+
+      await this.recordTrackingEvent(tx, shipmentId, {
+        source: TrackingEventSource.SELLER_MANUAL,
+        normalizedStatus: input.normalizedStatus,
+        description: input.description,
+        location: input.location,
+        occurredAt: input.occurredAt,
+        isCorrection: false,
+        actorUserId,
+        idempotencyKey,
+        requestHash,
+      });
+
+      return tx.shipment.findUniqueOrThrow({ where: { id: shipmentId } });
+    });
+  }
+
+  /**
    * Ingests a carrier webhook: dedupes the delivery first (before any event
    * is parsed into history), then applies each event the same way a manual
    * or polled one is applied. A delivery already recorded — a carrier retry
@@ -445,7 +543,10 @@ export class ShipmentsService {
    * ShipmentTrackingPollerService, which calls this on an interval. */
   async pollNonTerminalShipments(): Promise<void> {
     const shipments = await this.prisma.shipment.findMany({
-      where: { status: { in: NON_TERMINAL_STATUSES } },
+      // A #37 seller-fulfilled shipment (warehouseId null) has no real
+      // carrier integration to poll — excluded here rather than relying on
+      // some future provider being registered as a safe no-op.
+      where: { status: { in: NON_TERMINAL_STATUSES }, warehouseId: { not: null } },
     });
 
     for (const shipment of shipments) {
@@ -496,6 +597,8 @@ export class ShipmentsService {
           isCorrection: input.isCorrection,
           correctionReason: input.correctionReason,
           metadata: input.metadata as Prisma.InputJsonValue | undefined,
+          idempotencyKey: input.idempotencyKey,
+          requestHash: input.requestHash,
         },
       });
     } catch (error) {

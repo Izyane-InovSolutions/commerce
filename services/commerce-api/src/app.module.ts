@@ -35,6 +35,8 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { ProcurementModule } from './modules/procurement/procurement.module';
 import { ProductsModule } from './modules/products/products.module';
 import { ReturnsModule } from './modules/returns/returns.module';
+import { ReviewsModule } from './modules/reviews/reviews.module';
+import { AdminReviewsModule } from './modules/reviews/admin/admin-reviews.module';
 import { ShipmentsModule } from './modules/shipments/shipments.module';
 import { UsersModule } from './modules/users/users.module';
 import { WishlistModule } from './modules/wishlist/wishlist.module';
@@ -75,6 +77,8 @@ import { WorkersModule } from './infrastructure/workers/workers.module';
     ShipmentsModule,
     OperationsModule,
     ReturnsModule,
+    ReviewsModule,
+    AdminReviewsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

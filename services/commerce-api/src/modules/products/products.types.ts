@@ -11,6 +11,7 @@ import type {
   ProductVariant,
   ProductVariantAttributeValue,
 } from '@prisma/client';
+import type { RatingHistogram } from '../reviews/rating-summary.util';
 
 export type VariantAttributeValueWithDetail = ProductVariantAttributeValue & {
   attributeValue: AttributeValue & { attribute: Attribute };
@@ -113,4 +114,23 @@ export type PublicProduct = {
     url: string;
   }[];
   variants: PublicVariant[];
+  /** null when the product has never been reviewed (no ProductRatingSummary row yet). */
+  averageRating: number | null;
+  ratingCount: number;
+  ratingHistogram: RatingHistogram;
+};
+
+/** A single PUBLISHED review as the public catalog exposes it — never the
+ * author's id, the order/order-item, moderation state, or revision history. */
+export type PublicProductReview = {
+  id: string;
+  rating: number;
+  title: string | null;
+  body: string;
+  reviewerLabel: string;
+  verifiedPurchase: true;
+  createdAt: Date;
+  updatedAt: Date;
+  product: { id: string; name: string; slug: string };
+  seller: { id: string; displayName: string | null } | null;
 };

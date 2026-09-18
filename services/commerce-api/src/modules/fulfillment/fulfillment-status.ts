@@ -13,6 +13,14 @@ export type DeriveFulfillmentStatusInput = {
   pickWorkItemStatus: FulfillmentWorkItemStatus;
   packWorkItemStatus: FulfillmentWorkItemStatus;
   hasOpenException: boolean;
+  /**
+   * #37: true only for a SELLER-mode fulfillment order (warehouseId null) —
+   * a PLATFORM order never requires acceptance and omits this (defaults to
+   * false), so every existing caller/test is unaffected.
+   */
+  requiresAcceptance?: boolean;
+  /** Set once FulfillmentsService.acceptSellerFulfillment records it. */
+  acceptedAt?: Date | null;
 };
 
 /**
@@ -21,14 +29,19 @@ export type DeriveFulfillmentStatusInput = {
  * be filtered/indexed, but must always be recomputed by this function after
  * any mutation — never set directly.
  *
- * Priority order (first match wins), most-progressed state first: an open
- * exception always wins (ON_HOLD); then full cancellation; then dispatch,
- * pack, and pick progress each in turn (exact-match before partial, and a
- * work item merely IN_PROGRESS before any of its quantity has moved);
- * finally a still-open partial cancellation, or the untouched start state.
- * This ordering is a deliberate choice where the ticket's state list left
- * the resolution ambiguous — see purchase-order-status.ts for the same
- * one-file-owns-the-rule approach on the procurement side.
+ * Priority order (first match wins), most-progressed state first: full
+ * cancellation (every allocated unit cancelled — e.g. a seller rejecting
+ * before acceptance) always wins first, since there is nothing left to
+ * await, hold, or progress; then, for a SELLER-mode order that still has
+ * active quantity and hasn't been accepted yet, AWAITING_ACCEPTANCE —
+ * nothing can be on hold or otherwise in progress before it has even been
+ * accepted; then an open exception (ON_HOLD); then dispatch, pack, and pick
+ * progress each in turn (exact-match before partial, and a work item merely
+ * IN_PROGRESS before any of its quantity has moved); finally a still-open
+ * partial cancellation, or the untouched start state. This ordering is a
+ * deliberate choice where the ticket's state list left the resolution
+ * ambiguous — see purchase-order-status.ts for the same one-file-owns-the-
+ * rule approach on the procurement side.
  */
 export function deriveFulfillmentStatus(
   input: DeriveFulfillmentStatusInput,
@@ -36,13 +49,17 @@ export function deriveFulfillmentStatus(
   const { lines, pickWorkItemStatus, packWorkItemStatus, hasOpenException } =
     input;
 
-  if (hasOpenException) return FulfillmentStatus.ON_HOLD;
-
   const totalAllocated = sum(lines, (l) => l.allocatedQuantity);
   const totalCancelled = sum(lines, (l) => l.cancelledQuantity);
   const totalActive = totalAllocated - totalCancelled;
 
   if (totalActive <= 0) return FulfillmentStatus.CANCELLED;
+
+  if (input.requiresAcceptance && !input.acceptedAt) {
+    return FulfillmentStatus.AWAITING_ACCEPTANCE;
+  }
+
+  if (hasOpenException) return FulfillmentStatus.ON_HOLD;
 
   const totalDispatched = sum(lines, (l) => l.dispatchedQuantity);
   if (totalDispatched >= totalActive) return FulfillmentStatus.DISPATCHED;

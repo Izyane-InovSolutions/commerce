@@ -272,6 +272,46 @@ export class InventoryService {
   }
 
   /**
+   * The offer-scoped counterpart to `returnCancelledStock` for a #37
+   * seller-fulfilled (no-warehouse) committed line — cannot reuse
+   * `returnCancelledStock` (requires a warehouseId) or `restock` (restocks a
+   * reservation's whole quantity, not an arbitrary partial amount). The
+   * InventoryRecord must already exist (a committed seller offer always has
+   * one from checkout's InventoryService.reserveOffer/commit), so a missing
+   * record is a genuine error, not a lazily-created row.
+   */
+  async returnCancelledOfferStock(
+    tx: Prisma.TransactionClient,
+    offerId: string,
+    quantity: number,
+    reference: { referenceType: string; referenceId: string },
+    note?: string,
+  ): Promise<{ record: InventoryRecord; movement: InventoryMovement }> {
+    if (quantity <= 0) {
+      throw new BadRequestException('quantity must be positive');
+    }
+
+    const record = await tx.inventoryRecord.findUnique({ where: { offerId } });
+    if (!record) {
+      throw new NotFoundException('No inventory record exists for this offer');
+    }
+    const updated = await tx.inventoryRecord.update({
+      where: { id: record.id },
+      data: { onHand: { increment: quantity } },
+    });
+    const movement = await this.recordMovement(
+      tx,
+      record.id,
+      InventoryMovementType.RETURN,
+      quantity,
+      note,
+      reference,
+    );
+
+    return { record: updated, movement };
+  }
+
+  /**
    * Adds accepted-and-RESTOCK-dispositioned return quantity back onto
    * sellable on-hand. This is the only path by which a customer return
    * increases inventory — QUARANTINE/DAMAGED/DISPOSE dispositions and

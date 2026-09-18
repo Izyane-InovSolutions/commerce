@@ -183,6 +183,32 @@ describe('deriveFulfillmentStatus', () => {
     ).toBe(FulfillmentStatus.ON_HOLD);
   });
 
+  it('is AWAITING_ACCEPTANCE for a seller-mode order that has not been accepted, even with an open exception', () => {
+    expect(
+      deriveFulfillmentStatus({
+        lines: [line({ pickedQuantity: 6 })],
+        pickWorkItemStatus: PENDING,
+        packWorkItemStatus: PENDING,
+        hasOpenException: true,
+        requiresAcceptance: true,
+        acceptedAt: null,
+      }),
+    ).toBe(FulfillmentStatus.AWAITING_ACCEPTANCE);
+  });
+
+  it('falls through to the normal priority order once a seller-mode order is accepted', () => {
+    expect(
+      deriveFulfillmentStatus({
+        lines: [line({ pickedQuantity: 10 })],
+        pickWorkItemStatus: PENDING,
+        packWorkItemStatus: PENDING,
+        hasOpenException: false,
+        requiresAcceptance: true,
+        acceptedAt: new Date(),
+      }),
+    ).toBe(FulfillmentStatus.PICKED);
+  });
+
   it('aggregates across multiple lines', () => {
     expect(
       deriveFulfillmentStatus({

@@ -53,30 +53,35 @@ enum OfferFulfillmentMode {
 }
 
 model Seller {
-  id                 String           @id @default(uuid()) @db.Uuid
-  ownerUserId        String           @unique @map("owner_user_id") @db.Uuid
-  ownerUser          User             @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
-  businessName       String           @map("business_name")
-  registrationNumber String           @map("registration_number")
-  country            String           @db.VarChar(2)
-  businessAddress    String           @map("business_address")
-  contactEmail       String           @map("contact_email")
-  status             SellerStatus     @default(PENDING)
-  reviewReason       String?          @map("review_reason")
-  reviewedBy         String?          @map("reviewed_by") @db.Uuid
-  reviewedAt         DateTime?        @map("reviewed_at")
-  version            Int              @default(0)
+  id                 String                @id @default(uuid()) @db.Uuid
+  ownerUserId        String                @unique @map("owner_user_id") @db.Uuid
+  ownerUser          User                  @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  businessName       String                @map("business_name")
+  registrationNumber String                @map("registration_number")
+  country            String                @db.VarChar(2)
+  businessAddress    String                @map("business_address")
+  contactEmail       String                @map("contact_email")
+  status             SellerStatus          @default(PENDING)
+  reviewReason       String?               @map("review_reason")
+  reviewedBy         String?               @map("reviewed_by") @db.Uuid
+  reviewedAt         DateTime?             @map("reviewed_at")
+  version            Int                   @default(0)
   documents          SellerDocument[]
-  storefrontSlug     String?          @unique @map("storefront_slug") @db.VarChar(100)
-  displayName        String?          @map("display_name") @db.VarChar(120)
-  description        String?          @db.VarChar(2000)
+  storefrontSlug     String?               @unique @map("storefront_slug") @db.VarChar(100)
+  displayName        String?               @map("display_name") @db.VarChar(120)
+  description        String?               @db.VarChar(2000)
   offers             Offer[]
   orders             SellerOrder[]
   ledgerEntries      LedgerEntry[]
   balance            SellerBalance?
   payouts            Payout[]
-  createdAt          DateTime         @default(now()) @map("created_at")
-  updatedAt          DateTime         @updatedAt @map("updated_at")
+  payoutAccounts     SellerPayoutAccount[]
+  payoutRequests     SellerPayoutRequest[]
+  ratings            SellerRating[]
+  ratingSummary      SellerRatingSummary?
+  createdAt          DateTime              @default(now()) @map("created_at")
+  updatedAt          DateTime              @updatedAt @map("updated_at")
+  ProductReview      ProductReview[]
 
   @@index([status, createdAt])
   @@map("sellers")
@@ -119,29 +124,36 @@ enum ProductStatus {
 }
 
 model User {
-  id                   String               @id @default(uuid()) @db.Uuid
-  email                String               @unique
-  passwordHash         String               @map("password_hash")
-  firstName            String?              @map("first_name")
-  lastName             String?              @map("last_name")
-  phone                String?
-  role                 Role                 @default(CUSTOMER)
-  isActive             Boolean              @default(true) @map("is_active")
-  createdAt            DateTime             @default(now()) @map("created_at")
-  updatedAt            DateTime             @updatedAt @map("updated_at")
-  sessions             Session[]
-  passwordResetTokens  PasswordResetToken[]
-  mediaAssets          MediaAsset[]
-  addresses            Address[]
-  cart                 Cart?
-  wishlistItems        WishlistItem[]
-  orders               Order[]
-  seller               Seller?
-  returnRequests       ReturnRequest[]      @relation("ReturnRequestCustomer")
-  assignedReturns      ReturnRequest[]      @relation("ReturnAssignedStaff")
-  postedReturnReceipts ReturnReceipt[]
-  returnInspections    ReturnInspection[]
-  returnEvents         ReturnEvent[]
+  id                     String                @id @default(uuid()) @db.Uuid
+  email                  String                @unique
+  passwordHash           String                @map("password_hash")
+  firstName              String?               @map("first_name")
+  lastName               String?               @map("last_name")
+  phone                  String?
+  role                   Role                  @default(CUSTOMER)
+  isActive               Boolean               @default(true) @map("is_active")
+  createdAt              DateTime              @default(now()) @map("created_at")
+  updatedAt              DateTime              @updatedAt @map("updated_at")
+  sessions               Session[]
+  passwordResetTokens    PasswordResetToken[]
+  mediaAssets            MediaAsset[]
+  addresses              Address[]
+  cart                   Cart?
+  wishlistItems          WishlistItem[]
+  orders                 Order[]
+  seller                 Seller?
+  returnRequests         ReturnRequest[]       @relation("ReturnRequestCustomer")
+  assignedReturns        ReturnRequest[]       @relation("ReturnAssignedStaff")
+  postedReturnReceipts   ReturnReceipt[]
+  returnInspections      ReturnInspection[]
+  returnEvents           ReturnEvent[]
+  recordedPayouts        Payout[]
+  verifiedPayoutAccounts SellerPayoutAccount[] @relation("PayoutAccountVerifier")
+  reviewedPayoutRequests SellerPayoutRequest[] @relation("PayoutRequestReviewer")
+  resolvedPayoutRequests SellerPayoutRequest[] @relation("PayoutRequestResolver")
+  productReviews         ProductReview[]
+  sellerRatings          SellerRating[]
+  reviewReports          ReviewReport[]
 
   @@map("users")
 }
@@ -342,24 +354,26 @@ model AttributeValue {
 }
 
 model Product {
-  id               String           @id @default(uuid()) @db.Uuid
+  id               String                @id @default(uuid()) @db.Uuid
   name             String
-  slug             String           @unique
+  slug             String                @unique
   description      String?
-  brandId          String?          @map("brand_id") @db.Uuid
-  brand            Brand?           @relation(fields: [brandId], references: [id], onDelete: SetNull)
-  categoryId       String?          @map("category_id") @db.Uuid
-  category         Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  status           ProductStatus    @default(DRAFT)
+  brandId          String?               @map("brand_id") @db.Uuid
+  brand            Brand?                @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  categoryId       String?               @map("category_id") @db.Uuid
+  category         Category?             @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  status           ProductStatus         @default(DRAFT)
   // Return policy: isReturnable gates whether the item can be returned at
   // all; returnWindowDays overrides the platform default (30 days, applied
   // in application code when null) for this product specifically.
-  isReturnable     Boolean          @default(true) @map("is_returnable")
-  returnWindowDays Int?             @map("return_window_days")
+  isReturnable     Boolean               @default(true) @map("is_returnable")
+  returnWindowDays Int?                  @map("return_window_days")
   variants         ProductVariant[]
   media            ProductMedia[]
-  createdAt        DateTime         @default(now()) @map("created_at")
-  updatedAt        DateTime         @updatedAt @map("updated_at")
+  reviews          ProductReview[]
+  ratingSummary    ProductRatingSummary?
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
 
   @@index([brandId])
   @@index([categoryId])
@@ -382,6 +396,7 @@ model ProductVariant {
   fulfillmentLines   FulfillmentLine[]
   createdAt          DateTime                       @default(now()) @map("created_at")
   updatedAt          DateTime                       @updatedAt @map("updated_at")
+  ProductReview      ProductReview[]
 
   @@index([productId])
   @@map("product_variants")
@@ -437,6 +452,7 @@ model Offer {
   inventoryRecord  InventoryRecord?
   createdAt        DateTime             @default(now()) @map("created_at")
   updatedAt        DateTime             @updatedAt @map("updated_at")
+  ProductReview    ProductReview[]
 
   @@unique([sellerId, sellerSku])
   @@index([variantId])
@@ -637,6 +653,42 @@ enum LedgerEntryType {
   PAYOUT
 }
 
+enum PayoutAccountMethod {
+  BANK
+  MOBILE_MONEY
+}
+
+enum PayoutAccountStatus {
+  PENDING_VERIFICATION
+  VERIFIED
+  REJECTED
+  DISABLED
+}
+
+enum SellerPayoutStatus {
+  REQUESTED
+  APPROVED
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  RECONCILIATION_REQUIRED
+}
+
+enum PayoutAttemptStatus {
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  RECONCILIATION_REQUIRED
+}
+
+enum PayoutBatchStatus {
+  OPEN
+  PROCESSING
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+}
+
 // Shipping is snapshotted through ShippingGroup rows; tax modeling remains a
 // later concern. shippingAddress is a point-in-time AddressSnapshot JSON blob (see
 // src/common/addresses/address-snapshot.ts), not a live FK to Address, so the
@@ -699,6 +751,7 @@ model SellerOrder {
   refundCases       RefundCase[]
   fulfillmentOrders FulfillmentOrder[]
   shipments         Shipment[]
+  rating            SellerRating?
   createdAt         DateTime           @default(now()) @map("created_at")
   updatedAt         DateTime           @updatedAt @map("updated_at")
 
@@ -775,6 +828,7 @@ model OrderItem {
   shipmentLines   ShipmentLine[]
   returnItems     ReturnItem[]
   refundCaseItems RefundCaseItem[]
+  review          ProductReview?
   createdAt       DateTime         @default(now()) @map("created_at")
 
   @@index([orderId])
@@ -868,10 +922,17 @@ model LedgerEntry {
   netAmount        Int             @map("net_amount")
   currency         String          @db.VarChar(3)
   description      String?
+  // SALE proceeds can be held for a configured reserve period. releasedAt
+  // marks the one-time transfer from held to available funds.
+  availableAt      DateTime        @default(now()) @map("available_at")
+  releasedAt       DateTime?       @map("released_at")
   createdAt        DateTime        @default(now()) @map("created_at")
 
+  // Backstops the application-level replay check in LedgerService.appendEntry
+  // with a real constraint, so one sale or refund can never be booked twice
+  // even under a race the row lock somehow misses.
+  @@unique([sellerId, type, referenceType, referenceId])
   @@index([sellerId, createdAt])
-  @@index([sellerId, type, referenceType, referenceId])
   @@map("ledger_entries")
 }
 
@@ -879,27 +940,152 @@ model LedgerEntry {
 // same transaction as the LedgerEntry that changes it, so it's a derived
 // cache of the ledger rather than an independent source of truth.
 model SellerBalance {
-  sellerId  String   @id @map("seller_id") @db.Uuid
-  seller    Seller   @relation(fields: [sellerId], references: [id], onDelete: Restrict)
-  balance   Int      @default(0)
-  currency  String   @db.VarChar(3)
-  updatedAt DateTime @updatedAt @map("updated_at")
+  sellerId             String   @id @map("seller_id") @db.Uuid
+  seller               Seller   @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  balance              Int      @default(0)
+  heldBalance          Int      @default(0) @map("held_balance")
+  pendingPayoutBalance Int      @default(0) @map("pending_payout_balance")
+  paidBalance          Int      @default(0) @map("paid_balance")
+  currency             String   @db.VarChar(3)
+  updatedAt            DateTime @updatedAt @map("updated_at")
 
   @@map("seller_balances")
+}
+
+// Sensitive destination data is never selected by seller/public projections.
+// A dedicated audited admin detail endpoint can retrieve it for verification.
+model SellerPayoutAccount {
+  id                String                @id @default(uuid()) @db.Uuid
+  sellerId          String                @map("seller_id") @db.Uuid
+  seller            Seller                @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  method            PayoutAccountMethod
+  provider          String                @db.VarChar(100)
+  accountHolderName String                @map("account_holder_name") @db.VarChar(200)
+  destination       Json
+  maskedReference   String                @map("masked_reference") @db.VarChar(100)
+  status            PayoutAccountStatus   @default(PENDING_VERIFICATION)
+  verificationNote  String?               @map("verification_note") @db.VarChar(500)
+  verifiedByUserId  String?               @map("verified_by_user_id") @db.Uuid
+  verifiedBy        User?                 @relation("PayoutAccountVerifier", fields: [verifiedByUserId], references: [id], onDelete: Restrict)
+  verifiedAt        DateTime?             @map("verified_at")
+  version           Int                   @default(0)
+  requests          SellerPayoutRequest[]
+  createdAt         DateTime              @default(now()) @map("created_at")
+  updatedAt         DateTime              @updatedAt @map("updated_at")
+
+  @@index([sellerId, status])
+  @@map("seller_payout_accounts")
+}
+
+model PayoutBatch {
+  id           String                @id @default(uuid()) @db.Uuid
+  status       PayoutBatchStatus     @default(OPEN)
+  requestCount Int                   @default(0) @map("request_count")
+  totalAmount  Int                   @default(0) @map("total_amount")
+  currency     String                @default("ZMW") @db.VarChar(3)
+  startedAt    DateTime?             @map("started_at")
+  completedAt  DateTime?             @map("completed_at")
+  requests     SellerPayoutRequest[]
+  createdAt    DateTime              @default(now()) @map("created_at")
+  updatedAt    DateTime              @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@map("payout_batches")
+}
+
+model SellerPayoutRequest {
+  id                  String               @id @default(uuid()) @db.Uuid
+  sellerId            String               @map("seller_id") @db.Uuid
+  seller              Seller               @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  payoutAccountId     String               @map("payout_account_id") @db.Uuid
+  payoutAccount       SellerPayoutAccount  @relation(fields: [payoutAccountId], references: [id], onDelete: Restrict)
+  amount              Int
+  currency            String               @db.VarChar(3)
+  status              SellerPayoutStatus   @default(REQUESTED)
+  destinationSnapshot Json                 @map("destination_snapshot")
+  idempotencyKey      String               @unique @map("idempotency_key") @db.Uuid
+  requestHash         String               @map("request_hash") @db.VarChar(64)
+  failureReason       String?              @map("failure_reason") @db.VarChar(1000)
+  cancellationReason  String?              @map("cancellation_reason") @db.VarChar(500)
+  reviewedByUserId    String?              @map("reviewed_by_user_id") @db.Uuid
+  reviewedBy          User?                @relation("PayoutRequestReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+  reviewedAt          DateTime?            @map("reviewed_at")
+  resolvedByUserId    String?              @map("resolved_by_user_id") @db.Uuid
+  resolvedBy          User?                @relation("PayoutRequestResolver", fields: [resolvedByUserId], references: [id], onDelete: Restrict)
+  resolvedAt          DateTime?            @map("resolved_at")
+  batchId             String?              @map("batch_id") @db.Uuid
+  batch               PayoutBatch?         @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  version             Int                  @default(0)
+  attempts            PayoutAttempt[]
+  events              PayoutRequestEvent[]
+  payout              Payout?
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+
+  @@index([sellerId, createdAt])
+  @@index([status, createdAt])
+  @@index([batchId])
+  @@map("seller_payout_requests")
+}
+
+model PayoutAttempt {
+  id                String              @id @default(uuid()) @db.Uuid
+  payoutRequestId   String              @map("payout_request_id") @db.Uuid
+  payoutRequest     SellerPayoutRequest @relation(fields: [payoutRequestId], references: [id], onDelete: Restrict)
+  attemptNumber     Int                 @map("attempt_number")
+  provider          String              @db.VarChar(100)
+  status            PayoutAttemptStatus @default(PROCESSING)
+  providerReference String?             @map("provider_reference") @db.VarChar(200)
+  requestPayload    Json?               @map("request_payload")
+  responsePayload   Json?               @map("response_payload")
+  failureReason     String?             @map("failure_reason") @db.VarChar(1000)
+  startedAt         DateTime            @default(now()) @map("started_at")
+  completedAt       DateTime?           @map("completed_at")
+
+  @@unique([payoutRequestId, attemptNumber])
+  @@index([provider, providerReference])
+  @@map("payout_attempts")
+}
+
+model PayoutRequestEvent {
+  id              String              @id @default(uuid()) @db.Uuid
+  payoutRequestId String              @map("payout_request_id") @db.Uuid
+  payoutRequest   SellerPayoutRequest @relation(fields: [payoutRequestId], references: [id], onDelete: Restrict)
+  action          String              @db.VarChar(100)
+  fromStatus      SellerPayoutStatus? @map("from_status")
+  toStatus        SellerPayoutStatus  @map("to_status")
+  actorUserId     String?             @map("actor_user_id") @db.Uuid
+  idempotencyKey  String?             @unique @map("idempotency_key") @db.Uuid
+  requestHash     String?             @map("request_hash") @db.VarChar(64)
+  metadata        Json?
+  createdAt       DateTime            @default(now()) @map("created_at")
+
+  @@index([payoutRequestId, createdAt])
+  @@map("payout_request_events")
 }
 
 // Admin-recorded bookkeeping only - "this seller was paid $X externally" -
 // not an integration with a real payout rail (that's a later phase per the
 // README's own phasing).
 model Payout {
-  id        String   @id @default(uuid()) @db.Uuid
-  sellerId  String   @map("seller_id") @db.Uuid
-  seller    Seller   @relation(fields: [sellerId], references: [id], onDelete: Restrict)
-  amount    Int
-  currency  String   @db.VarChar(3)
-  reference String?
-  note      String?
-  createdAt DateTime @default(now()) @map("created_at")
+  id                String               @id @default(uuid()) @db.Uuid
+  sellerId          String               @map("seller_id") @db.Uuid
+  seller            Seller               @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  amount            Int
+  currency          String               @db.VarChar(3)
+  reference         String?
+  note              String?
+  // Nullable only for pre-#36 rows; every new payout sets both going forward.
+  // idempotencyKey is a client-minted UUID so a retried "record payout"
+  // request replays instead of double-debiting; recordedByUserId is Restrict
+  // (not SetNull) so a payout's attribution can never silently disappear.
+  idempotencyKey    String?              @unique @map("idempotency_key") @db.Uuid
+  recordedByUserId  String?              @map("recorded_by_user_id") @db.Uuid
+  recordedBy        User?                @relation(fields: [recordedByUserId], references: [id], onDelete: Restrict)
+  payoutRequestId   String?              @unique @map("payout_request_id") @db.Uuid
+  payoutRequest     SellerPayoutRequest? @relation(fields: [payoutRequestId], references: [id], onDelete: Restrict)
+  providerReference String?              @map("provider_reference") @db.VarChar(200)
+  createdAt         DateTime             @default(now()) @map("created_at")
 
   @@index([sellerId, createdAt])
   @@map("payouts")
@@ -1200,6 +1386,7 @@ model ProcurementDocument {
 // ---------------------------------------------------------------------------
 
 enum FulfillmentStatus {
+  AWAITING_ACCEPTANCE
   READY_TO_PICK
   PICKING
   PARTIALLY_PICKED
@@ -1242,6 +1429,14 @@ enum FulfillmentExceptionStatus {
 // warehouses), so this is the actual unit of picking/packing/dispatch, not
 // the shipping group itself. Warehouse reassignment is out of scope for #28:
 // the committed reservation's warehouse is authoritative for the row's life.
+//
+// warehouseId is null for a SELLER-mode shipping group's fulfillment (#37) —
+// the seller fulfills from their own stock, not a platform warehouse. A hand-
+// added partial unique index (migration SQL, not expressible in this DSL)
+// enforces at most one such row per shippingGroupId where warehouseId is
+// null, alongside the @@unique below which still governs platform rows.
+// acceptedAt/acceptedByUserId are set once by FulfillmentsService.accept()
+// and gate every seller-fulfillment transition — see FulfillmentStatus.
 model FulfillmentOrder {
   id                String                 @id @default(uuid()) @db.Uuid
   fulfillmentNumber String                 @unique @map("fulfillment_number")
@@ -1251,12 +1446,14 @@ model FulfillmentOrder {
   sellerOrder       SellerOrder            @relation(fields: [sellerOrderId], references: [id], onDelete: Restrict)
   shippingGroupId   String                 @map("shipping_group_id") @db.Uuid
   shippingGroup     ShippingGroup          @relation(fields: [shippingGroupId], references: [id], onDelete: Restrict)
-  warehouseId       String                 @map("warehouse_id") @db.Uuid
-  warehouse         Warehouse              @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  warehouseId       String?                @map("warehouse_id") @db.Uuid
+  warehouse         Warehouse?             @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
   status            FulfillmentStatus      @default(READY_TO_PICK)
   priority          Int                    @default(0)
   version           Int                    @default(0)
   heldReason        String?                @map("held_reason")
+  acceptedAt        DateTime?              @map("accepted_at")
+  acceptedByUserId  String?                @map("accepted_by_user_id") @db.Uuid
   lines             FulfillmentLine[]
   workItems         FulfillmentWorkItem[]
   dispatches        FulfillmentDispatch[]
@@ -1343,6 +1540,10 @@ model FulfillmentDispatch {
   shipment           Shipment                  @relation(fields: [shipmentId], references: [id], onDelete: Restrict)
   dispatchNumber     String                    @unique @map("dispatch_number")
   idempotencyKey     String                    @unique @map("idempotency_key") @db.VarChar(64)
+  // Canonical hash of the full dispatch request (carrier code, tracking
+  // reference, estimated delivery, line quantities) — a replayed
+  // idempotencyKey with a different hash is a conflict, not a no-op.
+  requestHash        String?                   @map("request_hash") @db.VarChar(64)
   dispatchedByUserId String                    @map("dispatched_by_user_id") @db.Uuid
   lines              FulfillmentDispatchLine[]
   createdAt          DateTime                  @default(now()) @map("created_at")
@@ -1396,6 +1597,10 @@ model FulfillmentEvent {
   type               String
   actorUserId        String?          @map("actor_user_id") @db.Uuid
   idempotencyKey     String?          @unique @map("idempotency_key") @db.VarChar(64)
+  // Canonical hash of the command's full request payload (#37 seller
+  // commands) — lets a replay check reject a reused key whose payload
+  // differs without re-deriving it from stored metadata.
+  requestHash        String?          @map("request_hash") @db.VarChar(64)
   metadata           Json?
   createdAt          DateTime         @default(now()) @map("created_at")
 
@@ -1431,6 +1636,11 @@ enum TrackingEventSource {
   CARRIER_POLL
   ADMIN_MANUAL
   ADMIN_CORRECTION
+  // Externally supplied tracking a seller enters by hand for their own
+  // fulfillment (#37) — never produced by carrier polling/webhooks, and
+  // (like ADMIN_MANUAL) never a correction: only ADMIN_CORRECTION may
+  // supersede an invalid terminal tracking event.
+  SELLER_MANUAL
 }
 
 enum CarrierWebhookDeliveryStatus {
@@ -1458,8 +1668,12 @@ model Shipment {
   shippingGroup         ShippingGroup        @relation(fields: [shippingGroupId], references: [id], onDelete: Restrict)
   fulfillmentOrderId    String               @map("fulfillment_order_id") @db.Uuid
   fulfillmentOrder      FulfillmentOrder     @relation(fields: [fulfillmentOrderId], references: [id], onDelete: Restrict)
-  warehouseId           String               @map("warehouse_id") @db.Uuid
-  warehouse             Warehouse            @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  // Null for a seller-fulfilled shipment (#37) — mirrors
+  // FulfillmentOrder.warehouseId; a hand-added partial unique index
+  // enforces (carrierCode, trackingReference) uniqueness whenever a
+  // reference is present, regardless of warehouse.
+  warehouseId           String?              @map("warehouse_id") @db.Uuid
+  warehouse             Warehouse?           @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
   providerCode          String               @map("provider_code") @db.VarChar(50)
   carrierCode           String               @map("carrier_code") @db.VarChar(50)
   methodCode            String               @map("method_code") @db.VarChar(100)
@@ -1530,6 +1744,10 @@ model TrackingEvent {
   isCorrection     Boolean             @default(false) @map("is_correction")
   correctionReason String?             @map("correction_reason")
   metadata         Json?
+  // Only a seller-submitted event (#37) sets these — an Idempotency-Key
+  // header is required there, unlike carrier/admin sources.
+  idempotencyKey   String?             @unique @map("idempotency_key") @db.VarChar(64)
+  requestHash      String?             @map("request_hash") @db.VarChar(64)
   createdAt        DateTime            @default(now()) @map("created_at")
 
   @@unique([shipmentId, source, providerEventKey])
@@ -1681,9 +1899,9 @@ model ReturnItem {
   refundCaseItems  RefundCaseItem[]
   createdAt        DateTime               @default(now()) @map("created_at")
 
+  @@unique([returnRequestId, orderItemId])
   @@index([returnRequestId])
   @@index([orderItemId])
-  @@unique([returnRequestId, orderItemId])
   @@map("return_items")
 }
 
@@ -1692,18 +1910,18 @@ model ReturnItem {
 // concurrent return requests against the same OrderItem can never
 // double-claim the same delivered unit.
 model ReturnItemAllocation {
-  id             String       @id @default(uuid()) @db.Uuid
-  returnItemId   String       @map("return_item_id") @db.Uuid
-  returnItem     ReturnItem   @relation(fields: [returnItemId], references: [id], onDelete: Cascade)
-  shipmentLineId String       @map("shipment_line_id") @db.Uuid
-  shipmentLine   ShipmentLine @relation(fields: [shipmentLineId], references: [id], onDelete: Restrict)
-  quantity       Int
-  releasedQuantity Int        @default(0) @map("released_quantity")
-  createdAt      DateTime     @default(now()) @map("created_at")
+  id               String       @id @default(uuid()) @db.Uuid
+  returnItemId     String       @map("return_item_id") @db.Uuid
+  returnItem       ReturnItem   @relation(fields: [returnItemId], references: [id], onDelete: Cascade)
+  shipmentLineId   String       @map("shipment_line_id") @db.Uuid
+  shipmentLine     ShipmentLine @relation(fields: [shipmentLineId], references: [id], onDelete: Restrict)
+  quantity         Int
+  releasedQuantity Int          @default(0) @map("released_quantity")
+  createdAt        DateTime     @default(now()) @map("created_at")
 
+  @@unique([returnItemId, shipmentLineId])
   @@index([returnItemId])
   @@index([shipmentLineId])
-  @@unique([returnItemId, shipmentLineId])
   @@map("return_item_allocations")
 }
 
@@ -1739,9 +1957,9 @@ model ReturnReceiptLine {
   quantity     Int
   createdAt    DateTime      @default(now()) @map("created_at")
 
+  @@unique([receiptId, returnItemId])
   @@index([receiptId])
   @@index([returnItemId])
-  @@unique([receiptId, returnItemId])
   @@map("return_receipt_lines")
 }
 
@@ -1779,9 +1997,9 @@ model ReturnInspectionLine {
   rejectionReason  String?            @map("rejection_reason")
   createdAt        DateTime           @default(now()) @map("created_at")
 
+  @@unique([inspectionId, returnItemId])
   @@index([inspectionId])
   @@index([returnItemId])
-  @@unique([inspectionId, returnItemId])
   @@map("return_inspection_lines")
 }
 
@@ -1862,4 +2080,267 @@ model RefundEvent {
 
   @@index([refundCaseId])
   @@map("refund_events")
+}
+
+// ---------------------------------------------------------------------------
+// Reviews, ratings, reports, and moderation (#38)
+// ---------------------------------------------------------------------------
+
+// HIDDEN is a reversible moderation hold; REMOVED and WITHDRAWN are
+// terminal. Public read paths include PUBLISHED records only, regardless of
+// moderationState below — a PENDING or FLAGGED record still shows publicly
+// under the publish-then-moderate policy.
+enum ReviewVisibility {
+  PUBLISHED
+  HIDDEN
+  REMOVED
+  WITHDRAWN
+}
+
+enum ReviewModerationState {
+  PENDING
+  APPROVED
+  FLAGGED
+}
+
+enum ReviewReportReason {
+  SPAM
+  HARASSMENT
+  HATEFUL_CONTENT
+  PERSONAL_INFORMATION
+  OFF_TOPIC
+  FRAUD
+  OTHER
+}
+
+enum ReviewReportStatus {
+  OPEN
+  DISMISSED
+  ACTIONED
+}
+
+// Distinguishes a revision/moderation-event's target without two parallel
+// tables per action — both ProductReview and SellerRating share this pair of
+// append-only history tables.
+enum ReviewTargetType {
+  PRODUCT_REVIEW
+  SELLER_RATING
+}
+
+enum ReviewRevisionSource {
+  SUBMISSION
+  CUSTOMER_EDIT
+}
+
+enum ReviewModerationAction {
+  SUBMITTED
+  EDITED
+  REPORTED
+  APPROVED
+  HIDDEN
+  REMOVED
+  RESTORED
+  WITHDRAWN
+  REPORT_DISMISSED
+}
+
+// One review per delivered OrderItem (orderItemId unique). rating/body range
+// and length are enforced by hand-added CHECK constraints (migration SQL,
+// not expressible in this DSL) mirroring FulfillmentLine's convention:
+// rating BETWEEN 1 AND 5, char_length(title) <= 120,
+// char_length(body) BETWEEN 10 AND 2000. editDeadline is createdAt + 30 days,
+// computed once at submission — never recomputed, so a later change to the
+// edit-window policy can't retroactively reopen or close existing reviews.
+// deliveredAt/verifiedAt are snapshotted at submission time from the
+// authoritative delivery join (ShipmentLine -> Shipment.deliveredAt), the
+// same eligibility source returns.service.ts uses, so a later fulfillment
+// correction can't silently invalidate an already-earned review.
+model ProductReview {
+  id              String                  @id @default(uuid()) @db.Uuid
+  orderItemId     String                  @unique @map("order_item_id") @db.Uuid
+  orderItem       OrderItem               @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  authorUserId    String                  @map("author_user_id") @db.Uuid
+  author          User                    @relation(fields: [authorUserId], references: [id], onDelete: Restrict)
+  productId       String                  @map("product_id") @db.Uuid
+  product         Product                 @relation(fields: [productId], references: [id], onDelete: Restrict)
+  variantId       String                  @map("variant_id") @db.Uuid
+  variant         ProductVariant          @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  offerId         String                  @map("offer_id") @db.Uuid
+  offer           Offer                   @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  sellerId        String?                 @map("seller_id") @db.Uuid
+  seller          Seller?                 @relation(fields: [sellerId], references: [id], onDelete: SetNull)
+  rating          Int
+  title           String?                 @db.VarChar(120)
+  body            String                  @db.VarChar(2000)
+  deliveredAt     DateTime                @map("delivered_at")
+  verifiedAt      DateTime                @map("verified_at")
+  visibility      ReviewVisibility        @default(PUBLISHED)
+  moderationState ReviewModerationState   @default(PENDING) @map("moderation_state")
+  version         Int                     @default(0)
+  editDeadline    DateTime                @map("edit_deadline")
+  revisions       ProductReviewRevision[]
+  createdAt       DateTime                @default(now()) @map("created_at")
+  updatedAt       DateTime                @updatedAt @map("updated_at")
+  ReviewReport    ReviewReport[]
+
+  @@index([productId, visibility, createdAt])
+  @@index([sellerId, visibility, createdAt])
+  @@index([moderationState])
+  @@map("product_reviews")
+}
+
+model ProductReviewRevision {
+  id              String               @id @default(uuid()) @db.Uuid
+  productReviewId String               @map("product_review_id") @db.Uuid
+  productReview   ProductReview        @relation(fields: [productReviewId], references: [id], onDelete: Cascade)
+  revisionNumber  Int                  @map("revision_number")
+  rating          Int
+  title           String?              @db.VarChar(120)
+  body            String               @db.VarChar(2000)
+  authorUserId    String               @map("author_user_id") @db.Uuid
+  source          ReviewRevisionSource
+  reason          String?
+  createdAt       DateTime             @default(now()) @map("created_at")
+
+  @@unique([productReviewId, revisionNumber])
+  @@map("product_review_revisions")
+}
+
+// One rating per SellerOrder (sellerOrderId unique) — the seller on a
+// SellerOrder is never null by construction of this model (a rating is only
+// ever created for a third-party seller order), unlike ProductReview.sellerId
+// which is nullable for a platform sale.
+model SellerRating {
+  id              String                 @id @default(uuid()) @db.Uuid
+  sellerOrderId   String                 @unique @map("seller_order_id") @db.Uuid
+  sellerOrder     SellerOrder            @relation(fields: [sellerOrderId], references: [id], onDelete: Restrict)
+  authorUserId    String                 @map("author_user_id") @db.Uuid
+  author          User                   @relation(fields: [authorUserId], references: [id], onDelete: Restrict)
+  sellerId        String                 @map("seller_id") @db.Uuid
+  seller          Seller                 @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  rating          Int
+  comment         String?                @db.VarChar(2000)
+  deliveredAt     DateTime               @map("delivered_at")
+  verifiedAt      DateTime               @map("verified_at")
+  visibility      ReviewVisibility       @default(PUBLISHED)
+  moderationState ReviewModerationState  @default(PENDING) @map("moderation_state")
+  version         Int                    @default(0)
+  editDeadline    DateTime               @map("edit_deadline")
+  revisions       SellerRatingRevision[]
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+  ReviewReport    ReviewReport[]
+
+  @@index([sellerId, visibility, createdAt])
+  @@index([moderationState])
+  @@map("seller_ratings")
+}
+
+model SellerRatingRevision {
+  id             String               @id @default(uuid()) @db.Uuid
+  sellerRatingId String               @map("seller_rating_id") @db.Uuid
+  sellerRating   SellerRating         @relation(fields: [sellerRatingId], references: [id], onDelete: Cascade)
+  revisionNumber Int                  @map("revision_number")
+  rating         Int
+  comment        String?              @db.VarChar(2000)
+  authorUserId   String               @map("author_user_id") @db.Uuid
+  source         ReviewRevisionSource
+  reason         String?
+  createdAt      DateTime             @default(now()) @map("created_at")
+
+  @@unique([sellerRatingId, revisionNumber])
+  @@map("seller_rating_revisions")
+}
+
+// Targets exactly one of productReviewId/sellerRatingId — enforced by a
+// hand-added CHECK constraint (XOR), not expressible in this DSL. Report
+// deduplication ((reporterUserId, productReviewId) / (reporterUserId,
+// sellerRatingId) each unique) is also hand-added as two partial unique
+// indexes, since a plain compound @@unique would not dedupe correctly here:
+// Postgres treats every NULL column as distinct, so a plain unique index
+// including both nullable target columns would never reject a second report
+// from the same reporter against the same target.
+model ReviewReport {
+  id               String             @id @default(uuid()) @db.Uuid
+  productReviewId  String?            @map("product_review_id") @db.Uuid
+  productReview    ProductReview?     @relation(fields: [productReviewId], references: [id], onDelete: Cascade)
+  sellerRatingId   String?            @map("seller_rating_id") @db.Uuid
+  sellerRating     SellerRating?      @relation(fields: [sellerRatingId], references: [id], onDelete: Cascade)
+  reporterUserId   String             @map("reporter_user_id") @db.Uuid
+  reporter         User               @relation(fields: [reporterUserId], references: [id], onDelete: Restrict)
+  reason           ReviewReportReason
+  details          String?            @db.VarChar(2000)
+  status           ReviewReportStatus @default(OPEN)
+  resolvedByUserId String?            @map("resolved_by_user_id") @db.Uuid
+  resolutionNote   String?            @map("resolution_note")
+  resolvedAt       DateTime?          @map("resolved_at")
+  createdAt        DateTime           @default(now()) @map("created_at")
+
+  @@index([status])
+  @@map("review_reports")
+}
+
+// Append-only — never updated or deleted, same convention as PaymentEvent /
+// InventoryMovement / ReturnEvent. actorUserId has no FK (loose reference,
+// same convention as TrackingEvent.actorUserId) since a submission/edit
+// event's actor is the author but a moderation event's actor is a staff
+// member and neither needs a dedicated relation for this audit trail — the
+// existing AuditService.record call alongside each admin action is the
+// queryable-by-actor audit path; this table is the domain-specific,
+// target-scoped history a moderation-detail view renders inline.
+model ReviewModerationEvent {
+  id                       String                 @id @default(uuid()) @db.Uuid
+  targetType               ReviewTargetType       @map("target_type")
+  targetId                 String                 @map("target_id") @db.Uuid
+  action                   ReviewModerationAction
+  actorUserId              String?                @map("actor_user_id") @db.Uuid
+  reason                   String?
+  previousVisibility       ReviewVisibility?      @map("previous_visibility")
+  resultingVisibility      ReviewVisibility?      @map("resulting_visibility")
+  previousModerationState  ReviewModerationState? @map("previous_moderation_state")
+  resultingModerationState ReviewModerationState? @map("resulting_moderation_state")
+  idempotencyKey           String?                @unique @map("idempotency_key") @db.VarChar(64)
+  requestHash              String?                @map("request_hash") @db.VarChar(64)
+  createdAt                DateTime               @default(now()) @map("created_at")
+
+  @@index([targetType, targetId, createdAt])
+  @@map("review_moderation_events")
+}
+
+// Exact recalculation only (never incremental) — recomputed from every
+// PUBLISHED record for the product/seller inside the same transaction as
+// the mutation that changed it (submit/edit/hide/restore/remove/withdraw),
+// after locking this row. averageRating = ratingSum / ratingCount at read
+// time (application code), null when ratingCount is 0 — not stored, to
+// avoid a stale derived column.
+model ProductRatingSummary {
+  productId      String   @id @map("product_id") @db.Uuid
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  ratingCount    Int      @default(0) @map("rating_count")
+  ratingSum      Int      @default(0) @map("rating_sum")
+  star1Count     Int      @default(0) @map("star_1_count")
+  star2Count     Int      @default(0) @map("star_2_count")
+  star3Count     Int      @default(0) @map("star_3_count")
+  star4Count     Int      @default(0) @map("star_4_count")
+  star5Count     Int      @default(0) @map("star_5_count")
+  version        Int      @default(0)
+  recalculatedAt DateTime @map("recalculated_at")
+
+  @@map("product_rating_summaries")
+}
+
+model SellerRatingSummary {
+  sellerId       String   @id @map("seller_id") @db.Uuid
+  seller         Seller   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  ratingCount    Int      @default(0) @map("rating_count")
+  ratingSum      Int      @default(0) @map("rating_sum")
+  star1Count     Int      @default(0) @map("star_1_count")
+  star2Count     Int      @default(0) @map("star_2_count")
+  star3Count     Int      @default(0) @map("star_3_count")
+  star4Count     Int      @default(0) @map("star_4_count")
+  star5Count     Int      @default(0) @map("star_5_count")
+  version        Int      @default(0)
+  recalculatedAt DateTime @map("recalculated_at")
+
+  @@map("seller_rating_summaries")
 }
