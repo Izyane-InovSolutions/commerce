@@ -15,7 +15,6 @@ import {
   ShoppingCart,
   Store,
   Tag,
-  Truck,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -66,11 +65,6 @@ export const navigation: NavItem[] = [
     href: '/inventory',
     label: 'Inventory',
     icon: Boxes,
-  },
-  {
-    href: '/fulfillment',
-    label: 'Fulfillment',
-    icon: Truck,
   },
   {
     href: '/promotions',

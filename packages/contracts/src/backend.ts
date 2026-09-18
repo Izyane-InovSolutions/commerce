@@ -708,3 +708,268 @@ export const backendRecordPayoutSchema = z.object({
 export type BackendRecordPayoutInput = z.input<
   typeof backendRecordPayoutSchema
 >;
+
+/* ---- admin order management, fulfillment, and shipping ---- */
+
+/** The admin read of a customer order — every seller's slice, unabridged. */
+export const backendAdminOrderSchema = z.object({
+  id: z.uuid(),
+  userId: z.uuid(),
+  status: backendOrderStatusSchema,
+  currency: z.string(),
+  subtotal: z.int(),
+  shippingAmount: z.int(),
+  total: z.int(),
+  createdAt: z.iso.datetime(),
+  items: z.array(backendOrderItemSchema).default([]),
+  sellerOrders: z.array(backendSellerOrderSchema).default([]),
+  payment: z
+    .object({
+      id: z.uuid(),
+      status: z.string(),
+      failureReason: z.string().nullable(),
+    })
+    .nullable()
+    .optional(),
+});
+export type BackendAdminOrder = z.infer<typeof backendAdminOrderSchema>;
+
+/**
+ * Warehouse progress on one (shipping group, warehouse) pair of an order —
+ * the unit picking, packing, and dispatch actually operate on. An order with
+ * items from more than one seller, or split across fulfillment modes, has
+ * more than one of these.
+ */
+export const backendFulfillmentStatuses = [
+  'READY_TO_PICK',
+  'PICKING',
+  'PARTIALLY_PICKED',
+  'PICKED',
+  'PACKING',
+  'PARTIALLY_PACKED',
+  'PACKED',
+  'PARTIALLY_DISPATCHED',
+  'DISPATCHED',
+  'ON_HOLD',
+  'PARTIALLY_CANCELLED',
+  'CANCELLED',
+] as const;
+export const backendFulfillmentStatusSchema = z.enum(backendFulfillmentStatuses);
+export type BackendFulfillmentStatus = z.infer<
+  typeof backendFulfillmentStatusSchema
+>;
+
+/** One order item's quantity as it moves through picking, packing, and dispatch. */
+export const backendFulfillmentLineSchema = z.object({
+  id: z.uuid(),
+  fulfillmentOrderId: z.uuid(),
+  orderItemId: z.uuid(),
+  variantId: z.uuid(),
+  allocatedQuantity: z.int(),
+  pickedQuantity: z.int(),
+  packedQuantity: z.int(),
+  shipmentAssignedQuantity: z.int(),
+  dispatchedQuantity: z.int(),
+  cancelledQuantity: z.int(),
+});
+export type BackendFulfillmentLine = z.infer<typeof backendFulfillmentLineSchema>;
+
+export const backendFulfillmentWorkItemTypes = ['PICK', 'PACK'] as const;
+export const backendFulfillmentWorkItemTypeSchema = z.enum(
+  backendFulfillmentWorkItemTypes,
+);
+export type BackendFulfillmentWorkItemType = z.infer<
+  typeof backendFulfillmentWorkItemTypeSchema
+>;
+
+export const backendFulfillmentWorkItemStatuses = [
+  'PENDING',
+  'IN_PROGRESS',
+  'COMPLETED',
+  'CANCELLED',
+] as const;
+export const backendFulfillmentWorkItemSchema = z.object({
+  id: z.uuid(),
+  fulfillmentOrderId: z.uuid(),
+  type: backendFulfillmentWorkItemTypeSchema,
+  status: z.enum(backendFulfillmentWorkItemStatuses),
+  assignedUserId: z.uuid().nullable(),
+  version: z.int(),
+});
+export type BackendFulfillmentWorkItem = z.infer<
+  typeof backendFulfillmentWorkItemSchema
+>;
+
+export const backendFulfillmentExceptionTypes = [
+  'SHORT_PICK',
+  'DAMAGED',
+  'MISSING',
+] as const;
+export const backendFulfillmentExceptionStatuses = ['OPEN', 'RESOLVED'] as const;
+export const backendFulfillmentExceptionSchema = z.object({
+  id: z.uuid(),
+  fulfillmentOrderId: z.uuid(),
+  fulfillmentLineId: z.uuid(),
+  type: z.enum(backendFulfillmentExceptionTypes),
+  status: z.enum(backendFulfillmentExceptionStatuses),
+  quantity: z.int(),
+  reason: z.string(),
+});
+export type BackendFulfillmentException = z.infer<
+  typeof backendFulfillmentExceptionSchema
+>;
+
+export const backendFulfillmentOrderSchema = z.object({
+  id: z.uuid(),
+  fulfillmentNumber: z.string(),
+  orderId: z.uuid(),
+  sellerOrderId: z.uuid(),
+  shippingGroupId: z.uuid(),
+  warehouseId: z.uuid(),
+  status: backendFulfillmentStatusSchema,
+  priority: z.int(),
+  version: z.int(),
+  heldReason: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+  lines: z.array(backendFulfillmentLineSchema).default([]),
+  workItems: z.array(backendFulfillmentWorkItemSchema).default([]),
+  exceptions: z.array(backendFulfillmentExceptionSchema).default([]),
+});
+export type BackendFulfillmentOrder = z.infer<
+  typeof backendFulfillmentOrderSchema
+>;
+
+/** Every mutation below carries the version it was decided against, or an
+ * idempotency key, or both — two staff acting on the same line cannot both
+ * silently succeed, and a retried request cannot double-apply. */
+export const backendVersionInputSchema = z.object({
+  version: z.int().min(0),
+});
+export type BackendVersionInput = z.input<typeof backendVersionInputSchema>;
+
+export const backendQuantityLineSchema = z.object({
+  fulfillmentLineId: z.uuid(),
+  quantity: z.int().min(1),
+});
+export type BackendQuantityLine = z.input<typeof backendQuantityLineSchema>;
+
+export const backendRecordQuantitiesInputSchema = z.object({
+  lines: z.array(backendQuantityLineSchema).min(1),
+});
+export type BackendRecordQuantitiesInput = z.input<
+  typeof backendRecordQuantitiesInputSchema
+>;
+
+export const backendDispatchInputSchema = z.object({
+  shipmentId: z.uuid(),
+});
+export type BackendDispatchInput = z.input<typeof backendDispatchInputSchema>;
+
+export const backendFulfillmentDispatchLineSchema = z.object({
+  id: z.uuid(),
+  fulfillmentDispatchId: z.uuid(),
+  fulfillmentLineId: z.uuid(),
+  quantity: z.int(),
+});
+export const backendFulfillmentDispatchSchema = z.object({
+  id: z.uuid(),
+  fulfillmentOrderId: z.uuid(),
+  shipmentId: z.uuid(),
+  idempotencyKey: z.string().nullable().optional(),
+  createdAt: z.iso.datetime(),
+  lines: z.array(backendFulfillmentDispatchLineSchema).default([]),
+});
+export type BackendFulfillmentDispatch = z.infer<
+  typeof backendFulfillmentDispatchSchema
+>;
+
+/**
+ * A shipment is booked against already-packed quantity before it can be
+ * dispatched — `PENDING_BOOKING` and `BOOKED` both precede
+ * `FulfillmentOrder.status` ever reaching `DISPATCHED`.
+ */
+export const backendShipmentStatuses = [
+  'PENDING_BOOKING',
+  'BOOKED',
+  'DISPATCHED',
+  'IN_TRANSIT',
+  'OUT_FOR_DELIVERY',
+  'DELIVERED',
+  'DELIVERY_FAILED',
+  'EXCEPTION',
+  'RETURN_TO_SENDER',
+  'RETURNED',
+  'CANCELLED',
+] as const;
+export const backendShipmentStatusSchema = z.enum(backendShipmentStatuses);
+export type BackendShipmentStatus = z.infer<typeof backendShipmentStatusSchema>;
+
+export const backendShipmentLineSchema = z.object({
+  id: z.uuid(),
+  shipmentId: z.uuid(),
+  fulfillmentLineId: z.uuid(),
+  orderItemId: z.uuid(),
+  quantity: z.int(),
+});
+export type BackendShipmentLine = z.infer<typeof backendShipmentLineSchema>;
+
+export const backendShipmentSchema = z.object({
+  id: z.uuid(),
+  shipmentNumber: z.string(),
+  orderId: z.uuid(),
+  sellerOrderId: z.uuid(),
+  shippingGroupId: z.uuid(),
+  fulfillmentOrderId: z.uuid(),
+  warehouseId: z.uuid(),
+  providerCode: z.string(),
+  carrierCode: z.string(),
+  methodCode: z.string(),
+  trackingReference: z.string().nullable(),
+  status: backendShipmentStatusSchema,
+  estimatedDeliveryAt: z.iso.datetime().nullable(),
+  bookedAt: z.iso.datetime().nullable(),
+  dispatchedAt: z.iso.datetime().nullable(),
+  deliveredAt: z.iso.datetime().nullable(),
+  cancelledAt: z.iso.datetime().nullable(),
+  lines: z.array(backendShipmentLineSchema).default([]),
+});
+export type BackendShipment = z.infer<typeof backendShipmentSchema>;
+
+export const backendCreateShipmentInputSchema = z.object({
+  fulfillmentOrderId: z.uuid(),
+  lines: z.array(backendQuantityLineSchema).min(1),
+});
+export type BackendCreateShipmentInput = z.input<
+  typeof backendCreateShipmentInputSchema
+>;
+
+/**
+ * A manual tracking event — how staff record a carrier update by hand, and
+ * the only way to correct a status that projected wrong (`isCorrection`,
+ * admin-only server-side). `normalizedStatus` accepts any shipment status,
+ * including regressions and terminal ones like `DELIVERED`.
+ */
+export const backendAddTrackingEventInputSchema = z.object({
+  normalizedStatus: backendShipmentStatusSchema,
+  description: z.string().optional(),
+  location: z.string().optional(),
+  occurredAt: z.iso.datetime().optional(),
+  isCorrection: z.boolean().optional(),
+  correctionReason: z.string().min(1).optional(),
+});
+export type BackendAddTrackingEventInput = z.input<
+  typeof backendAddTrackingEventInputSchema
+>;
+
+export const backendTrackingEventSchema = z.object({
+  id: z.uuid(),
+  shipmentId: z.uuid(),
+  normalizedStatus: backendShipmentStatusSchema,
+  description: z.string().nullable(),
+  location: z.string().nullable(),
+  occurredAt: z.iso.datetime(),
+  isCorrection: z.boolean(),
+  correctionReason: z.string().nullable(),
+});
+export type BackendTrackingEvent = z.infer<typeof backendTrackingEventSchema>;

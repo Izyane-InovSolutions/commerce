@@ -5,11 +5,14 @@
  * the clients were first built against, so the two can be reconciled in one
  * place instead of inside every page.
  */
+export * from './admin-orders.ts';
 export * from './auth.ts';
 export * from './catalog.ts';
 export * from './financials.ts';
+export * from './fulfillment.ts';
 export * from './inventory.ts';
 export * from './media.ts';
 export * from './seller-offers.ts';
 export * from './seller-orders.ts';
 export * from './sellers.ts';
+export * from './shipments.ts';

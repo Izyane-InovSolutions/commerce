@@ -10,6 +10,10 @@ export class ListFulfillmentsDto extends PaginationQueryDto {
 
   @IsOptional()
   @IsUUID()
+  orderId?: string;
+
+  @IsOptional()
+  @IsUUID()
   warehouseId?: string;
 
   @IsOptional()

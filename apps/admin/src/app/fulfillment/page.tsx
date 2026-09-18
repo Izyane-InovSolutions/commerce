@@ -1,18 +1,9 @@
-import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 
-import { AwaitingBackend } from '@/components/awaiting-backend';
-import { requireAdmin } from '@/lib/session';
-
-export const metadata: Metadata = { title: 'Fulfillment' };
-
-export default async function FulfillmentPage() {
-  await requireAdmin();
-
-  return (
-    <AwaitingBackend
-      title={'Fulfillment'}
-      description={'Shipments, carriers, and 3PL handoffs.'}
-      needs={['GET /admin/fulfillments', 'GET /admin/shipments']}
-    />
-  );
+/**
+ * Shipping is processed from an order's own page now, not a separate queue —
+ * `GET /admin/fulfillments` and `GET /admin/shipments` are both wired there.
+ */
+export default function FulfillmentPage() {
+  redirect('/orders');
 }

@@ -3095,6 +3095,16 @@
           }
         },
         {
+          "name": "orderId",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          }
+        },
+        {
           "name": "warehouseId",
           "in": "query",
           "required": false,
@@ -14477,6 +14487,11 @@
             "PARTIALLY_CANCELLED"
           ],
           "nullable": true
+        },
+        "orderId": {
+          "type": "string",
+          "nullable": true,
+          "format": "uuid"
         },
         "warehouseId": {
           "type": "string",
