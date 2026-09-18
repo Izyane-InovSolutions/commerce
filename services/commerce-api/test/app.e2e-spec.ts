@@ -34,6 +34,8 @@ describe('Commerce API (e2e)', () => {
       .useValue({
         $connect: () => Promise.resolve(),
         $disconnect: () => Promise.resolve(),
+        // FxRatesService.onModuleInit() reads this on every app boot.
+        fxRate: { findMany: () => Promise.resolve([]) },
       })
       .overrideProvider(PrismaHealthIndicator)
       .useValue({

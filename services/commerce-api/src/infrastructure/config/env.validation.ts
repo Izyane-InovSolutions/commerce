@@ -145,9 +145,25 @@ class EnvironmentVariables {
   // JSON keyed by target currency; see PaymentCurrencyConverter. Left
   // unvalidated beyond "is a string" — a missing, expired or malformed quote
   // safely disables foreign settlement at request time rather than failing
-  // startup.
+  // startup. Manual fallback only, used when PAYMENT_FX_API_KEY is unset
+  // (dev/test) — FxRatesService's auto-refreshed rates take priority
+  // whenever a key is configured.
   @IsString()
   PAYMENT_FX_QUOTES = '{}';
+
+  // exchangerate-api.com key — see https://www.exchangerate-api.com. Unset
+  // means FxRatesRefreshScheduler never calls out and PaymentCurrencyConverter
+  // falls back to PAYMENT_FX_QUOTES.
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  PAYMENT_FX_API_KEY?: string;
+
+  // Rates express target major units per one unit of this currency,
+  // matching PaymentCurrencyConverter's existing convention.
+  @IsString()
+  @MinLength(3)
+  PAYMENT_FX_BASE_CURRENCY = 'ZMW';
 
   // See ZoneShippingRateProvider. Domestic is ZMW's home market and gets the
   // cheaper rate plus a free-shipping threshold; everywhere else pays the

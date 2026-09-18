@@ -21,6 +21,7 @@ import { PaymentDetailsDto } from './dto/payment-details.dto';
 import { GatewayPaymentQueryDto } from './dto/gateway-payment.dto';
 import { PaymentOutcomeUnknownException } from './gateway-errors';
 import { PaymentCurrencyConverter } from './payment-currency-converter';
+import { FxRatesService } from './fx-rates.service';
 
 export type GatewayPayment = {
   paymentId: string;
@@ -80,7 +81,10 @@ function text(value: unknown, key: string): Record<string, string> {
 export class UnifiedPaymentProvider implements PaymentProvider {
   readonly name = 'unified';
   private readonly logger = new Logger(UnifiedPaymentProvider.name);
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly fxRates: FxRatesService,
+  ) {}
 
   prepareInput(input: InitializePaymentInput): InitializePaymentInput & {
     settlement?: import('./payment-currency-converter').SettlementQuote;
@@ -96,10 +100,10 @@ export class UnifiedPaymentProvider implements PaymentProvider {
       throw new ServiceUnavailableException(
         'This payment method is temporarily unavailable',
       );
-    const settlement = new PaymentCurrencyConverter(this.config).quote(
-      input.amount,
-      currency,
-    );
+    const settlement = new PaymentCurrencyConverter(
+      this.config,
+      this.fxRates,
+    ).quote(input.amount, currency);
     return { ...input, amount: settlement.amount, currency, settlement };
   }
 
@@ -406,7 +410,12 @@ export class UnifiedPaymentProvider implements PaymentProvider {
         },
         body: body ? JSON.stringify(body) : undefined,
         signal: AbortSignal.timeout(
-          this.config.get<number>('UNIFIED_PAYMENTS_TIMEOUT_MS', 15000),
+          // ConfigService.get() can hand back the raw process.env string
+          // (e.g. '15000') rather than the numeric default when the key is
+          // set in the environment but read outside the validated
+          // EnvironmentVariables class — AbortSignal.timeout() throws on
+          // anything but a real number.
+          Number(this.config.get('UNIFIED_PAYMENTS_TIMEOUT_MS', 15000)),
         ),
       });
     } catch {

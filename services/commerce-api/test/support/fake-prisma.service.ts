@@ -2240,4 +2240,12 @@ export class FakePrismaService {
     findUnique: (): Promise<Record<string, unknown> | null> =>
       Promise.resolve(null),
   };
+
+  // FxRatesService.onModuleInit() always hydrates from this on app boot
+  // (harmless — it's a DB read, not the live network call, which is
+  // separately gated to skip under NODE_ENV=test); no e2e fixture seeds a
+  // rate, so the cache stays empty here.
+  fxRate = {
+    findMany: (): Promise<Record<string, unknown>[]> => Promise.resolve([]),
+  };
 }
