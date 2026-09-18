@@ -68,11 +68,6 @@ export const navigation: NavItem[] = [
     icon: Boxes,
   },
   {
-    href: '/fulfillment',
-    label: 'Fulfillment',
-    icon: Truck,
-  },
-  {
     href: '/operations',
     label: 'Operations',
     icon: RotateCcw,
