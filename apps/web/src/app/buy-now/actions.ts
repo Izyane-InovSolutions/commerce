@@ -44,8 +44,8 @@ export async function buyNowAction(
     return toFormState(error);
   }
 
-  revalidatePath('/orders');
-  redirect(`/orders?placed=${orderId}`);
+  revalidatePath('/account');
+  redirect(`/account?tab=orders&placed=${orderId}`);
 }
 
 /** The cost breakdown this "buy now" checkout would charge right now. */

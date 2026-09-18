@@ -17,19 +17,28 @@ import {
  * finished JSX through as children, so this component only ever needs to be
  * a client component for the tab-switching itself.
  */
+export type AccountTabValue =
+  | 'recently-viewed'
+  | 'wishlist'
+  | 'orders'
+  | 'addresses';
+
 export function AccountTabs({
   recentlyViewed,
   wishlist,
   orders,
   addresses,
+  defaultTab = 'recently-viewed',
 }: {
   recentlyViewed: ReactNode;
   wishlist: ReactNode;
   orders: ReactNode;
   addresses: ReactNode;
+  /** Which tab opens first — set from `?tab=` when linked in from elsewhere. */
+  defaultTab?: AccountTabValue;
 }) {
   return (
-    <Tabs defaultValue="recently-viewed">
+    <Tabs defaultValue={defaultTab}>
       <TabsList>
         <TabsTrigger value="recently-viewed">Recently viewed</TabsTrigger>
         <TabsTrigger value="wishlist">Wishlist</TabsTrigger>

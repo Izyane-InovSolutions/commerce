@@ -69,6 +69,17 @@ export type OrderStatus =
   | 'PARTIALLY_REFUNDED'
   | 'REFUNDED';
 
+/**
+ * Warehouse progress on an order, collapsed to one value — separate from
+ * `OrderStatus`, which tracks payment. Absent until fulfillment has been
+ * provisioned for the order (normally once it's paid).
+ */
+export type FulfillmentSummary =
+  | 'PREPARING'
+  | 'PARTIALLY_DISPATCHED'
+  | 'DISPATCHED'
+  | 'CANCELLED';
+
 export type OrderItem = {
   id: string;
   offerId: string;
@@ -106,6 +117,7 @@ export type Order = {
   total: number;
   items: OrderItem[];
   createdAt: string;
+  fulfillmentSummary?: FulfillmentSummary;
 };
 
 export type Address = {

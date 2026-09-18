@@ -52,8 +52,8 @@ export async function placeOrderAction(
   }
 
   revalidatePath('/cart');
-  revalidatePath('/orders');
-  redirect(`/orders?placed=${orderId}`);
+  revalidatePath('/account');
+  redirect(`/account?tab=orders&placed=${orderId}`);
 }
 
 /**

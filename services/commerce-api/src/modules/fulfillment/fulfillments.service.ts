@@ -104,6 +104,7 @@ export class FulfillmentsService {
     const limit = query.limit ?? DEFAULT_PAGE_SIZE;
     const where: Prisma.FulfillmentOrderWhereInput = {
       ...(query.status ? { status: query.status } : {}),
+      ...(query.orderId ? { orderId: query.orderId } : {}),
       ...(query.warehouseId ? { warehouseId: query.warehouseId } : {}),
       ...(query.assignedUserId
         ? { workItems: { some: { assignedUserId: query.assignedUserId } } }

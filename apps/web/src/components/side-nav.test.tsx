@@ -30,11 +30,11 @@ describe('SideNav', () => {
 
     expect(screen.getByRole('link', { name: /My Wishlist/ })).toHaveAttribute(
       'href',
-      '/wishlist',
+      '/account?tab=wishlist',
     );
     expect(screen.getByRole('link', { name: /My Orders/ })).toHaveAttribute(
       'href',
-      '/orders',
+      '/account?tab=orders',
     );
     expect(
       screen.getByRole('link', { name: /Help & Support/ }),
