@@ -9,6 +9,12 @@ import { UnifiedPaymentProvider } from './unified-payment.provider';
 import { PaymentOutcomeUnknownException } from './gateway-errors';
 import type { InitializePaymentInput } from './payment-provider';
 import { GatewayPaymentQueryDto } from './dto/gateway-payment.dto';
+import type { FxRatesService } from './fx-rates.service';
+
+// No test here exercises a foreign-currency card charge, so the live rate
+// cache is never consulted — PaymentCurrencyConverter falls back to
+// PAYMENT_FX_QUOTES, which these fixtures also leave unset.
+const noFxRates = { getEntry: () => undefined } as unknown as FxRatesService;
 
 describe('UnifiedPaymentProvider', () => {
   let provider: UnifiedPaymentProvider;
@@ -45,6 +51,7 @@ describe('UnifiedPaymentProvider', () => {
         UNIFIED_PAYMENTS_API_KEY: 'test-only-key',
         UNIFIED_PAYMENTS_MERCHANT_ID: 'KAUSA',
       }),
+      noFxRates,
     );
     fetchMock = jest.spyOn(globalThis, 'fetch');
     reply({ success: true, data });
@@ -138,6 +145,7 @@ describe('UnifiedPaymentProvider', () => {
         UNIFIED_PAYMENTS_BASE_URL: 'http://gateway.example',
         UNIFIED_PAYMENTS_API_KEY: 'test-only',
       }),
+      noFxRates,
     );
     await expect(insecure.initialize(input)).rejects.toBeInstanceOf(
       ServiceUnavailableException,
@@ -194,6 +202,7 @@ describe('UnifiedPaymentProvider', () => {
         UNIFIED_PAYMENTS_API_KEY: 'test-only-key',
         UNIFIED_PAYMENTS_CALLBACK_URL: 'https://shop.example/payments/webhook',
       }),
+      noFxRates,
     );
 
     await configured.initialize(input);

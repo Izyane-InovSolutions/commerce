@@ -15,6 +15,10 @@ import { GatewayPaymentsService } from './gateway-payments.service';
 import { GatewayPaymentsController } from './gateway-payments.controller';
 import { RefundCasesService } from './refund-cases.service';
 import { FulfillmentCancellationRefundHandler } from './jobs/fulfillment-cancellation-refund.handler';
+import { FX_RATE_PROVIDER } from './fx-rate-provider';
+import { ExchangeRateApiProvider } from './exchange-rate-api.provider';
+import { FxRatesService } from './fx-rates.service';
+import { FxRatesRefreshScheduler } from './fx-rates-refresh.scheduler';
 
 // Extracted from the provider factory below so the toggle logic itself is a
 // plain, directly unit-testable function rather than only reachable by
@@ -48,12 +52,17 @@ export function resolvePaymentProvider(
     PaymentsService,
     RefundCasesService,
     FulfillmentCancellationRefundHandler,
+    ExchangeRateApiProvider,
+    { provide: FX_RATE_PROVIDER, useExisting: ExchangeRateApiProvider },
+    FxRatesService,
+    FxRatesRefreshScheduler,
   ],
   exports: [
     PAYMENT_PROVIDER,
     PaymentsService,
     RefundCasesService,
     FulfillmentCancellationRefundHandler,
+    FxRatesService,
   ],
 })
 export class PaymentsModule {}

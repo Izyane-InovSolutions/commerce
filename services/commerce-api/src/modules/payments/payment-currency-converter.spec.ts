@@ -1,6 +1,9 @@
 import { ConfigService } from '@nestjs/config';
 import { ServiceUnavailableException } from '@nestjs/common';
-import { PaymentCurrencyConverter } from './payment-currency-converter';
+import {
+  PaymentCurrencyConverter,
+  type RateSource,
+} from './payment-currency-converter';
 
 describe('PaymentCurrencyConverter', () => {
   const at = new Date('2026-09-14T00:00:00Z');
@@ -48,5 +51,82 @@ describe('PaymentCurrencyConverter', () => {
     expect(() =>
       converter('USD', '999999999999').quote(2147483647, 'USD', at),
     ).toThrow(ServiceUnavailableException);
+  });
+
+  describe('with a live RateSource', () => {
+    function rateSource(entry?: {
+      rate: string;
+      quoteId: string;
+      expiresAt: Date;
+    }): RateSource {
+      return { getEntry: () => entry };
+    }
+
+    it('prefers a live rate over PAYMENT_FX_QUOTES when both are present', () => {
+      const converterWithLiveRate = new PaymentCurrencyConverter(
+        new ConfigService({
+          PAYMENT_FX_QUOTES: JSON.stringify({
+            USD: { rate: '999', quoteId: 'manual', expiresAt: '2026-09-15T00:00:00Z' },
+          }),
+        }),
+        rateSource({
+          rate: '0.05',
+          quoteId: 'fx:live-1',
+          expiresAt: new Date('2026-09-15T00:00:00Z'),
+        }),
+      );
+
+      expect(converterWithLiveRate.quote(12345, 'USD', at)).toMatchObject({
+        amount: 617,
+        rate: '0.05',
+        quoteId: 'fx:live-1',
+      });
+    });
+
+    it('falls back to PAYMENT_FX_QUOTES when the live source has no entry for the currency', () => {
+      const converterWithFallback = new PaymentCurrencyConverter(
+        new ConfigService({
+          PAYMENT_FX_QUOTES: JSON.stringify({
+            USD: { rate: '0.05', quoteId: 'manual', expiresAt: '2026-09-15T00:00:00Z' },
+          }),
+        }),
+        rateSource(undefined),
+      );
+
+      expect(converterWithFallback.quote(12345, 'USD', at)).toMatchObject({
+        rate: '0.05',
+        quoteId: 'manual',
+      });
+    });
+
+    it('refuses a malformed live rate rather than inventing one', () => {
+      const converterWithBadLiveRate = new PaymentCurrencyConverter(
+        new ConfigService(),
+        rateSource({
+          rate: 'not-a-number',
+          quoteId: 'fx:live-1',
+          expiresAt: new Date('2026-09-15T00:00:00Z'),
+        }),
+      );
+
+      expect(() => converterWithBadLiveRate.quote(100, 'USD', at)).toThrow(
+        ServiceUnavailableException,
+      );
+    });
+
+    it('refuses an expired live rate', () => {
+      const converterWithExpiredLiveRate = new PaymentCurrencyConverter(
+        new ConfigService(),
+        rateSource({
+          rate: '0.05',
+          quoteId: 'fx:live-1',
+          expiresAt: new Date('2026-09-13T00:00:00Z'),
+        }),
+      );
+
+      expect(() => converterWithExpiredLiveRate.quote(100, 'USD', at)).toThrow(
+        ServiceUnavailableException,
+      );
+    });
   });
 });
