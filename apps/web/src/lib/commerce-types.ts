@@ -120,6 +120,43 @@ export type Order = {
   fulfillmentSummary?: FulfillmentSummary;
 };
 
+/**
+ * Warehouse/carrier progress on one shipment, collapsed to what a customer is
+ * safe to see — no warehouse or staff detail, mirroring the API's
+ * `CustomerShipmentView`.
+ */
+export type ShipmentStatus =
+  | 'PENDING_BOOKING'
+  | 'BOOKED'
+  | 'DISPATCHED'
+  | 'IN_TRANSIT'
+  | 'OUT_FOR_DELIVERY'
+  | 'DELIVERED'
+  | 'DELIVERY_FAILED'
+  | 'EXCEPTION'
+  | 'RETURN_TO_SENDER'
+  | 'RETURNED'
+  | 'CANCELLED';
+
+export type ShipmentTrackingEvent = {
+  normalizedStatus: ShipmentStatus;
+  description: string | null;
+  location: string | null;
+  occurredAt: string;
+};
+
+/** One shipment against an order — an order with split fulfillment can have
+ * more than one, each tracked separately from confirmation to delivery. */
+export type OrderShipment = {
+  id: string;
+  shipmentNumber: string;
+  status: ShipmentStatus;
+  methodName: string;
+  trackingReference: string | null;
+  estimatedDeliveryAt: string | null;
+  events: ShipmentTrackingEvent[];
+};
+
 export type Address = {
   id: string;
   label: string | null;

@@ -3,20 +3,16 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 
+import { OrderDetailModal } from '@/components/order-detail-modal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { formatMinor } from '@/lib/currency';
+import { STATUS_LABELS } from '@/lib/order-status-labels';
 import type { FulfillmentSummary, OrderStatus } from '@/lib/commerce-types';
 
-export const STATUS_LABELS: Record<OrderStatus, string> = {
-  PENDING_PAYMENT: 'Awaiting payment',
-  PAID: 'Paid',
-  CANCELLED: 'Cancelled',
-  PARTIALLY_REFUNDED: 'Partially refunded',
-  REFUNDED: 'Refunded',
-};
+export { STATUS_LABELS } from '@/lib/order-status-labels';
 
 /** Every real order status, in the order the filter bar lists them. */
 const FILTERABLE_STATUSES: OrderStatus[] = [
@@ -84,6 +80,7 @@ function formatDatestamp(iso: string): string {
  * page and the account page's Orders tab via `OrdersList`. */
 export function OrdersFilterList({ orders }: { orders: OrderCard[] }) {
   const [filter, setFilter] = useState<FilterValue>('all');
+  const [selected, setSelected] = useState<OrderCard | null>(null);
 
   const counts = useMemo(() => {
     const byStatus: Partial<Record<OrderStatus, number>> = {};
@@ -145,7 +142,18 @@ export function OrdersFilterList({ orders }: { orders: OrderCard[] }) {
         <ul className="space-y-4">
           {filtered.map((order) => (
             <li key={order.id}>
-              <Card>
+              <Card
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelected(order)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setSelected(order);
+                  }
+                }}
+                className="cursor-pointer transition-shadow hover:ring-foreground/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
                 <CardContent className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -222,6 +230,13 @@ export function OrdersFilterList({ orders }: { orders: OrderCard[] }) {
           ))}
         </ul>
       )}
+
+      <OrderDetailModal
+        order={selected}
+        onOpenChange={(open) => {
+          if (!open) setSelected(null);
+        }}
+      />
     </div>
   );
 }

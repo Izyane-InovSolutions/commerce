@@ -1,6 +1,12 @@
 import { apiClient } from './api';
 import type { SuccessEnvelope } from './catalog-types';
-import type { Address, CheckoutQuote, CheckoutResult, Order } from './commerce-types';
+import type {
+  Address,
+  CheckoutQuote,
+  CheckoutResult,
+  Order,
+  OrderShipment,
+} from './commerce-types';
 
 /** A signed-in visitor's own orders, and the addresses they ship to. */
 
@@ -8,6 +14,21 @@ export async function listOrders(): Promise<Order[]> {
   const response = await apiClient.get<SuccessEnvelope<Order[]>>('/orders', {
     cache: 'no-store',
   });
+  return response.data;
+}
+
+/**
+ * The shipping timeline for one order — every shipment raised against it,
+ * each with its own tracking events from booking through to delivery.
+ * 404s (from the API) if the order is not the caller's own.
+ */
+export async function getOrderShipments(
+  orderId: string,
+): Promise<OrderShipment[]> {
+  const response = await apiClient.get<SuccessEnvelope<OrderShipment[]>>(
+    `/orders/${orderId}/shipments`,
+    { cache: 'no-store' },
+  );
   return response.data;
 }
 
