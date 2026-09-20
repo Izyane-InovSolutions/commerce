@@ -9,7 +9,7 @@ import type {
   BackendAdminOffer,
   BackendAdminProduct,
   BackendPage,
-  BackendProduct,
+  BackendRatedProduct,
   BackendProductStatus,
   BackendUpdateOfferShippingInput,
   BackendVariant,
@@ -116,7 +116,7 @@ export function backendGetProduct(
 export function backendListPublicProducts(
   client: ApiClient,
   query: BackendProductQuery = {},
-): Promise<BackendPage<BackendProduct>> {
+): Promise<BackendPage<BackendRatedProduct>> {
   return client.get('/catalog/products', {
     query: query as Record<string, QueryValue>,
     cache: 'no-store',
@@ -127,7 +127,7 @@ export function backendGetPublicProduct(
   client: ApiClient,
   slug: string,
   currency?: string,
-): Promise<BackendProduct> {
+): Promise<BackendRatedProduct> {
   return client.get(`/catalog/products/${slug}`, {
     query: { currency },
     cache: 'no-store',

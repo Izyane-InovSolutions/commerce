@@ -21,6 +21,7 @@ export class PayoutProcessingService {
     try {
       await this.ledger.releaseMaturedFunds();
       await this.payouts.recoverStaleProcessing();
+      await this.payouts.resumeBatches();
       let batchId = await this.payouts.createBatch();
       while (batchId) {
         await this.payouts.processBatch(batchId);

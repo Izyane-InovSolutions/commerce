@@ -4,6 +4,7 @@ import type {
   BackendPayout,
   BackendRecordPayoutInput,
   BackendSellerBalance,
+  BackendSellerBalanceIntegrity,
 } from '@commerce/contracts';
 
 import type { ApiClient, QueryValue } from '../client.ts';
@@ -20,6 +21,15 @@ import type { ApiClient, QueryValue } from '../client.ts';
  */
 
 export type BackendLedgerQuery = { page?: number; limit?: number };
+
+export function backendGetSellerBalanceIntegrity(
+  client: ApiClient,
+  sellerId: string,
+): Promise<BackendSellerBalanceIntegrity> {
+  return client.get(`/admin/sellers/${sellerId}/balance/integrity`, {
+    cache: 'no-store',
+  });
+}
 
 export function backendGetOwnBalance(
   client: ApiClient,

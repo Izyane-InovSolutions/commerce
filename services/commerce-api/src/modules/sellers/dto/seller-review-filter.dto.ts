@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
   IsDateString,
@@ -11,6 +11,7 @@ import {
 import { ReviewModerationState, ReviewVisibility } from '@prisma/client';
 
 import { PaginationQueryDto } from '../../../common/pagination/pagination-query.dto';
+import { booleanQuery } from '../../../common/pagination/boolean-query.transform';
 
 // Parallels ListReturnsDto's filter shape (status/date range) for the seller
 // reviews/ratings reads: rating, visibility, moderation state, an aggregate
@@ -34,7 +35,7 @@ export class SellerReviewFilterDto extends PaginationQueryDto {
 
   /** true = only rows with an open report; false = only rows with none. */
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(booleanQuery)
   @IsBoolean()
   reported?: boolean;
 

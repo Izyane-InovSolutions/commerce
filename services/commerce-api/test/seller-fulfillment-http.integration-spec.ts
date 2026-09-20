@@ -275,6 +275,9 @@ describe('Seller fulfillment HTTP API (#37, integration)', () => {
     expect(
       beforeAccept.body.data.shippingGroups[0].destination,
     ).not.toHaveProperty('line1');
+    const version = beforeAccept.body.data.shippingGroups[0]
+      .fulfillmentOrders[0].version as number;
+    expect(Number.isInteger(version)).toBe(true);
 
     await request(server)
       .get(`/api/v1/sellers/me/orders/${fixture!.sellerOrderId}`)
@@ -293,8 +296,16 @@ describe('Seller fulfillment HTTP API (#37, integration)', () => {
         `/api/v1/sellers/me/fulfillments/${fixture!.fulfillmentOrderId}/accept`,
       )
       .set('authorization', `Bearer ${fixture!.token}`)
-      .send({ version: 0 })
+      .send({ version })
       .expect(201);
+    await request(server)
+      .post(
+        `/api/v1/sellers/me/fulfillments/${fixture!.fulfillmentOrderId}/reject`,
+      )
+      .set('authorization', `Bearer ${fixture!.token}`)
+      .set('idempotency-key', randomUUID())
+      .send({ version, reason: 'Stale concurrent decision' })
+      .expect(409);
     const afterAccept = await request(server)
       .get(`/api/v1/sellers/me/orders/${fixture!.sellerOrderId}`)
       .set('authorization', `Bearer ${fixture!.token}`)

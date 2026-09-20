@@ -79,6 +79,7 @@ export type SellerFulfillmentEventView = Pick<
 // though those endpoints independently reject non-seller-mode orders.
 export type SellerFulfillmentOrderDetail = {
   id: string | null;
+  version: number;
   fulfillmentNumber: string;
   status: FulfillmentStatus;
   awaitingAcceptance: boolean;

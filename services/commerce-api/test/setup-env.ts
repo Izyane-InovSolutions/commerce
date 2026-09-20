@@ -1,5 +1,7 @@
 process.env.DATABASE_URL ??=
   'postgresql://commerce:commerce@localhost:5432/commerce_test?schema=public';
+process.env.NODE_ENV = 'test';
+process.env.SCHEDULED_WORKERS_ENABLED = 'false';
 process.env.SHADOW_DATABASE_URL ??=
   'postgresql://commerce:commerce@localhost:5432/commerce_test_shadow?schema=public';
 process.env.PORT ??= '3000';

@@ -89,7 +89,11 @@ export class SellerOrdersService {
       // "Contains a group of this mode," not "every group is this mode" -
       // a seller order can mix SELLER and PLATFORM shipping groups.
       ...(query.fulfillmentMode
-        ? { shippingGroups: { some: { fulfillmentMode: query.fulfillmentMode } } }
+        ? {
+            shippingGroups: {
+              some: { fulfillmentMode: query.fulfillmentMode },
+            },
+          }
         : {}),
       ...(query.dateFrom || query.dateTo
         ? {
@@ -140,7 +144,10 @@ export class SellerOrdersService {
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
 
-    return this.projectDetail(sellerOrder, returnRows.map(projectSellerReturnItem));
+    return this.projectDetail(
+      sellerOrder,
+      returnRows.map(projectSellerReturnItem),
+    );
   }
 
   private projectListItem(
@@ -202,6 +209,7 @@ export class SellerOrdersService {
               ? fulfillmentOrder.id
               : null,
           fulfillmentNumber: fulfillmentOrder.fulfillmentNumber,
+          version: fulfillmentOrder.version,
           status: fulfillmentOrder.status,
           awaitingAcceptance:
             fulfillmentOrder.status === FulfillmentStatus.AWAITING_ACCEPTANCE,
@@ -225,30 +233,32 @@ export class SellerOrdersService {
             createdAt: event.createdAt,
           })),
         })),
-        shipments: group.shipments.map((shipment): SellerShipmentDetail => ({
-          id: shipment.id,
-          shipmentNumber: shipment.shipmentNumber,
-          status: shipment.status,
-          carrierCode: shipment.carrierCode,
-          methodCode: shipment.methodCode,
-          trackingReference: shipment.trackingReference,
-          estimatedDeliveryAt: shipment.estimatedDeliveryAt,
-          dispatchedAt: shipment.dispatchedAt,
-          deliveredAt: shipment.deliveredAt,
-          cancelledAt: shipment.cancelledAt,
-          lines: shipment.lines.map((line) => ({
-            orderItemId: line.orderItemId,
-            quantity: line.quantity,
-          })),
-          trackingEvents: shipment.trackingEvents.map((event) => ({
-            source: event.source,
-            normalizedStatus: event.normalizedStatus,
-            description: event.description,
-            location: event.location,
-            occurredAt: event.occurredAt,
-            isCorrection: event.isCorrection,
-          })),
-        })),
+        shipments: group.shipments.map(
+          (shipment): SellerShipmentDetail => ({
+            id: shipment.id,
+            shipmentNumber: shipment.shipmentNumber,
+            status: shipment.status,
+            carrierCode: shipment.carrierCode,
+            methodCode: shipment.methodCode,
+            trackingReference: shipment.trackingReference,
+            estimatedDeliveryAt: shipment.estimatedDeliveryAt,
+            dispatchedAt: shipment.dispatchedAt,
+            deliveredAt: shipment.deliveredAt,
+            cancelledAt: shipment.cancelledAt,
+            lines: shipment.lines.map((line) => ({
+              orderItemId: line.orderItemId,
+              quantity: line.quantity,
+            })),
+            trackingEvents: shipment.trackingEvents.map((event) => ({
+              source: event.source,
+              normalizedStatus: event.normalizedStatus,
+              description: event.description,
+              location: event.location,
+              occurredAt: event.occurredAt,
+              isCorrection: event.isCorrection,
+            })),
+          }),
+        ),
       }),
     );
 
