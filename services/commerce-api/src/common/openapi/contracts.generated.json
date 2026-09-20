@@ -487,6 +487,138 @@
         }
       }
     },
+    "AuthController_mintHandoff": {
+      "operationId": "AuthController_mintHandoff",
+      "tags": [
+        "auth"
+      ],
+      "parameters": [
+        {
+          "name": "user-agent",
+          "in": "header",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/HandoffCodeResponse"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      }
+    },
+    "AuthController_exchangeHandoff": {
+      "operationId": "AuthController_exchangeHandoff",
+      "tags": [
+        "auth"
+      ],
+      "parameters": [
+        {
+          "name": "user-agent",
+          "in": "header",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "security": [],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/AuthTokensResponse"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputExchangeHandoffTokenDto"
+            }
+          }
+        }
+      }
+    },
     "AuthController_listSessions": {
       "operationId": "AuthController_listSessions",
       "tags": [
@@ -4674,6 +4806,7 @@
             "type": "string",
             "enum": [
               "CANCELLED",
+              "PACKED",
               "PARTIALLY_DISPATCHED",
               "DISPATCHED",
               "AWAITING_ACCEPTANCE",
@@ -4683,7 +4816,6 @@
               "PICKED",
               "PACKING",
               "PARTIALLY_PACKED",
-              "PACKED",
               "ON_HOLD",
               "PARTIALLY_CANCELLED"
             ],
@@ -8756,6 +8888,7 @@
               "type": "string",
               "enum": [
                 "CANCELLED",
+                "PACKED",
                 "PARTIALLY_DISPATCHED",
                 "DISPATCHED",
                 "AWAITING_ACCEPTANCE",
@@ -8765,7 +8898,6 @@
                 "PICKED",
                 "PACKING",
                 "PARTIALLY_PACKED",
-                "PACKED",
                 "ON_HOLD",
                 "PARTIALLY_CANCELLED"
               ]
@@ -9163,6 +9295,7 @@
             "type": "string",
             "enum": [
               "CANCELLED",
+              "PACKED",
               "PARTIALLY_DISPATCHED",
               "DISPATCHED",
               "AWAITING_ACCEPTANCE",
@@ -9172,7 +9305,6 @@
               "PICKED",
               "PACKING",
               "PARTIALLY_PACKED",
-              "PACKED",
               "ON_HOLD",
               "PARTIALLY_CANCELLED"
             ],
@@ -18642,6 +18774,34 @@
       ],
       "additionalProperties": false
     },
+    "HandoffCodeResponse": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "expiresIn": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "code",
+        "expiresIn"
+      ]
+    },
+    "InputExchangeHandoffTokenDto": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "additionalProperties": false
+    },
     "SessionSummary": {
       "type": "object",
       "properties": {
@@ -19387,9 +19547,15 @@
           "enum": [
             "CANCELLED",
             "PREPARING",
+            "PACKED",
             "PARTIALLY_DISPATCHED",
             "DISPATCHED"
           ]
+        },
+        "packedAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
         }
       },
       "required": [
@@ -20718,6 +20884,7 @@
           "type": "string",
           "enum": [
             "CANCELLED",
+            "PACKED",
             "PARTIALLY_DISPATCHED",
             "DISPATCHED",
             "AWAITING_ACCEPTANCE",
@@ -20727,7 +20894,6 @@
             "PICKED",
             "PACKING",
             "PARTIALLY_PACKED",
-            "PACKED",
             "ON_HOLD",
             "PARTIALLY_CANCELLED"
           ],
@@ -20808,6 +20974,7 @@
           "type": "string",
           "enum": [
             "CANCELLED",
+            "PACKED",
             "PARTIALLY_DISPATCHED",
             "DISPATCHED",
             "AWAITING_ACCEPTANCE",
@@ -20817,7 +20984,6 @@
             "PICKED",
             "PACKING",
             "PARTIALLY_PACKED",
-            "PACKED",
             "ON_HOLD",
             "PARTIALLY_CANCELLED"
           ]
@@ -21444,6 +21610,7 @@
           "type": "string",
           "enum": [
             "CANCELLED",
+            "PACKED",
             "PARTIALLY_DISPATCHED",
             "DISPATCHED",
             "AWAITING_ACCEPTANCE",
@@ -21453,7 +21620,6 @@
             "PICKED",
             "PACKING",
             "PARTIALLY_PACKED",
-            "PACKED",
             "ON_HOLD",
             "PARTIALLY_CANCELLED"
           ]
@@ -22953,6 +23119,7 @@
             "type": "string",
             "enum": [
               "CANCELLED",
+              "PACKED",
               "PARTIALLY_DISPATCHED",
               "DISPATCHED",
               "AWAITING_ACCEPTANCE",
@@ -22962,7 +23129,6 @@
               "PICKED",
               "PACKING",
               "PARTIALLY_PACKED",
-              "PACKED",
               "ON_HOLD",
               "PARTIALLY_CANCELLED"
             ]
@@ -23120,6 +23286,7 @@
           "type": "string",
           "enum": [
             "CANCELLED",
+            "PACKED",
             "PARTIALLY_DISPATCHED",
             "DISPATCHED",
             "AWAITING_ACCEPTANCE",
@@ -23129,7 +23296,6 @@
             "PICKED",
             "PACKING",
             "PARTIALLY_PACKED",
-            "PACKED",
             "ON_HOLD",
             "PARTIALLY_CANCELLED"
           ]
@@ -23339,6 +23505,7 @@
           "type": "string",
           "enum": [
             "CANCELLED",
+            "PACKED",
             "PARTIALLY_DISPATCHED",
             "DISPATCHED",
             "AWAITING_ACCEPTANCE",
@@ -23348,7 +23515,6 @@
             "PICKED",
             "PACKING",
             "PARTIALLY_PACKED",
-            "PACKED",
             "ON_HOLD",
             "PARTIALLY_CANCELLED"
           ],
@@ -23515,6 +23681,7 @@
           "type": "string",
           "enum": [
             "CANCELLED",
+            "PACKED",
             "PARTIALLY_DISPATCHED",
             "DISPATCHED",
             "AWAITING_ACCEPTANCE",
@@ -23524,7 +23691,6 @@
             "PICKED",
             "PACKING",
             "PARTIALLY_PACKED",
-            "PACKED",
             "ON_HOLD",
             "PARTIALLY_CANCELLED"
           ]
@@ -23810,6 +23976,7 @@
           "type": "string",
           "enum": [
             "CANCELLED",
+            "PACKED",
             "PARTIALLY_DISPATCHED",
             "DISPATCHED",
             "AWAITING_ACCEPTANCE",
@@ -23819,7 +23986,6 @@
             "PICKED",
             "PACKING",
             "PARTIALLY_PACKED",
-            "PACKED",
             "ON_HOLD",
             "PARTIALLY_CANCELLED"
           ]
@@ -29839,6 +30005,10 @@
           "format": "date-time",
           "nullable": true
         },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
         "events": {
           "type": "array",
           "items": {
@@ -29853,6 +30023,7 @@
         "methodName",
         "trackingReference",
         "estimatedDeliveryAt",
+        "createdAt",
         "events"
       ]
     },

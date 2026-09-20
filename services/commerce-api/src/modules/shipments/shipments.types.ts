@@ -17,6 +17,7 @@ export type CustomerShipmentView = {
   methodName: string;
   trackingReference: string | null;
   estimatedDeliveryAt: Date | null;
+  createdAt: Date;
   events: {
     normalizedStatus: TrackingEvent['normalizedStatus'];
     description: string | null;

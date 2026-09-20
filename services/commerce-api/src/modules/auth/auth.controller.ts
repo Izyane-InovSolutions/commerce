@@ -19,12 +19,14 @@ import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { Public } from '../../common/auth/public.decorator';
 import {
   AuthTokensResponse,
+  HandoffCodeResponse,
   PublicUser,
   SessionSummary,
 } from './auth-response';
 import { AuthService, RequestContext } from './auth.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ConfirmPasswordResetDto } from './dto/confirm-password-reset.dto';
+import { ExchangeHandoffTokenDto } from './dto/exchange-handoff-token.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -144,6 +146,40 @@ export class AuthController {
     return this.authService.confirmPasswordReset(
       dto.token,
       dto.newPassword,
+      this.requestContext(ip, userAgent),
+    );
+  }
+
+  /** Called by the app the user is already signed into (e.g. apps/web),
+   * server-to-server, to get a code for handing that session off to
+   * another app's own login (e.g. apps/seller). */
+  @Throttle(AUTH_BRUTE_FORCE_THROTTLE)
+  @Post('handoff')
+  @HttpCode(HttpStatus.OK)
+  mintHandoff(
+    @CurrentUser() user: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
+  ): Promise<HandoffCodeResponse> {
+    return this.authService.mintHandoffToken(
+      user.id,
+      this.requestContext(ip, userAgent),
+    );
+  }
+
+  /** Called by the receiving app (e.g. apps/seller), server-to-server, to
+   * redeem a handoff code for a real token pair — public because whoever
+   * calls it isn't signed in there yet; the code itself is the proof. */
+  @Public()
+  @Post('handoff/exchange')
+  @HttpCode(HttpStatus.OK)
+  exchangeHandoff(
+    @Body() dto: ExchangeHandoffTokenDto,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
+  ): Promise<AuthTokensResponse> {
+    return this.authService.exchangeHandoffToken(
+      dto.code,
       this.requestContext(ip, userAgent),
     );
   }

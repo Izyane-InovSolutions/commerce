@@ -27,6 +27,7 @@ const FILTERABLE_STATUSES: OrderStatus[] = [
  * default "nothing has moved yet" or "cancelled" (already covered by the
  * order's own status badge). */
 const FULFILLMENT_LABELS: Partial<Record<FulfillmentSummary, string>> = {
+  PACKED: 'Packed',
   PARTIALLY_DISPATCHED: 'Partially shipped',
   DISPATCHED: 'Shipped',
 };
@@ -64,6 +65,7 @@ export type OrderCard = {
   total: number;
   currency: string;
   fulfillmentSummary?: FulfillmentSummary;
+  packedAt?: string | null;
 };
 
 function formatDatestamp(iso: string): string {

@@ -76,6 +76,7 @@ export type OrderStatus =
  */
 export type FulfillmentSummary =
   | 'PREPARING'
+  | 'PACKED'
   | 'PARTIALLY_DISPATCHED'
   | 'DISPATCHED'
   | 'CANCELLED';
@@ -118,6 +119,8 @@ export type Order = {
   items: OrderItem[];
   createdAt: string;
   fulfillmentSummary?: FulfillmentSummary;
+  /** When packing finished — null until it has. */
+  packedAt?: string | null;
 };
 
 /**
@@ -154,6 +157,7 @@ export type OrderShipment = {
   methodName: string;
   trackingReference: string | null;
   estimatedDeliveryAt: string | null;
+  createdAt: string;
   events: ShipmentTrackingEvent[];
 };
 

@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  FulfillmentWorkItemType,
   OfferStockSource,
   OrderStatus,
   Prisma,
@@ -68,6 +69,13 @@ export type OrderWithItems = Order & {
    * need it (findAny/listAll), present on customer-facing ones.
    */
   fulfillmentSummary?: CustomerFulfillmentSummary;
+  /**
+   * When packing finished — the PACK work item's own `completedAt`, not a
+   * status. Present alongside `fulfillmentSummary`, null until packing is
+   * actually done (or there's nothing to show a time for, e.g. a fully
+   * cancelled order).
+   */
+  packedAt?: Date | null;
 };
 
 export type OrderPage = {
@@ -790,21 +798,50 @@ export class OrdersService {
 
     const fulfillmentOrders = await this.prisma.fulfillmentOrder.findMany({
       where: { orderId: { in: orders.map((order) => order.id) } },
-      select: { orderId: true, status: true },
+      select: {
+        orderId: true,
+        status: true,
+        // The PACK work item's own completedAt is the only record of when
+        // packing actually finished — recomputeStatus derives PACKED as a
+        // status, not a timestamp, so the shipping timeline's "Preparing for
+        // shipment" step has nothing else to show a time against.
+        workItems: {
+          where: { type: FulfillmentWorkItemType.PACK },
+          select: { completedAt: true },
+        },
+      },
     });
     const statusesByOrderId = new Map<string, (typeof fulfillmentOrders)[number]['status'][]>();
+    const packedAtByOrderId = new Map<string, Date>();
     for (const fo of fulfillmentOrders) {
       const list = statusesByOrderId.get(fo.orderId) ?? [];
       list.push(fo.status);
       statusesByOrderId.set(fo.orderId, list);
+
+      for (const workItem of fo.workItems) {
+        if (!workItem.completedAt) continue;
+        const current = packedAtByOrderId.get(fo.orderId);
+        if (!current || workItem.completedAt > current) {
+          packedAtByOrderId.set(fo.orderId, workItem.completedAt);
+        }
+      }
     }
 
-    return orders.map((order) => ({
-      ...order,
-      fulfillmentSummary: deriveCustomerFulfillmentSummary(
+    return orders.map((order) => {
+      const fulfillmentSummary = deriveCustomerFulfillmentSummary(
         statusesByOrderId.get(order.id) ?? [],
-      ),
-    }));
+      );
+      const packed =
+        fulfillmentSummary === 'PACKED' ||
+        fulfillmentSummary === 'PARTIALLY_DISPATCHED' ||
+        fulfillmentSummary === 'DISPATCHED';
+
+      return {
+        ...order,
+        fulfillmentSummary,
+        packedAt: packed ? (packedAtByOrderId.get(order.id) ?? null) : null,
+      };
+    });
   }
 
   // sellerId: null is the platform/first-party group - every order gets at
