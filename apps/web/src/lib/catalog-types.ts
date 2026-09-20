@@ -18,6 +18,16 @@ export type Category = {
 export type ProductOffer = {
   id: string;
   status: string;
+  /** Null for the platform's own offer — who else's storefront this is,
+   * otherwise. Optional only because existing fixtures predate this field;
+   * the API always sends it. Not yet shown on any page. */
+  seller?: {
+    id: string;
+    storefrontSlug: string | null;
+    displayName: string | null;
+    description: string | null;
+  } | null;
+  isFirstParty?: boolean;
   /**
    * `amount` is in the currency's minor units. Null when the offer carries no
    * price in the currency being browsed — which is not the same as having no

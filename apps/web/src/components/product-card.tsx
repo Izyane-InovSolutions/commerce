@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import {
   getDisplayPrice,
   getPrimaryImage,
+  getPrimaryOffer,
   getShippingCost,
   isInStock,
   type Product,
@@ -21,6 +22,9 @@ export function ProductCard({
   const price = getDisplayPrice(product);
   const shippingCost = getShippingCost(product);
   const outOfStock = price !== null && !isInStock(product);
+  // Null for the platform's own products — only a marketplace offer names a
+  // seller at all.
+  const soldBy = getPrimaryOffer(product)?.seller?.displayName ?? null;
 
   return (
     <Link href={`/products/${product.slug}`} className="group block h-full">
@@ -52,6 +56,9 @@ export function ProductCard({
             <p className="text-sm font-medium line-clamp-2 group-hover:underline">
               {product.name}
             </p>
+            {soldBy ? (
+              <p className="text-muted-foreground text-xs">Sold by {soldBy}</p>
+            ) : null}
             <p className="text-sm font-semibold">
               {price !== null
                 ? formatMinor(price.amount, price.currency)

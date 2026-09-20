@@ -78,4 +78,30 @@ describe('ProductCard', () => {
 
     expect(screen.getByText('Free shipping')).toBeInTheDocument();
   });
+
+  it('shows who it’s sold by for a marketplace offer', () => {
+    render(
+      <ProductCard
+        product={buildProduct(
+          buildOffer({
+            isFirstParty: false,
+            seller: {
+              id: 'seller-1',
+              storefrontSlug: 'acme',
+              displayName: 'Acme',
+              description: null,
+            },
+          }),
+        )}
+      />,
+    );
+
+    expect(screen.getByText('Sold by Acme')).toBeInTheDocument();
+  });
+
+  it('shows no "Sold by" line for the platform’s own offer', () => {
+    render(<ProductCard product={buildProduct(buildOffer())} />);
+
+    expect(screen.queryByText(/^Sold by/)).not.toBeInTheDocument();
+  });
 });

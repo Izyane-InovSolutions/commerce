@@ -88,6 +88,11 @@ export default async function ProductDetailPage({
             <h1 className="text-2xl font-semibold tracking-tight text-balance">
               {product.name}
             </h1>
+            {offer?.seller ? (
+              <p className="text-muted-foreground text-sm">
+                Sold by {offer.seller.displayName ?? 'a marketplace seller'}
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-1">

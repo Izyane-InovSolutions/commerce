@@ -26056,6 +26056,15 @@
           "items": {
             "$ref": "#/components/schemas/__type22"
           }
+        },
+        "seller": {
+          "type": "object",
+          "allOf": [
+            {
+              "$ref": "#/components/schemas/PublicStorefront"
+            }
+          ],
+          "nullable": true
         }
       },
       "required": [
@@ -26593,6 +26602,18 @@
             "ARCHIVED"
           ]
         },
+        "seller": {
+          "type": "object",
+          "allOf": [
+            {
+              "$ref": "#/components/schemas/PublicStorefront"
+            }
+          ],
+          "nullable": true
+        },
+        "isFirstParty": {
+          "type": "boolean"
+        },
         "currentPrice": {
           "type": "object",
           "allOf": [
@@ -26624,6 +26645,8 @@
       "required": [
         "id",
         "status",
+        "seller",
+        "isFirstParty",
         "currentPrice",
         "currencies",
         "inStock",

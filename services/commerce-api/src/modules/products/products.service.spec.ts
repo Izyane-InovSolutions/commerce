@@ -5,7 +5,7 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
-import { ProductStatus, ReviewVisibility } from '@prisma/client';
+import { ProductStatus, ReviewVisibility, SellerStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import type { InventoryService } from '../inventory/inventory.service';
@@ -233,6 +233,109 @@ describe('ProductsService', () => {
         amount: 1500,
         currency: 'USD',
       });
+    });
+
+    it('queries offers eligible for the public catalog — the platform’s own, or an approved seller’s with a complete storefront', async () => {
+      prisma.product.findMany.mockResolvedValue([]);
+      prisma.product.count.mockResolvedValue(0);
+
+      await service.findPublished({ page: 1, limit: 20, currency: 'USD' });
+
+      const call = prisma.product.findMany.mock.calls[0]![0] as {
+        include: {
+          variants: { include: { offers: { where: Record<string, unknown> } } };
+        };
+      };
+      expect(call.include.variants.include.offers.where).toEqual(
+        expect.objectContaining({
+          status: ProductStatus.PUBLISHED,
+          OR: [
+            { sellerId: null },
+            {
+              seller: {
+                is: {
+                  status: SellerStatus.APPROVED,
+                  storefrontSlug: { not: null },
+                  displayName: { not: null },
+                  ownerUser: { isActive: true },
+                },
+              },
+            },
+          ],
+        }),
+      );
+    });
+
+    it('marks a seller-owned offer as such and carries its storefront', async () => {
+      prisma.product.findMany.mockResolvedValue([
+        {
+          id: 'p1',
+          name: 'Widget',
+          slug: 'widget',
+          description: null,
+          status: ProductStatus.PUBLISHED,
+          brand: null,
+          category: null,
+          media: [],
+          variants: [
+            {
+              id: 'v1',
+              skuCode: 'WID-1',
+              name: null,
+              status: ProductStatus.PUBLISHED,
+              attributeValues: [],
+              offers: [
+                {
+                  id: 'o1',
+                  status: ProductStatus.PUBLISHED,
+                  sellerId: 'seller-1',
+                  stockSource: 'SELLER',
+                  shippingAmount: null,
+                  shippingCurrency: null,
+                  seller: {
+                    id: 'seller-1',
+                    storefrontSlug: 'acme',
+                    displayName: 'Acme',
+                    description: null,
+                  },
+                  prices: [
+                    {
+                      id: 'price-1',
+                      amount: 500,
+                      currency: 'USD',
+                      startsAt: new Date(Date.now() - 1000),
+                      endsAt: null,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ]);
+      prisma.product.count.mockResolvedValue(1);
+      inventory.getAvailableOfferQuantities.mockResolvedValue(
+        new Map([['o1', 2]]),
+      );
+
+      const result = await service.findPublished({
+        page: 1,
+        limit: 20,
+        currency: 'USD',
+      });
+
+      const offer = result.data[0]?.variants[0]?.offers[0];
+      expect(offer?.isFirstParty).toBe(false);
+      expect(offer?.seller).toEqual({
+        id: 'seller-1',
+        storefrontSlug: 'acme',
+        displayName: 'Acme',
+        description: null,
+      });
+      expect(offer?.inStock).toBe(true);
+      expect(inventory.getAvailableOfferQuantities).toHaveBeenCalledWith([
+        'o1',
+      ]);
     });
 
     it('filters by category slug, brand slug, and search text', async () => {
