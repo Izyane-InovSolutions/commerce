@@ -4,6 +4,7 @@
   "testEnvironment": "node",
   "testRegex": ".integration-spec.ts$",
   "setupFiles": ["<rootDir>/setup-integration-env.ts"],
+  "globalSetup": "<rootDir>/prepare-integration-database.ts",
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   }

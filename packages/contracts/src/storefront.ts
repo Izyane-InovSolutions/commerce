@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { productSchema } from './catalog.ts';
 import { listQuerySchema, moneySchema } from './common.ts';
 import { offerConditionSchema, offerSchema } from './offers.ts';
+import { backendRatingSummarySchema } from './reviews.ts';
 
 /**
  * Public storefront contract.
@@ -37,6 +38,9 @@ export const storefrontProductSchema = productSchema
     description: true,
   })
   .extend({
+    // Optional only for legacy/mock storefront data. The real public API's
+    // backendRatedProductSchema requires the complete rating projection.
+    ...backendRatingSummarySchema.partial().shape,
     brandName: z.string().nullable(),
     categoryName: z.string().nullable(),
     /** Cheapest active offer, the price a listing leads with. */

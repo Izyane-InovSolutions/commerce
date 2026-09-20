@@ -6,5 +6,7 @@ export * from './insights.ts';
 export * from './inventory.ts';
 export * from './offers.ts';
 export * from './seller-catalog.ts';
+export * from './seller-operations.ts';
+export * from './reviews.ts';
 export * from './sellers.ts';
 export * from './storefront.ts';

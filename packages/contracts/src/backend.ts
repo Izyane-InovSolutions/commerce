@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { backendRatingSummarySchema } from './reviews.ts';
 
 /**
  * The Commerce API as it actually exists today (Phase 0–2).
@@ -321,6 +322,10 @@ export const backendProductSchema = z.object({
   variants: z.array(backendVariantSchema).default([]),
 });
 export type BackendProduct = z.infer<typeof backendProductSchema>;
+export const backendRatedProductSchema = backendProductSchema.extend(
+  backendRatingSummarySchema.shape,
+);
+export type BackendRatedProduct = z.infer<typeof backendRatedProductSchema>;
 
 export const backendAdminProductSchema = backendProductSchema.extend({
   /** The admin read carries the asset itself, including ones still uploading. */
@@ -989,6 +994,7 @@ export type BackendAdminOrder = z.infer<typeof backendAdminOrderSchema>;
  * more than one of these.
  */
 export const backendFulfillmentStatuses = [
+  'AWAITING_ACCEPTANCE',
   'READY_TO_PICK',
   'PICKING',
   'PARTIALLY_PICKED',
@@ -1002,7 +1008,9 @@ export const backendFulfillmentStatuses = [
   'PARTIALLY_CANCELLED',
   'CANCELLED',
 ] as const;
-export const backendFulfillmentStatusSchema = z.enum(backendFulfillmentStatuses);
+export const backendFulfillmentStatusSchema = z.enum(
+  backendFulfillmentStatuses,
+);
 export type BackendFulfillmentStatus = z.infer<
   typeof backendFulfillmentStatusSchema
 >;
@@ -1020,7 +1028,9 @@ export const backendFulfillmentLineSchema = z.object({
   dispatchedQuantity: z.int(),
   cancelledQuantity: z.int(),
 });
-export type BackendFulfillmentLine = z.infer<typeof backendFulfillmentLineSchema>;
+export type BackendFulfillmentLine = z.infer<
+  typeof backendFulfillmentLineSchema
+>;
 
 export const backendFulfillmentWorkItemTypes = ['PICK', 'PACK'] as const;
 export const backendFulfillmentWorkItemTypeSchema = z.enum(
@@ -1053,7 +1063,10 @@ export const backendFulfillmentExceptionTypes = [
   'DAMAGED',
   'MISSING',
 ] as const;
-export const backendFulfillmentExceptionStatuses = ['OPEN', 'RESOLVED'] as const;
+export const backendFulfillmentExceptionStatuses = [
+  'OPEN',
+  'RESOLVED',
+] as const;
 export const backendFulfillmentExceptionSchema = z.object({
   id: z.uuid(),
   fulfillmentOrderId: z.uuid(),

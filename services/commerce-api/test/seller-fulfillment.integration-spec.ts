@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma, ShipmentStatus } from '@prisma/client';
 
 import { NumberingService } from '../src/common/numbering/numbering.service';
@@ -38,7 +42,10 @@ describe('Seller fulfillment (#37, integration, real Postgres)', () => {
   const backgroundJobsServiceStub = {
     enqueue: backgroundJobsEnqueueMock,
   } as unknown as BackgroundJobsService;
-  const inventoryService = new InventoryService(prisma, backgroundJobsServiceStub);
+  const inventoryService = new InventoryService(
+    prisma,
+    backgroundJobsServiceStub,
+  );
   const provisioningService = new FulfillmentProvisioningService(
     prisma,
     numberingService,
@@ -52,7 +59,8 @@ describe('Seller fulfillment (#37, integration, real Postgres)', () => {
         where: { ownerUserId: userId, status: 'APPROVED' },
         data: { updatedAt: new Date() },
       });
-      if (locked.count !== 1) throw new ForbiddenException('Seller approval is required');
+      if (locked.count !== 1)
+        throw new ForbiddenException('Seller approval is required');
       return tx.seller.findUniqueOrThrow({ where: { ownerUserId: userId } });
     },
   } as unknown as SellersService;
@@ -66,7 +74,9 @@ describe('Seller fulfillment (#37, integration, real Postgres)', () => {
     backgroundJobsServiceStub,
     sellersServiceStub,
   );
-  const carrierProviderRegistry = new CarrierProviderRegistry([new ManualCarrierProvider()]);
+  const carrierProviderRegistry = new CarrierProviderRegistry([
+    new ManualCarrierProvider(),
+  ]);
   const shipmentsService = new ShipmentsService(
     prisma,
     fulfillmentsService,
@@ -89,6 +99,9 @@ describe('Seller fulfillment (#37, integration, real Postgres)', () => {
 
   afterAll(async () => {
     if (createdOrderIds.length) {
+      await prisma.refundCase.deleteMany({
+        where: { sellerOrder: { orderId: { in: createdOrderIds } } },
+      });
       const fulfillmentOrders = await prisma.fulfillmentOrder.findMany({
         where: { orderId: { in: createdOrderIds } },
         select: { id: true },
@@ -99,22 +112,33 @@ describe('Seller fulfillment (#37, integration, real Postgres)', () => {
           where: { fulfillmentOrderId: { in: fulfillmentOrderIds } },
         });
       }
-      await prisma.shipment.deleteMany({ where: { orderId: { in: createdOrderIds } } });
-      await prisma.fulfillmentOrder.deleteMany({ where: { orderId: { in: createdOrderIds } } });
+      await prisma.shipment.deleteMany({
+        where: { orderId: { in: createdOrderIds } },
+      });
+      await prisma.fulfillmentOrder.deleteMany({
+        where: { orderId: { in: createdOrderIds } },
+      });
       await prisma.order.deleteMany({ where: { id: { in: createdOrderIds } } });
     }
     if (createdSellerIds.length) {
-      await prisma.refundCase.deleteMany({});
       // Offer.sellerId is Restrict — must go before the seller row.
-      await prisma.offer.deleteMany({ where: { sellerId: { in: createdSellerIds } } });
-      await prisma.seller.deleteMany({ where: { id: { in: createdSellerIds } } });
+      await prisma.offer.deleteMany({
+        where: { sellerId: { in: createdSellerIds } },
+      });
+      await prisma.seller.deleteMany({
+        where: { id: { in: createdSellerIds } },
+      });
     }
-    await prisma.auditEvent.deleteMany({ where: { actorUserId: { in: createdUserIds } } });
+    await prisma.auditEvent.deleteMany({
+      where: { actorUserId: { in: createdUserIds } },
+    });
     if (createdUserIds.length) {
       await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
     }
     if (createdProductIds.length) {
-      await prisma.product.deleteMany({ where: { id: { in: createdProductIds } } });
+      await prisma.product.deleteMany({
+        where: { id: { in: createdProductIds } },
+      });
     }
     await prisma.$disconnect();
   });
@@ -136,7 +160,11 @@ describe('Seller fulfillment (#37, integration, real Postgres)', () => {
     const rowSuffix = `${suffix}-${randomUUID().slice(0, 8)}`;
 
     const sellerUser = await prisma.user.create({
-      data: { email: `seller-owner-${rowSuffix}@example.test`, passwordHash: 'x', role: 'SELLER' },
+      data: {
+        email: `seller-owner-${rowSuffix}@example.test`,
+        passwordHash: 'x',
+        role: 'SELLER',
+      },
     });
     createdUserIds.push(sellerUser.id);
     const buyer = await prisma.user.create({
@@ -158,7 +186,10 @@ describe('Seller fulfillment (#37, integration, real Postgres)', () => {
     createdSellerIds.push(seller.id);
 
     const product = await prisma.product.create({
-      data: { name: `Seller Product ${rowSuffix}`, slug: `seller-product-${rowSuffix}` },
+      data: {
+        name: `Seller Product ${rowSuffix}`,
+        slug: `seller-product-${rowSuffix}`,
+      },
     });
     createdProductIds.push(product.id);
     const variant = await prisma.productVariant.create({
@@ -174,7 +205,12 @@ describe('Seller fulfillment (#37, integration, real Postgres)', () => {
     });
 
     const record = await prisma.inventoryRecord.create({
-      data: { offerId: offer.id, variantId: variant.id, onHand, reserved: quantity },
+      data: {
+        offerId: offer.id,
+        variantId: variant.id,
+        onHand,
+        reserved: quantity,
+      },
     });
     const reservation = await prisma.reservation.create({
       data: {
@@ -247,7 +283,8 @@ describe('Seller fulfillment (#37, integration, real Postgres)', () => {
       include: { lines: true },
     });
     const [line] = fulfillmentOrder.lines;
-    if (!line) throw new Error('expected a provisioned seller fulfillment line');
+    if (!line)
+      throw new Error('expected a provisioned seller fulfillment line');
 
     return {
       fulfillmentOrderId: fulfillmentOrder.id,
@@ -272,7 +309,11 @@ describe('Seller fulfillment (#37, integration, real Postgres)', () => {
   it('404s a fulfillment order owned by a different seller', async () => {
     const { fulfillmentOrderId } = await createSellerFulfillment(3);
     const otherUser = await prisma.user.create({
-      data: { email: `other-${randomUUID()}@example.test`, passwordHash: 'x', role: 'SELLER' },
+      data: {
+        email: `other-${randomUUID()}@example.test`,
+        passwordHash: 'x',
+        role: 'SELLER',
+      },
     });
     createdUserIds.push(otherUser.id);
     const otherSeller = await prisma.seller.create({
@@ -289,19 +330,28 @@ describe('Seller fulfillment (#37, integration, real Postgres)', () => {
     createdSellerIds.push(otherSeller.id);
 
     await expect(
-      fulfillmentsService.acceptSellerFulfillment(fulfillmentOrderId, otherUser.id, 0),
+      fulfillmentsService.acceptSellerFulfillment(
+        fulfillmentOrderId,
+        otherUser.id,
+        0,
+      ),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('rejects an unapproved/suspended seller', async () => {
-    const { fulfillmentOrderId, sellerUserId } = await createSellerFulfillment(2);
+    const { fulfillmentOrderId, sellerUserId } =
+      await createSellerFulfillment(2);
     await prisma.seller.update({
       where: { ownerUserId: sellerUserId },
       data: { status: 'SUSPENDED' },
     });
 
     await expect(
-      fulfillmentsService.acceptSellerFulfillment(fulfillmentOrderId, sellerUserId, 0),
+      fulfillmentsService.acceptSellerFulfillment(
+        fulfillmentOrderId,
+        sellerUserId,
+        0,
+      ),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
@@ -321,14 +371,22 @@ describe('Seller fulfillment (#37, integration, real Postgres)', () => {
     expect(line.pickedQuantity).toBe(4);
 
     await expect(
-      fulfillmentsService.acceptSellerFulfillment(fulfillmentOrderId, sellerUserId, 0),
+      fulfillmentsService.acceptSellerFulfillment(
+        fulfillmentOrderId,
+        sellerUserId,
+        0,
+      ),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('packs partially across multiple calls, then dispatches atomically with an initial tracking event', async () => {
     const { fulfillmentOrderId, fulfillmentLineId, sellerUserId, offerId } =
       await createSellerFulfillment(6);
-    await fulfillmentsService.acceptSellerFulfillment(fulfillmentOrderId, sellerUserId, 0);
+    await fulfillmentsService.acceptSellerFulfillment(
+      fulfillmentOrderId,
+      sellerUserId,
+      0,
+    );
 
     await fulfillmentsService.recordSellerPack(
       fulfillmentOrderId,
@@ -344,7 +402,9 @@ describe('Seller fulfillment (#37, integration, real Postgres)', () => {
       sellerUserId,
       randomUUID(),
     );
-    const packedLine = afterFirstPack.lines.find((l) => l.id === fulfillmentLineId)!;
+    const packedLine = afterFirstPack.lines.find(
+      (l) => l.id === fulfillmentLineId,
+    )!;
     expect(packedLine.packedQuantity).toBe(6);
     expect(afterFirstPack.status).toBe('PACKED');
 
@@ -362,7 +422,11 @@ describe('Seller fulfillment (#37, integration, real Postgres)', () => {
     const dispatched = await fulfillmentsService.dispatchSellerFulfillment(
       fulfillmentOrderId,
       sellerUserId,
-      { lines: [{ fulfillmentLineId, quantity: 6 }], carrierCode: 'DHL', trackingReference: 'TRK-1' },
+      {
+        lines: [{ fulfillmentLineId, quantity: 6 }],
+        carrierCode: 'DHL',
+        trackingReference: 'TRK-1',
+      },
       sellerUserId,
       dispatchKey,
     );
@@ -384,7 +448,11 @@ describe('Seller fulfillment (#37, integration, real Postgres)', () => {
     const replay = await fulfillmentsService.dispatchSellerFulfillment(
       fulfillmentOrderId,
       sellerUserId,
-      { lines: [{ fulfillmentLineId, quantity: 6 }], carrierCode: 'DHL', trackingReference: 'TRK-1' },
+      {
+        lines: [{ fulfillmentLineId, quantity: 6 }],
+        carrierCode: 'DHL',
+        trackingReference: 'TRK-1',
+      },
       sellerUserId,
       dispatchKey,
     );
@@ -416,8 +484,11 @@ describe('Seller fulfillment (#37, integration, real Postgres)', () => {
   });
 
   it('rejects before any dispatch, restores inventory, and enqueues exactly one refund job', async () => {
-    const { fulfillmentOrderId, offerId, sellerUserId } = await createSellerFulfillment(5);
-    const recordBefore = await prisma.inventoryRecord.findUniqueOrThrow({ where: { offerId } });
+    const { fulfillmentOrderId, offerId, sellerUserId } =
+      await createSellerFulfillment(5);
+    const recordBefore = await prisma.inventoryRecord.findUniqueOrThrow({
+      where: { offerId },
+    });
 
     backgroundJobsEnqueueMock.mockClear();
     const rejected = await fulfillmentsService.rejectSellerFulfillment(
@@ -430,7 +501,9 @@ describe('Seller fulfillment (#37, integration, real Postgres)', () => {
     );
     expect(rejected.status).toBe('CANCELLED');
 
-    const recordAfter = await prisma.inventoryRecord.findUniqueOrThrow({ where: { offerId } });
+    const recordAfter = await prisma.inventoryRecord.findUniqueOrThrow({
+      where: { offerId },
+    });
     expect(recordAfter.onHand).toBe(recordBefore.onHand + 5);
     expect(backgroundJobsEnqueueMock).toHaveBeenCalledTimes(1);
 
@@ -443,7 +516,11 @@ describe('Seller fulfillment (#37, integration, real Postgres)', () => {
   it('refuses to reject once any quantity has been dispatched', async () => {
     const { fulfillmentOrderId, fulfillmentLineId, sellerUserId } =
       await createSellerFulfillment(3);
-    await fulfillmentsService.acceptSellerFulfillment(fulfillmentOrderId, sellerUserId, 0);
+    await fulfillmentsService.acceptSellerFulfillment(
+      fulfillmentOrderId,
+      sellerUserId,
+      0,
+    );
     await fulfillmentsService.recordSellerPack(
       fulfillmentOrderId,
       sellerUserId,
@@ -474,7 +551,11 @@ describe('Seller fulfillment (#37, integration, real Postgres)', () => {
   it('cancels only the selected line, leaving other seller-fulfilled quantity untouched', async () => {
     const { fulfillmentOrderId, fulfillmentLineId, sellerUserId } =
       await createSellerFulfillment(8);
-    await fulfillmentsService.acceptSellerFulfillment(fulfillmentOrderId, sellerUserId, 0);
+    await fulfillmentsService.acceptSellerFulfillment(
+      fulfillmentOrderId,
+      sellerUserId,
+      0,
+    );
 
     const cancelled = await fulfillmentsService.cancelSellerFulfillment(
       fulfillmentOrderId,
@@ -497,7 +578,11 @@ describe('Seller fulfillment (#37, integration, real Postgres)', () => {
   it('does not let concurrent pack requests over-consume quantity', async () => {
     const { fulfillmentOrderId, fulfillmentLineId, sellerUserId } =
       await createSellerFulfillment(10);
-    await fulfillmentsService.acceptSellerFulfillment(fulfillmentOrderId, sellerUserId, 0);
+    await fulfillmentsService.acceptSellerFulfillment(
+      fulfillmentOrderId,
+      sellerUserId,
+      0,
+    );
 
     const attempts = await Promise.allSettled(
       Array.from({ length: 5 }, () =>

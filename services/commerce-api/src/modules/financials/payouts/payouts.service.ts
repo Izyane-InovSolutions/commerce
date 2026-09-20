@@ -542,6 +542,7 @@ export class PayoutsService {
         actorUserId,
         idempotencyKey,
         this.hash(dto),
+        dto.version,
       );
     } else {
       await this.completeFailure(
@@ -551,15 +552,22 @@ export class PayoutsService {
         actorUserId,
         idempotencyKey,
         this.hash(dto),
+        dto.version,
       );
     }
     return this.findRequest(id);
   }
 
   async createBatch(limit = 100): Promise<string | null> {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 1000)
+      throw new BadRequestException('Batch limit must be between 1 and 1000');
     return this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM seller_payout_requests
+        WHERE status = 'APPROVED' AND batch_id IS NULL
+        ORDER BY created_at, id LIMIT ${limit} FOR UPDATE SKIP LOCKED`;
       const requests = await tx.sellerPayoutRequest.findMany({
-        where: { status: SellerPayoutStatus.APPROVED, batchId: null },
+        where: { id: { in: claimed.map((row) => row.id) } },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         take: limit,
       });
@@ -576,7 +584,7 @@ export class PayoutsService {
           startedAt: new Date(),
         },
       });
-      await tx.sellerPayoutRequest.updateMany({
+      const assigned = await tx.sellerPayoutRequest.updateMany({
         where: {
           id: { in: requests.map((request) => request.id) },
           status: SellerPayoutStatus.APPROVED,
@@ -584,6 +592,8 @@ export class PayoutsService {
         },
         data: { batchId: batch.id },
       });
+      if (assigned.count !== requests.length)
+        throw new ConflictException('Payout batch claim changed');
       return batch.id;
     });
   }
@@ -594,26 +604,68 @@ export class PayoutsService {
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
     for (const request of requests) await this.processRequest(request.id);
-    const errorCount = await this.prisma.sellerPayoutRequest.count({
-      where: {
-        batchId,
-        status: {
-          in: [
-            SellerPayoutStatus.FAILED,
-            SellerPayoutStatus.RECONCILIATION_REQUIRED,
-          ],
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM payout_batches WHERE id = ${batchId}::uuid FOR UPDATE`;
+      const pending = await tx.sellerPayoutRequest.count({
+        where: {
+          batchId,
+          status: {
+            in: [SellerPayoutStatus.APPROVED, SellerPayoutStatus.PROCESSING],
+          },
         },
-      },
+      });
+      if (pending > 0) return;
+      const errorCount = await tx.sellerPayoutRequest.count({
+        where: {
+          batchId,
+          status: {
+            in: [
+              SellerPayoutStatus.FAILED,
+              SellerPayoutStatus.RECONCILIATION_REQUIRED,
+            ],
+          },
+        },
+      });
+      await tx.payoutBatch.update({
+        where: { id: batchId },
+        data: {
+          status: errorCount
+            ? PayoutBatchStatus.COMPLETED_WITH_ERRORS
+            : PayoutBatchStatus.COMPLETED,
+          completedAt: new Date(),
+        },
+      });
     });
-    await this.prisma.payoutBatch.update({
-      where: { id: batchId },
-      data: {
-        status: errorCount
-          ? PayoutBatchStatus.COMPLETED_WITH_ERRORS
-          : PayoutBatchStatus.COMPLETED,
-        completedAt: new Date(),
+  }
+
+  async resumeBatches(): Promise<void> {
+    const batches = await this.prisma.payoutBatch.findMany({
+      where: {
+        OR: [
+          {
+            status: {
+              in: [PayoutBatchStatus.OPEN, PayoutBatchStatus.PROCESSING],
+            },
+          },
+          {
+            requests: {
+              some: {
+                status: {
+                  in: [
+                    SellerPayoutStatus.APPROVED,
+                    SellerPayoutStatus.PROCESSING,
+                  ],
+                },
+              },
+            },
+          },
+        ],
       },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: 100,
+      select: { id: true },
     });
+    for (const batch of batches) await this.processBatch(batch.id);
   }
 
   async listBatches(query: PaginationQueryDto): Promise<PayoutBatchPage> {
@@ -650,6 +702,20 @@ export class PayoutsService {
       });
       if (!request || request.status !== SellerPayoutStatus.APPROVED)
         return null;
+      await tx.$queryRaw`SELECT id FROM sellers WHERE id = ${request.sellerId}::uuid FOR SHARE`;
+      await tx.$queryRaw`SELECT id FROM seller_payout_accounts WHERE id = ${request.payoutAccountId}::uuid FOR SHARE`;
+      const seller = await tx.seller.findUnique({
+        where: { id: request.sellerId },
+      });
+      const account = await tx.sellerPayoutAccount.findUnique({
+        where: { id: request.payoutAccountId },
+      });
+      const eligible =
+        seller?.status === 'APPROVED' &&
+        account?.sellerId === request.sellerId &&
+        account.status === PayoutAccountStatus.VERIFIED &&
+        this.hash(account.destination) ===
+          this.hash(request.destinationSnapshot);
       const attemptNumber =
         (await tx.payoutAttempt.count({ where: { payoutRequestId: id } })) + 1;
       const attempt = await tx.payoutAttempt.create({
@@ -680,14 +746,24 @@ export class PayoutsService {
           metadata: { attemptId: attempt.id, provider: this.provider.name },
         },
       });
-      return { request, attempt };
+      return { request, attempt, eligible };
     });
     if (!claimed) return;
+
+    if (!claimed.eligible) {
+      await this.markUnknown(
+        id,
+        claimed.attempt.id,
+        'Transfer not submitted: seller or payout destination requires review',
+      );
+      return;
+    }
 
     try {
       const result = await this.provider.submit({
         requestId: id,
         attemptId: claimed.attempt.id,
+        idempotencyKey: claimed.attempt.id,
         amount: claimed.request.amount,
         currency: claimed.request.currency,
         destination: claimed.request.destinationSnapshot,
@@ -698,49 +774,119 @@ export class PayoutsService {
           claimed.attempt.id,
           result.providerReference ??
             `${this.provider.name}:${claimed.attempt.id}`,
+          undefined,
+          undefined,
+          undefined,
+          claimed.request.version + 1,
         );
       } else if (result.outcome === 'FAILED') {
         await this.completeFailure(
           claimed.request,
           claimed.attempt.id,
           result.failureReason ?? 'Payout provider rejected the transfer',
+          undefined,
+          undefined,
+          undefined,
+          claimed.request.version + 1,
         );
       } else {
-        await this.prisma.$transaction(async (tx) => {
-          await tx.payoutAttempt.update({
-            where: { id: claimed.attempt.id },
-            data: {
-              status: PayoutAttemptStatus.RECONCILIATION_REQUIRED,
-              providerReference: result.providerReference,
-              responsePayload: result.response,
-              completedAt: new Date(),
-            },
-          });
-          await tx.sellerPayoutRequest.update({
-            where: { id },
-            data: {
-              status: SellerPayoutStatus.RECONCILIATION_REQUIRED,
-              version: { increment: 1 },
-            },
-          });
-          await tx.payoutRequestEvent.create({
-            data: {
-              payoutRequestId: id,
-              action: 'RECONCILIATION_REQUIRED',
-              fromStatus: SellerPayoutStatus.PROCESSING,
-              toStatus: SellerPayoutStatus.RECONCILIATION_REQUIRED,
-              metadata: { providerReference: result.providerReference ?? null },
-            },
-          });
-        });
+        await this.markUnknown(
+          id,
+          claimed.attempt.id,
+          'Provider requires reconciliation',
+          result.providerReference,
+          result.response,
+        );
       }
-    } catch (error) {
-      await this.completeFailure(
-        claimed.request,
+    } catch {
+      await this.markUnknown(
+        id,
         claimed.attempt.id,
-        error instanceof Error ? error.message : String(error),
+        'Provider outcome could not be recorded; reconcile before retrying',
       );
     }
+  }
+
+  private async assertCompletion(
+    tx: Prisma.TransactionClient,
+    request: SellerPayoutRequest,
+    attemptId: string,
+    expectedVersion: number | undefined,
+    manual: boolean,
+  ): Promise<void> {
+    const latest = await tx.payoutAttempt.findFirst({
+      where: { payoutRequestId: request.id },
+      orderBy: { attemptNumber: 'desc' },
+    });
+    const expectedStatus = manual
+      ? SellerPayoutStatus.RECONCILIATION_REQUIRED
+      : SellerPayoutStatus.PROCESSING;
+    if (
+      request.version !== expectedVersion ||
+      request.status !== expectedStatus ||
+      latest?.id !== attemptId ||
+      latest.status !==
+        (manual
+          ? PayoutAttemptStatus.RECONCILIATION_REQUIRED
+          : PayoutAttemptStatus.PROCESSING)
+    ) {
+      throw new ConflictException(
+        'Payout changed or attempt is no longer awaiting this outcome',
+      );
+    }
+  }
+
+  private async markUnknown(
+    id: string,
+    attemptId: string,
+    reason: string,
+    providerReference?: string,
+    response?: Prisma.InputJsonValue,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM seller_payout_requests WHERE id = ${id}::uuid FOR UPDATE`;
+      const request = await tx.sellerPayoutRequest.findUniqueOrThrow({
+        where: { id },
+      });
+      // Never overwrite a manual decision, a newer attempt or a committed success.
+      if (request.status !== SellerPayoutStatus.PROCESSING) return;
+      const latest = await tx.payoutAttempt.findFirst({
+        where: { payoutRequestId: id },
+        orderBy: { attemptNumber: 'desc' },
+      });
+      if (
+        latest?.id !== attemptId ||
+        latest.status !== PayoutAttemptStatus.PROCESSING
+      )
+        return;
+      await tx.payoutAttempt.update({
+        where: { id: attemptId },
+        data: {
+          status: PayoutAttemptStatus.RECONCILIATION_REQUIRED,
+          failureReason: reason,
+          providerReference,
+          responsePayload: response,
+          completedAt: new Date(),
+        },
+      });
+      await tx.sellerPayoutRequest.update({
+        where: { id },
+        data: {
+          status: SellerPayoutStatus.RECONCILIATION_REQUIRED,
+          failureReason: reason,
+          version: { increment: 1 },
+        },
+      });
+      await tx.payoutRequestEvent.create({
+        data: {
+          payoutRequestId: id,
+          action: 'RECONCILIATION_REQUIRED',
+          fromStatus: request.status,
+          toStatus: SellerPayoutStatus.RECONCILIATION_REQUIRED,
+          metadata: { reason, providerReference: providerReference ?? null },
+        },
+      });
+    });
   }
 
   /**
@@ -810,13 +956,27 @@ export class PayoutsService {
     actorUserId?: string,
     idempotencyKey?: string,
     requestHash?: string,
+    expectedVersion?: number,
   ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT seller_id FROM seller_balances WHERE seller_id = ${request.sellerId}::uuid FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM seller_payout_requests WHERE id = ${request.id}::uuid FOR UPDATE`;
+      if (
+        idempotencyKey &&
+        requestHash &&
+        (await this.isEventReplay(request.id, idempotencyKey, requestHash, tx))
+      )
+        return;
       const current = await tx.sellerPayoutRequest.findUniqueOrThrow({
         where: { id: request.id },
       });
-      if (current.status === SellerPayoutStatus.SUCCEEDED) return;
+      await this.assertCompletion(
+        tx,
+        current,
+        attemptId,
+        expectedVersion,
+        !!actorUserId,
+      );
       if (
         current.status !== SellerPayoutStatus.PROCESSING &&
         current.status !== SellerPayoutStatus.RECONCILIATION_REQUIRED
@@ -906,12 +1066,26 @@ export class PayoutsService {
     actorUserId?: string,
     idempotencyKey?: string,
     requestHash?: string,
+    expectedVersion?: number,
   ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM seller_payout_requests WHERE id = ${request.id}::uuid FOR UPDATE`;
+      if (
+        idempotencyKey &&
+        requestHash &&
+        (await this.isEventReplay(request.id, idempotencyKey, requestHash, tx))
+      )
+        return;
       const current = await tx.sellerPayoutRequest.findUniqueOrThrow({
         where: { id: request.id },
       });
-      if (current.status === SellerPayoutStatus.FAILED) return;
+      await this.assertCompletion(
+        tx,
+        current,
+        attemptId,
+        expectedVersion,
+        !!actorUserId,
+      );
       await tx.payoutAttempt.update({
         where: { id: attemptId },
         data: {
@@ -959,6 +1133,8 @@ export class PayoutsService {
     const requestHash = this.hash({ id, version, action, metadata });
     if (await this.isEventReplay(id, idempotencyKey, requestHash)) return;
     await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM seller_payout_requests WHERE id = ${id}::uuid FOR UPDATE`;
+      if (await this.isEventReplay(id, idempotencyKey, requestHash, tx)) return;
       const current = await tx.sellerPayoutRequest.findUnique({
         where: { id },
       });
@@ -1002,6 +1178,8 @@ export class PayoutsService {
     if (await this.isEventReplay(id, idempotencyKey, requestHash)) return;
     await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT seller_id FROM seller_balances WHERE seller_id = ${sellerId}::uuid FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM seller_payout_requests WHERE id = ${id}::uuid FOR UPDATE`;
+      if (await this.isEventReplay(id, idempotencyKey, requestHash, tx)) return;
       const request = await tx.sellerPayoutRequest.findFirst({
         where: { id, sellerId },
       });
@@ -1084,8 +1262,9 @@ export class PayoutsService {
     requestId: string,
     idempotencyKey: string,
     requestHash: string,
+    client: Prisma.TransactionClient = this.prisma,
   ): Promise<boolean> {
-    const event = await this.prisma.payoutRequestEvent.findUnique({
+    const event = await client.payoutRequestEvent.findUnique({
       where: { idempotencyKey },
     });
     if (!event) return false;

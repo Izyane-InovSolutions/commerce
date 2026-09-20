@@ -120,6 +120,14 @@ describe('Seller payouts (#36, integration, real Postgres)', () => {
   });
 
   afterAll(async () => {
+    if (!sellerId) {
+      await prisma.$disconnect();
+      return;
+    }
+    const batches = await prisma.payoutBatch.findMany({
+      where: { requests: { some: { sellerId } } },
+      select: { id: true },
+    });
     await prisma.payoutRequestEvent.deleteMany({
       where: { payoutRequestId: { in: requestIds } },
     });
@@ -129,7 +137,10 @@ describe('Seller payouts (#36, integration, real Postgres)', () => {
     await prisma.payout.deleteMany({ where: { sellerId } });
     await prisma.sellerPayoutRequest.deleteMany({ where: { sellerId } });
     await prisma.payoutBatch.deleteMany({
-      where: { requests: { none: {} } },
+      where: {
+        id: { in: batches.map((batch) => batch.id) },
+        requests: { none: {} },
+      },
     });
     await prisma.sellerPayoutAccount.deleteMany({ where: { sellerId } });
     await prisma.ledgerEntry.deleteMany({ where: { sellerId } });
@@ -351,5 +362,149 @@ describe('Seller payouts (#36, integration, real Postgres)', () => {
       version: approved.version + 1,
     });
     expect(recovered.attempts[0]!.status).toBe('RECONCILIATION_REQUIRED');
+  });
+
+  async function approvedRequest(): Promise<
+    Awaited<ReturnType<PayoutsService['approve']>>
+  > {
+    await prisma.sellerBalance.update({
+      where: { sellerId },
+      data: { balance: { increment: 10 } },
+    });
+    const request = await service.createRequest(
+      ownerUserId,
+      { payoutAccountId, amount: 10 },
+      randomUUID(),
+    );
+    requestIds.push(request.id);
+    return service.approve(
+      request.id,
+      { version: request.version },
+      adminUserId,
+      randomUUID(),
+    );
+  }
+
+  it('does not retry a provider exception with an unknown transfer outcome', async () => {
+    const request = await approvedRequest();
+    // An empty queue throws, modeling a transport failure with no definitive result.
+    await service.processRequest(request.id);
+    const unknown = await service.findAdminRequest(request.id);
+    expect(unknown.status).toBe('RECONCILIATION_REQUIRED');
+    await expect(
+      service.retry(
+        request.id,
+        { version: unknown.version },
+        adminUserId,
+        randomUUID(),
+      ),
+    ).rejects.toThrow();
+    expect(
+      await prisma.payout.count({ where: { payoutRequestId: request.id } }),
+    ).toBe(0);
+  });
+
+  it('rolls back accounting and requires reconciliation if saving success fails', async () => {
+    const request = await approvedRequest();
+    const before = await ledger.getBalance(sellerId);
+    providerResults.push({
+      outcome: 'SUCCEEDED',
+      providerReference: 'x'.repeat(201),
+    });
+    await service.processRequest(request.id);
+    expect((await service.findAdminRequest(request.id)).status).toBe(
+      'RECONCILIATION_REQUIRED',
+    );
+    expect(await ledger.getBalance(sellerId)).toEqual(before);
+    expect(
+      await prisma.payout.count({ where: { payoutRequestId: request.id } }),
+    ).toBe(0);
+  });
+
+  it('allows only one of two conflicting reconciliation decisions', async () => {
+    const request = await approvedRequest();
+    providerResults.push({ outcome: 'RECONCILIATION_REQUIRED' });
+    await service.processRequest(request.id);
+    const current = await service.findAdminRequest(request.id);
+    const results = await Promise.allSettled([
+      service.resolve(
+        request.id,
+        {
+          version: current.version,
+          outcome: PayoutResolutionOutcome.SUCCEEDED,
+          providerReference: 'race-paid',
+        },
+        adminUserId,
+        randomUUID(),
+      ),
+      service.resolve(
+        request.id,
+        {
+          version: current.version,
+          outcome: PayoutResolutionOutcome.FAILED,
+          providerReference: 'race-failed',
+        },
+        adminUserId,
+        randomUUID(),
+      ),
+    ]);
+    expect(
+      results.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(1);
+    const final = await service.findAdminRequest(request.id);
+    expect(final.attempts[0]!.status).toBe(final.status);
+    expect(
+      await prisma.payout.count({ where: { payoutRequestId: request.id } }),
+    ).toBe(final.status === 'SUCCEEDED' ? 1 : 0);
+  });
+
+  it('replays concurrent identical reconciliation without duplicate accounting', async () => {
+    const request = await approvedRequest();
+    providerResults.push({ outcome: 'RECONCILIATION_REQUIRED' });
+    await service.processRequest(request.id);
+    const current = await service.findAdminRequest(request.id);
+    const input = {
+      version: current.version,
+      outcome: PayoutResolutionOutcome.SUCCEEDED,
+      providerReference: 'idempotent-paid',
+    };
+    const key = randomUUID();
+    await Promise.all([
+      service.resolve(request.id, input, adminUserId, key),
+      service.resolve(request.id, input, adminUserId, key),
+    ]);
+    expect(
+      await prisma.payout.count({ where: { payoutRequestId: request.id } }),
+    ).toBe(1);
+  });
+
+  it('claims accurate batches concurrently and resumes assigned requests after a crash', async () => {
+    const requests = [await approvedRequest(), await approvedRequest()];
+    const batches = (
+      await Promise.all([service.createBatch(1), service.createBatch(1)])
+    ).filter((id): id is string => id !== null);
+    expect(batches).toHaveLength(2);
+    for (const id of batches) {
+      const batch = await service.findBatch(id);
+      expect(batch.requestCount).toBe(batch.requests.length);
+      expect(batch.totalAmount).toBe(
+        batch.requests.reduce((sum, row) => sum + row.amount, 0),
+      );
+    }
+    // A new worker sees the assigned requests even though createBatch cannot claim them again.
+    expect(await service.createBatch()).toBeNull();
+    providerResults.push(
+      { outcome: 'SUCCEEDED', providerReference: 'resume-1' },
+      { outcome: 'SUCCEEDED', providerReference: 'resume-2' },
+    );
+    await Promise.all([service.resumeBatches(), service.resumeBatches()]);
+    for (const request of requests) {
+      expect((await service.findAdminRequest(request.id)).status).toBe(
+        'SUCCEEDED',
+      );
+      expect(
+        await prisma.payout.count({ where: { payoutRequestId: request.id } }),
+      ).toBe(1);
+    }
   });
 });
