@@ -9,13 +9,12 @@ Targets:
 - iOS
 
 Stack:
-- Kotlin Multiplatform
-- Compose Multiplatform for shared UI
-- Ktor Client for HTTP
-- kotlinx.serialization for API JSON
-- Kotlin Coroutines/Flow for asynchronous state
-- Platform-native secure storage through `expect/actual`
-- Gradle Version Catalog for dependency management
+- Flutter
+- Dart
+- `http` for HTTP transport
+- `flutter_secure_storage` for refresh/session credentials
+- `go_router` for application navigation
+- Flutter `ChangeNotifier`/ValueNotifier for lightweight presentation state initially
 
 The mobile client must never duplicate transactional business logic. Pricing, stock validation, checkout totals, payment confirmation, order state transitions and marketplace rules remain authoritative in `services/commerce-api`.
 
@@ -24,42 +23,36 @@ The mobile client must never duplicate transactional business logic. Pricing, st
 ```text
 apps/
 └── mobile/
-    ├── androidApp/
-    ├── iosApp/
-    └── shared/
-        └── src/
-            ├── commonMain/
-            │   ├── core/
-            │   ├── network/
-            │   ├── auth/
-            │   ├── account/
-            │   ├── catalog/
-            │   ├── cart/
-            │   ├── checkout/
-            │   ├── orders/
-            │   ├── wishlist/
-            │   └── notifications/
-            ├── androidMain/
-            └── iosMain/
+    ├── android/
+    ├── ios/
+    ├── lib/
+    │   ├── app/
+    │   ├── core/
+    │   ├── data/
+    │   ├── domain/
+    │   ├── features/
+    │   └── presentation/
+    ├── test/
+    └── pubspec.yaml
 ```
 
 ## Layering
 
 ```text
-Compose UI
+Flutter UI
    ↓
-Presentation / ViewModel
+Presentation / controllers
    ↓
-Application use cases
+Application / domain actions
    ↓
 Repositories
    ↓
-Ktor API client / secure storage / platform services
+API client / secure storage
    ↓
 Commerce API (/api/v1)
 ```
 
-UI components must not call Ktor directly. ViewModels consume application-facing state and actions. Repositories own API access and local/session persistence concerns.
+UI widgets must not call the HTTP client directly. Feature controllers consume repositories and expose state/actions to the UI. Repositories own API access and local/session persistence concerns.
 
 ## API client
 
@@ -70,7 +63,7 @@ https://<commerce-api>/api/v1
 ```
 
 The client should have:
-- typed request/response DTOs
+- typed request/response models
 - centralized authentication headers
 - access-token refresh handling
 - consistent API error decoding
@@ -93,23 +86,11 @@ Required mobile flows:
 - password reset
 - restore session on app launch
 
-Access tokens stay in memory where possible. Refresh/session credentials use platform secure storage.
-
-Android and iOS platform implementations are exposed through an interface such as:
-
-```kotlin
-interface SecureTokenStore {
-    suspend fun readRefreshToken(): String?
-    suspend fun saveRefreshToken(token: String)
-    suspend fun clear()
-}
-```
-
-Platform implementations should use Android Keystore-backed storage and iOS Keychain rather than plain preferences/files.
+Access tokens should remain in memory where practical. Refresh/session credentials use platform secure storage through `flutter_secure_storage`.
 
 ## Navigation
 
-Use a single application navigation model with authenticated and public route groups:
+Use a single application navigation model with public and authenticated route groups:
 
 ```text
 Public
@@ -131,21 +112,21 @@ Checkout
 ├── Shipping
 ├── Review
 └── Payment
+```
 
 Seller/marketplace management is not part of the customer mobile app foundation.
-```
 
 ## Initial implementation order
 
 ### Mobile foundation
-- Create KMP Android + iOS project
-- Add Compose Multiplatform
-- Add shared networking module
-- Add serialization
-- Add secure-storage abstraction
+- Create Flutter Android + iOS project
+- Add API client
+- Add secure storage
 - Add environment configuration
 - Add navigation shell
 - Add theme/design system
+- Add error/loading/empty-state primitives
+- Add test foundation
 
 ### Customer account
 - session restoration
@@ -207,7 +188,7 @@ App restarts/backgrounding must be recoverable by querying the backend.
 
 ## Shared contracts
 
-Where practical, keep API contract types explicit and versioned. The mobile app should not import NestJS implementation code, Prisma types or backend DTO classes.
+Where practical, keep API contract types explicit and versioned. The Flutter app should not import NestJS implementation code, Prisma types or backend DTO classes.
 
 The dependency direction is:
 
