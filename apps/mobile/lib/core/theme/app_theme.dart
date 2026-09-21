@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
 import 'app_spacing.dart';
+import 'app_typography.dart';
 
 class AppTheme {
   const AppTheme._();
@@ -22,6 +23,15 @@ class AppTheme {
         outline: AppColors.outline,
       ),
       scaffoldBackgroundColor: AppColors.background,
+      textTheme: const TextTheme(
+        displaySmall: AppTypography.display,
+        headlineSmall: AppTypography.headline,
+        titleLarge: AppTypography.title,
+        bodyLarge: AppTypography.body,
+        bodyMedium: AppTypography.bodyMedium,
+        labelLarge: AppTypography.label,
+        bodySmall: AppTypography.caption,
+      ),
       canvasColor: AppColors.background,
       cupertinoOverrideTheme: const CupertinoThemeData(
         brightness: Brightness.light,
