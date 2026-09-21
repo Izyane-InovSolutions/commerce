@@ -590,6 +590,30 @@ export class ProductsService {
       where.OR = [
         { name: { contains: query.q, mode: 'insensitive' } },
         { description: { contains: query.q, mode: 'insensitive' } },
+        // Also finds a seller by their storefront name — a customer typing
+        // "Acme" should reach Acme's listings even when the product name
+        // itself doesn't contain that word. Only a seller a shopper could
+        // actually buy from counts, same eligibility as PUBLICLY_ELIGIBLE_OFFER.
+        {
+          variants: {
+            some: {
+              status: ProductStatus.PUBLISHED,
+              offers: {
+                some: {
+                  status: ProductStatus.PUBLISHED,
+                  seller: {
+                    is: {
+                      displayName: { contains: query.q, mode: 'insensitive' },
+                      status: SellerStatus.APPROVED,
+                      storefrontSlug: { not: null },
+                      ownerUser: { isActive: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
       ];
     }
 

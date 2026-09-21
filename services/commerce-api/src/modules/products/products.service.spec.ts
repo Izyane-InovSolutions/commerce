@@ -241,11 +241,16 @@ describe('ProductsService', () => {
 
       await service.findPublished({ page: 1, limit: 20, currency: 'USD' });
 
-      const call = prisma.product.findMany.mock.calls[0]![0] as {
-        include: {
-          variants: { include: { offers: { where: Record<string, unknown> } } };
-        };
-      };
+      const findManyCall = prisma.product.findMany.mock.calls[0] as [
+        {
+          include: {
+            variants: {
+              include: { offers: { where: Record<string, unknown> } };
+            };
+          };
+        },
+      ];
+      const call = findManyCall[0];
       expect(call.include.variants.include.offers.where).toEqual(
         expect.objectContaining({
           status: ProductStatus.PUBLISHED,
@@ -357,6 +362,43 @@ describe('ProductsService', () => {
           brand: { slug: 'acme' },
           OR: expect.any(Array) as unknown[],
         }) as object,
+      });
+    });
+
+    it('also matches an approved seller’s storefront name, so searching for the seller finds their listings', async () => {
+      prisma.product.findMany.mockResolvedValue([]);
+      prisma.product.count.mockResolvedValue(0);
+
+      await service.findPublished({
+        currency: 'USD',
+        page: 1,
+        limit: 20,
+        q: 'Acme',
+      });
+
+      const countCall = prisma.product.count.mock.calls[0] as [
+        { where: { OR: unknown[] } },
+      ];
+      const call = countCall[0];
+      expect(call.where.OR).toContainEqual({
+        variants: {
+          some: {
+            status: ProductStatus.PUBLISHED,
+            offers: {
+              some: {
+                status: ProductStatus.PUBLISHED,
+                seller: {
+                  is: {
+                    displayName: { contains: 'Acme', mode: 'insensitive' },
+                    status: SellerStatus.APPROVED,
+                    storefrontSlug: { not: null },
+                    ownerUser: { isActive: true },
+                  },
+                },
+              },
+            },
+          },
+        },
       });
     });
   });

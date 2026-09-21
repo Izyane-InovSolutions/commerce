@@ -82,6 +82,47 @@ export type SuccessEnvelope<T> = {
   meta: { requestId: string };
 };
 
+/** A seller's public storefront — `GET /storefronts/:slug`. */
+export type Storefront = {
+  id: string;
+  storefrontSlug: string | null;
+  displayName: string | null;
+  description: string | null;
+  averageRating: number | null;
+  ratingCount: number;
+  ratingHistogram: Record<1 | 2 | 3 | 4 | 5, number>;
+};
+
+/**
+ * One of a seller's own listings, as `GET /storefronts/:slug/offers`
+ * returns it — an offer, not a full `Product`: the same underlying product
+ * can be listed by more than one seller, each at their own price and
+ * condition, so a storefront page shows this seller's listing of it, never
+ * mixed with anyone else's.
+ */
+export type StorefrontOffer = {
+  id: string;
+  listingTitle: string | null;
+  condition: 'NEW' | 'USED' | 'REFURBISHED';
+  product: {
+    id: string;
+    name: string;
+    slug: string;
+    image: { url: string; mimeType: string } | null;
+  };
+  currentPrice: { amount: number; currency: string } | null;
+  currencies: string[];
+};
+
+/** This endpoint pages flat (`{items, total, page, limit}`), not nested
+ * under `data`/`meta` like the product list — see `ProductListPage`. */
+export type StorefrontOfferPage = {
+  items: StorefrontOffer[];
+  total: number;
+  page: number;
+  limit: number;
+};
+
 export type ProductListPage = {
   data: Product[];
   meta: { page: number; limit: number; total: number };
