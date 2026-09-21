@@ -7,9 +7,11 @@ Customer-facing mobile application for the Commerce platform.
 - Android
 - iOS
 
-## Architecture
+## Technology
 
-Kotlin Multiplatform + Compose Multiplatform is used to share application and UI code while retaining access to native platform APIs where required.
+Flutter + Dart.
+
+The mobile app is a single Flutter codebase targeting Android and iOS, with platform-specific integrations added only where required.
 
 The app is a client of the NestJS Commerce API under:
 
@@ -25,20 +27,32 @@ See [docs/mobile-architecture.md](../../docs/mobile-architecture.md) for the ful
 
 ```text
 apps/mobile/
-├── androidApp/
-├── iosApp/
-└── shared/
-    └── src/
-        ├── commonMain/
-        ├── androidMain/
-        └── iosMain/
+├── android/
+├── ios/
+├── lib/
+│   ├── core/
+│   ├── features/
+│   ├── data/
+│   ├── domain/
+│   └── presentation/
+├── test/
+└── pubspec.yaml
 ```
+
+Feature modules should keep UI, state, domain models, repositories, and API access separated. The exact structure can evolve as implementation starts.
 
 ## Local setup
 
-The initial project should be created with the Kotlin Multiplatform project wizard using Android and iOS targets.
+Install the Flutter SDK and configure Android Studio and/or Xcode for the target platforms.
 
-For iOS development, use the macOS/Xcode toolchain. Android can be run from Android Studio.
+From `apps/mobile/`:
+
+```bash
+flutter pub get
+flutter run
+```
+
+For iOS development, use the macOS/Xcode toolchain. Android can be run from Android Studio or a connected device.
 
 ## API configuration
 
@@ -57,3 +71,4 @@ Do not hard-code production credentials or secrets into the mobile project.
 - Payment confirmation is always backend-controlled.
 - Tokens and session credentials use secure platform storage.
 - Mobile must not duplicate server-side pricing, inventory, order or marketplace rules.
+- Use platform-native capabilities through Flutter plugins or platform channels only when necessary.
