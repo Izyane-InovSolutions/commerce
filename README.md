@@ -189,7 +189,7 @@ Customer capabilities include browsing, search, product details, offers, cart, c
 
 ### Customer Mobile
 
-Preferred: Kotlin Multiplatform + Compose Multiplatform. Flutter remains a viable alternative.
+Flutter + Dart.
 
 Mobile consumes the same `/api/v1` API as web.
 
@@ -709,8 +709,8 @@ PostgreSQL-backed jobs and cache
 ### Mobile
 
 ```text
-Kotlin Multiplatform
-Compose Multiplatform
+Flutter
+Dart
 ```
 
 ### Infrastructure
@@ -751,7 +751,7 @@ Seller onboarding, verification, seller storefronts, offers, seller inventory, m
 
 ### Phase 4 — Mobile Customer App
 
-Native customer app consuming the same Commerce API with authentication, discovery, cart, checkout, payments, orders, tracking, reviews, push notifications, and deep links.
+Flutter customer app consuming the same Commerce API with authentication, discovery, cart, checkout, payments, orders, tracking, reviews, push notifications, and deep links.
 
 ### Phase 5 — Advanced Commerce
 
@@ -871,7 +871,7 @@ Phase issues act as epics. Implementation issues are grouped beneath them by pha
 
 **Web:** Next.js + TypeScript + Tailwind CSS + shadcn/ui.
 
-**Mobile:** Kotlin Multiplatform + Compose Multiplatform preferred.
+**Mobile:** Flutter + Dart.
 
 **Payments:** In-house payment gateway behind a provider abstraction.
 
