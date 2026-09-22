@@ -1,0 +1,2366 @@
+// Commerce API — Prisma schema
+//
+// Conventions for every model added here (see docs/backend-development.md):
+// - Primary keys are UUIDs: `id String @id @default(uuid()) @db.Uuid`
+// - Timestamps are UTC: `createdAt DateTime @default(now())`,
+//   `updatedAt DateTime @updatedAt`
+// - Monetary amounts are stored as integer minor units (e.g. cents) alongside
+//   an explicit currency column (e.g. `amount Int`, `currency String`) —
+//   never as floating point.
+// - Model names are singular PascalCase; fields are camelCase.
+// - Tables and columns are mapped to plural snake_case via `@@map`/`@map`.
+// - Add optimistic concurrency (`version Int @default(0)`) and soft-delete
+//   (`deletedAt DateTime?`) only where the business actually needs them.
+//
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  SELLER
+  STAFF
+  ADMIN
+}
+
+enum SellerStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum OfferCondition {
+  NEW
+  USED
+  REFURBISHED
+}
+
+enum OfferStockSource {
+  PLATFORM
+  SELLER
+}
+
+enum OfferFulfillmentMode {
+  PLATFORM
+  SELLER
+}
+
+model Seller {
+  id                 String                @id @default(uuid()) @db.Uuid
+  ownerUserId        String                @unique @map("owner_user_id") @db.Uuid
+  ownerUser          User                  @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  businessName       String                @map("business_name")
+  registrationNumber String                @map("registration_number")
+  country            String                @db.VarChar(2)
+  businessAddress    String                @map("business_address")
+  contactEmail       String                @map("contact_email")
+  status             SellerStatus          @default(PENDING)
+  reviewReason       String?               @map("review_reason")
+  reviewedBy         String?               @map("reviewed_by") @db.Uuid
+  reviewedAt         DateTime?             @map("reviewed_at")
+  version            Int                   @default(0)
+  documents          SellerDocument[]
+  storefrontSlug     String?               @unique @map("storefront_slug") @db.VarChar(100)
+  displayName        String?               @map("display_name") @db.VarChar(120)
+  description        String?               @db.VarChar(2000)
+  offers             Offer[]
+  orders             SellerOrder[]
+  ledgerEntries      LedgerEntry[]
+  balance            SellerBalance?
+  payouts            Payout[]
+  payoutAccounts     SellerPayoutAccount[]
+  payoutRequests     SellerPayoutRequest[]
+  ratings            SellerRating[]
+  ratingSummary      SellerRatingSummary?
+  createdAt          DateTime              @default(now()) @map("created_at")
+  updatedAt          DateTime              @updatedAt @map("updated_at")
+  ProductReview      ProductReview[]
+
+  @@index([status, createdAt])
+  @@map("sellers")
+}
+
+model SellerDocument {
+  sellerId     String     @map("seller_id") @db.Uuid
+  seller       Seller     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  mediaAssetId String     @map("media_asset_id") @db.Uuid
+  mediaAsset   MediaAsset @relation(fields: [mediaAssetId], references: [id], onDelete: Restrict)
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@id([sellerId, mediaAssetId])
+  @@map("seller_documents")
+}
+
+enum BackgroundJobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  DEAD_LETTER
+}
+
+enum OutboxEventStatus {
+  PENDING
+  PUBLISHED
+  DEAD_LETTER
+}
+
+enum MediaStatus {
+  PENDING_UPLOAD
+  AVAILABLE
+  DELETED
+}
+
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model User {
+  id                     String                @id @default(uuid()) @db.Uuid
+  email                  String                @unique
+  passwordHash           String                @map("password_hash")
+  firstName              String?               @map("first_name")
+  lastName               String?               @map("last_name")
+  phone                  String?
+  role                   Role                  @default(CUSTOMER)
+  isActive               Boolean               @default(true) @map("is_active")
+  createdAt              DateTime              @default(now()) @map("created_at")
+  updatedAt              DateTime              @updatedAt @map("updated_at")
+  sessions               Session[]
+  passwordResetTokens    PasswordResetToken[]
+  mediaAssets            MediaAsset[]
+  addresses              Address[]
+  cart                   Cart?
+  wishlistItems          WishlistItem[]
+  orders                 Order[]
+  seller                 Seller?
+  returnRequests         ReturnRequest[]       @relation("ReturnRequestCustomer")
+  assignedReturns        ReturnRequest[]       @relation("ReturnAssignedStaff")
+  postedReturnReceipts   ReturnReceipt[]
+  returnInspections      ReturnInspection[]
+  returnEvents           ReturnEvent[]
+  recordedPayouts        Payout[]
+  verifiedPayoutAccounts SellerPayoutAccount[] @relation("PayoutAccountVerifier")
+  reviewedPayoutRequests SellerPayoutRequest[] @relation("PayoutRequestReviewer")
+  resolvedPayoutRequests SellerPayoutRequest[] @relation("PayoutRequestResolver")
+  productReviews         ProductReview[]
+  sellerRatings          SellerRating[]
+  reviewReports          ReviewReport[]
+
+  @@map("users")
+}
+
+// Only one address per user should have isDefault: true — enforced in
+// AddressesService (set new default -> unset the previous one in the same
+// transaction), not a DB constraint.
+model Address {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label         String?
+  recipientName String   @map("recipient_name")
+  phone         String?
+  line1         String
+  line2         String?
+  city          String
+  region        String?
+  postalCode    String   @map("postal_code")
+  country       String   @db.VarChar(2)
+  isDefault     Boolean  @default(false) @map("is_default")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+// A row is a login session backed by a refresh token. Refresh rotates it
+// (the old row is revoked, a new row is created); a revoked token being
+// presented again indicates theft and revokes every session for the user.
+model Session {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String    @unique @map("refresh_token_hash")
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+// No foreign key on actorUserId: audit history must survive the actor
+// (or their account) being deleted later.
+model AuditEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  action      String
+  targetType  String?  @map("target_type")
+  targetId    String?  @map("target_id")
+  metadata    Json?
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([actorUserId])
+  @@index([action])
+  @@map("audit_events")
+}
+
+model CacheEntry {
+  key       String   @id @db.VarChar(255)
+  value     Json
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([expiresAt])
+  @@map("cache_entries")
+}
+
+model BackgroundJob {
+  id          String              @id @default(uuid()) @db.Uuid
+  type        String              @db.VarChar(100)
+  payload     Json
+  status      BackgroundJobStatus @default(PENDING)
+  attempts    Int                 @default(0)
+  maxAttempts Int                 @default(5) @map("max_attempts")
+  runAt       DateTime            @default(now()) @map("run_at")
+  lockedAt    DateTime?           @map("locked_at")
+  lockToken   String?             @unique @map("lock_token") @db.Uuid
+  lastError   String?             @map("last_error") @db.Text
+  completedAt DateTime?           @map("completed_at")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+
+  @@index([status, runAt])
+  @@index([status, lockedAt])
+  @@map("background_jobs")
+}
+
+model OutboxEvent {
+  id            String            @id @default(uuid()) @db.Uuid
+  topic         String            @db.VarChar(100)
+  aggregateType String            @map("aggregate_type") @db.VarChar(100)
+  aggregateId   String            @map("aggregate_id") @db.VarChar(100)
+  payload       Json
+  status        OutboxEventStatus @default(PENDING)
+  attempts      Int               @default(0)
+  maxAttempts   Int               @default(10) @map("max_attempts")
+  availableAt   DateTime          @default(now()) @map("available_at")
+  publishedAt   DateTime?         @map("published_at")
+  lastError     String?           @map("last_error") @db.Text
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+
+  @@index([status, availableAt])
+  @@index([aggregateType, aggregateId])
+  @@map("outbox_events")
+}
+
+model MediaAsset {
+  id                   String                @id @default(uuid()) @db.Uuid
+  ownerUserId          String                @map("owner_user_id") @db.Uuid
+  ownerUser            User                  @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  storageKey           String                @unique @map("storage_key")
+  originalFileName     String                @map("original_file_name")
+  mimeType             String                @map("mime_type") @db.VarChar(100)
+  byteSize             BigInt                @map("byte_size")
+  status               MediaStatus           @default(PENDING_UPLOAD)
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  deletedAt            DateTime?             @map("deleted_at")
+  productMedia         ProductMedia[]
+  sellerDocuments      SellerDocument[]
+  procurementDocuments ProcurementDocument[]
+  verificationLocked   Boolean               @default(false) @map("verification_locked")
+
+  @@index([ownerUserId, status])
+  @@map("media_assets")
+}
+
+model Category {
+  id          String     @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String     @unique
+  description String?
+  parentId    String?    @map("parent_id") @db.Uuid
+  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Category[] @relation("CategoryHierarchy")
+  position    Int        @default(0)
+  products    Product[]
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@index([parentId])
+  @@map("categories")
+}
+
+model Brand {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String    @unique
+  description String?
+  products    Product[]
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("brands")
+}
+
+model Attribute {
+  id        String           @id @default(uuid()) @db.Uuid
+  name      String
+  code      String           @unique
+  values    AttributeValue[]
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  @@map("attributes")
+}
+
+model AttributeValue {
+  id          String                         @id @default(uuid()) @db.Uuid
+  attributeId String                         @map("attribute_id") @db.Uuid
+  attribute   Attribute                      @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  value       String
+  variants    ProductVariantAttributeValue[]
+  createdAt   DateTime                       @default(now()) @map("created_at")
+
+  @@unique([attributeId, value])
+  @@map("attribute_values")
+}
+
+model Product {
+  id               String                @id @default(uuid()) @db.Uuid
+  name             String
+  slug             String                @unique
+  description      String?
+  brandId          String?               @map("brand_id") @db.Uuid
+  brand            Brand?                @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  categoryId       String?               @map("category_id") @db.Uuid
+  category         Category?             @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  status           ProductStatus         @default(DRAFT)
+  // Return policy: isReturnable gates whether the item can be returned at
+  // all; returnWindowDays overrides the platform default (30 days, applied
+  // in application code when null) for this product specifically.
+  isReturnable     Boolean               @default(true) @map("is_returnable")
+  returnWindowDays Int?                  @map("return_window_days")
+  variants         ProductVariant[]
+  media            ProductMedia[]
+  reviews          ProductReview[]
+  ratingSummary    ProductRatingSummary?
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
+
+  @@index([brandId])
+  @@index([categoryId])
+  @@index([status])
+  @@map("products")
+}
+
+model ProductVariant {
+  id                 String                         @id @default(uuid()) @db.Uuid
+  productId          String                         @map("product_id") @db.Uuid
+  product            Product                        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  skuCode            String                         @unique @map("sku_code")
+  name               String?
+  status             ProductStatus                  @default(DRAFT)
+  attributeValues    ProductVariantAttributeValue[]
+  offers             Offer[]
+  inventoryRecords   InventoryRecord[]
+  supplierProducts   SupplierProduct[]
+  purchaseOrderLines PurchaseOrderLine[]
+  fulfillmentLines   FulfillmentLine[]
+  createdAt          DateTime                       @default(now()) @map("created_at")
+  updatedAt          DateTime                       @updatedAt @map("updated_at")
+  ProductReview      ProductReview[]
+
+  @@index([productId])
+  @@map("product_variants")
+}
+
+model ProductVariantAttributeValue {
+  variantId        String         @map("variant_id") @db.Uuid
+  variant          ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  attributeValueId String         @map("attribute_value_id") @db.Uuid
+  attributeValue   AttributeValue @relation(fields: [attributeValueId], references: [id], onDelete: Cascade)
+
+  @@id([variantId, attributeValueId])
+  @@map("product_variant_attribute_values")
+}
+
+model ProductMedia {
+  id           String     @id @default(uuid()) @db.Uuid
+  productId    String     @map("product_id") @db.Uuid
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  mediaAssetId String     @map("media_asset_id") @db.Uuid
+  mediaAsset   MediaAsset @relation(fields: [mediaAssetId], references: [id], onDelete: Cascade)
+  position     Int        @default(0)
+  isPrimary    Boolean    @default(false) @map("is_primary")
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@unique([productId, mediaAssetId])
+  @@map("product_media")
+}
+
+// Null sellerId means first-party. Seller offers reference an approved merchant.
+model Offer {
+  id               String               @id @default(uuid()) @db.Uuid
+  variantId        String               @map("variant_id") @db.Uuid
+  variant          ProductVariant       @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  sellerId         String?              @map("seller_id") @db.Uuid
+  seller           Seller?              @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  sellerSku        String?              @map("seller_sku") @db.VarChar(100)
+  listingTitle     String?              @map("listing_title") @db.VarChar(200)
+  condition        OfferCondition       @default(NEW)
+  stockSource      OfferStockSource     @default(PLATFORM) @map("stock_source")
+  fulfillmentMode  OfferFulfillmentMode @default(PLATFORM) @map("fulfillment_mode")
+  version          Int                  @default(0)
+  status           ProductStatus        @default(DRAFT)
+  // Flat, informational cost shown to shoppers on the catalog — unrelated to
+  // the dynamic per-destination quotes ShippingService computes at checkout.
+  // Null means no shipping cost has been set for this offer yet.
+  shippingAmount   Int?                 @map("shipping_amount")
+  shippingCurrency String?              @map("shipping_currency") @db.VarChar(3)
+  prices           Price[]
+  cartItems        CartItem[]
+  wishlistItems    WishlistItem[]
+  orderItems       OrderItem[]
+  inventoryRecord  InventoryRecord?
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+  ProductReview    ProductReview[]
+
+  @@unique([sellerId, sellerSku])
+  @@index([variantId])
+  @@index([sellerId])
+  @@map("offers")
+}
+
+// The current price for an offer is whichever row has
+// startsAt <= now < (endsAt ?? infinity); most recent startsAt wins on overlap.
+model Price {
+  id        String    @id @default(uuid()) @db.Uuid
+  offerId   String    @map("offer_id") @db.Uuid
+  offer     Offer     @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  amount    Int
+  currency  String    @db.VarChar(3)
+  startsAt  DateTime  @default(now()) @map("starts_at")
+  endsAt    DateTime? @map("ends_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([offerId, startsAt])
+  @@map("prices")
+}
+
+enum InventoryMovementType {
+  RECEIPT
+  ADJUSTMENT
+  RESERVATION
+  RELEASE
+  COMMITMENT
+  RETURN
+}
+
+enum ReservationStatus {
+  ACTIVE
+  COMMITTED
+  RELEASED
+  EXPIRED
+}
+
+model Warehouse {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  name                  String
+  code                  String                 @unique
+  isActive              Boolean                @default(true) @map("is_active")
+  records               InventoryRecord[]
+  purchaseOrders        PurchaseOrder[]
+  goodsReceipts         GoodsReceipt[]
+  fulfillmentOrders     FulfillmentOrder[]
+  shipments             Shipment[]
+  returnRequests        ReturnRequest[]
+  returnReceipts        ReturnReceipt[]
+  returnInspectionLines ReturnInspectionLine[]
+  createdAt             DateTime               @default(now()) @map("created_at")
+  updatedAt             DateTime               @updatedAt @map("updated_at")
+
+  @@map("warehouses")
+}
+
+// `available` is never stored — always computed as onHand - reserved.
+model InventoryRecord {
+  id           String              @id @default(uuid()) @db.Uuid
+  warehouseId  String?             @map("warehouse_id") @db.Uuid
+  warehouse    Warehouse?          @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  offerId      String?             @unique @map("offer_id") @db.Uuid
+  offer        Offer?              @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  variantId    String              @map("variant_id") @db.Uuid
+  variant      ProductVariant      @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  onHand       Int                 @default(0) @map("on_hand")
+  reserved     Int                 @default(0)
+  // Low stock means available (onHand - reserved) <= reorderPoint. 0 means
+  // no replenishment threshold has been configured for this record.
+  reorderPoint Int                 @default(0) @map("reorder_point")
+  version      Int                 @default(0)
+  movements    InventoryMovement[]
+  reservations Reservation[]
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+
+  @@unique([warehouseId, variantId])
+  @@index([offerId, createdAt])
+  @@map("inventory_records")
+}
+
+// One row per state change — an audit trail distinct from the live counters
+// on InventoryRecord. referenceId has no FK (same nullable-reference pattern
+// as AuditEvent.actorUserId): Cart/Checkout will populate it in Phase 1.4/1.5.
+model InventoryMovement {
+  id                String                @id @default(uuid()) @db.Uuid
+  inventoryRecordId String                @map("inventory_record_id") @db.Uuid
+  inventoryRecord   InventoryRecord       @relation(fields: [inventoryRecordId], references: [id], onDelete: Cascade)
+  type              InventoryMovementType
+  quantity          Int
+  referenceType     String?               @map("reference_type")
+  referenceId       String?               @map("reference_id")
+  note              String?
+  createdAt         DateTime              @default(now()) @map("created_at")
+
+  @@index([inventoryRecordId])
+  @@map("inventory_movements")
+}
+
+// holderType/holderId are nullable now — Cart/Checkout (Phase 1.4/1.5)
+// populate them; same forward-compatible-nullable pattern as Offer.sellerId.
+model Reservation {
+  id                String            @id @default(uuid()) @db.Uuid
+  inventoryRecordId String            @map("inventory_record_id") @db.Uuid
+  inventoryRecord   InventoryRecord   @relation(fields: [inventoryRecordId], references: [id], onDelete: Cascade)
+  quantity          Int
+  status            ReservationStatus @default(ACTIVE)
+  holderType        String?           @map("holder_type")
+  holderId          String?           @map("holder_id")
+  expiresAt         DateTime          @map("expires_at")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  @@index([inventoryRecordId, status])
+  @@index([status, expiresAt])
+  @@map("reservations")
+}
+
+enum CartStatus {
+  ACTIVE
+  MERGED
+}
+
+// guestToken is a plain opaque random string, not a security credential like
+// a session token — comparable in sensitivity to the cart-id cookie many
+// storefronts use. Exactly one of userId/guestToken is set.
+model Cart {
+  id         String     @id @default(uuid()) @db.Uuid
+  userId     String?    @unique @map("user_id") @db.Uuid
+  user       User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guestToken String?    @unique @map("guest_token")
+  status     CartStatus @default(ACTIVE)
+  items      CartItem[]
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+
+  @@map("carts")
+}
+
+model CartItem {
+  id        String   @id @default(uuid()) @db.Uuid
+  cartId    String   @map("cart_id") @db.Uuid
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  offerId   String   @map("offer_id") @db.Uuid
+  offer     Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  quantity  Int
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([cartId, offerId])
+  @@map("cart_items")
+}
+
+model WishlistItem {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  offerId   String   @map("offer_id") @db.Uuid
+  offer     Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, offerId])
+  @@map("wishlist_items")
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  CANCELLED
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  REQUIRES_ACTION
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+enum RefundStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum LedgerEntryType {
+  SALE
+  REFUND
+  PAYOUT
+}
+
+enum PayoutAccountMethod {
+  BANK
+  MOBILE_MONEY
+}
+
+enum PayoutAccountStatus {
+  PENDING_VERIFICATION
+  VERIFIED
+  REJECTED
+  DISABLED
+}
+
+enum SellerPayoutStatus {
+  REQUESTED
+  APPROVED
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  RECONCILIATION_REQUIRED
+}
+
+enum PayoutAttemptStatus {
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  RECONCILIATION_REQUIRED
+}
+
+enum PayoutBatchStatus {
+  OPEN
+  PROCESSING
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+}
+
+// Shipping is snapshotted through ShippingGroup rows; tax modeling remains a
+// later concern. shippingAddress is a point-in-time AddressSnapshot JSON blob (see
+// src/common/addresses/address-snapshot.ts), not a live FK to Address, so the
+// order survives the customer later editing or deleting that address.
+model Order {
+  id                String             @id @default(uuid()) @db.Uuid
+  userId            String             @map("user_id") @db.Uuid
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status            OrderStatus        @default(PENDING_PAYMENT)
+  currency          String             @db.VarChar(3)
+  subtotal          Int
+  shippingAmount    Int                @default(0) @map("shipping_amount")
+  total             Int
+  shippingAddress   Json               @map("shipping_address")
+  items             OrderItem[]
+  sellerOrders      SellerOrder[]
+  shippingGroups    ShippingGroup[]
+  payment           Payment?
+  fulfillmentOrders FulfillmentOrder[]
+  shipments         Shipment[]
+  returnRequests    ReturnRequest[]
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+
+  // The client-minted key that makes a retried checkout return the original
+  // order instead of creating a second one. Unique per (userId, key) rather
+  // than globally, so two shoppers minting the same UUID never collide.
+  // Nullable because a caller that sends no key gets no dedup, and Postgres
+  // treats every NULL in a unique index as distinct from every other NULL.
+  idempotencyKey String? @map("idempotency_key") @db.VarChar(64)
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId])
+  @@map("orders")
+}
+
+// One row per seller group within an Order - sellerId: null is the
+// platform/first-party group, not "no seller". Every Order gets at least one
+// SellerOrder, even a purely first-party one, so consumers can always
+// iterate order.sellerOrders uniformly instead of branching on whether
+// splitting happened. Status moves in lockstep with the parent Order for now
+// (see OrdersService) - independent per-seller fulfillment/refund status is
+// a later ticket, and this shape is what makes that possible without another
+// migration.
+model SellerOrder {
+  id                String             @id @default(uuid()) @db.Uuid
+  orderId           String             @map("order_id") @db.Uuid
+  order             Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sellerId          String?            @map("seller_id") @db.Uuid
+  seller            Seller?            @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  status            OrderStatus        @default(PENDING_PAYMENT)
+  subtotal          Int
+  shippingAmount    Int                @default(0) @map("shipping_amount")
+  total             Int
+  refundedAmount    Int                @default(0) @map("refunded_amount")
+  currency          String             @db.VarChar(3)
+  items             OrderItem[]
+  shippingGroups    ShippingGroup[]
+  refunds           Refund[]
+  refundCases       RefundCase[]
+  fulfillmentOrders FulfillmentOrder[]
+  shipments         Shipment[]
+  rating            SellerRating?
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+
+  @@index([sellerId, status])
+  @@map("seller_orders")
+}
+
+// A durable quote snapshot for the items that travel together. Seller orders
+// remain the financial/ownership split; shipping groups split those items
+// again when one seller uses more than one fulfillment mode.
+//
+// providerCode/carrierCode/methodCode/methodName (#29) identify the carrier
+// integration a shipment created against this group must book through;
+// existing rows are backfilled to the zone-rate provider's own manual
+// carrier and their pre-existing rateCode as both method code and name.
+model ShippingGroup {
+  id                       String               @id @default(uuid()) @db.Uuid
+  orderId                  String               @map("order_id") @db.Uuid
+  order                    Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sellerOrderId            String               @map("seller_order_id") @db.Uuid
+  sellerOrder              SellerOrder          @relation(fields: [sellerOrderId], references: [id], onDelete: Cascade)
+  fulfillmentMode          OfferFulfillmentMode @map("fulfillment_mode")
+  serviceLevel             String               @map("service_level") @db.VarChar(50)
+  rateCode                 String               @map("rate_code") @db.VarChar(100)
+  providerCode             String               @default("ZONE") @map("provider_code") @db.VarChar(50)
+  carrierCode              String               @default("MANUAL") @map("carrier_code") @db.VarChar(50)
+  methodCode               String               @map("method_code") @db.VarChar(100)
+  methodName               String               @map("method_name") @db.VarChar(150)
+  subtotal                 Int
+  shippingAmount           Int                  @map("shipping_amount")
+  total                    Int
+  currency                 String               @db.VarChar(3)
+  // Rate-quote provenance, mirroring PaymentSettlement.quoteId/expiresAt -
+  // ties this group back to the specific rate the provider quoted, for
+  // reconciliation if the rate policy changes later.
+  quoteId                  String               @map("quote_id")
+  quoteExpiresAt           DateTime             @map("quote_expires_at")
+  estimatedDeliveryMinDays Int                  @map("estimated_delivery_min_days")
+  estimatedDeliveryMaxDays Int                  @map("estimated_delivery_max_days")
+  items                    OrderItem[]
+  fulfillmentOrders        FulfillmentOrder[]
+  shipments                Shipment[]
+  createdAt                DateTime             @default(now()) @map("created_at")
+
+  @@unique([sellerOrderId, fulfillmentMode])
+  @@index([orderId])
+  @@map("shipping_groups")
+}
+
+// reservationId has no FK - same loose-reference convention as
+// Reservation.holderId/InventoryMovement.referenceId. It's set once
+// InventoryService.reserve() succeeds for this line, so OrdersService can
+// later commit()/release() it by id without a new lookup on InventoryService.
+// sellerOrderId is nullable at the schema level only (pre-existing dev-DB
+// rows predate it) - application code always sets it going forward.
+// orderId is kept as a direct FK too, deliberately denormalized alongside
+// sellerOrderId, so every existing order.items query keeps working unchanged.
+model OrderItem {
+  id              String           @id @default(uuid()) @db.Uuid
+  orderId         String           @map("order_id") @db.Uuid
+  order           Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sellerOrderId   String?          @map("seller_order_id") @db.Uuid
+  sellerOrder     SellerOrder?     @relation(fields: [sellerOrderId], references: [id], onDelete: Cascade)
+  shippingGroupId String?          @map("shipping_group_id") @db.Uuid
+  shippingGroup   ShippingGroup?   @relation(fields: [shippingGroupId], references: [id], onDelete: SetNull)
+  offerId         String           @map("offer_id") @db.Uuid
+  offer           Offer            @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  quantity        Int
+  unitAmount      Int              @map("unit_amount")
+  currency        String           @db.VarChar(3)
+  lineTotal       Int              @map("line_total")
+  reservationId   String?          @map("reservation_id")
+  fulfillmentLine FulfillmentLine?
+  shipmentLines   ShipmentLine[]
+  returnItems     ReturnItem[]
+  refundCaseItems RefundCaseItem[]
+  review          ProductReview?
+  createdAt       DateTime         @default(now()) @map("created_at")
+
+  @@index([orderId])
+  @@index([sellerOrderId])
+  @@index([shippingGroupId])
+  @@map("order_items")
+}
+
+// One payment per order for now - no retry-with-new-payment-row modeling.
+model Payment {
+  id                String             @id @default(uuid()) @db.Uuid
+  orderId           String             @unique @map("order_id") @db.Uuid
+  order             Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider          String
+  providerReference String?            @unique @map("provider_reference")
+  status            PaymentStatus      @default(PENDING)
+  amount            Int
+  refundedAmount    Int                @default(0) @map("refunded_amount")
+  currency          String             @db.VarChar(3)
+  idempotencyKey    String             @unique @map("idempotency_key")
+  failureReason     String?            @map("failure_reason")
+  events            PaymentEvent[]
+  refunds           Refund[]
+  settlement        PaymentSettlement?
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+
+  @@map("payments")
+}
+
+// Private payment quote; catalog prices, orders, refunds and seller balances
+// remain in ZMW. Persisted before the gateway charge for stable reconciliation.
+model PaymentSettlement {
+  paymentId String   @id @map("payment_id") @db.Uuid
+  payment   Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  amount    Int
+  currency  String   @db.VarChar(3)
+  rate      String
+  quoteId   String   @map("quote_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("payment_settlements")
+}
+
+// Every refund is scoped to exactly one SellerOrder, even a "refund the
+// whole order" action creates one Refund row per seller group - the gateway
+// refunds against the parent Payment (it has no seller-order concept), but
+// locally we need to know whose commission/balance to reverse.
+// refundCaseId is nullable at the schema level only — pre-existing rows are
+// backfilled into legacy ADMIN RefundCases by migration, application code
+// always sets it going forward (same convention as OrderItem.sellerOrderId).
+model Refund {
+  id                String       @id @default(uuid()) @db.Uuid
+  paymentId         String       @map("payment_id") @db.Uuid
+  payment           Payment      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  sellerOrderId     String       @map("seller_order_id") @db.Uuid
+  sellerOrder       SellerOrder  @relation(fields: [sellerOrderId], references: [id], onDelete: Cascade)
+  refundCaseId      String?      @map("refund_case_id") @db.Uuid
+  refundCase        RefundCase?  @relation(fields: [refundCaseId], references: [id], onDelete: SetNull)
+  amount            Int
+  currency          String       @db.VarChar(3)
+  reason            String
+  status            RefundStatus @default(PENDING)
+  providerReference String?      @unique @map("provider_reference")
+  idempotencyKey    String       @unique @map("idempotency_key")
+  failureReason     String?      @map("failure_reason")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  @@index([paymentId])
+  @@index([sellerOrderId])
+  @@index([refundCaseId])
+  @@map("refunds")
+}
+
+// Append-only - never updated or deleted. Only marketplace sellers (a
+// SellerOrder with a non-null sellerId) get entries; the platform's own
+// first-party SellerOrders never do, since that revenue is already the
+// platform's, not commission-split. referenceId has no FK - same
+// loose-reference convention as InventoryMovement.referenceId.
+model LedgerEntry {
+  id               String          @id @default(uuid()) @db.Uuid
+  sellerId         String          @map("seller_id") @db.Uuid
+  seller           Seller          @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  type             LedgerEntryType
+  referenceType    String          @map("reference_type")
+  referenceId      String          @map("reference_id")
+  grossAmount      Int             @map("gross_amount")
+  commissionAmount Int             @map("commission_amount")
+  netAmount        Int             @map("net_amount")
+  currency         String          @db.VarChar(3)
+  description      String?
+  // SALE proceeds can be held for a configured reserve period. releasedAt
+  // marks the one-time transfer from held to available funds.
+  availableAt      DateTime        @default(now()) @map("available_at")
+  releasedAt       DateTime?       @map("released_at")
+  createdAt        DateTime        @default(now()) @map("created_at")
+
+  // Backstops the application-level replay check in LedgerService.appendEntry
+  // with a real constraint, so one sale or refund can never be booked twice
+  // even under a race the row lock somehow misses.
+  @@unique([sellerId, type, referenceType, referenceId])
+  @@index([sellerId, createdAt])
+  @@map("ledger_entries")
+}
+
+// One row per seller - a materialized running total, always updated in the
+// same transaction as the LedgerEntry that changes it, so it's a derived
+// cache of the ledger rather than an independent source of truth.
+model SellerBalance {
+  sellerId             String   @id @map("seller_id") @db.Uuid
+  seller               Seller   @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  balance              Int      @default(0)
+  heldBalance          Int      @default(0) @map("held_balance")
+  pendingPayoutBalance Int      @default(0) @map("pending_payout_balance")
+  paidBalance          Int      @default(0) @map("paid_balance")
+  currency             String   @db.VarChar(3)
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("seller_balances")
+}
+
+// Sensitive destination data is never selected by seller/public projections.
+// A dedicated audited admin detail endpoint can retrieve it for verification.
+model SellerPayoutAccount {
+  id                String                @id @default(uuid()) @db.Uuid
+  sellerId          String                @map("seller_id") @db.Uuid
+  seller            Seller                @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  method            PayoutAccountMethod
+  provider          String                @db.VarChar(100)
+  accountHolderName String                @map("account_holder_name") @db.VarChar(200)
+  destination       Json
+  maskedReference   String                @map("masked_reference") @db.VarChar(100)
+  status            PayoutAccountStatus   @default(PENDING_VERIFICATION)
+  verificationNote  String?               @map("verification_note") @db.VarChar(500)
+  verifiedByUserId  String?               @map("verified_by_user_id") @db.Uuid
+  verifiedBy        User?                 @relation("PayoutAccountVerifier", fields: [verifiedByUserId], references: [id], onDelete: Restrict)
+  verifiedAt        DateTime?             @map("verified_at")
+  version           Int                   @default(0)
+  requests          SellerPayoutRequest[]
+  createdAt         DateTime              @default(now()) @map("created_at")
+  updatedAt         DateTime              @updatedAt @map("updated_at")
+
+  @@index([sellerId, status])
+  @@map("seller_payout_accounts")
+}
+
+model PayoutBatch {
+  id           String                @id @default(uuid()) @db.Uuid
+  status       PayoutBatchStatus     @default(OPEN)
+  requestCount Int                   @default(0) @map("request_count")
+  totalAmount  Int                   @default(0) @map("total_amount")
+  currency     String                @default("ZMW") @db.VarChar(3)
+  startedAt    DateTime?             @map("started_at")
+  completedAt  DateTime?             @map("completed_at")
+  requests     SellerPayoutRequest[]
+  createdAt    DateTime              @default(now()) @map("created_at")
+  updatedAt    DateTime              @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@map("payout_batches")
+}
+
+model SellerPayoutRequest {
+  id                  String               @id @default(uuid()) @db.Uuid
+  sellerId            String               @map("seller_id") @db.Uuid
+  seller              Seller               @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  payoutAccountId     String               @map("payout_account_id") @db.Uuid
+  payoutAccount       SellerPayoutAccount  @relation(fields: [payoutAccountId], references: [id], onDelete: Restrict)
+  amount              Int
+  currency            String               @db.VarChar(3)
+  status              SellerPayoutStatus   @default(REQUESTED)
+  destinationSnapshot Json                 @map("destination_snapshot")
+  idempotencyKey      String               @unique @map("idempotency_key") @db.Uuid
+  requestHash         String               @map("request_hash") @db.VarChar(64)
+  failureReason       String?              @map("failure_reason") @db.VarChar(1000)
+  cancellationReason  String?              @map("cancellation_reason") @db.VarChar(500)
+  reviewedByUserId    String?              @map("reviewed_by_user_id") @db.Uuid
+  reviewedBy          User?                @relation("PayoutRequestReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+  reviewedAt          DateTime?            @map("reviewed_at")
+  resolvedByUserId    String?              @map("resolved_by_user_id") @db.Uuid
+  resolvedBy          User?                @relation("PayoutRequestResolver", fields: [resolvedByUserId], references: [id], onDelete: Restrict)
+  resolvedAt          DateTime?            @map("resolved_at")
+  batchId             String?              @map("batch_id") @db.Uuid
+  batch               PayoutBatch?         @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  version             Int                  @default(0)
+  attempts            PayoutAttempt[]
+  events              PayoutRequestEvent[]
+  payout              Payout?
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+
+  @@index([sellerId, createdAt])
+  @@index([status, createdAt])
+  @@index([batchId])
+  @@map("seller_payout_requests")
+}
+
+model PayoutAttempt {
+  id                String              @id @default(uuid()) @db.Uuid
+  payoutRequestId   String              @map("payout_request_id") @db.Uuid
+  payoutRequest     SellerPayoutRequest @relation(fields: [payoutRequestId], references: [id], onDelete: Restrict)
+  attemptNumber     Int                 @map("attempt_number")
+  provider          String              @db.VarChar(100)
+  status            PayoutAttemptStatus @default(PROCESSING)
+  providerReference String?             @map("provider_reference") @db.VarChar(200)
+  requestPayload    Json?               @map("request_payload")
+  responsePayload   Json?               @map("response_payload")
+  failureReason     String?             @map("failure_reason") @db.VarChar(1000)
+  startedAt         DateTime            @default(now()) @map("started_at")
+  completedAt       DateTime?           @map("completed_at")
+
+  @@unique([payoutRequestId, attemptNumber])
+  @@index([provider, providerReference])
+  @@map("payout_attempts")
+}
+
+model PayoutRequestEvent {
+  id              String              @id @default(uuid()) @db.Uuid
+  payoutRequestId String              @map("payout_request_id") @db.Uuid
+  payoutRequest   SellerPayoutRequest @relation(fields: [payoutRequestId], references: [id], onDelete: Restrict)
+  action          String              @db.VarChar(100)
+  fromStatus      SellerPayoutStatus? @map("from_status")
+  toStatus        SellerPayoutStatus  @map("to_status")
+  actorUserId     String?             @map("actor_user_id") @db.Uuid
+  idempotencyKey  String?             @unique @map("idempotency_key") @db.Uuid
+  requestHash     String?             @map("request_hash") @db.VarChar(64)
+  metadata        Json?
+  createdAt       DateTime            @default(now()) @map("created_at")
+
+  @@index([payoutRequestId, createdAt])
+  @@map("payout_request_events")
+}
+
+// Admin-recorded bookkeeping only - "this seller was paid $X externally" -
+// not an integration with a real payout rail (that's a later phase per the
+// README's own phasing).
+model Payout {
+  id                String               @id @default(uuid()) @db.Uuid
+  sellerId          String               @map("seller_id") @db.Uuid
+  seller            Seller               @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  amount            Int
+  currency          String               @db.VarChar(3)
+  reference         String?
+  note              String?
+  // Nullable only for pre-#36 rows; every new payout sets both going forward.
+  // idempotencyKey is a client-minted UUID so a retried "record payout"
+  // request replays instead of double-debiting; recordedByUserId is Restrict
+  // (not SetNull) so a payout's attribution can never silently disappear.
+  idempotencyKey    String?              @unique @map("idempotency_key") @db.Uuid
+  recordedByUserId  String?              @map("recorded_by_user_id") @db.Uuid
+  recordedBy        User?                @relation(fields: [recordedByUserId], references: [id], onDelete: Restrict)
+  payoutRequestId   String?              @unique @map("payout_request_id") @db.Uuid
+  payoutRequest     SellerPayoutRequest? @relation(fields: [payoutRequestId], references: [id], onDelete: Restrict)
+  providerReference String?              @map("provider_reference") @db.VarChar(200)
+  createdAt         DateTime             @default(now()) @map("created_at")
+
+  @@index([sellerId, createdAt])
+  @@map("payouts")
+}
+
+// providerEventId dedupes webhook deliveries - gateways retry, and this makes
+// handleWebhook() a no-op on a repeat of an event it already recorded.
+model PaymentEvent {
+  id              String        @id @default(uuid()) @db.Uuid
+  paymentId       String        @map("payment_id") @db.Uuid
+  payment         Payment       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  providerEventId String        @unique @map("provider_event_id")
+  type            String
+  status          PaymentStatus
+  payload         Json
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  @@index([paymentId])
+  @@map("payment_events")
+}
+
+// ---------------------------------------------------------------------------
+// Procurement (suppliers, purchase orders, goods receipts) — see
+// docs/procurement.md. Inventory remains authoritative for physical stock;
+// procurement only ever writes stock through InventoryService.
+// ---------------------------------------------------------------------------
+
+enum SupplierStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  ORDERED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CLOSED_SHORT
+  CANCELLED
+}
+
+enum GoodsReceiptStatus {
+  DRAFT
+  POSTED
+  REVERSED
+}
+
+enum ProcurementDocumentType {
+  SUPPLIER_QUOTATION
+  PURCHASE_ORDER
+  DELIVERY_NOTE
+  INSPECTION_REPORT
+  INVOICE
+  OTHER
+}
+
+// A generic atomic counter backing human-readable sequential codes (PO and
+// receipt numbers). Incremented with a single `INSERT ... ON CONFLICT DO
+// UPDATE ... RETURNING` per key, so concurrent requests never hand out the
+// same number without needing an explicit row lock.
+model SequenceCounter {
+  key       String   @id @db.VarChar(50)
+  value     Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("sequence_counters")
+}
+
+// Suppliers are deactivated (status = INACTIVE), never deleted, once
+// referenced by a purchase order — the PO history must keep resolving.
+model Supplier {
+  id                   String            @id @default(uuid()) @db.Uuid
+  code                 String            @unique
+  legalName            String            @map("legal_name")
+  tradingName          String?           @map("trading_name")
+  registrationNumber   String?           @map("registration_number")
+  taxNumber            String?           @map("tax_number")
+  contactEmail         String?           @map("contact_email")
+  contactPhone         String?           @map("contact_phone")
+  billingAddress       Json?             @map("billing_address")
+  physicalAddress      Json?             @map("physical_address")
+  defaultCurrency      String            @default("ZMW") @map("default_currency") @db.VarChar(3)
+  paymentTermsDays     Int               @default(30) @map("payment_terms_days")
+  leadTimeDays         Int               @default(0) @map("lead_time_days")
+  minimumOrderAmount   Int?              @map("minimum_order_amount")
+  minimumOrderCurrency String?           @map("minimum_order_currency") @db.VarChar(3)
+  status               SupplierStatus    @default(ACTIVE)
+  notes                String?
+  version              Int               @default(0)
+  products             SupplierProduct[]
+  purchaseOrders       PurchaseOrder[]
+  createdAt            DateTime          @default(now()) @map("created_at")
+  updatedAt            DateTime          @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("suppliers")
+}
+
+// Maps our ProductVariant to how a specific supplier sells it. packSize is
+// the conversion factor from the purchasing unit (e.g. a case) to inventory
+// units (each) — PO lines snapshot it so a later change here never rewrites
+// an already-ordered line's meaning.
+model SupplierProduct {
+  id              String         @id @default(uuid()) @db.Uuid
+  supplierId      String         @map("supplier_id") @db.Uuid
+  supplier        Supplier       @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  variantId       String         @map("variant_id") @db.Uuid
+  variant         ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  supplierSku     String         @map("supplier_sku")
+  description     String?
+  packSize        Int            @default(1) @map("pack_size")
+  minimumOrderQty Int            @default(1) @map("minimum_order_qty")
+  unitOfMeasure   String         @default("EACH") @map("unit_of_measure") @db.VarChar(20)
+  defaultUnitCost Int            @map("default_unit_cost")
+  lastUnitCost    Int?           @map("last_unit_cost")
+  currency        String         @db.VarChar(3)
+  leadTimeDays    Int?           @map("lead_time_days")
+  isPreferred     Boolean        @default(false) @map("is_preferred")
+  isActive        Boolean        @default(true) @map("is_active")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  @@unique([supplierId, variantId])
+  @@index([variantId])
+  @@map("supplier_products")
+}
+
+// Amending an APPROVED/ORDERED PO creates a new revision (supersedesId links
+// back to the one it replaces) rather than mutating history in place; a
+// DRAFT/SUBMITTED PO is edited or returned to DRAFT directly. currency is
+// immutable once a PO leaves DRAFT.
+model PurchaseOrder {
+  id                   String                @id @default(uuid()) @db.Uuid
+  poNumber             String                @unique @map("po_number")
+  supplierId           String                @map("supplier_id") @db.Uuid
+  supplier             Supplier              @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  warehouseId          String                @map("warehouse_id") @db.Uuid
+  warehouse            Warehouse             @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  status               PurchaseOrderStatus   @default(DRAFT)
+  currency             String                @db.VarChar(3)
+  subtotalAmount       Int                   @default(0) @map("subtotal_amount")
+  taxAmount            Int                   @default(0) @map("tax_amount")
+  shippingAmount       Int                   @default(0) @map("shipping_amount")
+  totalAmount          Int                   @default(0) @map("total_amount")
+  expectedDeliveryDate DateTime?             @map("expected_delivery_date")
+  notes                String?
+  version              Int                   @default(0)
+  revisionNumber       Int                   @default(0) @map("revision_number")
+  supersedesId         String?               @unique @map("supersedes_id") @db.Uuid
+  supersedes           PurchaseOrder?        @relation("PurchaseOrderRevision", fields: [supersedesId], references: [id], onDelete: SetNull)
+  supersededBy         PurchaseOrder?        @relation("PurchaseOrderRevision")
+  createdByUserId      String                @map("created_by_user_id") @db.Uuid
+  approvedByUserId     String?               @map("approved_by_user_id") @db.Uuid
+  rejectedByUserId     String?               @map("rejected_by_user_id") @db.Uuid
+  rejectionReason      String?               @map("rejection_reason")
+  cancellationReason   String?               @map("cancellation_reason")
+  shortCloseReason     String?               @map("short_close_reason")
+  submittedAt          DateTime?             @map("submitted_at")
+  approvedAt           DateTime?             @map("approved_at")
+  orderedAt            DateTime?             @map("ordered_at")
+  completedAt          DateTime?             @map("completed_at")
+  lines                PurchaseOrderLine[]
+  goodsReceipts        GoodsReceipt[]
+  documents            ProcurementDocument[]
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+
+  @@index([supplierId, status])
+  @@index([status, expectedDeliveryDate])
+  @@map("purchase_orders")
+}
+
+// Costs are snapshotted here at order time — never a live read of
+// SupplierProduct or storefront Price, which model different concepts
+// (supplier cost vs. customer selling price) and change independently.
+model PurchaseOrderLine {
+  id                 String             @id @default(uuid()) @db.Uuid
+  purchaseOrderId    String             @map("purchase_order_id") @db.Uuid
+  purchaseOrder      PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  variantId          String             @map("variant_id") @db.Uuid
+  variant            ProductVariant     @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  supplierSku        String?            @map("supplier_sku")
+  packSize           Int                @default(1) @map("pack_size")
+  orderedQuantity    Int                @map("ordered_quantity")
+  receivedQuantity   Int                @default(0) @map("received_quantity")
+  cancelledQuantity  Int                @default(0) @map("cancelled_quantity")
+  unitCostAmount     Int                @map("unit_cost_amount")
+  discountAmount     Int                @default(0) @map("discount_amount")
+  taxRateBasisPoints Int                @default(0) @map("tax_rate_basis_points")
+  taxAmount          Int                @default(0) @map("tax_amount")
+  netAmount          Int                @map("net_amount")
+  grossAmount        Int                @map("gross_amount")
+  currency           String             @db.VarChar(3)
+  goodsReceiptLines  GoodsReceiptLine[]
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  @@index([purchaseOrderId])
+  @@index([variantId])
+  @@map("purchase_order_lines")
+}
+
+// DRAFT lets staff key in or scan a delivery before committing it — only
+// POSTED affects inventory. A posted receipt is immutable; correcting one
+// means posting a REVERSED receipt (reversalOfId) with negative movements,
+// never editing the original rows.
+model GoodsReceipt {
+  id                      String                @id @default(uuid()) @db.Uuid
+  receiptNumber           String                @unique @map("receipt_number")
+  purchaseOrderId         String                @map("purchase_order_id") @db.Uuid
+  purchaseOrder           PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  warehouseId             String                @map("warehouse_id") @db.Uuid
+  warehouse               Warehouse             @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  status                  GoodsReceiptStatus    @default(DRAFT)
+  supplierDeliveryNoteRef String?               @map("supplier_delivery_note_ref")
+  receivedByUserId        String                @map("received_by_user_id") @db.Uuid
+  postedByUserId          String?               @map("posted_by_user_id") @db.Uuid
+  reversedByUserId        String?               @map("reversed_by_user_id") @db.Uuid
+  reversalReason          String?               @map("reversal_reason")
+  reversalOfId            String?               @unique @map("reversal_of_id") @db.Uuid
+  reversalOf              GoodsReceipt?         @relation("GoodsReceiptReversal", fields: [reversalOfId], references: [id], onDelete: SetNull)
+  reversedBy              GoodsReceipt?         @relation("GoodsReceiptReversal")
+  // Nullable: a DRAFT receipt may not carry a caller-supplied key yet: it is
+  // required and enforced at the service layer only once posting is requested.
+  idempotencyKey          String?               @unique @map("idempotency_key") @db.VarChar(64)
+  postedAt                DateTime?             @map("posted_at")
+  lines                   GoodsReceiptLine[]
+  documents               ProcurementDocument[]
+  createdAt               DateTime              @default(now()) @map("created_at")
+  updatedAt               DateTime              @updatedAt @map("updated_at")
+
+  @@index([purchaseOrderId])
+  @@index([warehouseId, status])
+  @@map("goods_receipts")
+}
+
+// Reconciliation is enforced in application code as
+// deliveredQuantity = acceptedQuantity + rejectedQuantity + damagedQuantity.
+// Only acceptedQuantity ever reaches InventoryService.receiveStock —
+// rejected/damaged stock never becomes sellable on-hand.
+// inventoryMovementId has no FK (same loose-reference convention as
+// InventoryMovement.referenceId) and is null until the line is posted.
+model GoodsReceiptLine {
+  id                  String            @id @default(uuid()) @db.Uuid
+  goodsReceiptId      String            @map("goods_receipt_id") @db.Uuid
+  goodsReceipt        GoodsReceipt      @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  purchaseOrderLineId String            @map("purchase_order_line_id") @db.Uuid
+  purchaseOrderLine   PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id], onDelete: Restrict)
+  deliveredQuantity   Int               @map("delivered_quantity")
+  acceptedQuantity    Int               @map("accepted_quantity")
+  rejectedQuantity    Int               @default(0) @map("rejected_quantity")
+  damagedQuantity     Int               @default(0) @map("damaged_quantity")
+  authorizedExcessQty Int               @default(0) @map("authorized_excess_qty")
+  discrepancyReason   String?           @map("discrepancy_reason")
+  inventoryMovementId String?           @map("inventory_movement_id")
+  createdAt           DateTime          @default(now()) @map("created_at")
+
+  // One line per PO line per receipt — without this, two lines on the same
+  // receipt referencing the same PO line would each pass the outstanding-
+  // quantity check independently (checked against the PO line's quantity
+  // as of the start of the transaction) while together over-receiving it.
+  @@unique([goodsReceiptId, purchaseOrderLineId])
+  @@index([goodsReceiptId])
+  @@index([purchaseOrderLineId])
+  @@map("goods_receipt_lines")
+}
+
+// Attachments reference an existing MediaAsset rather than storing files
+// here, same as SellerDocument. Exactly one of purchaseOrderId/goodsReceiptId
+// is set.
+model ProcurementDocument {
+  id               String                  @id @default(uuid()) @db.Uuid
+  purchaseOrderId  String?                 @map("purchase_order_id") @db.Uuid
+  purchaseOrder    PurchaseOrder?          @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  goodsReceiptId   String?                 @map("goods_receipt_id") @db.Uuid
+  goodsReceipt     GoodsReceipt?           @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  mediaAssetId     String                  @map("media_asset_id") @db.Uuid
+  mediaAsset       MediaAsset              @relation(fields: [mediaAssetId], references: [id], onDelete: Restrict)
+  type             ProcurementDocumentType @default(OTHER)
+  uploadedByUserId String                  @map("uploaded_by_user_id") @db.Uuid
+  createdAt        DateTime                @default(now()) @map("created_at")
+
+  @@index([purchaseOrderId])
+  @@index([goodsReceiptId])
+  @@map("procurement_documents")
+}
+
+// ---------------------------------------------------------------------------
+// Fulfillment (warehouse picking, packing, dispatch) — see docs/fulfillment.md.
+// Provisioned asynchronously from `order.paid`; covers PLATFORM-mode lines
+// only (seller-fulfilled lines are #37, carrier booking/tracking is #29).
+// Picking/packing/dispatch never touch inventory — payment already committed
+// and deducted it via InventoryService.commit(); only cancellation returns
+// stock, through InventoryService.returnCancelledStock.
+// ---------------------------------------------------------------------------
+
+enum FulfillmentStatus {
+  AWAITING_ACCEPTANCE
+  READY_TO_PICK
+  PICKING
+  PARTIALLY_PICKED
+  PICKED
+  PACKING
+  PARTIALLY_PACKED
+  PACKED
+  PARTIALLY_DISPATCHED
+  DISPATCHED
+  ON_HOLD
+  PARTIALLY_CANCELLED
+  CANCELLED
+}
+
+enum FulfillmentWorkItemType {
+  PICK
+  PACK
+}
+
+enum FulfillmentWorkItemStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum FulfillmentExceptionType {
+  SHORT_PICK
+  DAMAGED
+  MISSING
+}
+
+enum FulfillmentExceptionStatus {
+  OPEN
+  RESOLVED
+}
+
+// One row per (shippingGroupId, warehouseId) — a shipping group's items can
+// resolve to more than one warehouse (different SKUs held at different
+// warehouses), so this is the actual unit of picking/packing/dispatch, not
+// the shipping group itself. Warehouse reassignment is out of scope for #28:
+// the committed reservation's warehouse is authoritative for the row's life.
+//
+// warehouseId is null for a SELLER-mode shipping group's fulfillment (#37) —
+// the seller fulfills from their own stock, not a platform warehouse. A hand-
+// added partial unique index (migration SQL, not expressible in this DSL)
+// enforces at most one such row per shippingGroupId where warehouseId is
+// null, alongside the @@unique below which still governs platform rows.
+// acceptedAt/acceptedByUserId are set once by FulfillmentsService.accept()
+// and gate every seller-fulfillment transition — see FulfillmentStatus.
+model FulfillmentOrder {
+  id                String                 @id @default(uuid()) @db.Uuid
+  fulfillmentNumber String                 @unique @map("fulfillment_number")
+  orderId           String                 @map("order_id") @db.Uuid
+  order             Order                  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  sellerOrderId     String                 @map("seller_order_id") @db.Uuid
+  sellerOrder       SellerOrder            @relation(fields: [sellerOrderId], references: [id], onDelete: Restrict)
+  shippingGroupId   String                 @map("shipping_group_id") @db.Uuid
+  shippingGroup     ShippingGroup          @relation(fields: [shippingGroupId], references: [id], onDelete: Restrict)
+  warehouseId       String?                @map("warehouse_id") @db.Uuid
+  warehouse         Warehouse?             @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  status            FulfillmentStatus      @default(READY_TO_PICK)
+  priority          Int                    @default(0)
+  version           Int                    @default(0)
+  heldReason        String?                @map("held_reason")
+  acceptedAt        DateTime?              @map("accepted_at")
+  acceptedByUserId  String?                @map("accepted_by_user_id") @db.Uuid
+  lines             FulfillmentLine[]
+  workItems         FulfillmentWorkItem[]
+  dispatches        FulfillmentDispatch[]
+  exceptions        FulfillmentException[]
+  events            FulfillmentEvent[]
+  shipments         Shipment[]
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
+
+  @@unique([shippingGroupId, warehouseId])
+  @@index([orderId])
+  @@index([status, priority])
+  @@map("fulfillment_orders")
+}
+
+// Snapshots the reservation/inventory record that backed this line at
+// provisioning time (loose references, no FK — same convention as
+// InventoryMovement.referenceId). Quantity invariants
+// (0 <= dispatched <= shipmentAssigned <= packed <= picked <= allocated,
+// cancelled + dispatched <= allocated) are enforced by CHECK constraints
+// added by hand in the migration, not expressible in the Prisma schema DSL.
+// shipmentAssignedQuantity (#29) is incremented when a ShipmentLine claims
+// packed quantity for booking, and decremented again if that shipment is
+// cancelled before dispatch — dispatch itself only ever consumes quantity
+// already assigned to a booked shipment.
+model FulfillmentLine {
+  id                       String                    @id @default(uuid()) @db.Uuid
+  fulfillmentOrderId       String                    @map("fulfillment_order_id") @db.Uuid
+  fulfillmentOrder         FulfillmentOrder          @relation(fields: [fulfillmentOrderId], references: [id], onDelete: Cascade)
+  orderItemId              String                    @unique @map("order_item_id") @db.Uuid
+  orderItem                OrderItem                 @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  variantId                String                    @map("variant_id") @db.Uuid
+  variant                  ProductVariant            @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  reservationId            String?                   @map("reservation_id")
+  inventoryRecordId        String?                   @map("inventory_record_id")
+  allocatedQuantity        Int                       @map("allocated_quantity")
+  pickedQuantity           Int                       @default(0) @map("picked_quantity")
+  packedQuantity           Int                       @default(0) @map("packed_quantity")
+  shipmentAssignedQuantity Int                       @default(0) @map("shipment_assigned_quantity")
+  dispatchedQuantity       Int                       @default(0) @map("dispatched_quantity")
+  cancelledQuantity        Int                       @default(0) @map("cancelled_quantity")
+  dispatchLines            FulfillmentDispatchLine[]
+  shipmentLines            ShipmentLine[]
+  exceptions               FulfillmentException[]
+  createdAt                DateTime                  @default(now()) @map("created_at")
+  updatedAt                DateTime                  @updatedAt @map("updated_at")
+
+  @@index([fulfillmentOrderId])
+  @@map("fulfillment_lines")
+}
+
+// Exactly one PICK and one PACK row per fulfillment order, created at
+// provisioning time (@@unique enforces this). "Only the assigned STAFF user
+// or an ADMIN may mutate that work item" is enforced in application code.
+model FulfillmentWorkItem {
+  id                 String                    @id @default(uuid()) @db.Uuid
+  fulfillmentOrderId String                    @map("fulfillment_order_id") @db.Uuid
+  fulfillmentOrder   FulfillmentOrder          @relation(fields: [fulfillmentOrderId], references: [id], onDelete: Cascade)
+  type               FulfillmentWorkItemType
+  status             FulfillmentWorkItemStatus @default(PENDING)
+  assignedUserId     String?                   @map("assigned_user_id") @db.Uuid
+  version            Int                       @default(0)
+  startedAt          DateTime?                 @map("started_at")
+  completedAt        DateTime?                 @map("completed_at")
+  createdAt          DateTime                  @default(now()) @map("created_at")
+  updatedAt          DateTime                  @updatedAt @map("updated_at")
+
+  @@unique([fulfillmentOrderId, type])
+  @@index([assignedUserId, status])
+  @@map("fulfillment_work_items")
+}
+
+// Immutable once created — a correction is a new dispatch/cancellation, never
+// an edit. idempotencyKey makes a retried dispatch request return the
+// original snapshot instead of consuming packed quantity twice.
+// Every dispatch references the one booked shipment whose exact lines it
+// consumes, and a shipment can be dispatched at most once. The #29 migration
+// backfills legacy #28 dispatches before making this relation required.
+model FulfillmentDispatch {
+  id                 String                    @id @default(uuid()) @db.Uuid
+  fulfillmentOrderId String                    @map("fulfillment_order_id") @db.Uuid
+  fulfillmentOrder   FulfillmentOrder          @relation(fields: [fulfillmentOrderId], references: [id], onDelete: Restrict)
+  shipmentId         String                    @unique @map("shipment_id") @db.Uuid
+  shipment           Shipment                  @relation(fields: [shipmentId], references: [id], onDelete: Restrict)
+  dispatchNumber     String                    @unique @map("dispatch_number")
+  idempotencyKey     String                    @unique @map("idempotency_key") @db.VarChar(64)
+  // Canonical hash of the full dispatch request (carrier code, tracking
+  // reference, estimated delivery, line quantities) — a replayed
+  // idempotencyKey with a different hash is a conflict, not a no-op.
+  requestHash        String?                   @map("request_hash") @db.VarChar(64)
+  dispatchedByUserId String                    @map("dispatched_by_user_id") @db.Uuid
+  lines              FulfillmentDispatchLine[]
+  createdAt          DateTime                  @default(now()) @map("created_at")
+
+  @@index([fulfillmentOrderId])
+  @@map("fulfillment_dispatches")
+}
+
+model FulfillmentDispatchLine {
+  id                    String              @id @default(uuid()) @db.Uuid
+  fulfillmentDispatchId String              @map("fulfillment_dispatch_id") @db.Uuid
+  fulfillmentDispatch   FulfillmentDispatch @relation(fields: [fulfillmentDispatchId], references: [id], onDelete: Cascade)
+  fulfillmentLineId     String              @map("fulfillment_line_id") @db.Uuid
+  fulfillmentLine       FulfillmentLine     @relation(fields: [fulfillmentLineId], references: [id], onDelete: Restrict)
+  quantity              Int
+  createdAt             DateTime            @default(now()) @map("created_at")
+
+  @@unique([fulfillmentDispatchId, fulfillmentLineId])
+  @@map("fulfillment_dispatch_lines")
+}
+
+// An OPEN exception holds the whole fulfillment order (surfaced as
+// FulfillmentStatus.ON_HOLD) until an admin resolves it — either resuming
+// work or cancelling the affected quantity via FulfillmentsService.
+model FulfillmentException {
+  id                 String                     @id @default(uuid()) @db.Uuid
+  fulfillmentOrderId String                     @map("fulfillment_order_id") @db.Uuid
+  fulfillmentOrder   FulfillmentOrder           @relation(fields: [fulfillmentOrderId], references: [id], onDelete: Cascade)
+  fulfillmentLineId  String                     @map("fulfillment_line_id") @db.Uuid
+  fulfillmentLine    FulfillmentLine            @relation(fields: [fulfillmentLineId], references: [id], onDelete: Restrict)
+  type               FulfillmentExceptionType
+  quantity           Int
+  reason             String
+  status             FulfillmentExceptionStatus @default(OPEN)
+  resolvedByUserId   String?                    @map("resolved_by_user_id") @db.Uuid
+  resolution         String?
+  resolvedAt         DateTime?                  @map("resolved_at")
+  createdAt          DateTime                   @default(now()) @map("created_at")
+
+  @@index([fulfillmentOrderId, status])
+  @@map("fulfillment_exceptions")
+}
+
+// Append-only operational history. idempotencyKey (nullable — only
+// idempotency-key-bearing commands like pick/pack/cancel set it) makes a
+// retried command a no-op instead of double-applying its quantity delta.
+model FulfillmentEvent {
+  id                 String           @id @default(uuid()) @db.Uuid
+  fulfillmentOrderId String           @map("fulfillment_order_id") @db.Uuid
+  fulfillmentOrder   FulfillmentOrder @relation(fields: [fulfillmentOrderId], references: [id], onDelete: Cascade)
+  type               String
+  actorUserId        String?          @map("actor_user_id") @db.Uuid
+  idempotencyKey     String?          @unique @map("idempotency_key") @db.VarChar(64)
+  // Canonical hash of the command's full request payload (#37 seller
+  // commands) — lets a replay check reject a reused key whose payload
+  // differs without re-deriving it from stored metadata.
+  requestHash        String?          @map("request_hash") @db.VarChar(64)
+  metadata           Json?
+  createdAt          DateTime         @default(now()) @map("created_at")
+
+  @@index([fulfillmentOrderId, createdAt])
+  @@map("fulfillment_events")
+}
+
+// ---------------------------------------------------------------------------
+// Shipping, tracking, and delivery (#29). A shipment is booked after packing
+// and before physical dispatch; dispatch (above) always references exactly
+// one booked shipment and consumes only that shipment's lines. Version one
+// books everything through the MANUAL carrier adapter — no real courier
+// credentials required — behind the same CarrierProvider interface future
+// adapters implement without changing shipment services.
+// ---------------------------------------------------------------------------
+
+enum ShipmentStatus {
+  PENDING_BOOKING
+  BOOKED
+  DISPATCHED
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  DELIVERY_FAILED
+  EXCEPTION
+  RETURN_TO_SENDER
+  RETURNED
+  CANCELLED
+}
+
+enum TrackingEventSource {
+  CARRIER_WEBHOOK
+  CARRIER_POLL
+  ADMIN_MANUAL
+  ADMIN_CORRECTION
+  // Externally supplied tracking a seller enters by hand for their own
+  // fulfillment (#37) — never produced by carrier polling/webhooks, and
+  // (like ADMIN_MANUAL) never a correction: only ADMIN_CORRECTION may
+  // supersede an invalid terminal tracking event.
+  SELLER_MANUAL
+}
+
+enum CarrierWebhookDeliveryStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+// Created before dispatch, atomically allocating packed quantity off its
+// fulfillment lines (FulfillmentLine.shipmentAssignedQuantity). Cancelling an
+// undispatched shipment releases that allocation. Only PENDING_BOOKING and
+// BOOKED shipments may be cancelled; DELIVERED/RETURNED/CANCELLED are
+// terminal except for an explicit admin TrackingEvent correction, which
+// supersedes the projected status without editing history.
+// bookingIdempotencyKey makes a retried creation request return the original
+// shipment instead of double-allocating packed quantity.
+model Shipment {
+  id                    String               @id @default(uuid()) @db.Uuid
+  shipmentNumber        String               @unique @map("shipment_number")
+  orderId               String               @map("order_id") @db.Uuid
+  order                 Order                @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  sellerOrderId         String               @map("seller_order_id") @db.Uuid
+  sellerOrder           SellerOrder          @relation(fields: [sellerOrderId], references: [id], onDelete: Restrict)
+  shippingGroupId       String               @map("shipping_group_id") @db.Uuid
+  shippingGroup         ShippingGroup        @relation(fields: [shippingGroupId], references: [id], onDelete: Restrict)
+  fulfillmentOrderId    String               @map("fulfillment_order_id") @db.Uuid
+  fulfillmentOrder      FulfillmentOrder     @relation(fields: [fulfillmentOrderId], references: [id], onDelete: Restrict)
+  // Null for a seller-fulfilled shipment (#37) — mirrors
+  // FulfillmentOrder.warehouseId; a hand-added partial unique index
+  // enforces (carrierCode, trackingReference) uniqueness whenever a
+  // reference is present, regardless of warehouse.
+  warehouseId           String?              @map("warehouse_id") @db.Uuid
+  warehouse             Warehouse?           @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  providerCode          String               @map("provider_code") @db.VarChar(50)
+  carrierCode           String               @map("carrier_code") @db.VarChar(50)
+  methodCode            String               @map("method_code") @db.VarChar(100)
+  trackingReference     String?              @map("tracking_reference")
+  status                ShipmentStatus       @default(PENDING_BOOKING)
+  estimatedDeliveryAt   DateTime?            @map("estimated_delivery_at")
+  version               Int                  @default(0)
+  bookingIdempotencyKey String               @unique @map("booking_idempotency_key") @db.VarChar(64)
+  bookedAt              DateTime?            @map("booked_at")
+  dispatchedAt          DateTime?            @map("dispatched_at")
+  deliveredAt           DateTime?            @map("delivered_at")
+  cancelledAt           DateTime?            @map("cancelled_at")
+  lines                 ShipmentLine[]
+  trackingEvents        TrackingEvent[]
+  dispatch              FulfillmentDispatch?
+  createdAt             DateTime             @default(now()) @map("created_at")
+  updatedAt             DateTime             @updatedAt @map("updated_at")
+
+  @@index([orderId])
+  @@index([sellerOrderId])
+  @@index([fulfillmentOrderId])
+  @@index([status])
+  @@map("shipments")
+}
+
+// One row per fulfillment line assigned to a shipment. orderItemId is kept
+// as a direct FK too, deliberately denormalized alongside fulfillmentLineId
+// (same convention as OrderItem.orderId/sellerOrderId), so customer-facing
+// tracking queries never need to join through FulfillmentLine.
+model ShipmentLine {
+  id                String                 @id @default(uuid()) @db.Uuid
+  shipmentId        String                 @map("shipment_id") @db.Uuid
+  shipment          Shipment               @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  fulfillmentLineId String                 @map("fulfillment_line_id") @db.Uuid
+  fulfillmentLine   FulfillmentLine        @relation(fields: [fulfillmentLineId], references: [id], onDelete: Restrict)
+  orderItemId       String                 @map("order_item_id") @db.Uuid
+  orderItem         OrderItem              @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  quantity          Int
+  returnAllocations ReturnItemAllocation[]
+  createdAt         DateTime               @default(now()) @map("created_at")
+
+  @@unique([shipmentId, fulfillmentLineId])
+  @@index([fulfillmentLineId])
+  @@map("shipment_lines")
+}
+
+// Immutable and append-only — never updated or deleted, including a
+// correction (isCorrection: true), which is a new row that supersedes the
+// projected status rather than editing a prior one. providerEventKey dedupes
+// webhook/poll deliveries per shipment (same convention as
+// PaymentEvent.providerEventId); it is null for admin-authored events, where
+// Postgres's per-NULL uniqueness semantics mean the unique index never
+// dedupes those against each other. Current status is projected from
+// occurredAt (carrier time), not createdAt (receipt time), and a normal event
+// never regresses a terminal projection.
+model TrackingEvent {
+  id               String              @id @default(uuid()) @db.Uuid
+  shipmentId       String              @map("shipment_id") @db.Uuid
+  shipment         Shipment            @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  source           TrackingEventSource
+  providerEventKey String?             @map("provider_event_key")
+  rawStatus        String?             @map("raw_status")
+  normalizedStatus ShipmentStatus      @map("normalized_status")
+  description      String?
+  location         String?
+  occurredAt       DateTime            @map("occurred_at")
+  actorUserId      String?             @map("actor_user_id") @db.Uuid
+  isCorrection     Boolean             @default(false) @map("is_correction")
+  correctionReason String?             @map("correction_reason")
+  metadata         Json?
+  // Only a seller-submitted event (#37) sets these — an Idempotency-Key
+  // header is required there, unlike carrier/admin sources.
+  idempotencyKey   String?             @unique @map("idempotency_key") @db.VarChar(64)
+  requestHash      String?             @map("request_hash") @db.VarChar(64)
+  createdAt        DateTime            @default(now()) @map("created_at")
+
+  @@unique([shipmentId, source, providerEventKey])
+  @@index([shipmentId, occurredAt])
+  @@map("tracking_events")
+}
+
+// Dedupes carrier webhook deliveries before they are ever parsed into
+// TrackingEvent rows — providerDeliveryId when the carrier supplies a stable
+// delivery id, payloadHash otherwise. The manual adapter never receives
+// webhooks; this exists for future signed-webhook carriers (#50).
+model CarrierWebhookDelivery {
+  id                 String                       @id @default(uuid()) @db.Uuid
+  providerCode       String                       @map("provider_code") @db.VarChar(50)
+  providerDeliveryId String?                      @map("provider_delivery_id")
+  payloadHash        String?                      @map("payload_hash")
+  status             CarrierWebhookDeliveryStatus @default(PENDING)
+  failureReason      String?                      @map("failure_reason")
+  processedAt        DateTime?                    @map("processed_at")
+  createdAt          DateTime                     @default(now()) @map("created_at")
+
+  @@unique([providerCode, providerDeliveryId])
+  @@unique([providerCode, payloadHash])
+  @@map("carrier_webhook_deliveries")
+}
+
+// ---------------------------------------------------------------------------
+// Returns, RMA, and refund-case domain (#30)
+// ---------------------------------------------------------------------------
+
+enum ReturnReasonCode {
+  CUSTOMER_REMORSE
+  WRONG_ITEM
+  DAMAGED
+  DEFECTIVE
+  NOT_AS_DESCRIBED
+  SIZE_FIT
+  OTHER
+}
+
+// REQUESTED -> APPROVED | REJECTED | CANCELLED
+// APPROVED -> RECEIVING -> RECEIVED -> INSPECTING
+// INSPECTING -> CLOSED_NO_REFUND | REFUND_PENDING
+// REFUND_PENDING -> PARTIALLY_REFUNDED | REFUNDED | REFUND_FAILED
+enum ReturnStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  CANCELLED
+  RECEIVING
+  RECEIVED
+  INSPECTING
+  CLOSED_NO_REFUND
+  REFUND_PENDING
+  PARTIALLY_REFUNDED
+  REFUNDED
+  REFUND_FAILED
+}
+
+// Only RESTOCK increments sellable InventoryRecord.onHand. QUARANTINE,
+// DAMAGED and DISPOSE record where accepted-but-unsellable stock went
+// without affecting availability.
+enum ReturnDisposition {
+  RESTOCK
+  QUARANTINE
+  DAMAGED
+  DISPOSE
+}
+
+enum RefundCaseSource {
+  RETURN
+  FULFILLMENT_CANCELLATION
+  ADMIN
+}
+
+// RECONCILIATION_REQUIRED means the provider gave an ambiguous outcome for a
+// refund attempt — money is never reported as refunded, and the case cannot
+// be retried until an operator reconciles it out-of-band. A definitive
+// FAILED case can be retried (a new Refund attempt row is created).
+enum RefundCaseStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  PARTIALLY_SUCCEEDED
+  FAILED
+  RECONCILIATION_REQUIRED
+  CANCELLED
+}
+
+// The customer/staff-facing return request, scoped to one Order but spanning
+// however many SellerOrders its ReturnItems' OrderItems belong to — the
+// resulting refund obligations are split one RefundCase per SellerOrder (see
+// RefundCase.source = RETURN). warehouseId is the single admin-selected
+// receiving warehouse for this RMA, independent of where the item originally
+// shipped from (see docs on the workflow). rmaNumber is the human-facing
+// reference handed to the customer alongside rmaInstructions.
+model ReturnRequest {
+  id              String             @id @default(uuid()) @db.Uuid
+  orderId         String             @map("order_id") @db.Uuid
+  order           Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId          String             @map("user_id") @db.Uuid
+  user            User               @relation("ReturnRequestCustomer", fields: [userId], references: [id], onDelete: Cascade)
+  status          ReturnStatus       @default(REQUESTED)
+  warehouseId     String?            @map("warehouse_id") @db.Uuid
+  warehouse       Warehouse?         @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  assignedStaffId String?            @map("assigned_staff_id") @db.Uuid
+  assignedStaff   User?              @relation("ReturnAssignedStaff", fields: [assignedStaffId], references: [id], onDelete: SetNull)
+  rmaNumber       String?            @unique @map("rma_number")
+  rmaInstructions String?            @map("rma_instructions")
+  rejectionReason String?            @map("rejection_reason")
+  version         Int                @default(0)
+  idempotencyKey  String?            @unique @map("idempotency_key")
+  requestHash     String?            @map("request_hash") @db.VarChar(64)
+  items           ReturnItem[]
+  receipts        ReturnReceipt[]
+  inspections     ReturnInspection[]
+  events          ReturnEvent[]
+  refundCases     RefundCase[]
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([assignedStaffId])
+  @@index([status])
+  @@map("return_requests")
+}
+
+// unitAmount/currency/returnWindowDays/eligibleUntil/deliveredAt are snapshot
+// at request time from the immutable OrderItem and the product's return
+// policy in effect then, so a later policy change never retroactively
+// changes an already-requested return's eligibility or refund math.
+model ReturnItem {
+  id               String                 @id @default(uuid()) @db.Uuid
+  returnRequestId  String                 @map("return_request_id") @db.Uuid
+  returnRequest    ReturnRequest          @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  orderItemId      String                 @map("order_item_id") @db.Uuid
+  orderItem        OrderItem              @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  quantity         Int
+  reasonCode       ReturnReasonCode       @map("reason_code")
+  note             String?
+  unitAmount       Int                    @map("unit_amount")
+  currency         String                 @db.VarChar(3)
+  returnWindowDays Int                    @map("return_window_days")
+  eligibleUntil    DateTime               @map("eligible_until")
+  deliveredAt      DateTime               @map("delivered_at")
+  allocations      ReturnItemAllocation[]
+  receiptLines     ReturnReceiptLine[]
+  inspectionLines  ReturnInspectionLine[]
+  refundCaseItems  RefundCaseItem[]
+  createdAt        DateTime               @default(now()) @map("created_at")
+
+  @@unique([returnRequestId, orderItemId])
+  @@index([returnRequestId])
+  @@index([orderItemId])
+  @@map("return_items")
+}
+
+// Ties a requested return quantity back to the specific delivered
+// ShipmentLine(s) it was allocated against, oldest-delivery-first, so
+// concurrent return requests against the same OrderItem can never
+// double-claim the same delivered unit.
+model ReturnItemAllocation {
+  id               String       @id @default(uuid()) @db.Uuid
+  returnItemId     String       @map("return_item_id") @db.Uuid
+  returnItem       ReturnItem   @relation(fields: [returnItemId], references: [id], onDelete: Cascade)
+  shipmentLineId   String       @map("shipment_line_id") @db.Uuid
+  shipmentLine     ShipmentLine @relation(fields: [shipmentLineId], references: [id], onDelete: Restrict)
+  quantity         Int
+  releasedQuantity Int          @default(0) @map("released_quantity")
+  createdAt        DateTime     @default(now()) @map("created_at")
+
+  @@unique([returnItemId, shipmentLineId])
+  @@index([returnItemId])
+  @@index([shipmentLineId])
+  @@map("return_item_allocations")
+}
+
+// Posted receipts are immutable — never updated after creation. isClosing
+// marks the receipt that releases any unreceived quantities still
+// outstanding on the RMA (partial receipts are otherwise allowed and leave
+// the return in RECEIVING). Admin corrections use a new compensating
+// ReturnEvent rather than mutating a posted receipt.
+model ReturnReceipt {
+  id              String              @id @default(uuid()) @db.Uuid
+  returnRequestId String              @map("return_request_id") @db.Uuid
+  returnRequest   ReturnRequest       @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  warehouseId     String              @map("warehouse_id") @db.Uuid
+  warehouse       Warehouse           @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  postedByUserId  String              @map("posted_by_user_id") @db.Uuid
+  postedBy        User                @relation(fields: [postedByUserId], references: [id], onDelete: Restrict)
+  isClosing       Boolean             @default(false) @map("is_closing")
+  idempotencyKey  String              @unique @map("idempotency_key")
+  requestHash     String?             @map("request_hash") @db.VarChar(64)
+  lines           ReturnReceiptLine[]
+  createdAt       DateTime            @default(now()) @map("created_at")
+
+  @@index([returnRequestId])
+  @@map("return_receipts")
+}
+
+model ReturnReceiptLine {
+  id           String        @id @default(uuid()) @db.Uuid
+  receiptId    String        @map("receipt_id") @db.Uuid
+  receipt      ReturnReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  returnItemId String        @map("return_item_id") @db.Uuid
+  returnItem   ReturnItem    @relation(fields: [returnItemId], references: [id], onDelete: Cascade)
+  quantity     Int
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  @@unique([receiptId, returnItemId])
+  @@index([receiptId])
+  @@index([returnItemId])
+  @@map("return_receipt_lines")
+}
+
+// Posted inspections are immutable. isFinal marks the inspection that closes
+// out a ReturnItem's disposition — final inspection requires every received
+// unit across the RMA to be either dispositioned (acceptedQuantity with a
+// disposition) or rejected (rejectedQuantity with rejectionReason).
+model ReturnInspection {
+  id                String                 @id @default(uuid()) @db.Uuid
+  returnRequestId   String                 @map("return_request_id") @db.Uuid
+  returnRequest     ReturnRequest          @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  inspectedByUserId String                 @map("inspected_by_user_id") @db.Uuid
+  inspectedBy       User                   @relation(fields: [inspectedByUserId], references: [id], onDelete: Restrict)
+  isFinal           Boolean                @default(false) @map("is_final")
+  idempotencyKey    String                 @unique @map("idempotency_key")
+  requestHash       String?                @map("request_hash") @db.VarChar(64)
+  lines             ReturnInspectionLine[]
+  createdAt         DateTime               @default(now()) @map("created_at")
+
+  @@index([returnRequestId])
+  @@map("return_inspections")
+}
+
+model ReturnInspectionLine {
+  id               String             @id @default(uuid()) @db.Uuid
+  inspectionId     String             @map("inspection_id") @db.Uuid
+  inspection       ReturnInspection   @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  returnItemId     String             @map("return_item_id") @db.Uuid
+  returnItem       ReturnItem         @relation(fields: [returnItemId], references: [id], onDelete: Cascade)
+  warehouseId      String             @map("warehouse_id") @db.Uuid
+  warehouse        Warehouse          @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  acceptedQuantity Int                @default(0) @map("accepted_quantity")
+  disposition      ReturnDisposition?
+  rejectedQuantity Int                @default(0) @map("rejected_quantity")
+  rejectionReason  String?            @map("rejection_reason")
+  createdAt        DateTime           @default(now()) @map("created_at")
+
+  @@unique([inspectionId, returnItemId])
+  @@index([inspectionId])
+  @@index([returnItemId])
+  @@map("return_inspection_lines")
+}
+
+// Append-only audit trail for a return's lifecycle, including admin
+// corrections (type: "CORRECTION") which compensate for a posted receipt or
+// inspection rather than mutating it.
+model ReturnEvent {
+  id              String        @id @default(uuid()) @db.Uuid
+  returnRequestId String        @map("return_request_id") @db.Uuid
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  type            String
+  actorUserId     String?       @map("actor_user_id") @db.Uuid
+  actor           User?         @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  data            Json?
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  @@index([returnRequestId])
+  @@map("return_events")
+}
+
+// RefundCase is the business obligation to refund a SellerOrder by some
+// amount, for some reason (RETURN / FULFILLMENT_CANCELLATION / ADMIN);
+// Refund rows underneath it are individual provider attempts. Existing
+// pre-#30 Refund rows are backfilled into legacy source: ADMIN cases by
+// migration so all refund money flows through one obligation model.
+model RefundCase {
+  id              String           @id @default(uuid()) @db.Uuid
+  sellerOrderId   String           @map("seller_order_id") @db.Uuid
+  sellerOrder     SellerOrder      @relation(fields: [sellerOrderId], references: [id], onDelete: Cascade)
+  source          RefundCaseSource
+  returnRequestId String?          @map("return_request_id") @db.Uuid
+  returnRequest   ReturnRequest?   @relation(fields: [returnRequestId], references: [id], onDelete: SetNull)
+  status          RefundCaseStatus @default(PENDING)
+  amount          Int
+  shippingAmount  Int              @default(0) @map("shipping_amount")
+  currency        String           @db.VarChar(3)
+  reason          String
+  version         Int              @default(0)
+  idempotencyKey  String           @unique @map("idempotency_key")
+  items           RefundCaseItem[]
+  refunds         Refund[]
+  events          RefundEvent[]
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  @@index([sellerOrderId])
+  @@index([returnRequestId])
+  @@index([status])
+  @@map("refund_cases")
+}
+
+model RefundCaseItem {
+  id           String      @id @default(uuid()) @db.Uuid
+  refundCaseId String      @map("refund_case_id") @db.Uuid
+  refundCase   RefundCase  @relation(fields: [refundCaseId], references: [id], onDelete: Cascade)
+  orderItemId  String      @map("order_item_id") @db.Uuid
+  orderItem    OrderItem   @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  returnItemId String?     @map("return_item_id") @db.Uuid
+  returnItem   ReturnItem? @relation(fields: [returnItemId], references: [id], onDelete: SetNull)
+  quantity     Int
+  amount       Int
+  currency     String      @db.VarChar(3)
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  @@index([refundCaseId])
+  @@map("refund_case_items")
+}
+
+// Append-only — never updated or deleted, same convention as PaymentEvent /
+// InventoryMovement.
+model RefundEvent {
+  id           String     @id @default(uuid()) @db.Uuid
+  refundCaseId String     @map("refund_case_id") @db.Uuid
+  refundCase   RefundCase @relation(fields: [refundCaseId], references: [id], onDelete: Cascade)
+  type         String
+  data         Json?
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@index([refundCaseId])
+  @@map("refund_events")
+}
+
+// ---------------------------------------------------------------------------
+// Reviews, ratings, reports, and moderation (#38)
+// ---------------------------------------------------------------------------
+
+// HIDDEN is a reversible moderation hold; REMOVED and WITHDRAWN are
+// terminal. Public read paths include PUBLISHED records only, regardless of
+// moderationState below — a PENDING or FLAGGED record still shows publicly
+// under the publish-then-moderate policy.
+enum ReviewVisibility {
+  PUBLISHED
+  HIDDEN
+  REMOVED
+  WITHDRAWN
+}
+
+enum ReviewModerationState {
+  PENDING
+  APPROVED
+  FLAGGED
+}
+
+enum ReviewReportReason {
+  SPAM
+  HARASSMENT
+  HATEFUL_CONTENT
+  PERSONAL_INFORMATION
+  OFF_TOPIC
+  FRAUD
+  OTHER
+}
+
+enum ReviewReportStatus {
+  OPEN
+  DISMISSED
+  ACTIONED
+}
+
+// Distinguishes a revision/moderation-event's target without two parallel
+// tables per action — both ProductReview and SellerRating share this pair of
+// append-only history tables.
+enum ReviewTargetType {
+  PRODUCT_REVIEW
+  SELLER_RATING
+}
+
+enum ReviewRevisionSource {
+  SUBMISSION
+  CUSTOMER_EDIT
+}
+
+enum ReviewModerationAction {
+  SUBMITTED
+  EDITED
+  REPORTED
+  APPROVED
+  HIDDEN
+  REMOVED
+  RESTORED
+  WITHDRAWN
+  REPORT_DISMISSED
+}
+
+// One review per delivered OrderItem (orderItemId unique). rating/body range
+// and length are enforced by hand-added CHECK constraints (migration SQL,
+// not expressible in this DSL) mirroring FulfillmentLine's convention:
+// rating BETWEEN 1 AND 5, char_length(title) <= 120,
+// char_length(body) BETWEEN 10 AND 2000. editDeadline is createdAt + 30 days,
+// computed once at submission — never recomputed, so a later change to the
+// edit-window policy can't retroactively reopen or close existing reviews.
+// deliveredAt/verifiedAt are snapshotted at submission time from the
+// authoritative delivery join (ShipmentLine -> Shipment.deliveredAt), the
+// same eligibility source returns.service.ts uses, so a later fulfillment
+// correction can't silently invalidate an already-earned review.
+model ProductReview {
+  id              String                  @id @default(uuid()) @db.Uuid
+  orderItemId     String                  @unique @map("order_item_id") @db.Uuid
+  orderItem       OrderItem               @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  authorUserId    String                  @map("author_user_id") @db.Uuid
+  author          User                    @relation(fields: [authorUserId], references: [id], onDelete: Restrict)
+  productId       String                  @map("product_id") @db.Uuid
+  product         Product                 @relation(fields: [productId], references: [id], onDelete: Restrict)
+  variantId       String                  @map("variant_id") @db.Uuid
+  variant         ProductVariant          @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  offerId         String                  @map("offer_id") @db.Uuid
+  offer           Offer                   @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  sellerId        String?                 @map("seller_id") @db.Uuid
+  seller          Seller?                 @relation(fields: [sellerId], references: [id], onDelete: SetNull)
+  rating          Int
+  title           String?                 @db.VarChar(120)
+  body            String                  @db.VarChar(2000)
+  deliveredAt     DateTime                @map("delivered_at")
+  verifiedAt      DateTime                @map("verified_at")
+  visibility      ReviewVisibility        @default(PUBLISHED)
+  moderationState ReviewModerationState   @default(PENDING) @map("moderation_state")
+  version         Int                     @default(0)
+  editDeadline    DateTime                @map("edit_deadline")
+  revisions       ProductReviewRevision[]
+  createdAt       DateTime                @default(now()) @map("created_at")
+  updatedAt       DateTime                @updatedAt @map("updated_at")
+  ReviewReport    ReviewReport[]
+
+  @@index([productId, visibility, createdAt])
+  @@index([sellerId, visibility, createdAt])
+  @@index([moderationState])
+  @@map("product_reviews")
+}
+
+model ProductReviewRevision {
+  id              String               @id @default(uuid()) @db.Uuid
+  productReviewId String               @map("product_review_id") @db.Uuid
+  productReview   ProductReview        @relation(fields: [productReviewId], references: [id], onDelete: Cascade)
+  revisionNumber  Int                  @map("revision_number")
+  rating          Int
+  title           String?              @db.VarChar(120)
+  body            String               @db.VarChar(2000)
+  authorUserId    String               @map("author_user_id") @db.Uuid
+  source          ReviewRevisionSource
+  reason          String?
+  createdAt       DateTime             @default(now()) @map("created_at")
+
+  @@unique([productReviewId, revisionNumber])
+  @@map("product_review_revisions")
+}
+
+// One rating per SellerOrder (sellerOrderId unique) — the seller on a
+// SellerOrder is never null by construction of this model (a rating is only
+// ever created for a third-party seller order), unlike ProductReview.sellerId
+// which is nullable for a platform sale.
+model SellerRating {
+  id              String                 @id @default(uuid()) @db.Uuid
+  sellerOrderId   String                 @unique @map("seller_order_id") @db.Uuid
+  sellerOrder     SellerOrder            @relation(fields: [sellerOrderId], references: [id], onDelete: Restrict)
+  authorUserId    String                 @map("author_user_id") @db.Uuid
+  author          User                   @relation(fields: [authorUserId], references: [id], onDelete: Restrict)
+  sellerId        String                 @map("seller_id") @db.Uuid
+  seller          Seller                 @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  rating          Int
+  comment         String?                @db.VarChar(2000)
+  deliveredAt     DateTime               @map("delivered_at")
+  verifiedAt      DateTime               @map("verified_at")
+  visibility      ReviewVisibility       @default(PUBLISHED)
+  moderationState ReviewModerationState  @default(PENDING) @map("moderation_state")
+  version         Int                    @default(0)
+  editDeadline    DateTime               @map("edit_deadline")
+  revisions       SellerRatingRevision[]
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+  ReviewReport    ReviewReport[]
+
+  @@index([sellerId, visibility, createdAt])
+  @@index([moderationState])
+  @@map("seller_ratings")
+}
+
+model SellerRatingRevision {
+  id             String               @id @default(uuid()) @db.Uuid
+  sellerRatingId String               @map("seller_rating_id") @db.Uuid
+  sellerRating   SellerRating         @relation(fields: [sellerRatingId], references: [id], onDelete: Cascade)
+  revisionNumber Int                  @map("revision_number")
+  rating         Int
+  comment        String?              @db.VarChar(2000)
+  authorUserId   String               @map("author_user_id") @db.Uuid
+  source         ReviewRevisionSource
+  reason         String?
+  createdAt      DateTime             @default(now()) @map("created_at")
+
+  @@unique([sellerRatingId, revisionNumber])
+  @@map("seller_rating_revisions")
+}
+
+// Targets exactly one of productReviewId/sellerRatingId — enforced by a
+// hand-added CHECK constraint (XOR), not expressible in this DSL. Report
+// deduplication ((reporterUserId, productReviewId) / (reporterUserId,
+// sellerRatingId) each unique) is also hand-added as two partial unique
+// indexes, since a plain compound @@unique would not dedupe correctly here:
+// Postgres treats every NULL column as distinct, so a plain unique index
+// including both nullable target columns would never reject a second report
+// from the same reporter against the same target.
+model ReviewReport {
+  id               String             @id @default(uuid()) @db.Uuid
+  productReviewId  String?            @map("product_review_id") @db.Uuid
+  productReview    ProductReview?     @relation(fields: [productReviewId], references: [id], onDelete: Cascade)
+  sellerRatingId   String?            @map("seller_rating_id") @db.Uuid
+  sellerRating     SellerRating?      @relation(fields: [sellerRatingId], references: [id], onDelete: Cascade)
+  reporterUserId   String             @map("reporter_user_id") @db.Uuid
+  reporter         User               @relation(fields: [reporterUserId], references: [id], onDelete: Restrict)
+  reason           ReviewReportReason
+  details          String?            @db.VarChar(2000)
+  status           ReviewReportStatus @default(OPEN)
+  resolvedByUserId String?            @map("resolved_by_user_id") @db.Uuid
+  resolutionNote   String?            @map("resolution_note")
+  resolvedAt       DateTime?          @map("resolved_at")
+  createdAt        DateTime           @default(now()) @map("created_at")
+
+  @@index([status])
+  @@map("review_reports")
+}
+
+// Append-only — never updated or deleted, same convention as PaymentEvent /
+// InventoryMovement / ReturnEvent. actorUserId has no FK (loose reference,
+// same convention as TrackingEvent.actorUserId) since a submission/edit
+// event's actor is the author but a moderation event's actor is a staff
+// member and neither needs a dedicated relation for this audit trail — the
+// existing AuditService.record call alongside each admin action is the
+// queryable-by-actor audit path; this table is the domain-specific,
+// target-scoped history a moderation-detail view renders inline.
+model ReviewModerationEvent {
+  id                       String                 @id @default(uuid()) @db.Uuid
+  targetType               ReviewTargetType       @map("target_type")
+  targetId                 String                 @map("target_id") @db.Uuid
+  action                   ReviewModerationAction
+  actorUserId              String?                @map("actor_user_id") @db.Uuid
+  reason                   String?
+  previousVisibility       ReviewVisibility?      @map("previous_visibility")
+  resultingVisibility      ReviewVisibility?      @map("resulting_visibility")
+  previousModerationState  ReviewModerationState? @map("previous_moderation_state")
+  resultingModerationState ReviewModerationState? @map("resulting_moderation_state")
+  idempotencyKey           String?                @unique @map("idempotency_key") @db.VarChar(64)
+  requestHash              String?                @map("request_hash") @db.VarChar(64)
+  createdAt                DateTime               @default(now()) @map("created_at")
+
+  @@index([targetType, targetId, createdAt])
+  @@map("review_moderation_events")
+}
+
+// Exact recalculation only (never incremental) — recomputed from every
+// PUBLISHED record for the product/seller inside the same transaction as
+// the mutation that changed it (submit/edit/hide/restore/remove/withdraw),
+// after locking this row. averageRating = ratingSum / ratingCount at read
+// time (application code), null when ratingCount is 0 — not stored, to
+// avoid a stale derived column.
+model ProductRatingSummary {
+  productId      String   @id @map("product_id") @db.Uuid
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  ratingCount    Int      @default(0) @map("rating_count")
+  ratingSum      Int      @default(0) @map("rating_sum")
+  star1Count     Int      @default(0) @map("star_1_count")
+  star2Count     Int      @default(0) @map("star_2_count")
+  star3Count     Int      @default(0) @map("star_3_count")
+  star4Count     Int      @default(0) @map("star_4_count")
+  star5Count     Int      @default(0) @map("star_5_count")
+  version        Int      @default(0)
+  recalculatedAt DateTime @map("recalculated_at")
+
+  @@map("product_rating_summaries")
+}
+
+model SellerRatingSummary {
+  sellerId       String   @id @map("seller_id") @db.Uuid
+  seller         Seller   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  ratingCount    Int      @default(0) @map("rating_count")
+  ratingSum      Int      @default(0) @map("rating_sum")
+  star1Count     Int      @default(0) @map("star_1_count")
+  star2Count     Int      @default(0) @map("star_2_count")
+  star3Count     Int      @default(0) @map("star_3_count")
+  star4Count     Int      @default(0) @map("star_4_count")
+  star5Count     Int      @default(0) @map("star_5_count")
+  version        Int      @default(0)
+  recalculatedAt DateTime @map("recalculated_at")
+
+  @@map("seller_rating_summaries")
+}
+
+// Auto-refreshed by FxRatesRefreshScheduler from a live FX provider
+// (see FX_RATE_PROVIDER / ExchangeRateApiProvider) — one row per target
+// currency, replacing the need to hand-edit PAYMENT_FX_QUOTES. baseCurrency
+// is always ZMW today, matching PaymentCurrencyConverter's existing
+// "target major units per one ZMW" convention. PAYMENT_FX_QUOTES remains a
+// manual fallback for dev/test environments with no PAYMENT_FX_API_KEY
+// configured; this table is never written to from that fallback.
+model FxRate {
+  id             String   @id @default(uuid()) @db.Uuid
+  baseCurrency   String   @default("ZMW") @map("base_currency") @db.VarChar(3)
+  targetCurrency String   @unique @map("target_currency") @db.VarChar(3)
+  rate           String
+  source         String   @default("exchangerate-api")
+  fetchedAt      DateTime @map("fetched_at")
+  expiresAt      DateTime @map("expires_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("fx_rates")
+}

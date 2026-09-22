@@ -53,7 +53,7 @@ services/
 - `common/` contains shared cross-cutting primitives.
 - `database/` contains Prisma client/configuration and migrations.
 - `integrations/` contains adapters for the in-house payment gateway, couriers, 3PLs, and other external systems.
-- `infrastructure/` contains Redis, queues, object storage, observability, and runtime concerns.
+- `infrastructure/` contains PostgreSQL-backed jobs and caching, local storage, observability, and runtime concerns.
 - The API remains one deployable NestJS service until there is a demonstrated reason to extract a domain.
 
 The goal is strong domain boundaries without introducing distributed-system complexity before it is necessary.
@@ -126,7 +126,7 @@ flowchart TB
 
     subgraph Data
         DB[(PostgreSQL)]
-        REDIS[(Redis)]
+        JOBS[(PostgreSQL jobs / cache)]
         OBJECT[(Object Storage)]
         SEARCH[(Search Index)]
     end
@@ -168,7 +168,7 @@ flowchart TB
     FIN --> DB
     REVIEW --> DB
 
-    API --> REDIS
+    API --> JOBS
     CAT --> OBJECT
     CAT --> SEARCH
 
@@ -189,7 +189,7 @@ Customer capabilities include browsing, search, product details, offers, cart, c
 
 ### Customer Mobile
 
-Preferred: Kotlin Multiplatform + Compose Multiplatform. Flutter remains a viable alternative.
+Flutter + Dart.
 
 Mobile consumes the same `/api/v1` API as web.
 
@@ -497,7 +497,7 @@ flowchart TD
     MOBILE[Mobile App] --> API[NestJS Commerce API]
     API --> MODULES[Domain Modules]
     MODULES --> DB[(PostgreSQL)]
-    MODULES --> REDIS[(Redis)]
+    MODULES --> JOBS[(PostgreSQL jobs / cache)]
     MODULES --> EXT[External Integrations]
 ```
 
@@ -651,7 +651,7 @@ Audit logs
 Health/readiness checks
 ```
 
-Monitor API, database, Redis, payments, webhooks, jobs, inventory, orders, and search.
+Monitor API, database, payments, webhooks, jobs, inventory, orders, and search.
 
 ## 27. Environment Strategy
 
@@ -681,7 +681,7 @@ Recommended deployment pattern:
 Next.js        → Vercel
 NestJS API     → Render / AWS / Equivalent
 PostgreSQL     → Managed PostgreSQL
-Redis          → Managed Redis
+Jobs / cache   → PostgreSQL
 Object Storage → S3 / R2
 ```
 
@@ -703,14 +703,14 @@ NestJS
 TypeScript
 Prisma
 PostgreSQL
-Redis
+PostgreSQL-backed jobs and cache
 ```
 
 ### Mobile
 
 ```text
-Kotlin Multiplatform
-Compose Multiplatform
+Flutter
+Dart
 ```
 
 ### Infrastructure
@@ -735,7 +735,7 @@ In-house Payment Gateway
 
 ### Phase 0 — Architecture & Foundation
 
-NestJS modular monolith, Prisma, PostgreSQL, Redis, auth, RBAC, storage, observability, audit, CI/CD, and payment abstraction.
+NestJS modular monolith, Prisma, PostgreSQL, auth, RBAC, local storage, observability, audit, CI/CD, and payment abstraction.
 
 ### Phase 1 — Retail Storefront
 
@@ -751,7 +751,7 @@ Seller onboarding, verification, seller storefronts, offers, seller inventory, m
 
 ### Phase 4 — Mobile Customer App
 
-Native customer app consuming the same Commerce API with authentication, discovery, cart, checkout, payments, orders, tracking, reviews, push notifications, and deep links.
+Flutter customer app consuming the same Commerce API with authentication, discovery, cart, checkout, payments, orders, tracking, reviews, push notifications, and deep links.
 
 ### Phase 5 — Advanced Commerce
 
@@ -853,7 +853,7 @@ Phase issues act as epics. Implementation issues are grouped beneath them by pha
               ┌───────────────────┼───────────────────┐
               │                   │                   │
         ┌─────▼─────┐       ┌─────▼─────┐       ┌─────▼─────┐
-        │ PostgreSQL│       │   Redis   │       │  Storage  │
+        │ PostgreSQL│       │ DB Jobs   │       │Local Files│
         └───────────┘       └───────────┘       └───────────┘
                                   │
                          ┌────────▼─────────┐
@@ -867,11 +867,11 @@ Phase issues act as epics. Implementation issues are grouped beneath them by pha
 
 **Backend architecture:** NestJS modular monolith first.
 
-**Backend:** NestJS + TypeScript + Prisma + PostgreSQL + Redis.
+**Backend:** NestJS + TypeScript + Prisma + PostgreSQL.
 
 **Web:** Next.js + TypeScript + Tailwind CSS + shadcn/ui.
 
-**Mobile:** Kotlin Multiplatform + Compose Multiplatform preferred.
+**Mobile:** Flutter + Dart.
 
 **Payments:** In-house payment gateway behind a provider abstraction.
 
