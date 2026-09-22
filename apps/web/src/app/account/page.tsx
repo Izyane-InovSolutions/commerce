@@ -6,6 +6,7 @@ import { ApiErrorNotice } from '@/components/api-error-notice';
 import { OrderStatusPoller } from '@/components/order-status-poller';
 import { OrdersList } from '@/components/orders-list';
 import { RecentlyViewedSection } from '@/components/recently-viewed-section';
+import { SellerAccountCard } from '@/components/seller-account-card';
 import { SignInForm } from '@/components/sign-in-form';
 import { SignUpForm } from '@/components/sign-up-form';
 import { WishlistList } from '@/components/wishlist-list';
@@ -21,11 +22,14 @@ import {
 import { labelOffers } from '@/lib/cart';
 import { listAddresses, listOrders, reconcileOrderPayments } from '@/lib/orders';
 import { getCurrentUser } from '@/lib/session';
+import { getOwnSeller } from '@/lib/sellers';
 import { listWishlist } from '@/lib/wishlist';
 
 import {
   addAddressAction,
+  becomeSellerAction,
   deleteAddressAction,
+  goToSellerDashboardAction,
   setDefaultAddressAction,
   signInAction,
   signOutAction,
@@ -96,12 +100,14 @@ export default async function AccountPage({
   let wishlistItems;
   let addresses;
   let labels;
+  let seller;
 
   try {
-    [orders, wishlistItems, addresses] = await Promise.all([
+    [orders, wishlistItems, addresses, seller] = await Promise.all([
       listOrders(),
       listWishlist(),
       listAddresses(),
+      getOwnSeller(),
     ]);
 
     // Same reconciliation the standalone orders page does: a mobile money
@@ -151,6 +157,12 @@ export default async function AccountPage({
           </form>
         </CardContent>
       </Card>
+
+      <SellerAccountCard
+        seller={seller}
+        becomeSeller={becomeSellerAction}
+        goToDashboard={goToSellerDashboardAction}
+      />
 
       <AccountTabs
         defaultTab={defaultTab}

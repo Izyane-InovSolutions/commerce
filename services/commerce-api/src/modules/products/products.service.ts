@@ -10,6 +10,7 @@ import {
   ProductRatingSummary,
   ProductStatus,
   ReviewVisibility,
+  SellerStatus,
   type Prisma,
   type ProductVariant,
 } from '@prisma/client';
@@ -33,6 +34,7 @@ import {
 import { formatReviewerLabel } from '../reviews/reviewer-label';
 import { reviewOrderBy } from '../reviews/review-sort';
 import { ReviewListQueryDto } from '../reviews/dto/review-list-query.dto';
+import { PUBLIC_STOREFRONT_SELECT } from '../sellers/storefronts.service';
 import { AttachMediaDto } from './dto/attach-media.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { CreateVariantDto } from './dto/create-variant.dto';
@@ -68,6 +70,30 @@ const PRODUCT_MEDIA_INCLUDE = {
   orderBy: { position: 'asc' as const },
   include: { mediaAsset: { select: PRODUCT_MEDIA_ASSET_SELECT } },
 } as const;
+
+/**
+ * An offer is publicly showable either because it's the platform's own
+ * (`sellerId: null`) or because the seller behind it is approved and has
+ * finished setting up their storefront — the same eligibility marketplace
+ * offer comparisons already apply (MarketplaceOffersService.publicPage).
+ * A pending/rejected/suspended seller's offers stay invisible even if
+ * published, same as an incomplete storefront's.
+ */
+const PUBLICLY_ELIGIBLE_OFFER: Prisma.OfferWhereInput = {
+  OR: [
+    { sellerId: null },
+    {
+      seller: {
+        is: {
+          status: SellerStatus.APPROVED,
+          storefrontSlug: { not: null },
+          displayName: { not: null },
+          ownerUser: { isActive: true },
+        },
+      },
+    },
+  ],
+};
 
 const PRODUCT_DETAIL_INCLUDE = {
   brand: true,
@@ -114,8 +140,11 @@ export class ProductsService {
                 include: { attributeValue: { include: { attribute: true } } },
               },
               offers: {
-                where: { status: ProductStatus.PUBLISHED, sellerId: null },
-                include: { prices: true },
+                where: { status: ProductStatus.PUBLISHED, ...PUBLICLY_ELIGIBLE_OFFER },
+                include: {
+                  prices: true,
+                  seller: { select: PUBLIC_STOREFRONT_SELECT },
+                },
               },
             },
           },
@@ -161,8 +190,11 @@ export class ProductsService {
               include: { attributeValue: { include: { attribute: true } } },
             },
             offers: {
-              where: { status: ProductStatus.PUBLISHED, sellerId: null },
-              include: { prices: true },
+              where: { status: ProductStatus.PUBLISHED, ...PUBLICLY_ELIGIBLE_OFFER },
+              include: {
+                prices: true,
+                seller: { select: PUBLIC_STOREFRONT_SELECT },
+              },
             },
           },
         },
@@ -558,6 +590,30 @@ export class ProductsService {
       where.OR = [
         { name: { contains: query.q, mode: 'insensitive' } },
         { description: { contains: query.q, mode: 'insensitive' } },
+        // Also finds a seller by their storefront name — a customer typing
+        // "Acme" should reach Acme's listings even when the product name
+        // itself doesn't contain that word. Only a seller a shopper could
+        // actually buy from counts, same eligibility as PUBLICLY_ELIGIBLE_OFFER.
+        {
+          variants: {
+            some: {
+              status: ProductStatus.PUBLISHED,
+              offers: {
+                some: {
+                  status: ProductStatus.PUBLISHED,
+                  seller: {
+                    is: {
+                      displayName: { contains: query.q, mode: 'insensitive' },
+                      status: SellerStatus.APPROVED,
+                      storefrontSlug: { not: null },
+                      ownerUser: { isActive: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
       ];
     }
 
@@ -691,6 +747,8 @@ export class ProductsService {
           return {
             id: offer.id,
             status: offer.status,
+            seller: offer.seller ?? null,
+            isFirstParty: offer.sellerId === null,
             currentPrice: currentPrice
               ? { amount: currentPrice.amount, currency: currentPrice.currency }
               : null,

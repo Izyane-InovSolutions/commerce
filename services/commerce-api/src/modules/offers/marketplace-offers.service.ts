@@ -4,8 +4,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, ProductStatus, SellerStatus } from '@prisma/client';
+import { MediaStatus, Prisma, ProductStatus, SellerStatus } from '@prisma/client';
 import type { Offer, Price, Seller } from '@prisma/client';
+import { MediaService } from '../media/media.service';
 import { ProductReferencesService } from '../products/product-references.service';
 import { PrismaService } from '../../database/prisma.service';
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
@@ -36,11 +37,30 @@ export type ComparableOffer = {
   condition: Offer['condition'];
   stockSource: Offer['stockSource'];
   fulfillmentMode: Offer['fulfillmentMode'];
+  /** The platform product this offer lists against — enough to link and
+   * picture it (e.g. on a seller's storefront page) without a second
+   * catalog lookup per offer. */
+  product: {
+    id: string;
+    name: string;
+    slug: string;
+    image: { url: string; mimeType: string } | null;
+  };
   /** Null only from the by-id lookup, which does not filter on currency. */
   currentPrice: { amount: number; currency: string } | null;
   /** Every currency this offer currently carries a price in. */
   currencies: string[];
   checkoutSupported: boolean;
+};
+
+/** One product image, whichever leads — the primary one, else the first by
+ * position — deliberately not the whole media list: a comparison card needs
+ * one picture, not a gallery. */
+const PRIMARY_PRODUCT_IMAGE = {
+  where: { mediaAsset: { status: MediaStatus.AVAILABLE } },
+  orderBy: [{ isPrimary: 'desc' as const }, { position: 'asc' as const }],
+  take: 1,
+  include: { mediaAsset: { select: { id: true, mimeType: true } } },
 };
 export type OfferPage<T> = {
   items: T[];
@@ -61,7 +81,28 @@ export class MarketplaceOffersService {
     private readonly sellers: SellersService,
     private readonly storefronts: StorefrontsService,
     private readonly products: ProductReferencesService,
+    private readonly media: MediaService,
   ) {}
+
+  private toProductSummary(product: {
+    id: string;
+    name: string;
+    slug: string;
+    media: { mediaAssetId: string; mediaAsset: { mimeType: string } }[];
+  }): ComparableOffer['product'] {
+    const image = product.media[0];
+    return {
+      id: product.id,
+      name: product.name,
+      slug: product.slug,
+      image: image
+        ? {
+            url: this.media.createProductDownloadUrl(image.mediaAssetId).url,
+            mimeType: image.mediaAsset.mimeType,
+          }
+        : null,
+    };
+  }
 
   async create(
     userId: string,
@@ -234,6 +275,13 @@ export class MarketplaceOffersService {
       },
       include: {
         seller: { select: PUBLIC_STOREFRONT_SELECT },
+        variant: {
+          select: {
+            product: {
+              select: { id: true, name: true, slug: true, media: PRIMARY_PRODUCT_IMAGE },
+            },
+          },
+        },
         ...withPrices,
       },
     });
@@ -249,6 +297,7 @@ export class MarketplaceOffersService {
       condition: offer.condition,
       stockSource: offer.stockSource,
       fulfillmentMode: offer.fulfillmentMode,
+      product: this.toProductSummary(offer.variant.product),
       currentPrice: price
         ? { amount: price.amount, currency: price.currency }
         : null,
@@ -300,6 +349,13 @@ export class MarketplaceOffersService {
         where,
         include: {
           seller: { select: PUBLIC_STOREFRONT_SELECT },
+          variant: {
+            select: {
+              product: {
+                select: { id: true, name: true, slug: true, media: PRIMARY_PRODUCT_IMAGE },
+              },
+            },
+          },
           prices: { ...withPrices.prices, where: currentPrice, take: 1 },
         },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -323,6 +379,7 @@ export class MarketplaceOffersService {
         condition: offer.condition,
         stockSource: offer.stockSource,
         fulfillmentMode: offer.fulfillmentMode,
+        product: this.toProductSummary(offer.variant.product),
         currentPrice: {
           amount: price.amount,
           currency: price.currency,

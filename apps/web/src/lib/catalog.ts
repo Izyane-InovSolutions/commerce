@@ -6,6 +6,8 @@ import type {
   Category,
   Product,
   ProductListPage,
+  Storefront,
+  StorefrontOfferPage,
   SuccessEnvelope,
 } from './catalog-types';
 
@@ -55,6 +57,45 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
     }
     throw error;
   }
+}
+
+/** The seller's own public page, or null if the slug matches nothing a
+ * shopper could actually buy from (unknown, unapproved, or suspended). */
+export async function getStorefront(slug: string): Promise<Storefront | null> {
+  try {
+    const response = await apiClient.get<SuccessEnvelope<Storefront>>(
+      `/storefronts/${encodeURIComponent(slug)}`,
+      { next: { revalidate: 60 } },
+    );
+    return response.data;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export type StorefrontOfferQuery = { page?: number; limit?: number };
+
+/** Every listing this seller currently has published, at the price they've
+ * set — never another seller's offer of the same underlying product. */
+export async function listStorefrontOffers(
+  slug: string,
+  query: StorefrontOfferQuery = {},
+): Promise<StorefrontOfferPage> {
+  const response = await apiClient.get<SuccessEnvelope<StorefrontOfferPage>>(
+    `/storefronts/${encodeURIComponent(slug)}/offers`,
+    {
+      query: {
+        page: query.page,
+        limit: query.limit,
+        currency: await readCurrency(),
+      },
+      next: { revalidate: 60 },
+    },
+  );
+  return response.data;
 }
 
 export async function listCategories(): Promise<Category[]> {

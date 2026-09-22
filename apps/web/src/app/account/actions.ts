@@ -6,12 +6,15 @@ import { redirect } from 'next/navigation';
 import { apiClient } from '@/lib/api';
 import type { AuthTokens, SuccessEnvelope } from '@/lib/auth-types';
 import { mergeGuestCart } from '@/lib/cart';
+import { env } from '@/lib/env';
 import { toFormState, type FormState } from '@/lib/form';
 import { clearGuestToken } from '@/lib/guest-cookie';
+import type { OrderShipment } from '@/lib/commerce-types';
 import {
   addressInputFromFormData,
   createAddress,
   deleteAddress,
+  getOrderShipments,
   setDefaultAddress,
   updateAddress,
 } from '@/lib/orders';
@@ -156,4 +159,48 @@ export async function setDefaultAddressAction(
 
   revalidatePath('/account');
   return { status: 'idle', message: 'Default address updated.' };
+}
+
+/**
+ * The order detail modal's shipping timeline is the one part of an order
+ * card that isn't already on the page — fetched only once someone opens it,
+ * rather than for every order in the list up front.
+ */
+/**
+ * Hands this session off to the seller portal (apps/seller), which keeps its
+ * own separate login cookie — mints a one-time code here (authenticated as
+ * this user) and sends the browser to redeem it there, landing signed in
+ * without a second password prompt. `next` is a path within that app.
+ */
+async function redirectToSellerApp(next: string): Promise<never> {
+  const response = await apiClient.post<SuccessEnvelope<{ code: string }>>(
+    '/auth/handoff',
+  );
+  const url = new URL('/auth/handoff', env.sellerAppUrl);
+  url.searchParams.set('code', response.data.code);
+  url.searchParams.set('next', next);
+  redirect(url.toString());
+}
+
+/** From the account page's "Become a seller" button — lands the customer on
+ * the seller portal's existing application form, signed in as themselves. */
+export async function becomeSellerAction(): Promise<void> {
+  await redirectToSellerApp('/apply');
+}
+
+/** From the account page's "Seller dashboard" button, shown once approved. */
+export async function goToSellerDashboardAction(): Promise<void> {
+  await redirectToSellerApp('/');
+}
+
+export async function getOrderShipmentsAction(
+  orderId: string,
+): Promise<{ shipments: OrderShipment[] } | { error: string }> {
+  try {
+    const shipments = await getOrderShipments(orderId);
+    return { shipments };
+  } catch (error) {
+    const { message } = toFormState(error);
+    return { error: message ?? 'Could not load shipping status.' };
+  }
 }

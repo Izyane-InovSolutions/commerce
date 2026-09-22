@@ -29,12 +29,87 @@ export type SellerBalanceView = {
   currency: string;
 };
 
+export type SellerBalanceIntegrity = {
+  sellerId: string;
+  currency: string | null;
+  actual: { available: number; held: number; pending: number; paid: number };
+  expected: { available: number; held: number; pending: number; paid: number };
+  discrepancies: string[];
+};
+
 @Injectable()
 export class LedgerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
   ) {}
+
+  /** Read-only, consistent snapshot. Never repairs balances or releases holds. */
+  async checkIntegrity(sellerId: string): Promise<SellerBalanceIntegrity> {
+    return this.prisma.$transaction(
+      async (tx) => {
+        const balance = await tx.sellerBalance.findUnique({
+          where: { sellerId },
+        });
+        const ledger = await tx.ledgerEntry.aggregate({
+          where: { sellerId },
+          _sum: { netAmount: true },
+        });
+        const held = await tx.ledgerEntry.aggregate({
+          where: { sellerId, type: LedgerEntryType.SALE, releasedAt: null },
+          _sum: { netAmount: true },
+        });
+        const pending = await tx.sellerPayoutRequest.aggregate({
+          where: { sellerId, status: { notIn: ['SUCCEEDED', 'CANCELLED'] } },
+          _sum: { amount: true },
+        });
+        const paid = await tx.payout.aggregate({
+          where: { sellerId },
+          _sum: { amount: true },
+        });
+        const expected = {
+          available:
+            (ledger._sum.netAmount ?? 0) -
+            (held._sum.netAmount ?? 0) -
+            (pending._sum.amount ?? 0),
+          held: held._sum.netAmount ?? 0,
+          pending: pending._sum.amount ?? 0,
+          paid: paid._sum.amount ?? 0,
+        };
+        const actual = {
+          available: balance?.balance ?? 0,
+          held: balance?.heldBalance ?? 0,
+          pending: balance?.pendingPayoutBalance ?? 0,
+          paid: balance?.paidBalance ?? 0,
+        };
+        const discrepancies: string[] = (
+          Object.keys(expected) as Array<keyof typeof expected>
+        ).filter((key) => expected[key] !== actual[key]);
+        if (!balance) discrepancies.push('missing_balance');
+        if (balance) {
+          const mismatched = await tx.ledgerEntry.count({
+            where: { sellerId, currency: { not: balance.currency } },
+          });
+          const mismatchedPayouts = await tx.payout.count({
+            where: { sellerId, currency: { not: balance.currency } },
+          });
+          const mismatchedRequests = await tx.sellerPayoutRequest.count({
+            where: { sellerId, currency: { not: balance.currency } },
+          });
+          if (mismatched || mismatchedPayouts || mismatchedRequests)
+            discrepancies.push('mixed_currency');
+        }
+        return {
+          sellerId,
+          currency: balance?.currency ?? null,
+          actual,
+          expected,
+          discrepancies,
+        };
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
+  }
 
   // Settlement currency is fixed per seller; checkout claims it before charging.
   async ensureCurrency(

@@ -415,6 +415,23 @@ describe('Reviews HTTP API (#38, integration)', () => {
       .expect(201);
     reportId = report.body.data.id as string;
 
+    const unreportedQueue = await request(server)
+      .get('/api/v1/admin/reviews?hasOpenReport=false')
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+    expect(
+      unreportedQueue.body.data.items.map((item: { id: string }) => item.id),
+    ).not.toContain(productReviewId);
+
+    await request(server)
+      .get('/api/v1/admin/reviews?hasOpenReport=invalid')
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(400);
+    await request(server)
+      .get('/api/v1/admin/reviews')
+      .set('authorization', `Bearer ${sellerToken}`)
+      .expect(403);
+
     const queue = await request(server)
       .get('/api/v1/admin/reviews?hasOpenReport=true')
       .set('authorization', `Bearer ${adminToken}`)

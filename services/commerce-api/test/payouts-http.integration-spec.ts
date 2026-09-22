@@ -84,6 +84,14 @@ describe('Seller payout HTTP API (#36, integration)', () => {
   });
 
   afterAll(async () => {
+    if (!prisma || !sellerId) {
+      await app?.close();
+      return;
+    }
+    const batches = await prisma.payoutBatch.findMany({
+      where: { requests: { some: { sellerId } } },
+      select: { id: true },
+    });
     if (payoutRequestId) {
       await prisma.payoutRequestEvent.deleteMany({
         where: { payoutRequestId },
@@ -92,7 +100,12 @@ describe('Seller payout HTTP API (#36, integration)', () => {
     }
     await prisma.payout.deleteMany({ where: { sellerId } });
     await prisma.sellerPayoutRequest.deleteMany({ where: { sellerId } });
-    await prisma.payoutBatch.deleteMany({ where: { requests: { none: {} } } });
+    await prisma.payoutBatch.deleteMany({
+      where: {
+        id: { in: batches.map((batch) => batch.id) },
+        requests: { none: {} },
+      },
+    });
     await prisma.sellerPayoutAccount.deleteMany({ where: { sellerId } });
     await prisma.ledgerEntry.deleteMany({ where: { sellerId } });
     await prisma.sellerBalance.deleteMany({ where: { sellerId } });
