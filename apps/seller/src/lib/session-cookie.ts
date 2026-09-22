@@ -1,5 +1,7 @@
 import { cookies } from 'next/headers';
 
+import { BASE_PATH } from './base-path';
+
 /**
  * Session cookie names for this portal.
  *
@@ -41,20 +43,22 @@ export async function writeSession(session: {
     httpOnly: true,
     sameSite: 'lax',
     secure,
-    path: '/',
+    path: BASE_PATH,
     maxAge: session.expiresIn,
   });
   jar.set(REFRESH_COOKIE, session.refreshToken, {
     httpOnly: true,
     sameSite: 'lax',
     secure,
-    path: '/',
+    path: BASE_PATH,
     maxAge: REFRESH_MAX_AGE_SECONDS,
   });
 }
 
 export async function clearSession(): Promise<void> {
   const jar = await cookies();
-  jar.delete(ACCESS_COOKIE);
-  jar.delete(REFRESH_COOKIE);
+  // A cookie is only removed by a delete that matches the path it was
+  // written with, so these have to carry BASE_PATH as well.
+  jar.delete({ name: ACCESS_COOKIE, path: BASE_PATH });
+  jar.delete({ name: REFRESH_COOKIE, path: BASE_PATH });
 }

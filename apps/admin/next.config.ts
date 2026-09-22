@@ -10,6 +10,8 @@ const apiBaseUrl = (
 const apiOrigin = apiBaseUrl.replace(/\/api\/v1\/?$/, '');
 
 const nextConfig: NextConfig = {
+  // Served under /admin on the shared Vercel origin; see src/lib/base-path.ts.
+  basePath: '/admin',
   transpilePackages: ['@commerce/api-client', '@commerce/contracts'],
   images: {
     // Next 16 refuses to optimise a local image whose src carries a query
