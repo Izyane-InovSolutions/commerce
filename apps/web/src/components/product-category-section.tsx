@@ -1,7 +1,5 @@
-'use client';
-
 import Image, { type StaticImageData } from 'next/image';
-import { useState } from 'react';
+import Link from 'next/link';
 
 import elBanner from '@/assets/el_banner.png';
 import hmBanner from '@/assets/hm_banner.png';
@@ -31,12 +29,8 @@ export function ProductCategorySection({
 }: {
   category: ProductSection;
 }) {
-  const [expanded, setExpanded] = useState(false);
-
   const hasMore = category.products.length > INITIAL_VISIBLE_COUNT;
-  const visibleProducts = expanded
-    ? category.products
-    : category.products.slice(0, INITIAL_VISIBLE_COUNT);
+  const visibleProducts = category.products.slice(0, INITIAL_VISIBLE_COUNT);
   const banner = SECTION_BANNERS[category.slug];
 
   return (
@@ -65,13 +59,14 @@ export function ProductCategorySection({
       </div>
       {hasMore ? (
         <Button
+          asChild
           variant="outline"
           size="sm"
-          aria-expanded={expanded}
-          onClick={() => setExpanded((value) => !value)}
-          className="border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 aria-expanded:bg-blue-100 aria-expanded:text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300 dark:hover:bg-blue-900"
+          className="border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300 dark:hover:bg-blue-900"
         >
-          {expanded ? 'View less' : 'View more'}
+          <Link href={`/products?category=${encodeURIComponent(category.slug)}`}>
+            View more
+          </Link>
         </Button>
       ) : null}
     </section>

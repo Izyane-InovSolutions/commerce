@@ -13,7 +13,7 @@ describe('SideNav', () => {
     );
     expect(screen.getByRole('link', { name: 'New Arrivals' })).toHaveAttribute(
       'href',
-      '/new-arrivals',
+      '/products?filter=new-arrivals',
     );
     expect(screen.getByRole('link', { name: 'Best Sellers' })).toHaveAttribute(
       'href',
