@@ -58,6 +58,115 @@ services/
 
 The goal is strong domain boundaries without introducing distributed-system complexity before it is necessary.
 
+## Getting Started
+
+### Requirements
+
+- Node.js 24 or later
+- npm 11 or later
+- PostgreSQL 14 or later
+- Flutter SDK (only required for the mobile app)
+
+All JavaScript and TypeScript commands below run from the repository root.
+
+### Local development
+
+Install the workspace dependencies:
+
+```bash
+npm install
+```
+
+Configure the API environment and update the database connection values as
+needed. Do not commit this file:
+
+```bash
+cp services/commerce-api/.env.example services/commerce-api/.env
+```
+
+Create the local database schema, generate Prisma Client, and load development
+data:
+
+```bash
+npm run prisma:migrate --workspace @commerce/commerce-api
+npm run prisma:generate --workspace @commerce/commerce-api
+npm run prisma:seed --workspace @commerce/commerce-api
+```
+
+Start the API and any client applications in separate terminals:
+
+```bash
+npm run api:dev       # http://localhost:3000, Swagger: /api/docs
+npm run web:dev       # http://localhost:3001
+npm run admin:dev     # http://localhost:3002
+npm run seller:dev    # http://localhost:3003
+```
+
+The API health endpoint is `http://localhost:3000/api/v1/health`. See
+[`services/commerce-api/API_TESTING.md`](services/commerce-api/API_TESTING.md)
+for seeded credentials, authentication, and endpoint examples.
+
+### Checks and tests
+
+Run the repository checks from the root:
+
+```bash
+npm run format:check
+npm run lint
+npm run typecheck
+npm test
+npm run test:e2e
+npm run build
+```
+
+Generate or verify the API contract directly:
+
+```bash
+npm run swagger:generate --workspace @commerce/commerce-api
+npm run swagger:check --workspace @commerce/commerce-api
+```
+
+## Production
+
+Production requires PostgreSQL, a TLS-enabled API endpoint, and production
+values for every API environment variable. Provision secrets through the
+deployment platform or secret manager. Never reuse the development
+`.env` file, seed credentials, JWT secrets, payment keys, or database
+passwords in production.
+
+On the release host or in the release container:
+
+```bash
+npm ci
+
+# Set NODE_ENV=production and provide the production environment variables
+# before running the commands below.
+npm run prisma:deploy --workspace @commerce/commerce-api
+npm run prisma:generate --workspace @commerce/commerce-api
+npm run build
+```
+
+Start the API after the build:
+
+```bash
+npm run start:prod --workspace @commerce/commerce-api
+```
+
+Start the built Next.js applications as separate processes when they are part
+of the deployment:
+
+```bash
+npm run start --workspace @commerce/web
+npm run start --workspace @commerce/admin
+npm run start --workspace @commerce/seller
+```
+
+The API production process listens on the `PORT` configured in its environment
+(the local default is `3000`). The web, admin, and seller processes use ports
+`3001`, `3002`, and `3003` respectively. Put them behind a reverse proxy or
+load balancer, terminate TLS there, and configure the clients to use the public
+API URL. Do not run `prisma:seed` in production.
+
 ## 1. Project Vision
 
 The platform combines:

@@ -16,7 +16,7 @@ export async function SiteHeader() {
           className="flex items-center gap-1.5 text-base font-semibold tracking-tight"
         >
           <Image src={izyaneLogo} alt="" className="h-6 w-auto" priority />
-          Marketplace
+          
         </Link>
 
         <form
