@@ -1,11 +1,10 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { PromoCarouselCard } from './promo-carousel-card';
-import type { StaticImageData } from 'next/image';
 import type { Product } from '@/lib/catalog-types';
 
-const banner: StaticImageData = { src: '/banner.png', width: 800, height: 400 };
+const gradientClassName = 'bg-linear-to-br from-amber-500 to-rose-600';
 
 function buildProduct(index: number): Product {
   return {
@@ -36,13 +35,13 @@ function buildProduct(index: number): Product {
 }
 
 describe('PromoCarouselCard', () => {
-  it('shows the title, a shop-all link, and up to three products on the first page', () => {
+  it('shows the title, a shop-all link, and every product (Embla mounts the whole track, not just one page)', () => {
     const products = Array.from({ length: 4 }, (_, index) => buildProduct(index));
     render(
       <PromoCarouselCard
         title="Trending"
         href="/products?filter=trending"
-        banner={banner}
+        gradientClassName={gradientClassName}
         products={products}
       />,
     );
@@ -52,10 +51,9 @@ describe('PromoCarouselCard', () => {
       'href',
       '/products?filter=trending',
     );
-    expect(screen.getByText('Product 0')).toBeInTheDocument();
-    expect(screen.getByText('Product 1')).toBeInTheDocument();
-    expect(screen.getByText('Product 2')).toBeInTheDocument();
-    expect(screen.queryByText('Product 3')).not.toBeInTheDocument();
+    for (const product of products) {
+      expect(screen.getByText(product.name)).toBeInTheDocument();
+    }
   });
 
   it('has no pager for three or fewer products', () => {
@@ -63,39 +61,17 @@ describe('PromoCarouselCard', () => {
       <PromoCarouselCard
         title="Trending"
         href="/products?filter=trending"
-        banner={banner}
+        gradientClassName={gradientClassName}
         products={[buildProduct(0), buildProduct(1), buildProduct(2)]}
       />,
     );
 
     expect(
-      screen.queryByRole('button', { name: 'Next products' }),
+      screen.queryByRole('button', { name: 'Next slide' }),
     ).not.toBeInTheDocument();
-  });
-
-  it('advances to the next page of products, looping back into the list so every page still shows three', () => {
-    const products = Array.from({ length: 4 }, (_, index) => buildProduct(index));
-    render(
-      <PromoCarouselCard
-        title="Trending"
-        href="/products?filter=trending"
-        banner={banner}
-        products={products}
-      />,
-    );
-
-    // Page 2 of 4 products wraps: [3, 0, 1] — still three, not a short
-    // trailing page of just [3].
-    fireEvent.click(screen.getByRole('button', { name: 'Next products' }));
-    expect(screen.getByText('Product 3')).toBeInTheDocument();
-    expect(screen.getByText('Product 0')).toBeInTheDocument();
-    expect(screen.getByText('Product 1')).toBeInTheDocument();
-    expect(screen.queryByText('Product 2')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Next products' }));
-    expect(screen.getByText('Product 0')).toBeInTheDocument();
-    expect(screen.getByText('Product 1')).toBeInTheDocument();
-    expect(screen.getByText('Product 2')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Previous slide' }),
+    ).not.toBeInTheDocument();
   });
 
   it('renders no product content, and no controls, for an empty list', () => {
@@ -103,13 +79,14 @@ describe('PromoCarouselCard', () => {
       <PromoCarouselCard
         title="Trending"
         href="/products?filter=trending"
-        banner={banner}
+        gradientClassName={gradientClassName}
         products={[]}
       />,
     );
 
     expect(
-      screen.queryByRole('button', { name: 'Next products' }),
+      screen.queryByRole('button', { name: 'Next slide' }),
     ).not.toBeInTheDocument();
+    expect(screen.queryByRole('group')).not.toBeInTheDocument();
   });
 });

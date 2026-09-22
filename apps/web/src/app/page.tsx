@@ -1,5 +1,3 @@
-import newArrivalsBanner from '@/assets/nw_banner.png';
-import trendingBanner from '@/assets/tr_banner.png';
 import {
   ProductCategorySection,
   type ProductSection,
@@ -76,13 +74,13 @@ export default async function HomePage() {
           <PromoCarouselCard
             title="Trending"
             href="/products?filter=trending"
-            banner={trendingBanner}
+            gradientClassName="bg-linear-to-br from-amber-500 via-orange-500 to-rose-600"
             products={trending}
           />
           <PromoCarouselCard
             title="New Arrivals"
             href="/products?filter=new-arrivals"
-            banner={newArrivalsBanner}
+            gradientClassName="bg-linear-to-br from-sky-500 via-indigo-500 to-violet-600"
             products={newArrivals}
           />
         </div>
