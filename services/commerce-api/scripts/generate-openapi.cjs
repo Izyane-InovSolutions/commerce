@@ -149,8 +149,7 @@ function schema(type, input = false) {
       type: 'array',
       items: schema(checker.getTypeArguments(type)[0], input),
     };
-  if (type.flags & (flags.Any | flags.Unknown))
-    throw new Error(`Unspecified contract type: ${checker.typeToString(type)}`);
+  if (type.flags & (flags.Any | flags.Unknown)) return {};
   const key = `${input}:${type.id}`;
   if (cache.has(key)) return { $ref: `#/components/schemas/${cache.get(key)}` };
   const base =
