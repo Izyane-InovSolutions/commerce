@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { BackButton } from '@/components/back-button';
@@ -88,6 +89,20 @@ export default async function ProductDetailPage({
             <h1 className="text-2xl font-semibold tracking-tight text-balance">
               {product.name}
             </h1>
+            {offer?.seller ? (
+              offer.seller.storefrontSlug ? (
+                <Link
+                  href={`/sellers/${offer.seller.storefrontSlug}`}
+                  className="text-muted-foreground block text-sm hover:underline"
+                >
+                  Sold by {offer.seller.displayName ?? 'a marketplace seller'}
+                </Link>
+              ) : (
+                <p className="text-muted-foreground text-sm">
+                  Sold by {offer.seller.displayName ?? 'a marketplace seller'}
+                </p>
+              )
+            ) : null}
           </div>
 
           <div className="space-y-1">

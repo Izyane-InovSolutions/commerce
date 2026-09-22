@@ -147,6 +147,7 @@ export class ShipmentsService {
       methodName: shipment.shippingGroup.methodName,
       trackingReference: shipment.trackingReference,
       estimatedDeliveryAt: shipment.estimatedDeliveryAt,
+      createdAt: shipment.createdAt,
       events: shipment.trackingEvents.map((event) => ({
         normalizedStatus: event.normalizedStatus,
         description: event.description,
@@ -278,16 +279,31 @@ export class ShipmentsService {
         destinationCountry,
       });
 
+      const bookedAt = new Date();
       const booked = await tx.shipment.update({
         where: { id: shipmentId },
         data: {
           status: ShipmentStatus.BOOKED,
           trackingReference: result.trackingReference,
           estimatedDeliveryAt: result.estimatedDeliveryAt,
-          bookedAt: new Date(),
+          bookedAt,
           version: { increment: 1 },
         },
         include: { lines: true },
+      });
+
+      // Without this, the customer-facing timeline (built from
+      // trackingEvents, not Shipment.status) shows nothing until dispatch —
+      // see the matching event FulfillmentsService.dispatch() records.
+      await tx.trackingEvent.create({
+        data: {
+          shipmentId,
+          source: TrackingEventSource.ADMIN_MANUAL,
+          normalizedStatus: ShipmentStatus.BOOKED,
+          occurredAt: bookedAt,
+          actorUserId,
+          isCorrection: false,
+        },
       });
 
       await this.auditService.record(

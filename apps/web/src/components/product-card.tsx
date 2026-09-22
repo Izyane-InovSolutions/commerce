@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import {
   getDisplayPrice,
   getPrimaryImage,
+  getPrimaryOffer,
   getShippingCost,
   isInStock,
   type Product,
@@ -21,11 +22,14 @@ export function ProductCard({
   const price = getDisplayPrice(product);
   const shippingCost = getShippingCost(product);
   const outOfStock = price !== null && !isInStock(product);
+  // Null for the platform's own products — only a marketplace offer names a
+  // seller at all.
+  const seller = getPrimaryOffer(product)?.seller ?? null;
 
   return (
-    <Link href={`/products/${product.slug}`} className="group block h-full">
-      <Card className="relative h-full transition-all duration-200 hover:shadow-md hover:border-foreground/20">
-        <CardContent className="space-y-3">
+    <Card className="group relative h-full transition-all duration-200 hover:shadow-md hover:border-foreground/20">
+      <CardContent className="space-y-3">
+        <Link href={`/products/${product.slug}`} className="block">
           <div className="relative overflow-hidden rounded-lg">
             <ProductImage
               src={getPrimaryImage(product)?.url ?? null}
@@ -43,30 +47,46 @@ export function ProductCard({
               </span>
             ) : null}
           </div>
-          <div className="space-y-1">
-            {product.category ? (
-              <p className="text-xs font-medium text-muted-foreground">
-                {product.category.name}
-              </p>
-            ) : null}
-            <p className="text-sm font-medium line-clamp-2 group-hover:underline">
+        </Link>
+        <div className="space-y-1">
+          {product.category ? (
+            <p className="text-xs font-medium text-muted-foreground">
+              {product.category.name}
+            </p>
+          ) : null}
+          <Link href={`/products/${product.slug}`}>
+            <p className="text-sm font-medium line-clamp-2 hover:underline">
               {product.name}
             </p>
+          </Link>
+          {seller?.storefrontSlug ? (
+            <Link
+              href={`/sellers/${seller.storefrontSlug}`}
+              className="text-muted-foreground block text-xs hover:underline"
+            >
+              Sold by {seller.displayName ?? 'a marketplace seller'}
+            </Link>
+          ) : seller ? (
+            <p className="text-muted-foreground text-xs">
+              Sold by {seller.displayName ?? 'a marketplace seller'}
+            </p>
+          ) : null}
+          <Link href={`/products/${product.slug}`}>
             <p className="text-sm font-semibold">
               {price !== null
                 ? formatMinor(price.amount, price.currency)
                 : 'Not sold in this currency'}
             </p>
-            {price !== null && shippingCost !== null ? (
-              <p className="text-xs text-muted-foreground">
-                {shippingCost.amount === 0
-                  ? 'Free shipping'
-                  : `+ ${formatMinor(shippingCost.amount, shippingCost.currency)} shipping`}
-              </p>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
-    </Link>
+          </Link>
+          {price !== null && shippingCost !== null ? (
+            <p className="text-xs text-muted-foreground">
+              {shippingCost.amount === 0
+                ? 'Free shipping'
+                : `+ ${formatMinor(shippingCost.amount, shippingCost.currency)} shipping`}
+            </p>
+          ) : null}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

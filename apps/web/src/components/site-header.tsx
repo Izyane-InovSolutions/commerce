@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 
 export async function SiteHeader() {
   return (
-    <header className="border-b">
+    <header className="bg-background sticky top-0 z-40 border-b">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-4 py-3">
         <Link
           href="/"

@@ -44,6 +44,11 @@ describe('AuthService', () => {
       findUnique: jest.Mock;
       update: jest.Mock;
     };
+    handoffToken: {
+      updateMany: jest.Mock;
+      create: jest.Mock;
+      findUnique: jest.Mock;
+    };
     user: { update: jest.Mock };
     $transaction: jest.Mock;
   };
@@ -73,6 +78,11 @@ describe('AuthService', () => {
         create: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
+      },
+      handoffToken: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        create: jest.fn(),
+        findUnique: jest.fn(),
       },
       user: { update: jest.fn() },
       $transaction: jest.fn(),
@@ -438,6 +448,109 @@ describe('AuthService', () => {
         expect.objectContaining({
           action: 'auth.password_reset.confirmed',
         }) as object,
+      );
+    });
+  });
+
+  describe('mintHandoffToken', () => {
+    it('creates a handoff token and returns a code with its ttl', async () => {
+      const result = await authService.mintHandoffToken('user-1');
+
+      expect(prisma.handoffToken.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ userId: 'user-1' }) as object,
+        }),
+      );
+      expect(result.code).toEqual(expect.any(String));
+      expect(result.expiresIn).toBe(60);
+      expect(auditService.record).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'auth.handoff.issued' }) as object,
+      );
+    });
+  });
+
+  describe('exchangeHandoffToken', () => {
+    it('rejects an unknown code', async () => {
+      prisma.handoffToken.findUnique.mockResolvedValue(null);
+
+      await expect(
+        authService.exchangeHandoffToken('bad-code'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('rejects an already-used code', async () => {
+      prisma.handoffToken.findUnique.mockResolvedValue({
+        id: 'handoff-1',
+        userId: 'user-1',
+        usedAt: new Date(),
+        expiresAt: new Date(Date.now() + 1000),
+      });
+
+      await expect(
+        authService.exchangeHandoffToken('used-code'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('rejects an expired code', async () => {
+      prisma.handoffToken.findUnique.mockResolvedValue({
+        id: 'handoff-1',
+        userId: 'user-1',
+        usedAt: null,
+        expiresAt: new Date(Date.now() - 1000),
+      });
+
+      await expect(
+        authService.exchangeHandoffToken('expired-code'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('rejects a code consumed by a concurrent request', async () => {
+      prisma.handoffToken.findUnique.mockResolvedValue({
+        id: 'handoff-1',
+        userId: 'user-1',
+        usedAt: null,
+        expiresAt: new Date(Date.now() + 60000),
+      });
+      prisma.handoffToken.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        authService.exchangeHandoffToken('valid-code'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(usersService.findById).not.toHaveBeenCalled();
+    });
+
+    it('rejects a code for a since-deactivated user', async () => {
+      prisma.handoffToken.findUnique.mockResolvedValue({
+        id: 'handoff-1',
+        userId: 'user-1',
+        usedAt: null,
+        expiresAt: new Date(Date.now() + 60000),
+      });
+      usersService.findById.mockResolvedValue(buildUser({ isActive: false }));
+
+      await expect(
+        authService.exchangeHandoffToken('valid-code'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('claims the code and issues a token pair for the owning user', async () => {
+      prisma.handoffToken.findUnique.mockResolvedValue({
+        id: 'handoff-1',
+        userId: 'user-1',
+        usedAt: null,
+        expiresAt: new Date(Date.now() + 60000),
+      });
+      usersService.findById.mockResolvedValue(buildUser());
+
+      const result = await authService.exchangeHandoffToken('valid-code');
+
+      expect(prisma.handoffToken.updateMany).toHaveBeenCalledWith({
+        where: { id: 'handoff-1', usedAt: null, expiresAt: { gt: expect.any(Date) as Date } },
+        data: { usedAt: expect.any(Date) as Date },
+      });
+      expect(result.accessToken).toBe('signed.jwt.token');
+      expect(auditService.record).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'auth.handoff.exchanged' }) as object,
       );
     });
   });

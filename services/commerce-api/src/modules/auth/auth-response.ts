@@ -19,3 +19,10 @@ export type SessionSummary = {
   createdAt: Date;
   expiresAt: Date;
 };
+
+/** A one-time code minted for handing a signed-in session off to another
+ * app (see AuthService.mintHandoffToken/exchangeHandoffToken). */
+export type HandoffCodeResponse = {
+  code: string;
+  expiresIn: number;
+};

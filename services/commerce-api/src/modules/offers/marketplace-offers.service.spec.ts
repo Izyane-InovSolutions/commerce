@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { MediaService } from '../media/media.service';
 import { SellersService } from '../sellers/sellers.service';
 import { StorefrontsService } from '../sellers/storefronts.service';
 import { MarketplaceOffersService } from './marketplace-offers.service';
@@ -23,6 +24,7 @@ describe('MarketplaceOffersService mutation guards', () => {
     sellers as unknown as SellersService,
     {} as StorefrontsService,
     new ProductReferencesService(prisma as unknown as PrismaService),
+    {} as MediaService,
   );
   beforeEach(() => {
     jest.resetAllMocks();

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 
 import {
   backendListSellerOffers,
@@ -93,7 +94,7 @@ export default async function OrdersPage({
     <div className="space-y-6">
       <PageHeader
         title={TITLE}
-        description="Your share of each customer order. Status follows the parent order for now — there is nothing here for you to advance yet."
+        description="Your share of each customer order. Open one to accept, pack, and dispatch whatever you ship yourself."
       />
 
       {orders.items.length === 0 ? (
@@ -107,9 +108,12 @@ export default async function OrdersPage({
             <div key={order.id} className="rounded-xl border">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
                 <div>
-                  <p className="font-mono text-xs">
+                  <Link
+                    href={`/orders/${order.id}`}
+                    className="font-mono text-xs hover:underline"
+                  >
                     {order.orderId.slice(0, 8)}
-                  </p>
+                  </Link>
                   <p className="text-muted-foreground text-xs">
                     {new Date(order.createdAt).toLocaleDateString('en-GB', {
                       day: 'numeric',

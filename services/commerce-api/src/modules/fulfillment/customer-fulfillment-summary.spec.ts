@@ -22,6 +22,33 @@ describe('deriveCustomerFulfillmentSummary', () => {
     );
   });
 
+  it('is PACKED once every fulfillment order has finished packing', () => {
+    expect(
+      deriveCustomerFulfillmentSummary([
+        FulfillmentStatus.PACKED,
+        FulfillmentStatus.PACKED,
+      ]),
+    ).toBe('PACKED');
+  });
+
+  it('is PACKED when one fulfillment order packed and another was cancelled', () => {
+    expect(
+      deriveCustomerFulfillmentSummary([
+        FulfillmentStatus.PACKED,
+        FulfillmentStatus.CANCELLED,
+      ]),
+    ).toBe('PACKED');
+  });
+
+  it('is PREPARING while any fulfillment order has not yet finished packing', () => {
+    expect(
+      deriveCustomerFulfillmentSummary([
+        FulfillmentStatus.PACKED,
+        FulfillmentStatus.PICKING,
+      ]),
+    ).toBe('PREPARING');
+  });
+
   it('is PARTIALLY_DISPATCHED when some but not all fulfillment orders have shipped', () => {
     expect(
       deriveCustomerFulfillmentSummary([
