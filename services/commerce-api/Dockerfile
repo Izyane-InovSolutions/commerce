@@ -15,6 +15,15 @@
 FROM node:24-bookworm-slim AS deps
 WORKDIR /repo
 
+# Must be present before `prisma generate` runs in the build stage below.
+# Prisma picks its query engine by sniffing the OpenSSL version at generate
+# time; with no libssl to find it guesses openssl-1.1.x, and the runtime stage
+# — which does have OpenSSL 3 — then demands a 3.0.x engine that was never
+# emitted. The client and the runtime have to agree, so both install it.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
 # Manifests only, so this layer stays cached until a dependency actually
 # changes. --workspace installs just the API's tree: without it npm would pull
 # Next, React and the whole frontend toolchain into the image as well.
@@ -48,6 +57,12 @@ RUN npm run build
 FROM node:24-bookworm-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /repo
+
+# The runtime half of the pairing described in the deps stage: the engine
+# generated there links against OpenSSL 3, so it has to exist here too.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 
 # A second, production-only install: this drops tsc, the Nest CLI, jest and
 # eslint rather than carrying them into the image that faces the internet.

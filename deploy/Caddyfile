@@ -1,7 +1,24 @@
-# Plain HTTP, as chosen for this stage. Traffic between Vercel and this server
-# is unencrypted, so anything in a request — including bearer tokens on the
-# proxied /api/v1 calls — is readable in transit. See "Turning on HTTPS" in
-# README.md; it is a four-line change once a hostname exists.
+# Internal testing: this serves plain HTTP on the LAN at
+# http://192.168.100.105. There is no certificate because there is no hostname
+# to put one on, and nothing is reachable from outside the network.
+#
+# To publish it later, start the cloudflared service (see docker-compose.yml)
+# — nothing in this file needs to change for that.
+
+{
+	servers {
+		# Without this Caddy discards any inbound X-Forwarded-For and reports
+		# only its own peer, because it will not propagate a header it cannot
+		# vouch for. The API then sees every visitor as one address and the
+		# global 100 req/min throttle becomes a cap on the whole platform.
+		#
+		# Testers connect from LAN addresses, which are private, so this also
+		# lets a tester set their own X-Forwarded-For and dodge their rate
+		# limit. That is an acceptable trade inside the building, and it is the
+		# same setting needed once cloudflared fronts this from outside.
+		trusted_proxies static private_ranges
+	}
+}
 
 :80 {
 	encode gzip

@@ -1,53 +1,91 @@
-# Deploying the Commerce API
+# Deploying the Commerce API — internal testing
 
-Runs the NestJS API, PostgreSQL and a Caddy reverse proxy on one Linux server
-via Docker Compose. Everything here has been verified end to end: migrations
-apply, `/api/v1/health/ready` reports the database up, and an unauthenticated
-request to a protected route returns 401.
+Runs the NestJS API, PostgreSQL and a Caddy reverse proxy on the on-premise
+server at **192.168.100.105**, reachable from the LAN at:
 
-Serving **plain HTTP** for now. See [Turning on HTTPS](#turning-on-https).
+```
+http://192.168.100.105/api/v1
+```
+
+No domain, no TLS, no inbound firewall rule — nothing here is reachable from
+outside the network. See [Publishing it later](#publishing-it-later) when that
+changes.
+
+Everything below was verified end to end before being written down: migrations
+apply, `/health/ready` reports the database up, protected routes return 401,
+and rate limiting buckets per tester rather than globally.
 
 ## What runs
 
-| Service    | Image / source            | Exposed        | Notes |
-|------------|---------------------------|----------------|-------|
-| `caddy`    | `caddy:2-alpine`          | host `:80`     | The only service reachable from outside |
-| `api`      | built from this repo      | internal :3000 | Non-root, read-only deps, media on a volume |
-| `postgres` | `postgres:17-bookworm`    | internal only  | Data in the `pgdata` volume |
-| `migrate`  | API image, `build` target | —              | One-shot `prisma migrate deploy`, runs before `api` starts |
+| Service      | Image / source            | Exposed        | Notes |
+|--------------|---------------------------|----------------|-------|
+| `caddy`      | `caddy:2-alpine`          | LAN `:80`      | Reverse proxy; the only way in |
+| `api`        | built from this repo      | internal :3000 | Non-root, media on a volume |
+| `postgres`   | `postgres:17-bookworm`    | internal only  | Data in the `pgdata` volume |
+| `migrate`    | API image, `build` target | —              | One-shot `prisma migrate deploy` before `api` starts |
+| `cloudflared`| `cloudflare/cloudflared`  | *not started*  | Behind the `tunnel` profile; unused for internal testing |
 
 `migrate` is a separate one-shot container rather than part of the API's
-startup, so a second API replica can never race a schema change.
+startup, so a second API replica could never race a schema change.
+
+## ⚠️ The Vercel frontends cannot reach this server
+
+192.168.100.105 is a private address. The web, admin and seller apps call this
+API **server-side** — from Vercel's infrastructure, not from the tester's
+browser — and Vercel cannot route to your LAN. Deployed frontends pointed at
+this server will fail on every request that loads data.
+
+For internal testing, run the frontends where they can see it:
+
+- **On a tester's machine**, with `NEXT_PUBLIC_API_BASE_URL=http://192.168.100.105/api/v1`
+  and `npm run web:dev` / `admin:dev` / `seller:dev`. Fine for developers,
+  awkward for non-technical testers.
+- **On this same server**, added to this Compose stack behind Caddy, so testers
+  get one LAN URL with `/`, `/admin` and `/seller` — the layout `vercel.json`
+  already describes. Not built yet; ask if you want it.
+
+The API itself is fully testable right now with curl, Postman or the Swagger UI
+at `http://192.168.100.105/api/docs`.
 
 ## Server prerequisites
 
-Ubuntu 22.04/24.04 or Debian 12, 2 GB RAM minimum (the TypeScript build is the
-peak; 1 GB will OOM). Install Docker:
+Debian 12 or Ubuntu 22.04/24.04, 2 GB RAM minimum — the TypeScript build is the
+peak and 1 GB will OOM.
 
 ```bash
 curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker "$USER"   # log out and back in
+sudo usermod -aG docker "$USER"      # log out and back in
+sudo systemctl enable --now docker   # so the stack returns after a power cut
 ```
 
-Open only what you need:
+Firewall — LAN only, no inbound from the internet:
 
 ```bash
 sudo ufw allow OpenSSH
-sudo ufw allow 80/tcp
+sudo ufw allow from 192.168.100.0/24 to any port 80
 sudo ufw enable
 ```
 
-Postgres is deliberately **not** published to the host — it is reachable only
-on Compose's internal network. Do not add a `ports:` entry for it.
+Give the box a static address or a DHCP reservation for 192.168.100.105. If it
+moves, every tester's bookmark and `NEXT_PUBLIC_API_BASE_URL` breaks.
+
+**Check the clock.** Access tokens live 15 minutes and JWT expiry is
+wall-clock. A drifting on-prem box rejects valid tokens or honours expired
+ones, and the symptom looks like random logouts rather than a clock problem:
+
+```bash
+timedatectl set-ntp true && timedatectl status   # want "synchronized: yes"
+```
 
 ## First deploy
 
 ```bash
 git clone <this-repo> /opt/commerce && cd /opt/commerce/deploy
 cp .env.example .env
+chmod 600 .env
 ```
 
-Fill in `.env`. Three values have no safe default:
+Fill in `.env`. Three values have no safe default — leave `TUNNEL_TOKEN` empty:
 
 ```bash
 openssl rand -base64 48   # POSTGRES_PASSWORD
@@ -55,41 +93,41 @@ openssl rand -base64 48   # JWT_SECRET           (min 32 chars, enforced at boot
 openssl rand -base64 48   # MEDIA_SIGNING_SECRET (min 32 chars, separate from JWT_SECRET)
 ```
 
-Set `DATABASE_URL` and `SHADOW_DATABASE_URL` to use the same password you put
-in `POSTGRES_PASSWORD`. Then:
+Set `DATABASE_URL` and `SHADOW_DATABASE_URL` to the same password you used for
+`POSTGRES_PASSWORD`. Then:
 
 ```bash
 docker compose up -d --build
-docker compose ps                      # api should reach (healthy)
-curl -s localhost/api/v1/health/ready  # database: up
+docker compose ps                                          # api should reach (healthy)
+curl -s http://192.168.100.105/api/v1/health/ready          # database: up
 ```
 
-The first build takes a few minutes; later ones reuse cached layers.
+First build takes a few minutes; later ones reuse cached layers.
 
 > **Leave the commented-out `UNIFIED_PAYMENTS_*` lines commented.** Compose
 > passes `FOO=` as an empty string, and `@IsOptional()` only skips
 > null/undefined — an empty string still gets validated and the API refuses to
 > boot. Uncomment them only when switching to the `unified` provider.
 
-## Connecting the Vercel frontends
+## Seeding test data
 
-Set this on all three Vercel apps and redeploy:
+Internal testing usually wants an admin account to log in with. `SEED_ADMIN_EMAIL`
+and `SEED_ADMIN_PASSWORD` in `.env.example` feed the seed script:
 
+The seed script refuses to run unless `NODE_ENV` is `development` or `test`,
+which is a guard against seeding a real database. `.env` sets `production`, so
+override it for this one command:
+
+```bash
+docker compose run --rm -e NODE_ENV=development migrate npx prisma db seed
 ```
-NEXT_PUBLIC_API_BASE_URL = http://<SERVER_IP>/api/v1
-```
 
-Despite the `NEXT_PUBLIC_` prefix, the API client is server-only — it reads the
-session from `next/headers`, which cannot run in a browser. So the plain-HTTP
-hop is Vercel's server to this box, never the visitor's browser to this box,
-and an HTTPS page will not trip mixed-content blocking.
+That creates the admin account and a small catalog (3 categories, 18 products)
+to click around. Without the override it fails with
+"Seeding requires NODE_ENV=development or test".
 
-Two consequences worth knowing while HTTPS is off:
-
-- That hop crosses the public internet unencrypted. Requests carry bearer
-  tokens, so anyone positioned between Vercel and this server can read them.
-- `NEXT_PUBLIC_*` values are inlined into the client bundle, so the server's IP
-  is visible in the shipped JavaScript.
+Do not carry those credentials forward if this server later becomes reachable
+from outside.
 
 ## Updating
 
@@ -99,38 +137,25 @@ cd deploy && docker compose up -d --build
 ```
 
 Compose rebuilds, re-runs `migrate`, then restarts `api`. Expect a few seconds
-of downtime — this is a single-instance setup with no rolling deploy.
-
-## Turning on HTTPS
-
-Prerequisite: a hostname pointing at this server — a real domain, or a free
-`sslip.io` name (`203-0-113-10.sslip.io` resolves to `203.0.113.10`), which is
-enough for Let's Encrypt to issue a certificate.
-
-Replace the first line of `Caddyfile`:
-
-```diff
--:80 {
-+api.example.com {
-```
-
-Then `docker compose restart caddy`. Caddy obtains and renews the certificate
-itself; port 443 is already mapped. Update `NEXT_PUBLIC_API_BASE_URL` to
-`https://api.example.com/api/v1` and redeploy the Vercel apps.
+of downtime — single instance, no rolling deploy.
 
 ## Backups
 
-The `pgdata` volume is the only thing here that cannot be rebuilt from git.
-Nightly dump:
+Even for internal testing, the `pgdata` and `media` volumes are the only things
+that cannot be rebuilt from git — and on-premise there are no snapshots to fall
+back on.
 
 ```bash
 sudo tee /etc/cron.daily/commerce-backup >/dev/null <<'EOF'
 #!/bin/sh
 set -e
-mkdir -p /var/backups/commerce
+DEST=/var/backups/commerce
+mkdir -p "$DEST"
 docker exec commerce-postgres-1 pg_dump -U commerce -Fc commerce \
-  > "/var/backups/commerce/commerce-$(date +%F).dump"
-find /var/backups/commerce -name '*.dump' -mtime +14 -delete
+  > "$DEST/commerce-$(date +%F).dump"
+docker run --rm -v commerce_media:/media:ro -v "$DEST":/out alpine \
+  tar czf "/out/media-$(date +%F).tar.gz" -C /media .
+find "$DEST" -mtime +14 -delete
 EOF
 sudo chmod +x /etc/cron.daily/commerce-backup
 ```
@@ -141,11 +166,8 @@ Restore:
 docker exec -i commerce-postgres-1 pg_restore -U commerce -d commerce --clean < backup.dump
 ```
 
-Uploaded media lives in the `media` volume and is **not** covered by that dump.
-Back it up too, or move media to object storage.
-
-Verify a restore on a throwaway database before you need it. An untested
-backup is not a backup.
+While it is only test data this is low stakes — but get a copy off the machine
+before anyone relies on it, and test a restore before you need one.
 
 ## Operations
 
@@ -159,19 +181,45 @@ docker compose down                   # stop (volumes survive)
 docker compose down -v                # stop AND DELETE ALL DATA
 ```
 
-## Known gaps
+## Publishing it later
 
-- **Single instance, single server.** No redundancy; restarts are brief
-  downtime. If you add API replicas, set `SCHEDULED_WORKERS_ENABLED=false` on
-  every replica but one, or each will run the same cron jobs concurrently.
-- **Swagger UI is public** at `/api/docs`. It documents all 253 endpoints. To
-  close it, add to the `Caddyfile` above `reverse_proxy`:
+When this needs to be reachable from outside — for the Vercel frontends, or for
+testers off-site — the server is behind NAT, so it needs an outbound tunnel
+rather than a port forward. `cloudflared` is already defined in
+`docker-compose.yml` behind a profile:
+
+1. Cloudflare dashboard → **Zero Trust → Networks → Tunnels → Create**, pick
+   **Docker** as the connector, copy the token.
+2. Add a **Public Hostname** (e.g. `api.yourshop.com`) pointing at
+   `http://caddy:80`.
+3. Put the token in `.env` as `TUNNEL_TOKEN`.
+4. `docker compose --profile tunnel up -d`
+
+That also brings real HTTPS with it, since Cloudflare terminates TLS at its
+edge. Nothing in the `Caddyfile` needs to change. Then point the Vercel apps at
+`https://api.yourshop.com/api/v1`.
+
+## Things that will bite you
+
+These are all real, and each was hit while building this setup.
+
+- **Do not remove `trusted_proxies` from the `Caddyfile`.** Without it Caddy
+  discards the inbound `X-Forwarded-For`, the API sees every tester as one
+  address, and the global 100 req/min throttle becomes a cap on everyone at
+  once — about a dozen concurrent users before the whole thing returns 429s.
+  It pairs with `app.set('trust proxy', …)` in `src/main.ts`; both are needed.
+- **OpenSSL must be installed in both Docker stages.** Prisma picks its query
+  engine by sniffing OpenSSL at *generate* time. If the two stages disagree the
+  API crash-loops with "could not locate the Query Engine".
+- **Single instance.** If you add API replicas, set
+  `SCHEDULED_WORKERS_ENABLED=false` on every replica but one, or each runs the
+  same cron jobs concurrently.
+- **Swagger UI is open** at `/api/docs`. Fine on a trusted LAN, and genuinely
+  useful for internal testing — but close it before this is public. Add above
+  `reverse_proxy` in the `Caddyfile`:
   ```
   @docs path /api/docs*
   respond @docs 404
   ```
-  The admin portal proxies this path, so check nothing depends on it first.
-- **No log shipping or alerting.** Logs live in the Docker journal; nothing
-  tells you when the API is down.
-- **Secrets sit in `deploy/.env`** as plaintext on the server. It is gitignored.
-  Keep it `chmod 600` and owned by the deploying user.
+- **No log shipping or alerting.** Nothing tells you when the API is down.
+- **Secrets sit in `deploy/.env`** in plaintext. Gitignored; keep it `chmod 600`.

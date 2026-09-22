@@ -84,16 +84,42 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     ports:
+      # LAN only. Public traffic does not arrive here — it comes in through the
+      # cloudflared tunnel below, which reaches Caddy over the internal network.
+      # TLS is terminated at Cloudflare's edge, so Caddy serves plain HTTP here
+      # and needs no certificate and no 443 mapping.
       - '80:80'
-      # Already mapped so that turning on TLS later is a Caddyfile edit and a
-      # restart, with no change to this file.
-      - '443:443'
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
       - api
+
+  # Dials OUT to Cloudflare and holds the connection open, so this server needs
+  # no public IP, no port forwarding and no inbound firewall rule — which is
+  # what makes it work behind NAT. Cloudflare terminates TLS at its edge and
+  # forwards to Caddy over the tunnel.
+  #
+  # Create the tunnel once in the Cloudflare dashboard (Zero Trust > Networks >
+  # Tunnels), set its public hostname to point at http://caddy:80, then copy the
+  # token into deploy/.env as TUNNEL_TOKEN.
+  #
+  # Behind a `tunnel` profile so the rest of the stack can still be brought up
+  # on its own for LAN testing. Deploy with:
+  #   docker compose --profile tunnel up -d
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    profiles: ['tunnel']
+    command: tunnel --no-autoupdate run
+    environment:
+      # Not marked required: Compose interpolates this even when the
+      # `tunnel` profile is inactive, which would block bringing the stack
+      # up for LAN testing. cloudflared itself fails clearly if it is empty.
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on:
+      - caddy
 
 volumes:
   pgdata:
