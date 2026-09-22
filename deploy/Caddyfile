@@ -1,0 +1,18 @@
+# Plain HTTP, as chosen for this stage. Traffic between Vercel and this server
+# is unencrypted, so anything in a request — including bearer tokens on the
+# proxied /api/v1 calls — is readable in transit. See "Turning on HTTPS" in
+# README.md; it is a four-line change once a hostname exists.
+
+:80 {
+	encode gzip
+
+	# Vercel rewrites arrive with the original path, and the API mounts
+	# everything under /api/v1 (main.ts setGlobalPrefix), so no path rewriting
+	# is needed here.
+	reverse_proxy api:3000
+
+	log {
+		output stdout
+		format console
+	}
+}

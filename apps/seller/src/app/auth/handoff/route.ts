@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { BASE_PATH } from '@/lib/base-path';
 import { env } from '@/lib/env';
 import { writeSession } from '@/lib/session-cookie';
 
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const next = safeNext(request.nextUrl.searchParams.get('next'));
 
   if (!code) {
-    return NextResponse.redirect(new URL('/sign-in', request.url));
+    return NextResponse.redirect(new URL(`${BASE_PATH}/sign-in`, request.url));
   }
 
   try {
@@ -43,15 +44,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
 
     if (!response.ok) {
-      return NextResponse.redirect(new URL('/sign-in', request.url));
+      return NextResponse.redirect(new URL(`${BASE_PATH}/sign-in`, request.url));
     }
 
     const session = (await response.json()) as HandoffExchangeResponse;
     await writeSession(session.data);
   } catch {
     // The API is unreachable — sign-in can still work on its own.
-    return NextResponse.redirect(new URL('/sign-in', request.url));
+    return NextResponse.redirect(new URL(`${BASE_PATH}/sign-in`, request.url));
   }
 
-  return NextResponse.redirect(new URL(next, request.url));
+  return NextResponse.redirect(new URL(`${BASE_PATH}${next}`, request.url));
 }
