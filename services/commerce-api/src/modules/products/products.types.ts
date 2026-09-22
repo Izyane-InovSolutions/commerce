@@ -12,12 +12,19 @@ import type {
   ProductVariantAttributeValue,
 } from '@prisma/client';
 import type { RatingHistogram } from '../reviews/rating-summary.util';
+import type { PublicStorefront } from '../sellers/storefronts.service';
 
 export type VariantAttributeValueWithDetail = ProductVariantAttributeValue & {
   attributeValue: AttributeValue & { attribute: Attribute };
 };
 
-export type OfferWithPrices = Offer & { prices: Price[] };
+/** `seller` is only ever populated on the public catalog read, which is the
+ * only one that needs to say who a marketplace offer belongs to — the admin
+ * detail read doesn't select it. */
+export type OfferWithPrices = Offer & {
+  prices: Price[];
+  seller?: PublicStorefront | null;
+};
 
 export type VariantWithRelations = ProductVariant & {
   attributeValues: VariantAttributeValueWithDetail[];
@@ -66,6 +73,10 @@ export type ProductWithRelations = Omit<ProductRowWithRelations, 'media'> & {
 export type PublicOffer = {
   id: string;
   status: Offer['status'];
+  /** Null for the platform's own offer; who a marketplace offer belongs to
+   * otherwise — the seller's public storefront, not their account. */
+  seller: PublicStorefront | null;
+  isFirstParty: boolean;
   /** Resolved in the requested currency; null when it has no price in it. */
   currentPrice: { amount: number; currency: string } | null;
   /** Every currency this offer currently carries a price in. */

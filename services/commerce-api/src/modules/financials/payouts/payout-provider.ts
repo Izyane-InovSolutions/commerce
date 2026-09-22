@@ -5,6 +5,8 @@ export const PAYOUT_PROVIDER = Symbol('PAYOUT_PROVIDER');
 export type PayoutProviderInput = {
   requestId: string;
   attemptId: string;
+  /** Stable across any transport replay of this attempt; provider must deduplicate it. */
+  idempotencyKey: string;
   amount: number;
   currency: string;
   destination: Prisma.JsonValue;

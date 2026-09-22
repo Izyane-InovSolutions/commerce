@@ -1,6 +1,7 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsDateString,
+  IsBoolean,
   IsEnum,
   IsInt,
   IsOptional,
@@ -11,6 +12,7 @@ import {
 import { ReviewModerationState, ReviewVisibility } from '@prisma/client';
 
 import { PaginationQueryDto } from '../../../../common/pagination/pagination-query.dto';
+import { booleanQuery } from '../../../../common/pagination/boolean-query.transform';
 
 /** URL-facing discriminator for which underlying table a row/route targets —
  * kept as short lowercase segments ('product'/'seller') rather than the
@@ -37,7 +39,8 @@ export class ListAdminReviewsDto extends PaginationQueryDto {
   /** true = only rows with at least one OPEN report; false = only rows with
    * none; omitted = no filtering on report status. */
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(booleanQuery)
+  @IsBoolean()
   hasOpenReport?: boolean;
 
   @IsOptional()

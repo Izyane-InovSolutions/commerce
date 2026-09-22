@@ -59,7 +59,7 @@ export default async function HomePage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-12 sm:flex-row">
+    <div className="flex flex-col gap-10 px-4 py-12 sm:flex-row">
       <SideNav categories={categories} />
 
       <div className="min-w-0 flex-1 space-y-12">

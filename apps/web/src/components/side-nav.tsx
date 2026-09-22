@@ -20,7 +20,10 @@ export function SideNav({ categories = [] }: { categories?: Category[] }) {
   return (
     <nav
       aria-label="Storefront"
-      className="w-full space-y-4 sm:w-56 sm:shrink-0"
+      // top-14 matches the site header's own rendered height, so the sidenav
+      // sticks directly beneath it rather than under (or overlapping) it —
+      // both are sticky now, stacked.
+      className="w-full space-y-4 sm:sticky sm:top-14 sm:h-[calc(100vh-3.5rem)] sm:w-56 sm:shrink-0 sm:self-start sm:overflow-y-auto"
     >
       <div className="space-y-1">
         <div className="flex items-center gap-2 px-2 py-1.5 text-sm font-medium">

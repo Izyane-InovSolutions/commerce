@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { backendRatingSummarySchema } from './reviews.ts';
 
 /**
  * The Commerce API as it actually exists today (Phase 0–2).
@@ -321,6 +322,10 @@ export const backendProductSchema = z.object({
   variants: z.array(backendVariantSchema).default([]),
 });
 export type BackendProduct = z.infer<typeof backendProductSchema>;
+export const backendRatedProductSchema = backendProductSchema.extend(
+  backendRatingSummarySchema.shape,
+);
+export type BackendRatedProduct = z.infer<typeof backendRatedProductSchema>;
 
 export const backendAdminProductSchema = backendProductSchema.extend({
   /** The admin read carries the asset itself, including ones still uploading. */
@@ -697,6 +702,52 @@ export type BackendSellerOfferPriceInput = z.input<
   typeof backendSellerOfferPriceSchema
 >;
 
+/**
+ * A seller's own stock for one self-managed (`stockSource: 'SELLER'`) offer.
+ * `id` and `updatedAt` are null until they set a quantity for the first
+ * time — there is nothing to count yet, not zero stock specifically.
+ */
+export const backendSellerInventoryRecordSchema = z.object({
+  id: z.uuid().nullable(),
+  offerId: z.uuid(),
+  variantId: z.uuid(),
+  sellerSku: z.string().nullable(),
+  listingTitle: z.string().nullable(),
+  onHand: z.int(),
+  reserved: z.int(),
+  available: z.int(),
+  version: z.int(),
+  updatedAt: z.iso.datetime().nullable(),
+});
+export type BackendSellerInventoryRecord = z.infer<
+  typeof backendSellerInventoryRecordSchema
+>;
+
+/** Sets the absolute on-hand quantity — `version` is the record's own
+ * (0 before it exists yet), and the API rejects a stale one. */
+export const backendSetSellerInventorySchema = z.object({
+  quantity: z.int().min(0, 'Enter a quantity of 0 or more.'),
+  version: z.int().min(0),
+  note: z.string().trim().max(500).optional(),
+});
+export type BackendSetSellerInventoryInput = z.input<
+  typeof backendSetSellerInventorySchema
+>;
+
+export const backendBulkSellerInventoryItemSchema =
+  backendSetSellerInventorySchema.extend({
+    offerId: z.uuid(),
+  });
+export const backendBulkSellerInventorySchema = z.object({
+  items: z
+    .array(backendBulkSellerInventoryItemSchema)
+    .min(1, 'List at least one item.')
+    .max(100, 'Update at most 100 items at once.'),
+});
+export type BackendBulkSellerInventoryInput = z.input<
+  typeof backendBulkSellerInventorySchema
+>;
+
 export const backendRecordPayoutSchema = z.object({
   amount: z.int().min(1, 'Enter an amount above zero.'),
   reference: z
@@ -943,6 +994,7 @@ export type BackendAdminOrder = z.infer<typeof backendAdminOrderSchema>;
  * more than one of these.
  */
 export const backendFulfillmentStatuses = [
+  'AWAITING_ACCEPTANCE',
   'READY_TO_PICK',
   'PICKING',
   'PARTIALLY_PICKED',
@@ -956,7 +1008,9 @@ export const backendFulfillmentStatuses = [
   'PARTIALLY_CANCELLED',
   'CANCELLED',
 ] as const;
-export const backendFulfillmentStatusSchema = z.enum(backendFulfillmentStatuses);
+export const backendFulfillmentStatusSchema = z.enum(
+  backendFulfillmentStatuses,
+);
 export type BackendFulfillmentStatus = z.infer<
   typeof backendFulfillmentStatusSchema
 >;
@@ -974,7 +1028,9 @@ export const backendFulfillmentLineSchema = z.object({
   dispatchedQuantity: z.int(),
   cancelledQuantity: z.int(),
 });
-export type BackendFulfillmentLine = z.infer<typeof backendFulfillmentLineSchema>;
+export type BackendFulfillmentLine = z.infer<
+  typeof backendFulfillmentLineSchema
+>;
 
 export const backendFulfillmentWorkItemTypes = ['PICK', 'PACK'] as const;
 export const backendFulfillmentWorkItemTypeSchema = z.enum(
@@ -1007,7 +1063,10 @@ export const backendFulfillmentExceptionTypes = [
   'DAMAGED',
   'MISSING',
 ] as const;
-export const backendFulfillmentExceptionStatuses = ['OPEN', 'RESOLVED'] as const;
+export const backendFulfillmentExceptionStatuses = [
+  'OPEN',
+  'RESOLVED',
+] as const;
 export const backendFulfillmentExceptionSchema = z.object({
   id: z.uuid(),
   fulfillmentOrderId: z.uuid(),

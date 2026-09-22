@@ -7,7 +7,13 @@ import { OutboxService } from './outbox.service';
 
 @Global()
 @Module({
-  imports: [ScheduleModule.forRoot()],
+  imports: [
+    ScheduleModule.forRoot({
+      cronJobs: process.env.SCHEDULED_WORKERS_ENABLED !== 'false',
+      intervals: process.env.SCHEDULED_WORKERS_ENABLED !== 'false',
+      timeouts: process.env.SCHEDULED_WORKERS_ENABLED !== 'false',
+    }),
+  ],
   providers: [BackgroundJobsService, OutboxService, JobWorkerService],
   exports: [BackgroundJobsService, OutboxService, JobWorkerService],
 })

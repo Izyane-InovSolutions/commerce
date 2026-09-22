@@ -47,6 +47,21 @@ describe('Security (e2e)', () => {
 
   const server = (): Server => app.getHttpServer() as Server;
 
+  it('restricts financial integrity reports to administrators', async () => {
+    const path =
+      '/api/v1/admin/sellers/00000000-0000-4000-8000-000000000001/balance/integrity';
+    await request(server()).get(path).expect(401);
+    const registered = await request(server())
+      .post('/api/v1/auth/register')
+      .send({ email: 'integrity-reader@example.test', password: 'password123' })
+      .expect(201);
+    const body = registered.body as { data: { accessToken: string } };
+    await request(server())
+      .get(path)
+      .set('authorization', `Bearer ${body.data.accessToken}`)
+      .expect(403);
+  });
+
   it('sets security headers on every response', async () => {
     const response = await request(server()).get('/api/v1/health').expect(200);
 

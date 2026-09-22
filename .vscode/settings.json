@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^git rev-list --objects origin/staging\\.\\.staging \\| git cat-file --batch-check='%\\(objectname\\) %\\(objecttype\\) %\\(objectsize\\) %\\(rest\\)' \\| awk '\\$2 == \"blob\" && \\$3 > 100000000 \\{ print \\$3, \\$4 \\}'$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

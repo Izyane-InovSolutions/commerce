@@ -14,6 +14,7 @@ import { AuditService } from '../audit/audit.service';
 import { UsersService } from '../users/users.service';
 import {
   AuthTokensResponse,
+  HandoffCodeResponse,
   PublicUser,
   SessionSummary,
 } from './auth-response';
@@ -21,6 +22,7 @@ import { comparePassword, hashPassword } from './password.util';
 import { generateOpaqueToken, hashOpaqueToken } from './token.util';
 
 const PASSWORD_RESET_TOKEN_TTL_SECONDS = 60 * 60;
+const HANDOFF_TOKEN_TTL_SECONDS = 60;
 const INVALID_CREDENTIALS_MESSAGE = 'Invalid email or password';
 
 export type RequestContext = {
@@ -279,6 +281,77 @@ export class AuthService {
       targetId: record.userId,
       ...context,
     });
+  }
+
+  /**
+   * Mints a one-time code letting the caller's already-verified session on
+   * this app be honoured on another app's own login, without handing over a
+   * password or a real access/refresh token pair up front — only
+   * `exchangeHandoffToken` (below), presenting the code itself, can turn it
+   * into one, and only once.
+   */
+  async mintHandoffToken(
+    userId: string,
+    context: RequestContext = {},
+  ): Promise<HandoffCodeResponse> {
+    const rawToken = generateOpaqueToken();
+    const tokenHash = hashOpaqueToken(rawToken);
+    const expiresAt = new Date(Date.now() + HANDOFF_TOKEN_TTL_SECONDS * 1000);
+
+    await this.prisma.handoffToken.create({
+      data: { userId, tokenHash, expiresAt },
+    });
+    await this.auditService.record({
+      actorUserId: userId,
+      action: 'auth.handoff.issued',
+      targetType: 'User',
+      targetId: userId,
+      ...context,
+    });
+
+    return { code: rawToken, expiresIn: HANDOFF_TOKEN_TTL_SECONDS };
+  }
+
+  /**
+   * Redeems a handoff code for a real token pair — same atomic single-use
+   * claim as confirmPasswordReset, so a code can never be exchanged twice
+   * even under a concurrent retry.
+   */
+  async exchangeHandoffToken(
+    rawToken: string,
+    context: RequestContext = {},
+  ): Promise<AuthTokensResponse> {
+    const tokenHash = hashOpaqueToken(rawToken);
+    const record = await this.prisma.handoffToken.findUnique({
+      where: { tokenHash },
+    });
+
+    if (!record || record.usedAt || record.expiresAt < new Date()) {
+      throw new UnauthorizedException('Invalid or expired handoff code');
+    }
+
+    const claimed = await this.prisma.handoffToken.updateMany({
+      where: { id: record.id, usedAt: null, expiresAt: { gt: new Date() } },
+      data: { usedAt: new Date() },
+    });
+    if (claimed.count !== 1) {
+      throw new UnauthorizedException('Invalid or expired handoff code');
+    }
+
+    const user = await this.usersService.findById(record.userId);
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('Invalid or expired handoff code');
+    }
+
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: 'auth.handoff.exchanged',
+      targetType: 'User',
+      targetId: user.id,
+      ...context,
+    });
+
+    return this.issueTokens(user);
   }
 
   async listSessions(userId: string): Promise<SessionSummary[]> {

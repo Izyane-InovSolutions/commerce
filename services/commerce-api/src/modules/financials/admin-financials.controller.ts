@@ -17,12 +17,24 @@ import type { AuthenticatedUser } from '../../common/auth/authenticated-user';
 import { Roles } from '../../common/auth/roles.decorator';
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
 import { RecordPayoutDto } from './dto/record-payout.dto';
-import { LedgerPage, LedgerService, SellerBalanceView } from './ledger.service';
+import {
+  LedgerPage,
+  LedgerService,
+  SellerBalanceView,
+  SellerBalanceIntegrity,
+} from './ledger.service';
 
 @Roles(Role.ADMIN)
 @Controller('admin')
 export class AdminFinancialsController {
   constructor(private readonly ledgerService: LedgerService) {}
+
+  @Get('sellers/:id/balance/integrity')
+  integrity(
+    @Param('id', ParseUUIDPipe) sellerId: string,
+  ): Promise<SellerBalanceIntegrity> {
+    return this.ledgerService.checkIntegrity(sellerId);
+  }
 
   @Get('sellers/:id/balance')
   balance(

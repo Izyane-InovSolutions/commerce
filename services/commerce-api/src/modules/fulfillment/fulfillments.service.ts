@@ -559,9 +559,26 @@ export class FulfillmentsService {
         throw this.mapWriteError(error);
       }
 
+      const dispatchedAt = new Date();
       await tx.shipment.update({
         where: { id: shipmentId },
-        data: { status: ShipmentStatus.DISPATCHED, dispatchedAt: new Date() },
+        data: { status: ShipmentStatus.DISPATCHED, dispatchedAt },
+      });
+
+      // Mirrors dispatchSellerFulfillment's initial tracking event — without
+      // this, the shipment's status column moves to DISPATCHED but the
+      // customer-facing timeline (built from trackingEvents) never shows it,
+      // leaving the order looking stuck at "preparing" until some later
+      // carrier webhook/poll or manual correction adds an event.
+      await tx.trackingEvent.create({
+        data: {
+          shipmentId,
+          source: TrackingEventSource.ADMIN_MANUAL,
+          normalizedStatus: ShipmentStatus.DISPATCHED,
+          occurredAt: dispatchedAt,
+          actorUserId,
+          isCorrection: false,
+        },
       });
 
       await this.recomputeStatus(tx, fulfillmentOrderId);
