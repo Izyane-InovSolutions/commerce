@@ -1,0 +1,147 @@
+# Commerce API — single-server deployment.
+#
+#   cd deploy && cp .env.example .env && $EDITOR .env && docker compose up -d
+#
+# Run from this directory: the build context is `..` (the repo root) because
+# the npm lockfile lives there.
+
+name: commerce
+
+services:
+  postgres:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in deploy/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in deploy/.env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Deliberately not published to the host. Only the API and a manual
+    # `docker compose exec` need it, and an exposed 5432 with a guessable
+    # password is one of the most reliably scanned-for things on the internet.
+    expose:
+      - '5432'
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  # Migrations run as their own one-shot container rather than from the API's
+  # entrypoint, so that starting a second API replica can never race a schema
+  # change. It targets the `build` stage because `prisma migrate deploy` needs
+  # the Prisma CLI, which the production image deliberately omits.
+  migrate:
+    build:
+      context: ..
+      dockerfile: services/commerce-api/Dockerfile
+      target: build
+    working_dir: /repo/services/commerce-api
+    command: npx prisma migrate deploy
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  api:
+    build:
+      context: ..
+      dockerfile: services/commerce-api/Dockerfile
+    restart: unless-stopped
+    # Forwards SIGTERM to node so main.ts's enableShutdownHooks() can drain
+    # in-flight requests instead of being killed outright.
+    init: true
+    env_file: .env
+    volumes:
+      - media:/var/lib/commerce/media
+    expose:
+      - '3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      # Uses the app's own liveness route. node 24 has a global fetch, so this
+      # needs no curl in the image.
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      # LAN only. Public traffic does not arrive here — it comes in through the
+      # cloudflared tunnel below, which reaches Caddy over the internal network.
+      # TLS is terminated at Cloudflare's edge, so Caddy serves plain HTTP here
+      # and needs no certificate and no 443 mapping.
+      - '80:80'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+  # Dials OUT to Cloudflare and holds the connection open, so this server needs
+  # no public IP, no port forwarding and no inbound firewall rule — which is
+  # what makes it work behind NAT. Cloudflare terminates TLS at its edge and
+  # forwards to Caddy over the tunnel.
+  #
+  # Create the tunnel once in the Cloudflare dashboard (Zero Trust > Networks >
+  # Tunnels), set its public hostname to point at http://caddy:80, then copy the
+  # token into deploy/.env as TUNNEL_TOKEN.
+  #
+  # Behind a `tunnel` profile so the rest of the stack can still be brought up
+  # on its own for LAN testing. Deploy with:
+  #   docker compose --profile tunnel up -d
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    profiles: ['tunnel']
+    command: tunnel --no-autoupdate run
+    environment:
+      # Not marked required: Compose interpolates this even when the
+      # `tunnel` profile is inactive, which would block bringing the stack
+      # up for LAN testing. cloudflared itself fails clearly if it is empty.
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on:
+      - caddy
+
+  # NO DOMAIN YET? Use this instead of `cloudflared` above. It opens a quick
+  # tunnel: a random https://<words>.trycloudflare.com hostname with a real
+  # certificate, needing no domain, no DNS and no Cloudflare account at all.
+  #
+  #   docker compose --profile quicktunnel up -d
+  #   docker compose logs cloudflared-quick | grep trycloudflare.com
+  #
+  # The catch: that hostname is regenerated every time the container restarts.
+  # The Flutter app compiles its base URL in at build time, so each restart
+  # means rebuilding the app. Fine for a few days of testing, which is why the
+  # token-based service above is the one to move to once a domain exists.
+  cloudflared-quick:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    profiles: ['quicktunnel']
+    command: tunnel --no-autoupdate --url http://caddy:80
+    depends_on:
+      - caddy
+
+volumes:
+  pgdata:
+  media:
+  caddy_data:
+  caddy_config:

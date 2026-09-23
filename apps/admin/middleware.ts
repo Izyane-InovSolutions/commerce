@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { BASE_PATH } from '@/lib/base-path';
+
 const ACCESS_COOKIE = 'commerce_admin_access';
 const REFRESH_COOKIE = 'commerce_admin_refresh';
 const API_BASE_URL =
@@ -50,7 +52,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
       // The refresh token is spent or revoked; drop it so the next request
       // goes straight to the sign-in form instead of retrying every time.
       const cleared = NextResponse.next();
-      cleared.cookies.delete(REFRESH_COOKIE);
+      cleared.cookies.delete({ name: REFRESH_COOKIE, path: BASE_PATH });
       return cleared;
     }
 
@@ -62,14 +64,14 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
       httpOnly: true,
       sameSite: 'lax',
       secure,
-      path: '/',
+      path: BASE_PATH,
       maxAge: session.data.expiresIn,
     });
     next.cookies.set(REFRESH_COOKIE, session.data.refreshToken, {
       httpOnly: true,
       sameSite: 'lax',
       secure,
-      path: '/',
+      path: BASE_PATH,
       maxAge: 30 * 24 * 60 * 60,
     });
 

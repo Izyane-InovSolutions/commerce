@@ -1,0 +1,36 @@
+# The build context is the repo root (the npm lockfile lives there), so this
+# file is what keeps the frontends, the Flutter app and every local artifact
+# out of the image. Only services/commerce-api and the two root manifests are
+# actually needed.
+
+.git
+.github
+**/node_modules
+
+# Build output — the image rebuilds all of this from source.
+**/dist
+**/.next
+**/build
+**/coverage
+**/*.tsbuildinfo
+
+# Not part of the API.
+apps
+packages
+docs
+services/docs
+
+# Local state and secrets. .data holds uploaded media, which belongs on a
+# mounted volume, never baked into an image.
+**/.data
+**/.env
+!**/.env.example
+**/.vercel
+.vscode
+.idea
+**/*.iml
+
+# macOS
+**/.DS_Store
+*.pem
+npm-debug.log*
