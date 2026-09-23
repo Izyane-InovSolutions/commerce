@@ -35,8 +35,12 @@ API **server-side** — from Vercel's infrastructure, not from the tester's
 browser — and Vercel cannot route to your LAN. Deployed frontends pointed at
 this server will fail on every request that loads data.
 
-For internal testing, run the frontends where they can see it:
+Three ways out of that, in increasing order of effort:
 
+- **Start a quick tunnel** (see [Making it reachable from outside](#making-it-reachable-from-outside))
+  and point the Vercel apps at the `trycloudflare.com` URL. No domain needed,
+  works today — but the URL changes on restart, so expect to update the Vercel
+  env var each time.
 - **On a tester's machine**, with `NEXT_PUBLIC_API_BASE_URL=http://192.168.100.105/api/v1`
   and `npm run web:dev` / `admin:dev` / `seller:dev`. Fine for developers,
   awkward for non-technical testers.
@@ -181,12 +185,37 @@ docker compose down                   # stop (volumes survive)
 docker compose down -v                # stop AND DELETE ALL DATA
 ```
 
-## Publishing it later
+## Making it reachable from outside
 
-When this needs to be reachable from outside — for the Vercel frontends, or for
-testers off-site — the server is behind NAT, so it needs an outbound tunnel
-rather than a port forward. `cloudflared` is already defined in
-`docker-compose.yml` behind a profile:
+The server is behind NAT, so it needs an outbound tunnel rather than a port
+forward. Both options below are already defined in `docker-compose.yml`; the
+deployment itself does not change, only which profile you start.
+
+### Without a domain — quick tunnel
+
+Works today. No domain, no DNS, no Cloudflare account:
+
+```bash
+docker compose --profile quicktunnel up -d
+docker compose logs cloudflared-quick | grep trycloudflare.com
+```
+
+That prints a URL like `https://random-words-here.trycloudflare.com`, with a
+real certificate, reachable from anywhere — cellular included. Point the mobile
+app at it:
+
+```bash
+flutter build apk --dart-define=COMMERCE_API_BASE_URL=https://random-words-here.trycloudflare.com/api/v1
+```
+
+**The hostname changes every time the container restarts.** The Flutter app
+compiles its base URL in at build time, so each restart means rebuilding and
+redistributing the app. Workable for a few days of testing; painful as a
+standing arrangement.
+
+### With a domain — named tunnel
+
+The stable version, and where to land once a domain exists:
 
 1. Cloudflare dashboard → **Zero Trust → Networks → Tunnels → Create**, pick
    **Docker** as the connector, copy the token.
@@ -195,9 +224,11 @@ rather than a port forward. `cloudflared` is already defined in
 3. Put the token in `.env` as `TUNNEL_TOKEN`.
 4. `docker compose --profile tunnel up -d`
 
-That also brings real HTTPS with it, since Cloudflare terminates TLS at its
-edge. Nothing in the `Caddyfile` needs to change. Then point the Vercel apps at
-`https://api.yourshop.com/api/v1`.
+The hostname never changes, so app builds keep working across restarts. Then
+point the Vercel apps at `https://api.yourshop.com/api/v1`.
+
+Either way Cloudflare terminates TLS at its edge, nothing in the `Caddyfile`
+changes, and LAN access on port 80 keeps working alongside it.
 
 ## Things that will bite you
 

@@ -121,6 +121,25 @@ services:
     depends_on:
       - caddy
 
+  # NO DOMAIN YET? Use this instead of `cloudflared` above. It opens a quick
+  # tunnel: a random https://<words>.trycloudflare.com hostname with a real
+  # certificate, needing no domain, no DNS and no Cloudflare account at all.
+  #
+  #   docker compose --profile quicktunnel up -d
+  #   docker compose logs cloudflared-quick | grep trycloudflare.com
+  #
+  # The catch: that hostname is regenerated every time the container restarts.
+  # The Flutter app compiles its base URL in at build time, so each restart
+  # means rebuilding the app. Fine for a few days of testing, which is why the
+  # token-based service above is the one to move to once a domain exists.
+  cloudflared-quick:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    profiles: ['quicktunnel']
+    command: tunnel --no-autoupdate --url http://caddy:80
+    depends_on:
+      - caddy
+
 volumes:
   pgdata:
   media:
