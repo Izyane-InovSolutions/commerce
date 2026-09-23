@@ -18,7 +18,7 @@ const INITIAL_VISIBLE_COUNT = 4;
  * rather than plumbed through the product data. */
 const SECTION_GRADIENTS: Partial<Record<string, string>> = {
   electronics: 'bg-linear-to-br from-slate-700 via-blue-600 to-cyan-500',
-  'home-and-living': 'bg-linear-to-br from-emerald-500 via-teal-500 to-green-600',
+  'home-and-living': 'bg-linear-to-br from-cyan-500 via-teal-500 to-emerald-600',
   'outdoor-and-apparel': 'bg-linear-to-br from-orange-600 via-amber-600 to-yellow-500',
 };
 
@@ -34,7 +34,7 @@ export function ProductCategorySection({
   return (
     <section
       className={cn(
-        'space-y-4',
+        'space-y-1',
         gradientClassName && cn('rounded-2xl p-6', gradientClassName),
       )}
     >
@@ -46,7 +46,7 @@ export function ProductCategorySection({
       >
         {category.title}
       </h2>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-4">
         {visibleProducts.map((product) => (
           <ProductCard key={product.id} product={product} />
         ))}

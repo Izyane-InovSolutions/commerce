@@ -3,13 +3,12 @@ import type { Metadata } from 'next';
 import { AccountTabs, type AccountTabValue } from '@/components/account-tabs';
 import { AddressesSection } from '@/components/addresses-section';
 import { ApiErrorNotice } from '@/components/api-error-notice';
+import { AuthPanel } from '@/components/auth-panel';
 import { OrderStatusPoller } from '@/components/order-status-poller';
 import { OrdersList } from '@/components/orders-list';
 import { RecentlyViewedSection } from '@/components/recently-viewed-section';
 import { SavedSellersList } from '@/components/saved-sellers-list';
 import { SellerAccountCard } from '@/components/seller-account-card';
-import { SignInForm } from '@/components/sign-in-form';
-import { SignUpForm } from '@/components/sign-up-form';
 import { WishlistList } from '@/components/wishlist-list';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -70,32 +69,8 @@ export default async function AccountPage({
 
   if (!user) {
     return (
-      <div className="mx-auto grid max-w-3xl gap-6 px-4 py-12 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Sign in</CardTitle>
-            <CardDescription>
-              One account for customers, sellers, and admins — sign in here
-              either way.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <SignInForm action={signInAction} next="/account" />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Create an account</CardTitle>
-            <CardDescription>
-              New accounts start as a customer. Selling and admin access are
-              granted separately.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <SignUpForm action={signUpAction} next="/account" />
-          </CardContent>
-        </Card>
+      <div className="px-4 py-12">
+        <AuthPanel signIn={signInAction} signUp={signUpAction} next="/account" />
       </div>
     );
   }
