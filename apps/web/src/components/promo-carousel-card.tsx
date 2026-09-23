@@ -33,7 +33,8 @@ export function PromoCarouselCard({
 }: {
   title: string;
   href: string;
-  /** The card's own background gradient, e.g. `bg-linear-to-br from-amber-500 to-rose-600`. */
+  /** The card's own gradient color stops — `bg-linear-to-br` is applied by
+   * this component, so only pass e.g. `from-amber-500 to-rose-600`. */
   gradientClassName: string;
   products: Product[];
 }) {
@@ -66,7 +67,7 @@ export function PromoCarouselCard({
 
   return (
     <div
-      className={`relative isolate flex min-h-72 flex-col justify-between overflow-hidden rounded-2xl p-5 ${gradientClassName}`}
+      className={`relative isolate flex min-h-72 flex-col justify-between overflow-hidden rounded-2xl bg-linear-to-br p-5 ${gradientClassName}`}
     >
       <div className="flex items-start justify-between gap-3">
         <h3 className="text-xl font-semibold tracking-tight text-white drop-shadow-sm">
@@ -92,11 +93,11 @@ export function PromoCarouselCard({
             plugins={products.length > PAGE_SIZE ? [autoplayPlugin] : []}
             className="px-6"
           >
-            <CarouselContent className="-ml-2">
+            <CarouselContent className="-ml-4">
               {products.map((product) => {
                 const price = getDisplayPrice(product);
                 return (
-                  <CarouselItem key={product.id} className="basis-1/3 pl-2">
+                  <CarouselItem key={product.id} className="basis-1/3 pl-4">
                     <Link
                       href={`/products/${product.slug}`}
                       className="block min-w-0 space-y-1 text-center"
@@ -104,8 +105,8 @@ export function PromoCarouselCard({
                       <ProductImage
                         src={getPrimaryImage(product)?.url ?? null}
                         alt={product.name}
-                        sizes="80px"
-                        className="mx-auto aspect-square w-full rounded-lg"
+                        sizes="(min-width: 640px) 15vw, 30vw"
+                        className="aspect-square w-full rounded-lg"
                       />
                       <p className="truncate text-xs font-medium text-white drop-shadow-sm">
                         {product.name}

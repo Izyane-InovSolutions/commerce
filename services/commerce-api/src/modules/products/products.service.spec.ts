@@ -9,6 +9,7 @@ import { ProductStatus, ReviewVisibility, SellerStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import type { InventoryService } from '../inventory/inventory.service';
+import type { SellersService } from '../sellers/sellers.service';
 import { ProductsService } from './products.service';
 
 function buildInventory(): {
@@ -28,6 +29,7 @@ function buildPrisma(): {
     findUnique: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
+    updateMany: jest.Mock;
     delete: jest.Mock;
     count: jest.Mock;
   };
@@ -35,6 +37,7 @@ function buildPrisma(): {
     findUnique: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
+    updateMany: jest.Mock;
     delete: jest.Mock;
   };
   productVariantAttributeValue: {
@@ -60,6 +63,7 @@ function buildPrisma(): {
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       delete: jest.fn(),
       count: jest.fn(),
     },
@@ -74,6 +78,7 @@ function buildPrisma(): {
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
       delete: jest.fn(),
     },
     productVariantAttributeValue: {
@@ -103,11 +108,13 @@ function buildPrisma(): {
 describe('ProductsService', () => {
   let prisma: ReturnType<typeof buildPrisma>;
   let inventory: ReturnType<typeof buildInventory>;
+  let sellers: { requireApproved: jest.Mock; mine: jest.Mock };
   let service: ProductsService;
 
   beforeEach(() => {
     prisma = buildPrisma();
     inventory = buildInventory();
+    sellers = { requireApproved: jest.fn(), mine: jest.fn() };
     service = new ProductsService(
       prisma as unknown as PrismaService,
       new MediaService(
@@ -116,6 +123,7 @@ describe('ProductsService', () => {
         {} as never,
       ),
       inventory as unknown as InventoryService,
+      sellers as unknown as SellersService,
     );
   });
 
@@ -685,6 +693,187 @@ describe('ProductsService', () => {
       await expect(
         service.attachMedia('p1', { mediaAssetId: 'm1' }),
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  describe('submitProduct', () => {
+    it('rejects a caller who is not an approved seller', async () => {
+      sellers.requireApproved.mockRejectedValue(new Error('not approved'));
+
+      await expect(
+        service.submitProduct('user-1', { name: 'Widget', slug: 'widget' }),
+      ).rejects.toThrow('not approved');
+      expect(prisma.product.create).not.toHaveBeenCalled();
+    });
+
+    it('creates the product tagged with the seller and pending review', async () => {
+      sellers.requireApproved.mockResolvedValue({ id: 'seller-1' });
+      sellers.mine.mockResolvedValue({ id: 'seller-1' });
+      prisma.product.create.mockResolvedValue({ id: 'p1' });
+      prisma.product.findUnique.mockResolvedValue({
+        id: 'p1',
+        createdBySellerId: 'seller-1',
+        media: [],
+      });
+
+      await service.submitProduct('user-1', {
+        name: 'Widget',
+        slug: 'widget',
+      });
+
+      expect(prisma.product.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          name: 'Widget',
+          slug: 'widget',
+          createdBySellerId: 'seller-1',
+          submissionStatus: 'PENDING',
+        }) as object,
+      });
+    });
+  });
+
+  describe('addSellerVariant / attachSellerMedia ownership', () => {
+    it('rejects adding a variant to a product submitted by another seller', async () => {
+      sellers.requireApproved.mockResolvedValue({ id: 'seller-1' });
+      prisma.product.findUnique.mockResolvedValue({
+        id: 'p1',
+        createdBySellerId: 'someone-else',
+        submissionStatus: 'PENDING',
+      });
+
+      await expect(
+        service.addSellerVariant('user-1', 'p1', { skuCode: 'SKU-1' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.productVariant.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects adding a variant once the submission has already been reviewed', async () => {
+      sellers.requireApproved.mockResolvedValue({ id: 'seller-1' });
+      prisma.product.findUnique.mockResolvedValue({
+        id: 'p1',
+        createdBySellerId: 'seller-1',
+        submissionStatus: 'APPROVED',
+      });
+
+      await expect(
+        service.addSellerVariant('user-1', 'p1', { skuCode: 'SKU-1' }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('adds the variant once ownership and pending state check out', async () => {
+      sellers.requireApproved.mockResolvedValue({ id: 'seller-1' });
+      prisma.product.findUnique.mockResolvedValue({
+        id: 'p1',
+        createdBySellerId: 'seller-1',
+        submissionStatus: 'PENDING',
+      });
+      prisma.productVariant.create.mockResolvedValue({ id: 'v1' });
+      prisma.productVariant.findUnique.mockResolvedValue({
+        id: 'v1',
+        attributeValues: [],
+        offers: [],
+      });
+
+      const result = await service.addSellerVariant('user-1', 'p1', {
+        skuCode: 'SKU-1',
+      });
+
+      expect(result.id).toBe('v1');
+      expect(prisma.productVariant.create).toHaveBeenCalledWith({
+        data: { productId: 'p1', skuCode: 'SKU-1', name: undefined },
+      });
+    });
+
+    it('rejects attaching a media asset the seller does not own', async () => {
+      sellers.requireApproved.mockResolvedValue({ id: 'seller-1' });
+      prisma.product.findUnique.mockResolvedValue({
+        id: 'p1',
+        createdBySellerId: 'seller-1',
+        submissionStatus: 'PENDING',
+      });
+      prisma.mediaAsset.findUnique.mockResolvedValue({
+        id: 'm1',
+        status: 'AVAILABLE',
+        verificationLocked: false,
+        ownerUserId: 'someone-else',
+      });
+
+      await expect(
+        service.attachSellerMedia('user-1', 'p1', { mediaAssetId: 'm1' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  describe('reviewSubmission', () => {
+    it('rejects a submission that is not pending (already reviewed, or concurrently reviewed)', async () => {
+      prisma.product.findUnique.mockResolvedValue({
+        id: 'p1',
+        createdBySellerId: 'seller-1',
+      });
+      prisma.product.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.reviewSubmission('admin-1', 'p1', 'APPROVED', {
+          reason: 'Looks good',
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.productVariant.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects reviewing a product nobody submitted', async () => {
+      prisma.product.findUnique.mockResolvedValue({
+        id: 'p1',
+        createdBySellerId: null,
+      });
+
+      await expect(
+        service.reviewSubmission('admin-1', 'p1', 'APPROVED', {
+          reason: 'Looks good',
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('approving publishes the product and every variant on it', async () => {
+      prisma.product.findUnique
+        .mockResolvedValueOnce({ id: 'p1', createdBySellerId: 'seller-1' })
+        .mockResolvedValueOnce({ id: 'p1', media: [] });
+
+      await service.reviewSubmission('admin-1', 'p1', 'APPROVED', {
+        reason: 'Looks good',
+      });
+
+      expect(prisma.product.updateMany).toHaveBeenCalledWith({
+        where: { id: 'p1', submissionStatus: 'PENDING' },
+        data: expect.objectContaining({
+          submissionStatus: 'APPROVED',
+          reviewReason: 'Looks good',
+          reviewedBy: 'admin-1',
+          status: 'PUBLISHED',
+        }) as object,
+      });
+      expect(prisma.productVariant.updateMany).toHaveBeenCalledWith({
+        where: { productId: 'p1' },
+        data: { status: 'PUBLISHED' },
+      });
+    });
+
+    it('rejecting leaves the product as a draft, without touching its variants', async () => {
+      prisma.product.findUnique
+        .mockResolvedValueOnce({ id: 'p1', createdBySellerId: 'seller-1' })
+        .mockResolvedValueOnce({ id: 'p1', media: [] });
+
+      await service.reviewSubmission('admin-1', 'p1', 'REJECTED', {
+        reason: 'Missing details',
+      });
+
+      expect(prisma.product.updateMany).toHaveBeenCalledWith({
+        where: { id: 'p1', submissionStatus: 'PENDING' },
+        data: expect.objectContaining({
+          submissionStatus: 'REJECTED',
+          reviewReason: 'Missing details',
+        }) as object,
+      });
+      expect(prisma.productVariant.updateMany).not.toHaveBeenCalled();
     });
   });
 });

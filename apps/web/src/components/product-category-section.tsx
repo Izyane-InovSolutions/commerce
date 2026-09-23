@@ -1,9 +1,5 @@
-import Image, { type StaticImageData } from 'next/image';
 import Link from 'next/link';
 
-import elBanner from '@/assets/el_banner.png';
-import hmBanner from '@/assets/hm_banner.png';
-import odBanner from '@/assets/od_banner.png';
 import { ProductCard } from '@/components/product-card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -17,11 +13,13 @@ export type ProductSection = {
 
 const INITIAL_VISIBLE_COUNT = 4;
 
-/** Section background banners */
-const SECTION_BANNERS: Partial<Record<string, StaticImageData>> = {
-  electronics: elBanner,
-  'home-and-living': hmBanner,
-  'outdoor-and-apparel': odBanner,
+/** One background gradient per featured category — a one-off visual accent,
+ * not something the catalog itself carries, so it's keyed by slug here
+ * rather than plumbed through the product data. */
+const SECTION_GRADIENTS: Partial<Record<string, string>> = {
+  electronics: 'bg-linear-to-br from-slate-700 via-blue-600 to-cyan-500',
+  'home-and-living': 'bg-linear-to-br from-emerald-500 via-teal-500 to-green-600',
+  'outdoor-and-apparel': 'bg-linear-to-br from-orange-600 via-amber-600 to-yellow-500',
 };
 
 export function ProductCategorySection({
@@ -31,25 +29,21 @@ export function ProductCategorySection({
 }) {
   const hasMore = category.products.length > INITIAL_VISIBLE_COUNT;
   const visibleProducts = category.products.slice(0, INITIAL_VISIBLE_COUNT);
-  const banner = SECTION_BANNERS[category.slug];
+  const gradientClassName = SECTION_GRADIENTS[category.slug];
 
   return (
     <section
       className={cn(
         'space-y-4',
-        banner && 'relative overflow-hidden rounded-2xl p-6',
+        gradientClassName && cn('rounded-2xl p-6', gradientClassName),
       )}
     >
-      {banner ? (
-        <Image
-          src={banner}
-          alt=""
-          fill
-          sizes="100vw"
-          className="-z-10 object-cover"
-        />
-      ) : null}
-      <h2 className="text-xl font-semibold tracking-tight">
+      <h2
+        className={cn(
+          'text-xl font-semibold tracking-tight',
+          gradientClassName && 'text-white drop-shadow-sm',
+        )}
+      >
         {category.title}
       </h2>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">

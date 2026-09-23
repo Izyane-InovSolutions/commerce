@@ -30,6 +30,8 @@ export const navigation: NavItem[] = [
     children: [
       { href: '/products', label: 'My Products' },
       { href: '/products/new', label: 'List a Product' },
+      { href: '/products/submit', label: 'Submit a Product' },
+      { href: '/products/submissions', label: 'My Submissions' },
       { href: '/products?status=DRAFT', label: 'Drafts' },
       { href: '/products?status=PUBLISHED', label: 'Published' },
       { href: '/products?status=ARCHIVED', label: 'Archived' },

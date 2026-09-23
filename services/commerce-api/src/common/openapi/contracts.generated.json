@@ -12212,6 +12212,64 @@
       },
       "description": "Required role: STAFF or ADMIN."
     },
+    "AdminProductsController_pendingSubmissions": {
+      "operationId": "AdminProductsController_pendingSubmissions",
+      "tags": [
+        "admin/catalog/products"
+      ],
+      "parameters": [],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ProductWithRelations"
+                    }
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN."
+    },
     "AdminProductsController_findOne": {
       "operationId": "AdminProductsController_findOne",
       "tags": [
@@ -12529,6 +12587,156 @@
         }
       },
       "description": "Required role: STAFF or ADMIN."
+    },
+    "AdminProductsController_approveSubmission": {
+      "operationId": "AdminProductsController_approveSubmission",
+      "tags": [
+        "admin/catalog/products"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/ProductWithRelations"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputReviewProductSubmissionDto"
+            }
+          }
+        }
+      }
+    },
+    "AdminProductsController_rejectSubmission": {
+      "operationId": "AdminProductsController_rejectSubmission",
+      "tags": [
+        "admin/catalog/products"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/ProductWithRelations"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputReviewProductSubmissionDto"
+            }
+          }
+        }
+      }
     },
     "AdminProductsController_addVariant": {
       "operationId": "AdminProductsController_addVariant",
@@ -13353,6 +13561,339 @@
               "schema": {
                 "$ref": "#/components/schemas/ErrorEnvelope"
               }
+            }
+          }
+        }
+      }
+    },
+    "SellerProductsController_list": {
+      "operationId": "SellerProductsController_list",
+      "tags": [
+        "sellers/me/products"
+      ],
+      "parameters": [],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ProductWithRelations"
+                    }
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      }
+    },
+    "SellerProductsController_findOne": {
+      "operationId": "SellerProductsController_findOne",
+      "tags": [
+        "sellers/me/products"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/ProductWithRelations"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      }
+    },
+    "SellerProductsController_submit": {
+      "operationId": "SellerProductsController_submit",
+      "tags": [
+        "sellers/me/products"
+      ],
+      "parameters": [],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/ProductWithRelations"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputCreateProductDto"
+            }
+          }
+        }
+      }
+    },
+    "SellerProductsController_addVariant": {
+      "operationId": "SellerProductsController_addVariant",
+      "tags": [
+        "sellers/me/products"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/VariantWithRelations"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputCreateVariantDto"
+            }
+          }
+        }
+      }
+    },
+    "SellerProductsController_attachMedia": {
+      "operationId": "SellerProductsController_attachMedia",
+      "tags": [
+        "sellers/me/products"
+      ],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "201": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/ProductWithRelations"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputAttachMediaDto"
             }
           }
         }
@@ -16054,6 +16595,137 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/InputReportReviewDto"
+            }
+          }
+        }
+      }
+    },
+    "SavedSellersController_list": {
+      "operationId": "SavedSellersController_list",
+      "tags": [
+        "saved-sellers"
+      ],
+      "parameters": [],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SavedSellerView"
+                    }
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      }
+    },
+    "SavedSellersController_add": {
+      "operationId": "SavedSellersController_add",
+      "tags": [
+        "saved-sellers"
+      ],
+      "parameters": [],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "204": {
+          "description": "No content"
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputSaveSellerDto"
+            }
+          }
+        }
+      }
+    },
+    "SavedSellersController_remove": {
+      "operationId": "SavedSellersController_remove",
+      "tags": [
+        "saved-sellers"
+      ],
+      "parameters": [
+        {
+          "name": "sellerId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "204": {
+          "description": "No content"
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
             }
           }
         }
@@ -26025,6 +26697,11 @@
             "ARCHIVED"
           ]
         },
+        "reviewedAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        },
         "brandId": {
           "type": "string",
           "nullable": true
@@ -26038,6 +26715,26 @@
         },
         "returnWindowDays": {
           "type": "number",
+          "nullable": true
+        },
+        "createdBySellerId": {
+          "type": "string",
+          "nullable": true
+        },
+        "submissionStatus": {
+          "type": "string",
+          "enum": [
+            "PENDING",
+            "REJECTED",
+            "APPROVED"
+          ]
+        },
+        "reviewReason": {
+          "type": "string",
+          "nullable": true
+        },
+        "reviewedBy": {
+          "type": "string",
           "nullable": true
         },
         "variants": {
@@ -26063,10 +26760,15 @@
         "description",
         "category",
         "status",
+        "reviewedAt",
         "brandId",
         "categoryId",
         "isReturnable",
         "returnWindowDays",
+        "createdBySellerId",
+        "submissionStatus",
+        "reviewReason",
+        "reviewedBy",
         "variants",
         "media"
       ]
@@ -26426,6 +27128,21 @@
           "minimum": 0
         }
       },
+      "additionalProperties": false
+    },
+    "InputReviewProductSubmissionDto": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 1000,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "reason"
+      ],
       "additionalProperties": false
     },
     "InputCreateVariantDto": {
@@ -29071,6 +29788,62 @@
       ],
       "additionalProperties": false
     },
+    "SavedSellerView": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "sellerId": {
+          "type": "string"
+        },
+        "storefrontSlug": {
+          "type": "string",
+          "nullable": true
+        },
+        "displayName": {
+          "type": "string",
+          "nullable": true
+        },
+        "description": {
+          "type": "string",
+          "nullable": true
+        },
+        "averageRating": {
+          "type": "number",
+          "nullable": true
+        },
+        "ratingCount": {
+          "type": "number"
+        },
+        "isAvailable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "sellerId",
+        "storefrontSlug",
+        "displayName",
+        "description",
+        "averageRating",
+        "ratingCount",
+        "isAvailable"
+      ]
+    },
+    "InputSaveSellerDto": {
+      "type": "object",
+      "properties": {
+        "sellerId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "sellerId"
+      ],
+      "additionalProperties": false
+    },
     "InputSellerQueryDto": {
       "type": "object",
       "properties": {
@@ -29207,12 +29980,6 @@
         "contactEmail": {
           "type": "string"
         },
-        "businessName": {
-          "type": "string"
-        },
-        "businessAddress": {
-          "type": "string"
-        },
         "reviewReason": {
           "type": "string",
           "nullable": true
@@ -29220,6 +29987,12 @@
         "reviewedBy": {
           "type": "string",
           "nullable": true
+        },
+        "businessName": {
+          "type": "string"
+        },
+        "businessAddress": {
+          "type": "string"
         },
         "storefrontSlug": {
           "type": "string",
@@ -29248,10 +30021,10 @@
         "country",
         "registrationNumber",
         "contactEmail",
-        "businessName",
-        "businessAddress",
         "reviewReason",
         "reviewedBy",
+        "businessName",
+        "businessAddress",
         "storefrontSlug",
         "displayName",
         "documents"

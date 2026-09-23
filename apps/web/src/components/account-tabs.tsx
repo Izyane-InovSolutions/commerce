@@ -20,18 +20,21 @@ import {
 export type AccountTabValue =
   | 'recently-viewed'
   | 'wishlist'
+  | 'saved-sellers'
   | 'orders'
   | 'addresses';
 
 export function AccountTabs({
   recentlyViewed,
   wishlist,
+  savedSellers,
   orders,
   addresses,
   defaultTab = 'recently-viewed',
 }: {
   recentlyViewed: ReactNode;
   wishlist: ReactNode;
+  savedSellers: ReactNode;
   orders: ReactNode;
   addresses: ReactNode;
   /** Which tab opens first — set from `?tab=` when linked in from elsewhere. */
@@ -42,11 +45,13 @@ export function AccountTabs({
       <TabsList>
         <TabsTrigger value="recently-viewed">Recently viewed</TabsTrigger>
         <TabsTrigger value="wishlist">Wishlist</TabsTrigger>
+        <TabsTrigger value="saved-sellers">Saved sellers</TabsTrigger>
         <TabsTrigger value="orders">Orders</TabsTrigger>
         <TabsTrigger value="addresses">My addresses</TabsTrigger>
       </TabsList>
       <TabsContent value="recently-viewed">{recentlyViewed}</TabsContent>
       <TabsContent value="wishlist">{wishlist}</TabsContent>
+      <TabsContent value="saved-sellers">{savedSellers}</TabsContent>
       <TabsContent value="orders">{orders}</TabsContent>
       <TabsContent value="addresses">{addresses}</TabsContent>
     </Tabs>

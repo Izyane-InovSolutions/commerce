@@ -1,13 +1,14 @@
+import Image from 'next/image';
+
+import heroImage from '@/assets/hero1.png';
 import {
   ProductCategorySection,
   type ProductSection,
 } from '@/components/product-category-section';
-import { PromoCarouselCard } from '@/components/promo-carousel-card';
 import { SideNav } from '@/components/side-nav';
+import { StorefrontCatalog } from '@/components/storefront-catalog';
 import { listCategories, listProducts } from '@/lib/catalog';
-import { isTrendingProduct, type Category, type Product } from '@/lib/catalog-types';
-
-const PROMO_ITEM_LIMIT = 8;
+import type { Category, Product } from '@/lib/catalog-types';
 
 const HOMEPAGE_CATEGORIES = [
   { slug: 'electronics', title: 'Electronics' },
@@ -38,52 +39,39 @@ async function getHomepageSections(): Promise<ProductSection[]> {
 
 export default async function HomePage() {
   let allProducts: Product[] = [];
-  let newArrivals: Product[] = [];
   let categories: Category[] = [];
   let sections: ProductSection[] = [];
 
   try {
-    const [productsResult, newArrivalsResult, categoriesResult, sectionsResult] =
+    const [productsResult, categoriesResult, sectionsResult] =
       await Promise.all([
         listProducts({ limit: 100 }),
-        listProducts({ sort: 'createdAt:desc', limit: PROMO_ITEM_LIMIT }),
         listCategories(),
         getHomepageSections(),
       ]);
     allProducts = productsResult.products;
-    newArrivals = newArrivalsResult.products;
     categories = categoriesResult;
     sections = sectionsResult;
   } catch {
     allProducts = [];
-    newArrivals = [];
     categories = [];
     sections = [];
   }
 
-  const trending = allProducts
-    .filter((product) => isTrendingProduct(product))
-    .slice(0, PROMO_ITEM_LIMIT);
-
   return (
-    <div className="flex flex-col gap-10 px-4 py-12 sm:flex-row">
+    <div className="mx-auto flex max-w-7xl flex-col gap-10 px-4 py-12 sm:flex-row">
       <SideNav categories={categories} />
 
       <div className="min-w-0 flex-1 space-y-12">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <PromoCarouselCard
-            title="Trending"
-            href="/products?filter=trending"
-            gradientClassName="bg-linear-to-br from-amber-500 via-orange-500 to-rose-600"
-            products={trending}
-          />
-          <PromoCarouselCard
-            title="New Arrivals"
-            href="/products?filter=new-arrivals"
-            gradientClassName="bg-linear-to-br from-sky-500 via-indigo-500 to-violet-600"
-            products={newArrivals}
-          />
-        </div>
+        
+
+        {/* Interactive Storefront Catalog with Categories & Trending Filters */}
+        <StorefrontCatalog
+          products={allProducts}
+          categories={categories}
+          title="All Products"
+          description="Browse by category, filter by trending or new arrivals, and sort by price."
+        />
 
         {/* Featured Category Spotlights */}
         {sections.length > 0 ? (

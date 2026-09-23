@@ -90,12 +90,17 @@ export default async function CatalogPage({
         title="Catalog"
         description="Products are platform-owned. A product reaches the storefront only once it, its variant, and its offer are all published."
         action={
-          <Button asChild>
-            <Link href="/catalog/new">
-              <Plus data-icon="inline-start" />
-              New product
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" asChild>
+              <Link href="/catalog/submissions">Seller submissions</Link>
+            </Button>
+            <Button asChild>
+              <Link href="/catalog/new">
+                <Plus data-icon="inline-start" />
+                New product
+              </Link>
+            </Button>
+          </div>
         }
       />
 

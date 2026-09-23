@@ -6,6 +6,7 @@ import { ApiErrorNotice } from '@/components/api-error-notice';
 import { OrderStatusPoller } from '@/components/order-status-poller';
 import { OrdersList } from '@/components/orders-list';
 import { RecentlyViewedSection } from '@/components/recently-viewed-section';
+import { SavedSellersList } from '@/components/saved-sellers-list';
 import { SellerAccountCard } from '@/components/seller-account-card';
 import { SignInForm } from '@/components/sign-in-form';
 import { SignUpForm } from '@/components/sign-up-form';
@@ -21,6 +22,7 @@ import {
 } from '@/components/ui/card';
 import { labelOffers } from '@/lib/cart';
 import { listAddresses, listOrders, reconcileOrderPayments } from '@/lib/orders';
+import { listSavedSellers } from '@/lib/saved-sellers';
 import { getCurrentUser } from '@/lib/session';
 import { getOwnSeller } from '@/lib/sellers';
 import { listWishlist } from '@/lib/wishlist';
@@ -40,6 +42,7 @@ import {
   addWishlistItemToCartAction,
   removeFromWishlistAction,
 } from '../wishlist/actions';
+import { unsaveSellerAction } from '../sellers/actions';
 
 export const metadata: Metadata = {
   title: 'Account',
@@ -48,6 +51,7 @@ export const metadata: Metadata = {
 const TAB_VALUES: AccountTabValue[] = [
   'recently-viewed',
   'wishlist',
+  'saved-sellers',
   'orders',
   'addresses',
 ];
@@ -98,17 +102,20 @@ export default async function AccountPage({
 
   let orders;
   let wishlistItems;
+  let savedSellers;
   let addresses;
   let labels;
   let seller;
 
   try {
-    [orders, wishlistItems, addresses, seller] = await Promise.all([
-      listOrders(),
-      listWishlist(),
-      listAddresses(),
-      getOwnSeller(),
-    ]);
+    [orders, wishlistItems, savedSellers, addresses, seller] =
+      await Promise.all([
+        listOrders(),
+        listWishlist(),
+        listSavedSellers(),
+        listAddresses(),
+        getOwnSeller(),
+      ]);
 
     // Same reconciliation the standalone orders page does: a mobile money
     // charge the customer already approved settles at the gateway within
@@ -173,6 +180,12 @@ export default async function AccountPage({
             labels={labels}
             addToCart={addWishlistItemToCartAction}
             remove={removeFromWishlistAction}
+          />
+        }
+        savedSellers={
+          <SavedSellersList
+            sellers={savedSellers}
+            remove={unsaveSellerAction}
           />
         }
         orders={
