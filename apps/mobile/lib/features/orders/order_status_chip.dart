@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
+import '../../design/design.dart';
 import '../../domain/orders.dart';
 
 /// One label for where an order stands, preferring the most useful fact:
@@ -11,33 +12,21 @@ class OrderStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final payment = order.payment?.status;
-
-    final (label, background, foreground) = switch (order.status) {
+    final (label, tone) = switch (order.status) {
       OrderStatus.paid => (
-          order.fulfillment?.label ?? 'Confirmed',
-          scheme.primaryContainer,
-          scheme.onPrimaryContainer,
-        ),
-      OrderStatus.cancelled => ('Cancelled', scheme.surfaceContainerHighest, scheme.onSurfaceVariant),
-      OrderStatus.refunded || OrderStatus.partiallyRefunded =>
-        (order.status.label, scheme.surfaceContainerHighest, scheme.onSurfaceVariant),
-      _ when payment == PaymentStatus.failed || payment == PaymentStatus.cancelled =>
-        (payment!.label, scheme.errorContainer, scheme.onErrorContainer),
-      _ => ('Awaiting payment', scheme.tertiaryContainer, scheme.onTertiaryContainer),
-    };
-
-    return DecoratedBox(
-      decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(8)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Text(label,
-            style: Theme.of(context)
-                .textTheme
-                .labelSmall
-                ?.copyWith(color: foreground, fontWeight: FontWeight.w600)),
+        order.fulfillment?.label ?? 'Confirmed',
+        Tone.accent,
       ),
-    );
+      OrderStatus.cancelled => ('Cancelled', Tone.neutral),
+      OrderStatus.refunded ||
+      OrderStatus.partiallyRefunded => (order.status.label, Tone.neutral),
+      _
+          when payment == PaymentStatus.failed ||
+              payment == PaymentStatus.cancelled =>
+        (payment!.label, Tone.danger),
+      _ => ('Awaiting payment', Tone.warning),
+    };
+    return StatusBadge(label, tone: tone);
   }
 }

@@ -3,21 +3,21 @@ import '../core/network/json.dart';
 enum UserRole { customer, seller, staff, admin, unknown }
 
 UserRole _role(String? value) => switch (value) {
-      'CUSTOMER' => UserRole.customer,
-      'SELLER' => UserRole.seller,
-      'STAFF' => UserRole.staff,
-      'ADMIN' => UserRole.admin,
-      _ => UserRole.unknown,
-    };
+  'CUSTOMER' => UserRole.customer,
+  'SELLER' => UserRole.seller,
+  'STAFF' => UserRole.staff,
+  'ADMIN' => UserRole.admin,
+  _ => UserRole.unknown,
+};
 
 class AuthUser {
   const AuthUser({required this.id, required this.email, required this.role});
 
   factory AuthUser.fromJson(Json json) => AuthUser(
-        id: json.str('id'),
-        email: json.str('email'),
-        role: _role(json.strOrNull('role')),
-      );
+    id: json.str('id'),
+    email: json.str('email'),
+    role: _role(json.strOrNull('role')),
+  );
 
   final String id;
   final String email;
@@ -34,11 +34,11 @@ class AuthSession {
   });
 
   factory AuthSession.fromJson(Json json) => AuthSession(
-        accessToken: json.str('accessToken'),
-        refreshToken: json.str('refreshToken'),
-        expiresIn: json.intOrNull('expiresIn') ?? 900,
-        user: AuthUser.fromJson(json.obj('user')),
-      );
+    accessToken: json.str('accessToken'),
+    refreshToken: json.str('refreshToken'),
+    expiresIn: json.intOrNull('expiresIn') ?? 900,
+    user: AuthUser.fromJson(json.obj('user')),
+  );
 
   final String accessToken;
   final String refreshToken;
@@ -55,11 +55,11 @@ class Profile {
   });
 
   factory Profile.fromJson(Json json) => Profile(
-        email: json.str('email'),
-        firstName: json.strOrNull('firstName'),
-        lastName: json.strOrNull('lastName'),
-        phone: json.strOrNull('phone'),
-      );
+    email: json.str('email'),
+    firstName: json.strOrNull('firstName'),
+    lastName: json.strOrNull('lastName'),
+    phone: json.strOrNull('phone'),
+  );
 
   final String email;
   final String? firstName;
@@ -67,10 +67,10 @@ class Profile {
   final String? phone;
 
   String get displayName {
-    final name = [firstName, lastName]
-        .whereType<String>()
-        .where((part) => part.trim().isNotEmpty)
-        .join(' ');
+    final name = [
+      firstName,
+      lastName,
+    ].whereType<String>().where((part) => part.trim().isNotEmpty).join(' ');
     return name.isEmpty ? email : name;
   }
 }

@@ -20,20 +20,28 @@ class CartRepository {
   }
 
   Future<Cart> addItem(String offerId, int quantity) async {
-    final data = await _api.post('/cart/items',
-        query: _currency, body: {'offerId': offerId, 'quantity': quantity});
+    final data = await _api.post(
+      '/cart/items',
+      query: _currency,
+      body: {'offerId': offerId, 'quantity': quantity},
+    );
     return parseResponse(() => Cart.fromJson(asJson(data)));
   }
 
   Future<Cart> updateItem(String itemId, int quantity) async {
-    final data = await _api.patch('/cart/items/${Uri.encodeComponent(itemId)}',
-        query: _currency, body: {'quantity': quantity});
+    final data = await _api.patch(
+      '/cart/items/${Uri.encodeComponent(itemId)}',
+      query: _currency,
+      body: {'quantity': quantity},
+    );
     return parseResponse(() => Cart.fromJson(asJson(data)));
   }
 
   Future<Cart> removeItem(String itemId) async {
-    final data = await _api.delete('/cart/items/${Uri.encodeComponent(itemId)}',
-        query: _currency);
+    final data = await _api.delete(
+      '/cart/items/${Uri.encodeComponent(itemId)}',
+      query: _currency,
+    );
     return data == null
         ? cart()
         : parseResponse(() => Cart.fromJson(asJson(data)));
@@ -46,8 +54,10 @@ class WishlistRepository {
   final ApiClient _api;
 
   Future<List<WishlistItem>> list() async {
-    final data = await _api.get('/wishlist',
-        query: {'currency': AppConfig.currency});
+    final data = await _api.get(
+      '/wishlist',
+      query: {'currency': AppConfig.currency},
+    );
     return parseResponse(() {
       // Accept a bare list or an `{items}` wrapper.
       final items = data is List ? data : asJson(data)['items'];
@@ -79,11 +89,14 @@ class AccountRepository {
     required String lastName,
     required String phone,
   }) async {
-    final data = await _api.patch('/users/me', body: {
-      if (firstName.trim().isNotEmpty) 'firstName': firstName.trim(),
-      if (lastName.trim().isNotEmpty) 'lastName': lastName.trim(),
-      if (phone.trim().isNotEmpty) 'phone': phone.trim(),
-    });
+    final data = await _api.patch(
+      '/users/me',
+      body: {
+        if (firstName.trim().isNotEmpty) 'firstName': firstName.trim(),
+        if (lastName.trim().isNotEmpty) 'lastName': lastName.trim(),
+        if (phone.trim().isNotEmpty) 'phone': phone.trim(),
+      },
+    );
     return parseResponse(() => Profile.fromJson(asJson(data)));
   }
 
@@ -99,8 +112,9 @@ class AccountRepository {
 
   Future<Address> updateAddress(String id, AddressDraft draft) async {
     final data = await _api.patch(
-        '/users/me/addresses/${Uri.encodeComponent(id)}',
-        body: draft.toJson());
+      '/users/me/addresses/${Uri.encodeComponent(id)}',
+      body: draft.toJson(),
+    );
     return parseResponse(() => Address.fromJson(asJson(data)));
   }
 
@@ -119,10 +133,13 @@ class CheckoutRepository {
   final ApiClient _api;
 
   Future<CheckoutQuote> quote(String shippingAddressId) async {
-    final data = await _api.post('/checkout/quote', body: {
-      'shippingAddressId': shippingAddressId,
-      'currency': AppConfig.currency,
-    });
+    final data = await _api.post(
+      '/checkout/quote',
+      body: {
+        'shippingAddressId': shippingAddressId,
+        'currency': AppConfig.currency,
+      },
+    );
     return parseResponse(() => CheckoutQuote.fromJson(asJson(data)));
   }
 
@@ -153,8 +170,9 @@ class CheckoutRepository {
   /// stands. Safe to call repeatedly; it is how the app recovers after being
   /// backgrounded or killed mid-payment.
   Future<PaymentState> refreshPayment(String paymentId) async {
-    final data =
-        await _api.post('/payments/${Uri.encodeComponent(paymentId)}/status');
+    final data = await _api.post(
+      '/payments/${Uri.encodeComponent(paymentId)}/status',
+    );
     return parseResponse(() => PaymentState.fromJson(asJson(data)));
   }
 }
@@ -179,8 +197,9 @@ class OrderRepository {
   }
 
   Future<List<Shipment>> shipments(String orderId) async {
-    final data =
-        await _api.get('/orders/${Uri.encodeComponent(orderId)}/shipments');
+    final data = await _api.get(
+      '/orders/${Uri.encodeComponent(orderId)}/shipments',
+    );
     return parseResponse(() => listOf(data, Shipment.fromJson, 'shipments'));
   }
 }

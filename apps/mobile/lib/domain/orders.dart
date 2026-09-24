@@ -12,23 +12,23 @@ enum OrderStatus {
 }
 
 OrderStatus _orderStatus(String? value) => switch (value) {
-      'PENDING_PAYMENT' => OrderStatus.pendingPayment,
-      'PAID' => OrderStatus.paid,
-      'CANCELLED' => OrderStatus.cancelled,
-      'PARTIALLY_REFUNDED' => OrderStatus.partiallyRefunded,
-      'REFUNDED' => OrderStatus.refunded,
-      _ => OrderStatus.unknown,
-    };
+  'PENDING_PAYMENT' => OrderStatus.pendingPayment,
+  'PAID' => OrderStatus.paid,
+  'CANCELLED' => OrderStatus.cancelled,
+  'PARTIALLY_REFUNDED' => OrderStatus.partiallyRefunded,
+  'REFUNDED' => OrderStatus.refunded,
+  _ => OrderStatus.unknown,
+};
 
 extension OrderStatusLabel on OrderStatus {
   String get label => switch (this) {
-        OrderStatus.pendingPayment => 'Awaiting payment',
-        OrderStatus.paid => 'Paid',
-        OrderStatus.cancelled => 'Cancelled',
-        OrderStatus.partiallyRefunded => 'Partially refunded',
-        OrderStatus.refunded => 'Refunded',
-        OrderStatus.unknown => 'Processing',
-      };
+    OrderStatus.pendingPayment => 'Awaiting payment',
+    OrderStatus.paid => 'Paid',
+    OrderStatus.cancelled => 'Cancelled',
+    OrderStatus.partiallyRefunded => 'Partially refunded',
+    OrderStatus.refunded => 'Refunded',
+    OrderStatus.unknown => 'Processing',
+  };
 }
 
 enum PaymentStatus {
@@ -44,37 +44,37 @@ enum PaymentStatus {
 }
 
 PaymentStatus paymentStatusFrom(String? value) => switch (value) {
-      'PENDING' => PaymentStatus.pending,
-      'REQUIRES_ACTION' => PaymentStatus.requiresAction,
-      'PROCESSING' => PaymentStatus.processing,
-      'SUCCEEDED' => PaymentStatus.succeeded,
-      'FAILED' => PaymentStatus.failed,
-      'CANCELLED' => PaymentStatus.cancelled,
-      'PARTIALLY_REFUNDED' => PaymentStatus.partiallyRefunded,
-      'REFUNDED' => PaymentStatus.refunded,
-      _ => PaymentStatus.unknown,
-    };
+  'PENDING' => PaymentStatus.pending,
+  'REQUIRES_ACTION' => PaymentStatus.requiresAction,
+  'PROCESSING' => PaymentStatus.processing,
+  'SUCCEEDED' => PaymentStatus.succeeded,
+  'FAILED' => PaymentStatus.failed,
+  'CANCELLED' => PaymentStatus.cancelled,
+  'PARTIALLY_REFUNDED' => PaymentStatus.partiallyRefunded,
+  'REFUNDED' => PaymentStatus.refunded,
+  _ => PaymentStatus.unknown,
+};
 
 extension PaymentStatusInfo on PaymentStatus {
   /// Still waiting on the customer or the gateway — worth polling.
   bool get isInFlight => const {
-        PaymentStatus.pending,
-        PaymentStatus.requiresAction,
-        PaymentStatus.processing,
-        PaymentStatus.unknown,
-      }.contains(this);
+    PaymentStatus.pending,
+    PaymentStatus.requiresAction,
+    PaymentStatus.processing,
+    PaymentStatus.unknown,
+  }.contains(this);
 
   String get label => switch (this) {
-        PaymentStatus.pending => 'Waiting for approval',
-        PaymentStatus.requiresAction => 'Action required',
-        PaymentStatus.processing => 'Processing',
-        PaymentStatus.succeeded => 'Payment received',
-        PaymentStatus.failed => 'Payment failed',
-        PaymentStatus.cancelled => 'Payment cancelled',
-        PaymentStatus.partiallyRefunded => 'Partially refunded',
-        PaymentStatus.refunded => 'Refunded',
-        PaymentStatus.unknown => 'Checking payment',
-      };
+    PaymentStatus.pending => 'Waiting for approval',
+    PaymentStatus.requiresAction => 'Action required',
+    PaymentStatus.processing => 'Processing',
+    PaymentStatus.succeeded => 'Payment received',
+    PaymentStatus.failed => 'Payment failed',
+    PaymentStatus.cancelled => 'Payment cancelled',
+    PaymentStatus.partiallyRefunded => 'Partially refunded',
+    PaymentStatus.refunded => 'Refunded',
+    PaymentStatus.unknown => 'Checking payment',
+  };
 }
 
 enum FulfillmentStatus {
@@ -86,22 +86,22 @@ enum FulfillmentStatus {
 }
 
 FulfillmentStatus? _fulfillment(String? value) => switch (value) {
-      'PREPARING' => FulfillmentStatus.preparing,
-      'PACKED' => FulfillmentStatus.packed,
-      'PARTIALLY_DISPATCHED' => FulfillmentStatus.partiallyDispatched,
-      'DISPATCHED' => FulfillmentStatus.dispatched,
-      'CANCELLED' => FulfillmentStatus.cancelled,
-      _ => null,
-    };
+  'PREPARING' => FulfillmentStatus.preparing,
+  'PACKED' => FulfillmentStatus.packed,
+  'PARTIALLY_DISPATCHED' => FulfillmentStatus.partiallyDispatched,
+  'DISPATCHED' => FulfillmentStatus.dispatched,
+  'CANCELLED' => FulfillmentStatus.cancelled,
+  _ => null,
+};
 
 extension FulfillmentLabel on FulfillmentStatus {
   String get label => switch (this) {
-        FulfillmentStatus.preparing => 'Preparing',
-        FulfillmentStatus.packed => 'Packed',
-        FulfillmentStatus.partiallyDispatched => 'Partly dispatched',
-        FulfillmentStatus.dispatched => 'Dispatched',
-        FulfillmentStatus.cancelled => 'Cancelled',
-      };
+    FulfillmentStatus.preparing => 'Preparing',
+    FulfillmentStatus.packed => 'Packed',
+    FulfillmentStatus.partiallyDispatched => 'Partly dispatched',
+    FulfillmentStatus.dispatched => 'Dispatched',
+    FulfillmentStatus.cancelled => 'Cancelled',
+  };
 }
 
 class OrderItem {
@@ -115,13 +115,13 @@ class OrderItem {
   });
 
   factory OrderItem.fromJson(Json json) => OrderItem(
-        id: json.str('id'),
-        offerId: json.str('offerId'),
-        quantity: json.integer('quantity'),
-        unitAmount: json.intOrNull('unitAmount') ?? 0,
-        lineTotal: json.intOrNull('lineTotal') ?? 0,
-        currency: json.strOrNull('currency') ?? '',
-      );
+    id: json.str('id'),
+    offerId: json.str('offerId'),
+    quantity: json.integer('quantity'),
+    unitAmount: json.intOrNull('unitAmount') ?? 0,
+    lineTotal: json.intOrNull('lineTotal') ?? 0,
+    currency: json.strOrNull('currency') ?? '',
+  );
 
   final String id;
   final String offerId;
@@ -139,10 +139,10 @@ class OrderPayment {
   });
 
   factory OrderPayment.fromJson(Json json) => OrderPayment(
-        id: json.str('id'),
-        status: paymentStatusFrom(json.strOrNull('status')),
-        failureReason: json.strOrNull('failureReason'),
-      );
+    id: json.str('id'),
+    status: paymentStatusFrom(json.strOrNull('status')),
+    failureReason: json.strOrNull('failureReason'),
+  );
 
   final String id;
   final PaymentStatus status;
@@ -155,17 +155,17 @@ class OrderAddress {
   const OrderAddress(this.recipientName, this.lines, this.phone);
 
   factory OrderAddress.fromJson(Json json) => OrderAddress(
-        json.strOrNull('recipientName') ?? '',
-        formatAddressLines(
-          line1: json.strOrNull('line1') ?? '',
-          line2: json.strOrNull('line2'),
-          city: json.strOrNull('city') ?? '',
-          region: json.strOrNull('region'),
-          postalCode: json.strOrNull('postalCode') ?? '',
-          country: json.strOrNull('country') ?? '',
-        ),
-        json.strOrNull('phone'),
-      );
+    json.strOrNull('recipientName') ?? '',
+    formatAddressLines(
+      line1: json.strOrNull('line1') ?? '',
+      line2: json.strOrNull('line2'),
+      city: json.strOrNull('city') ?? '',
+      region: json.strOrNull('region'),
+      postalCode: json.strOrNull('postalCode') ?? '',
+      country: json.strOrNull('country') ?? '',
+    ),
+    json.strOrNull('phone'),
+  );
 
   final String recipientName;
   final List<String> lines;
@@ -188,22 +188,22 @@ class Order {
   });
 
   factory Order.fromJson(Json json) => Order(
-        id: json.str('id'),
-        status: _orderStatus(json.strOrNull('status')),
-        currency: json.str('currency'),
-        subtotal: json.intOrNull('subtotal') ?? 0,
-        shippingAmount: json.intOrNull('shippingAmount') ?? 0,
-        total: json.integer('total'),
-        items: json.list('items', OrderItem.fromJson),
-        createdAt: json.dateOrNull('createdAt') ?? DateTime.now(),
-        payment: json.objOrNull('payment') == null
-            ? null
-            : OrderPayment.fromJson(json.obj('payment')),
-        fulfillment: _fulfillment(json.strOrNull('fulfillmentSummary')),
-        shippingAddress: json.objOrNull('shippingAddress') == null
-            ? null
-            : OrderAddress.fromJson(json.obj('shippingAddress')),
-      );
+    id: json.str('id'),
+    status: _orderStatus(json.strOrNull('status')),
+    currency: json.str('currency'),
+    subtotal: json.intOrNull('subtotal') ?? 0,
+    shippingAmount: json.intOrNull('shippingAmount') ?? 0,
+    total: json.integer('total'),
+    items: json.list('items', OrderItem.fromJson),
+    createdAt: json.dateOrNull('createdAt') ?? DateTime.now(),
+    payment: json.objOrNull('payment') == null
+        ? null
+        : OrderPayment.fromJson(json.obj('payment')),
+    fulfillment: _fulfillment(json.strOrNull('fulfillmentSummary')),
+    shippingAddress: json.objOrNull('shippingAddress') == null
+        ? null
+        : OrderAddress.fromJson(json.obj('shippingAddress')),
+  );
 
   final String id;
   final OrderStatus status;
@@ -232,11 +232,11 @@ class ShipmentEvent {
   });
 
   factory ShipmentEvent.fromJson(Json json) => ShipmentEvent(
-        status: json.strOrNull('normalizedStatus') ?? '',
-        description: json.strOrNull('description'),
-        location: json.strOrNull('location'),
-        occurredAt: json.dateOrNull('occurredAt') ?? DateTime.now(),
-      );
+    status: json.strOrNull('normalizedStatus') ?? '',
+    description: json.strOrNull('description'),
+    location: json.strOrNull('location'),
+    occurredAt: json.dateOrNull('occurredAt') ?? DateTime.now(),
+  );
 
   final String status;
   final String? description;
@@ -256,15 +256,15 @@ class Shipment {
   });
 
   factory Shipment.fromJson(Json json) => Shipment(
-        id: json.str('id'),
-        number: json.strOrNull('shipmentNumber') ?? '',
-        status: json.strOrNull('status') ?? '',
-        methodName: json.strOrNull('methodName') ?? '',
-        trackingReference: json.strOrNull('trackingReference'),
-        estimatedDeliveryAt: json.dateOrNull('estimatedDeliveryAt'),
-        events: json.list('events', ShipmentEvent.fromJson)
-          ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt)),
-      );
+    id: json.str('id'),
+    number: json.strOrNull('shipmentNumber') ?? '',
+    status: json.strOrNull('status') ?? '',
+    methodName: json.strOrNull('methodName') ?? '',
+    trackingReference: json.strOrNull('trackingReference'),
+    estimatedDeliveryAt: json.dateOrNull('estimatedDeliveryAt'),
+    events: json.list('events', ShipmentEvent.fromJson)
+      ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt)),
+  );
 
   final String id;
   final String number;

@@ -1,8 +1,12 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoPage;
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show Icons, MaterialPage;
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/state/loader.dart';
 import '../core/widgets/state_views.dart';
+import '../design/design.dart';
 import '../domain/account.dart';
 import '../features/account/account_page.dart';
 import '../features/account/address_form_page.dart';
@@ -35,27 +39,43 @@ import 'shell.dart';
 const _protectedPrefixes = [
   '/checkout',
   '/wishlist',
+  '/address',
   '/account/orders',
   '/account/addresses',
   '/account/profile',
 ];
 
-bool isProtectedLocation(String location) =>
-    _protectedPrefixes.any((prefix) =>
-        location == prefix || location.startsWith('$prefix/'));
+bool isProtectedLocation(String location) => _protectedPrefixes.any(
+  (prefix) => location == prefix || location.startsWith('$prefix/'),
+);
 
 /// Only an in-app path is honoured as a post-sign-in destination. Once deep
 /// links exist, `from` becomes attacker-reachable — the same open-redirect
 /// shape fixed in the web apps' sign-in actions.
 String? safeFrom(String? from) {
   if (from == null || from.isEmpty) return null;
-  if (!from.startsWith('/') || from.startsWith('//') || from.startsWith('/\\')) {
+  if (!from.startsWith('/') ||
+      from.startsWith('//') ||
+      from.startsWith('/\\')) {
     return null;
   }
   return from;
 }
 
-String _encode(GoRouterState state) => Uri.encodeComponent(state.uri.toString());
+/// Each platform's own page transition: Cupertino's slide with the
+/// edge-swipe back gesture on Apple platforms, Material's elsewhere. Navigation
+/// feel is muscle memory, so it is borrowed rather than reinvented.
+Page<void> _page(GoRouterState state, Widget child) {
+  final apple =
+      defaultTargetPlatform == TargetPlatform.iOS ||
+      defaultTargetPlatform == TargetPlatform.macOS;
+  return apple
+      ? CupertinoPage<void>(key: state.pageKey, child: child)
+      : MaterialPage<void>(key: state.pageKey, child: child);
+}
+
+String _encode(GoRouterState state) =>
+    Uri.encodeComponent(state.uri.toString());
 
 /// Tells the router to re-evaluate its redirects only on the session changes
 /// that need one: leaving the startup gate, and a session ending while a
@@ -103,10 +123,13 @@ GoRouter buildRouter(AppServices services) {
       final location = state.matchedLocation;
       final status = session.status;
 
-      if (status == SessionStatus.restoring || status == SessionStatus.unreachable) {
+      if (status == SessionStatus.restoring ||
+          status == SessionStatus.unreachable) {
         // Server settings stay reachable from the startup gate: a stale
         // tunnel hostname is the likeliest reason the gate is showing.
-        if (location == '/startup' || location == '/settings/server') return null;
+        if (location == '/startup' || location == '/settings/server') {
+          return null;
+        }
         return '/startup?from=${_encode(state)}';
       }
       if (location == '/startup') {
@@ -124,71 +147,154 @@ GoRouter buildRouter(AppServices services) {
       return null;
     },
     routes: [
-      GoRoute(path: '/startup', builder: (_, _) => const StartupPage()),
       GoRoute(
-          path: '/settings/server',
-          builder: (_, _) => const ServerSettingsPage()),
+        path: '/startup',
+        pageBuilder: (_, state) => _page(state, const StartupPage()),
+      ),
+      GoRoute(
+        path: '/settings/server',
+        pageBuilder: (_, state) => _page(state, const ServerSettingsPage()),
+      ),
       GoRoute(
         path: '/sign-in',
-        builder: (_, state) => SignInPage(from: state.uri.queryParameters['from']),
+        pageBuilder: (_, state) =>
+            _page(state, SignInPage(from: state.uri.queryParameters['from'])),
       ),
       GoRoute(
         path: '/register',
-        builder: (_, state) => RegisterPage(from: state.uri.queryParameters['from']),
+        pageBuilder: (_, state) =>
+            _page(state, RegisterPage(from: state.uri.queryParameters['from'])),
       ),
-      GoRoute(path: '/password-reset', builder: (_, _) => const PasswordResetPage()),
+      GoRoute(
+        path: '/password-reset',
+        pageBuilder: (_, state) => _page(state, const PasswordResetPage()),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => AppShell(shell: shell),
         branches: [
-          StatefulShellBranch(routes: [
-            GoRoute(path: '/', builder: (_, _) => const HomePage()),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(path: '/search', builder: (_, _) => const SearchPage()),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(path: '/cart', builder: (_, _) => const CartPage()),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(path: '/account', builder: (_, _) => const AccountPage()),
-          ]),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/',
+                pageBuilder: (_, state) => NoTransitionPage(
+                  key: state.pageKey,
+                  child: const HomePage(),
+                ),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/search',
+                pageBuilder: (_, state) => NoTransitionPage(
+                  key: state.pageKey,
+                  child: const SearchPage(),
+                ),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/cart',
+                pageBuilder: (_, state) => NoTransitionPage(
+                  key: state.pageKey,
+                  child: const CartPage(),
+                ),
+              ),
+            ],
+          ),
+          // Account pages live inside the Account tab, so they keep the tab
+          // bar and a real back stack — and `go('/account/orders/:id')` from
+          // anywhere (the payment screen) builds Account → Orders → Order
+          // rather than an orphan screen with no way back.
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/account',
+                pageBuilder: (_, state) => NoTransitionPage(
+                  key: state.pageKey,
+                  child: const AccountPage(),
+                ),
+                routes: [
+                  GoRoute(
+                    path: 'orders',
+                    pageBuilder: (_, state) => _page(state, const OrdersPage()),
+                    routes: [
+                      GoRoute(
+                        path: ':id',
+                        pageBuilder: (_, state) => _page(
+                          state,
+                          OrderDetailPage(orderId: state.pathParameters['id']!),
+                        ),
+                      ),
+                    ],
+                  ),
+                  GoRoute(
+                    path: 'profile',
+                    pageBuilder: (_, state) =>
+                        _page(state, const ProfilePage()),
+                  ),
+                  GoRoute(
+                    path: 'addresses',
+                    pageBuilder: (_, state) =>
+                        _page(state, const AddressesPage()),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ],
       ),
       GoRoute(
         path: '/category/:slug',
-        builder: (_, state) => CategoryPage(
-          slug: state.pathParameters['slug']!,
-          title: state.extra is String ? state.extra! as String : null,
+        pageBuilder: (_, state) => _page(
+          state,
+          CategoryPage(
+            slug: state.pathParameters['slug']!,
+            title: state.extra is String ? state.extra! as String : null,
+          ),
         ),
       ),
       GoRoute(
         path: '/product/:slug',
-        builder: (_, state) => ProductPage(slug: state.pathParameters['slug']!),
+        pageBuilder: (_, state) =>
+            _page(state, ProductPage(slug: state.pathParameters['slug']!)),
       ),
-      GoRoute(path: '/wishlist', builder: (_, _) => const WishlistPage()),
-      GoRoute(path: '/checkout', builder: (_, _) => const CheckoutPage()),
+      GoRoute(
+        path: '/wishlist',
+        pageBuilder: (_, state) => _page(state, const WishlistPage()),
+      ),
+      GoRoute(
+        path: '/checkout',
+        pageBuilder: (_, state) => _page(state, const CheckoutPage()),
+      ),
       GoRoute(
         path: '/checkout/payment/:paymentId',
-        builder: (_, state) => PaymentStatusPage(
-          paymentId: state.pathParameters['paymentId']!,
-          orderId: state.uri.queryParameters['order'],
+        pageBuilder: (_, state) => _page(
+          state,
+          PaymentStatusPage(
+            paymentId: state.pathParameters['paymentId']!,
+            orderId: state.uri.queryParameters['order'],
+          ),
         ),
       ),
-      GoRoute(path: '/account/orders', builder: (_, _) => const OrdersPage()),
+      // The address form covers the screen, as a form should, and is reached
+      // both from the address book and from checkout — which awaits the
+      // saved address it pops with.
       GoRoute(
-        path: '/account/orders/:id',
-        builder: (_, state) => OrderDetailPage(orderId: state.pathParameters['id']!),
+        path: '/address/new',
+        pageBuilder: (_, state) => _page(state, const AddressFormPage()),
       ),
-      GoRoute(path: '/account/profile', builder: (_, _) => const ProfilePage()),
-      GoRoute(path: '/account/addresses', builder: (_, _) => const AddressesPage()),
       GoRoute(
-          path: '/account/addresses/new',
-          builder: (_, _) => const AddressFormPage()),
-      GoRoute(
-        path: '/account/addresses/:id',
-        builder: (_, state) => state.extra is Address
-            ? AddressFormPage(address: state.extra! as Address)
-            : _AddressById(id: state.pathParameters['id']!),
+        path: '/address/:id',
+        pageBuilder: (_, state) => _page(
+          state,
+          state.extra is Address
+              ? AddressFormPage(address: state.extra! as Address)
+              : _AddressById(id: state.pathParameters['id']!),
+        ),
       ),
     ],
   );
@@ -230,8 +336,12 @@ class _AddressByIdState extends State<_AddressById> {
       builder: (context, addresses) {
         final match = addresses.where((a) => a.id == widget.id).firstOrNull;
         if (match == null) {
-          return const Scaffold(
-            body: EmptyView(icon: Icons.location_off_outlined, title: 'Address not found'),
+          return const PageScaffold(
+            title: 'Address',
+            body: EmptyState(
+              icon: Icons.location_off_outlined,
+              title: 'This address no longer exists',
+            ),
           );
         }
         return AddressFormPage(address: match);

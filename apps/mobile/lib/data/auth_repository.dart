@@ -9,16 +9,20 @@ class AuthRepository {
   final ApiClient _api;
 
   Future<AuthSession> login(String email, String password) async {
-    final data = await _api.post('/auth/login',
-        body: {'email': email.trim(), 'password': password},
-        authenticated: false);
+    final data = await _api.post(
+      '/auth/login',
+      body: {'email': email.trim(), 'password': password},
+      authenticated: false,
+    );
     return parseResponse(() => AuthSession.fromJson(asJson(data)));
   }
 
   Future<AuthSession> register(String email, String password) async {
-    final data = await _api.post('/auth/register',
-        body: {'email': email.trim(), 'password': password},
-        authenticated: false);
+    final data = await _api.post(
+      '/auth/register',
+      body: {'email': email.trim(), 'password': password},
+      authenticated: false,
+    );
     return parseResponse(() => AuthSession.fromJson(asJson(data)));
   }
 
@@ -26,8 +30,11 @@ class AuthRepository {
   /// the moment this succeeds — the caller must persist the new one before
   /// doing anything else.
   Future<AuthSession> refresh(String refreshToken) async {
-    final data = await _api.post('/auth/refresh',
-        body: {'refreshToken': refreshToken}, authenticated: false);
+    final data = await _api.post(
+      '/auth/refresh',
+      body: {'refreshToken': refreshToken},
+      authenticated: false,
+    );
     return parseResponse(() => AuthSession.fromJson(asJson(data)));
   }
 
@@ -36,13 +43,18 @@ class AuthRepository {
   }
 
   Future<void> requestPasswordReset(String email) async {
-    await _api.post('/auth/password-reset/request',
-        body: {'email': email.trim()}, authenticated: false);
+    await _api.post(
+      '/auth/password-reset/request',
+      body: {'email': email.trim()},
+      authenticated: false,
+    );
   }
 
   Future<void> confirmPasswordReset(String token, String newPassword) async {
-    await _api.post('/auth/password-reset/confirm',
-        body: {'token': token.trim(), 'newPassword': newPassword},
-        authenticated: false);
+    await _api.post(
+      '/auth/password-reset/confirm',
+      body: {'token': token.trim(), 'newPassword': newPassword},
+      authenticated: false,
+    );
   }
 }

@@ -42,8 +42,8 @@ class ApiClient {
       Duration(milliseconds: 400),
       Duration(milliseconds: 1200),
     ],
-  })  : _endpoint = endpoint,
-        _http = httpClient ?? http.Client();
+  }) : _endpoint = endpoint,
+       _http = httpClient ?? http.Client();
 
   final ApiEndpoint _endpoint;
   final http.Client _http;
@@ -59,8 +59,7 @@ class ApiClient {
     String path, {
     Map<String, Object?>? query,
     bool authenticated = true,
-  }) =>
-      _request('GET', path, query: query, authenticated: authenticated);
+  }) => _request('GET', path, query: query, authenticated: authenticated);
 
   Future<Object?> post(
     String path, {
@@ -68,32 +67,38 @@ class ApiClient {
     Map<String, Object?>? query,
     Map<String, String>? headers,
     bool authenticated = true,
-  }) =>
-      _request('POST', path,
-          body: body,
-          query: query,
-          headers: headers,
-          authenticated: authenticated);
+  }) => _request(
+    'POST',
+    path,
+    body: body,
+    query: query,
+    headers: headers,
+    authenticated: authenticated,
+  );
 
   Future<Object?> patch(
     String path, {
     Object? body,
     Map<String, Object?>? query,
     bool authenticated = true,
-  }) =>
-      _request('PATCH', path,
-          body: body, query: query, authenticated: authenticated);
+  }) => _request(
+    'PATCH',
+    path,
+    body: body,
+    query: query,
+    authenticated: authenticated,
+  );
 
   Future<Object?> delete(
     String path, {
     Map<String, Object?>? query,
     bool authenticated = true,
-  }) =>
-      _request('DELETE', path, query: query, authenticated: authenticated);
+  }) => _request('DELETE', path, query: query, authenticated: authenticated);
 
   Uri resolve(String path, [Map<String, Object?>? query]) {
     final base = _endpoint.value;
-    final joined = '${base.path.replaceAll(RegExp(r'/+$'), '')}'
+    final joined =
+        '${base.path.replaceAll(RegExp(r'/+$'), '')}'
         '/${path.replaceAll(RegExp(r'^/+'), '')}';
 
     final params = <String, dynamic>{};
@@ -164,7 +169,8 @@ class ApiClient {
         }
         throw ApiException(
           kind: ApiErrorKind.network,
-          message: "Couldn't reach the server. Check your connection, or the "
+          message:
+              "Couldn't reach the server. Check your connection, or the "
               'server address in settings.',
           requestId: requestId,
         );
@@ -251,7 +257,9 @@ class ApiClient {
               detail['field'] is String &&
               detail['message'] is String) {
             fields.putIfAbsent(
-                detail['field']! as String, () => detail['message']! as String);
+              detail['field']! as String,
+              () => detail['message']! as String,
+            );
           }
         }
       }

@@ -9,7 +9,8 @@ import 'package:http/http.dart' as http;
 import '../support/fake_api.dart';
 
 final _uuidV4 = RegExp(
-    r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$');
+  r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+);
 
 void main() {
   late FakeApi api;
@@ -22,27 +23,35 @@ void main() {
       httpClient: api.client,
       retryDelays: const [],
     );
-    api.on('GET /users/me/addresses', (_) => FakeApi.ok([
-          {
-            'id': 'addr-1',
-            'recipientName': 'Test Buyer',
-            'phone': '0971234567',
-            'line1': 'Plot 12 Cairo Rd',
-            'city': 'Lusaka',
-            'postalCode': '10101',
-            'country': 'ZM',
-            'isDefault': true,
-          },
-        ]));
-    api.on('POST /checkout/quote', (_) => FakeApi.ok({
-          'currency': 'ZMW',
-          'subtotal': 900000,
-          'shippingAmount': 0,
-          'total': 900000,
-          'shippingGroups': <Object>[],
-        }));
+    api.on(
+      'GET /users/me/addresses',
+      (_) => FakeApi.ok([
+        {
+          'id': 'addr-1',
+          'recipientName': 'Test Buyer',
+          'phone': '0971234567',
+          'line1': 'Plot 12 Cairo Rd',
+          'city': 'Lusaka',
+          'postalCode': '10101',
+          'country': 'ZM',
+          'isDefault': true,
+        },
+      ]),
+    );
+    api.on(
+      'POST /checkout/quote',
+      (_) => FakeApi.ok({
+        'currency': 'ZMW',
+        'subtotal': 900000,
+        'shippingAmount': 0,
+        'total': 900000,
+        'shippingGroups': <Object>[],
+      }),
+    );
     checkout = CheckoutController(
-        account: AccountRepository(client), checkout: CheckoutRepository(client));
+      account: AccountRepository(client),
+      checkout: CheckoutRepository(client),
+    );
     await checkout.start();
   });
 
@@ -76,33 +85,49 @@ void main() {
     expect(checkout.placeError, isNotNull);
     final result = await checkout.placeOrder();
 
-    final keys = api.calls('POST /checkout')
+    final keys = api
+        .calls('POST /checkout')
         .map((r) => r.headers['Idempotency-Key'])
         .toList();
     expect(keys, hasLength(2));
-    expect(keys[0], keys[1], reason: 'same order → same key → no double charge');
-    expect(keys[0], matches(_uuidV4), reason: 'the API rejects anything but v4');
+    expect(
+      keys[0],
+      keys[1],
+      reason: 'same order → same key → no double charge',
+    );
+    expect(
+      keys[0],
+      matches(_uuidV4),
+      reason: 'the API rejects anything but v4',
+    );
     expect(result!.orderId, 'order-1');
   });
 
   test('changing the payment details is a new order, so a new key', () async {
-    api.on('POST /checkout', (_) => throw http.ClientException('connection reset'));
+    api.on(
+      'POST /checkout',
+      (_) => throw http.ClientException('connection reset'),
+    );
 
     await checkout.placeOrder();
     checkout.setProvider(MobileMoneyProvider.airtel);
     await checkout.placeOrder();
 
-    final keys = api.calls('POST /checkout')
+    final keys = api
+        .calls('POST /checkout')
         .map((r) => r.headers['Idempotency-Key'])
         .toSet();
     expect(keys, hasLength(2));
   });
 
   test('sends mobile money details in the shape the API validates', () async {
-    api.on('POST /checkout', (_) => FakeApi.ok({
-          'order': {'id': 'order-1'},
-          'payment': {'id': 'pay-1', 'status': 'PENDING'},
-        }));
+    api.on(
+      'POST /checkout',
+      (_) => FakeApi.ok({
+        'order': {'id': 'order-1'},
+        'payment': {'id': 'pay-1', 'status': 'PENDING'},
+      }),
+    );
     checkout.setPhone('097 123-4567');
     await checkout.placeOrder();
 

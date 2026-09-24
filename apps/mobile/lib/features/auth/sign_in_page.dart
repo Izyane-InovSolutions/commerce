@@ -1,14 +1,16 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' show Icons;
+import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/services.dart';
+import '../../design/design.dart';
 import 'auth_form.dart';
 
 class SignInPage extends StatefulWidget {
   const SignInPage({super.key, this.from});
 
-  /// Where to go once signed in. The router sends the user there as soon as
-  /// the session changes, so this page never navigates on success itself.
+  /// Where the user was headed; see [leaveAuthPage].
   final String? from;
 
   @override
@@ -29,82 +31,107 @@ class _SignInPageState extends State<SignInPage> with FormSubmission {
 
   Future<void> _signIn() async {
     final router = GoRouter.of(context);
-    final ok = await submit(() => context.services.session.signIn(_email.text, _password.text));
+    final ok = await submit(
+      () => context.services.session.signIn(_email.text, _password.text),
+    );
     if (ok) leaveAuthPage(router, widget.from);
   }
 
   @override
   Widget build(BuildContext context) {
-    final query = widget.from == null ? '' : '?from=${Uri.encodeComponent(widget.from!)}';
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Sign in'),
-        actions: [
-          IconButton(
-            tooltip: 'Server settings',
-            icon: const Icon(Icons.dns_outlined),
-            onPressed: () => context.push('/settings/server'),
+    final query = widget.from == null
+        ? ''
+        : '?from=${Uri.encodeComponent(widget.from!)}';
+    return PageScaffold(
+      title: 'Sign in',
+      actions: [
+        IconAction(
+          icon: Icons.dns_outlined,
+          semanticLabel: 'Server settings',
+          onPressed: () => context.push('/settings/server'),
+        ),
+      ],
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(
+            Space.gutter,
+            Space.x2,
+            Space.gutter,
+            0,
           ),
-        ],
-      ),
-      body: SafeArea(
-        child: Form(
-          key: formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
-              Text('Welcome back',
-                  style: Theme.of(context).textTheme.headlineSmall),
-              const SizedBox(height: 8),
-              Text('Sign in to see your cart, orders and saved items.',
-                  style: Theme.of(context).textTheme.bodyMedium),
-              const SizedBox(height: 24),
-              FormErrorBanner(formError),
-              TextFormField(
-                controller: _email,
-                keyboardType: TextInputType.emailAddress,
-                autofillHints: const [AutofillHints.email],
-                textInputAction: TextInputAction.next,
-                decoration: InputDecoration(
-                    labelText: 'Email', errorText: fieldErrors['email']),
-                validator: validateEmail,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _password,
-                obscureText: _obscure,
-                autofillHints: const [AutofillHints.password],
-                textInputAction: TextInputAction.done,
-                onFieldSubmitted: (_) => _signIn(),
-                decoration: InputDecoration(
-                  labelText: 'Password',
-                  errorText: fieldErrors['password'],
-                  suffixIcon: IconButton(
-                    tooltip: _obscure ? 'Show password' : 'Hide password',
-                    icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
-                    onPressed: () => setState(() => _obscure = !_obscure),
-                  ),
+          sliver: SliverToBoxAdapter(
+            child: AutofillGroup(
+              child: Form(
+                key: formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Your cart, orders and saved items are waiting.',
+                      style: context.type.body.copyWith(
+                        color: context.colors.inkMuted,
+                      ),
+                    ),
+                    const SizedBox(height: Space.x6),
+                    FormErrorBanner(formError),
+                    InputFormField(
+                      controller: _email,
+                      label: 'Email',
+                      keyboardType: TextInputType.emailAddress,
+                      autofillHints: const [AutofillHints.email],
+                      textInputAction: TextInputAction.next,
+                      autocorrect: false,
+                      serverError: fieldErrors['email'],
+                      validator: validateEmail,
+                    ),
+                    fieldGap,
+                    InputFormField(
+                      controller: _password,
+                      label: 'Password',
+                      obscureText: _obscure,
+                      autofillHints: const [AutofillHints.password],
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _signIn(),
+                      serverError: fieldErrors['password'],
+                      validator: (value) => requiredField(value, 'Password'),
+                      trailing: IconAction(
+                        icon: _obscure
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        semanticLabel: _obscure
+                            ? 'Show password'
+                            : 'Hide password',
+                        size: 20,
+                        onPressed: () => setState(() => _obscure = !_obscure),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: LinkAction(
+                        label: 'Forgot password?',
+                        onPressed: () => context.push('/password-reset'),
+                      ),
+                    ),
+                    const SizedBox(height: Space.x2),
+                    Button(
+                      label: 'Sign in',
+                      loading: submitting,
+                      onPressed: _signIn,
+                    ),
+                    const SizedBox(height: Space.x3),
+                    Button(
+                      label: 'Create an account',
+                      variant: ButtonVariant.secondary,
+                      onPressed: () =>
+                          context.pushReplacement('/register$query'),
+                    ),
+                  ],
                 ),
-                validator: (value) => requiredField(value, 'Password'),
               ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () => context.push('/password-reset'),
-                  child: const Text('Forgot password?'),
-                ),
-              ),
-              const SizedBox(height: 8),
-              SubmitButton(label: 'Sign in', busy: submitting, onPressed: _signIn),
-              const SizedBox(height: 12),
-              OutlinedButton(
-                onPressed: () => context.pushReplacement('/register$query'),
-                child: const Text('Create an account'),
-              ),
-            ],
+            ),
           ),
         ),
-      ),
+      ],
     );
   }
 }

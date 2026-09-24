@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/router.dart' show safeFrom;
 import '../../core/network/api_exception.dart';
+import '../../design/design.dart';
 
 /// Holds a form's submit state and maps API validation errors onto fields.
 mixin FormSubmission<T extends StatefulWidget> on State<T> {
@@ -43,6 +44,7 @@ mixin FormSubmission<T extends StatefulWidget> on State<T> {
   }
 }
 
+/// A form-level failure — one that is not about any single field.
 class FormErrorBanner extends StatelessWidget {
   const FormErrorBanner(this.message, {super.key});
 
@@ -51,43 +53,28 @@ class FormErrorBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (message == null) return const SizedBox.shrink();
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: scheme.errorContainer,
-        borderRadius: BorderRadius.circular(12),
+    final colors = context.colors;
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: Space.x5),
+        padding: const EdgeInsets.all(Space.x4),
+        decoration: BoxDecoration(
+          color: colors.dangerWash,
+          borderRadius: const BorderRadius.all(Radii.control),
+        ),
+        child: Text(
+          message!,
+          style: context.type.small.copyWith(color: colors.danger),
+        ),
       ),
-      child: Text(message!, style: TextStyle(color: scheme.onErrorContainer)),
     );
   }
 }
 
-class SubmitButton extends StatelessWidget {
-  const SubmitButton({
-    super.key,
-    required this.label,
-    required this.busy,
-    required this.onPressed,
-  });
-
-  final String label;
-  final bool busy;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return FilledButton(
-      onPressed: busy ? null : onPressed,
-      child: busy
-          ? const SizedBox.square(
-              dimension: 22, child: CircularProgressIndicator(strokeWidth: 2.5))
-          : Text(label),
-    );
-  }
-}
+/// Vertical rhythm between form fields.
+const fieldGap = SizedBox(height: Space.x5);
 
 String? requiredField(String? value, String label) =>
     (value == null || value.trim().isEmpty) ? '$label is required' : null;

@@ -38,13 +38,12 @@ class ProductQuery {
     String? Function()? categorySlug,
     String? Function()? brandSlug,
     ProductSort? sort,
-  }) =>
-      ProductQuery(
-        search: search ?? this.search,
-        categorySlug: categorySlug == null ? this.categorySlug : categorySlug(),
-        brandSlug: brandSlug == null ? this.brandSlug : brandSlug(),
-        sort: sort ?? this.sort,
-      );
+  }) => ProductQuery(
+    search: search ?? this.search,
+    categorySlug: categorySlug == null ? this.categorySlug : categorySlug(),
+    brandSlug: brandSlug == null ? this.brandSlug : brandSlug(),
+    sort: sort ?? this.sort,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -119,7 +118,8 @@ class CatalogRepository {
           query: {'currency': AppConfig.currency},
         );
         return parseResponse<OfferDetail>(
-            () => OfferDetail.fromJson(asJson(data)));
+          () => OfferDetail.fromJson(asJson(data)),
+        );
       } catch (_) {
         // Do not cache a failure: the next screen to ask should retry.
         _offers.remove(id);
@@ -132,13 +132,18 @@ class CatalogRepository {
   /// unpublished listing should not blank out a whole cart.
   Future<Map<String, OfferDetail>> offers(Iterable<String> ids) async {
     final unique = ids.toSet();
-    final entries = await Future.wait(unique.map((id) async {
-      try {
-        return MapEntry(id, await offer(id));
-      } catch (_) {
-        return null;
-      }
-    }));
-    return {for (final entry in entries.whereType<MapEntry<String, OfferDetail>>()) entry.key: entry.value};
+    final entries = await Future.wait(
+      unique.map((id) async {
+        try {
+          return MapEntry(id, await offer(id));
+        } catch (_) {
+          return null;
+        }
+      }),
+    );
+    return {
+      for (final entry in entries.whereType<MapEntry<String, OfferDetail>>())
+        entry.key: entry.value,
+    };
   }
 }

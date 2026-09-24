@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/widgets/state_views.dart';
+import '../../design/design.dart';
 
 /// What a tab that needs an account shows to someone signed out — instead of
 /// yanking them to a sign-in form just for tapping the tab.
@@ -22,20 +22,21 @@ class SignInPrompt extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final query = '?from=${Uri.encodeComponent(from)}';
-    return EmptyView(
+    return EmptyState(
       icon: icon,
       title: title,
       message: message,
       action: Column(
         children: [
-          FilledButton(
+          Button(
+            label: 'Sign in',
             onPressed: () => context.push('/sign-in$query'),
-            child: const Text('Sign in'),
           ),
-          const SizedBox(height: 8),
-          TextButton(
+          const SizedBox(height: Space.x2),
+          Button(
+            label: 'Create an account',
+            variant: ButtonVariant.ghost,
             onPressed: () => context.push('/register$query'),
-            child: const Text('Create an account'),
           ),
         ],
       ),

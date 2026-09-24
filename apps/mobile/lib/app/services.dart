@@ -41,8 +41,10 @@ class AppServices {
     final endpoint = await ApiEndpoint.load(store);
     final api = ApiClient(endpoint: endpoint, httpClient: httpClient);
     final auth = AuthRepository(api);
-    final session =
-        SessionController(auth: auth, tokens: SecureTokenStore(store));
+    final session = SessionController(
+      auth: auth,
+      tokens: SecureTokenStore(store),
+    );
     api.tokenSource = session;
 
     final catalog = CatalogRepository(api);
@@ -62,7 +64,10 @@ class AppServices {
       orders: OrderRepository(api),
       cart: CartController(carts: carts, catalog: catalog, session: session),
       wishlist: WishlistController(
-          wishlist: wishlists, catalog: catalog, session: session),
+        wishlist: wishlists,
+        catalog: catalog,
+        session: session,
+      ),
     );
 
     // Tokens minted by one backend are meaningless to another, so repointing
@@ -100,8 +105,7 @@ class AppScope extends InheritedWidget {
   }
 
   @override
-  bool updateShouldNotify(AppScope oldWidget) =>
-      services != oldWidget.services;
+  bool updateShouldNotify(AppScope oldWidget) => services != oldWidget.services;
 }
 
 extension AppServicesContext on BuildContext {

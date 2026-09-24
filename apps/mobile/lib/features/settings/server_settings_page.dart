@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 import '../../app/services.dart';
 import '../../core/config/api_endpoint.dart';
@@ -6,6 +6,7 @@ import '../../core/config/app_config.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/widgets/state_views.dart';
 import '../../data/server_probe.dart';
+import '../../design/design.dart';
 
 /// Repoint the app at another API without rebuilding it.
 ///
@@ -19,17 +20,13 @@ class ServerSettingsPage extends StatefulWidget {
   State<ServerSettingsPage> createState() => _ServerSettingsPageState();
 }
 
-class _ServerSettingsPageState extends State<ServerSettingsPage> {
-  late final TextEditingController _url;
-  String? _error;
-  String? _status;
-  bool _checking = false;
+enum _Probe { idle, checking, healthy, notCommerce, failed }
 
-  @override
-  void initState() {
-    super.initState();
-    _url = TextEditingController();
-  }
+class _ServerSettingsPageState extends State<ServerSettingsPage> {
+  final _url = TextEditingController();
+  String? _error;
+  _Probe _probe = _Probe.idle;
+  String? _probeMessage;
 
   @override
   void didChangeDependencies() {
@@ -45,115 +42,135 @@ class _ServerSettingsPageState extends State<ServerSettingsPage> {
     super.dispose();
   }
 
-  Future<void> _test() async {
+  Uri? _parse() {
     final uri = ApiEndpoint.tryParse(_url.text);
-    if (uri == null) {
-      setState(() => _error = 'Enter a full https:// address');
-      return;
-    }
-    setState(() {
-      _error = null;
-      _status = null;
-      _checking = true;
-    });
+    setState(
+      () => _error = uri == null ? 'Enter a full https:// address' : null,
+    );
+    return uri;
+  }
+
+  Future<void> _test() async {
+    final uri = _parse();
+    if (uri == null) return;
+    setState(() => _probe = _Probe.checking);
     try {
-      // Probe the candidate directly, without switching to it yet.
-      final probe = await ServerProbe.check(uri);
-      setState(() => _status = probe ? 'Connected — the API is healthy.' : 'Reached a server, but it did not look like the Commerce API.');
+      final healthy = await ServerProbe.check(uri);
+      setState(() => _probe = healthy ? _Probe.healthy : _Probe.notCommerce);
     } on ApiException catch (error) {
-      setState(() => _status = error.message);
-    } finally {
-      if (mounted) setState(() => _checking = false);
+      setState(() {
+        _probe = _Probe.failed;
+        _probeMessage = error.message;
+      });
     }
   }
 
   Future<void> _save() async {
-    final uri = ApiEndpoint.tryParse(_url.text);
-    if (uri == null) {
-      setState(() => _error = 'Enter a full https:// address');
-      return;
-    }
+    final uri = _parse();
+    if (uri == null) return;
     final endpoint = context.services.endpoint;
     if (uri == endpoint.value) {
       Navigator.of(context).pop();
       return;
     }
-    final confirmed = await _confirmSwitch();
-    if (confirmed != true || !mounted) return;
+    if (!await _confirmSwitch() || !mounted) return;
     await endpoint.override(uri);
     if (!mounted) return;
-    showMessage(context, 'Now using $uri');
+    showMessage(context, 'Now using ${uri.host}');
     Navigator.of(context).pop();
   }
 
   Future<void> _reset() async {
-    final confirmed = await _confirmSwitch();
-    if (confirmed != true || !mounted) return;
+    if (!await _confirmSwitch() || !mounted) return;
     await context.services.endpoint.reset();
     if (!mounted) return;
     _url.text = AppConfig.defaultApiBaseUrl;
     showMessage(context, 'Back to the default server');
   }
 
-  Future<bool?> _confirmSwitch() => showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Switch server?'),
-          content: const Text(
-              "You'll be signed out — your session belongs to the current server."),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel')),
-            FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Switch')),
-          ],
-        ),
-      );
+  Future<bool> _confirmSwitch() => confirm(
+    context,
+    title: 'Switch server?',
+    message:
+        "You'll be signed out, because your session belongs to the current server.",
+    confirmLabel: 'Switch and sign out',
+  );
 
   @override
   Widget build(BuildContext context) {
     final endpoint = context.services.endpoint;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Server settings')),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          Text('API base URL', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Text(
-            endpoint.isOverridden
-                ? 'Using a custom server.'
-                : 'Using the default this build was made with.',
-            style: Theme.of(context).textTheme.bodyMedium,
+    final colors = context.colors;
+    final (probeText, probeColor) = switch (_probe) {
+      _Probe.idle || _Probe.checking => (null, colors.inkMuted),
+      _Probe.healthy => ('Connected. The API is healthy.', colors.accent),
+      _Probe.notCommerce => (
+        'Something answered, but it is not the Commerce API.',
+        colors.warning,
+      ),
+      _Probe.failed => (_probeMessage, colors.danger),
+    };
+
+    return PageScaffold(
+      title: 'Server',
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(
+            Space.gutter,
+            Space.x2,
+            Space.gutter,
+            0,
           ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _url,
-            keyboardType: TextInputType.url,
-            autocorrect: false,
-            decoration: InputDecoration(
-              labelText: 'https://…/api/v1',
-              errorText: _error,
-              helperText: '/api/v1 is added if you leave it off',
+          sliver: SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  endpoint.isOverridden
+                      ? 'This app is using a server you set.'
+                      : 'This app is using the server it was built with.',
+                  style: context.type.body.copyWith(color: colors.inkMuted),
+                ),
+                const SizedBox(height: Space.x6),
+                InputField(
+                  controller: _url,
+                  label: 'API address',
+                  helper: '/api/v1 is added if you leave it off',
+                  error: _error,
+                  keyboardType: TextInputType.url,
+                  autocorrect: false,
+                ),
+                if (probeText != null) ...[
+                  const SizedBox(height: Space.x4),
+                  Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      probeText,
+                      style: context.type.small.copyWith(color: probeColor),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: Space.x6),
+                Button(
+                  label: 'Test connection',
+                  variant: ButtonVariant.secondary,
+                  loading: _probe == _Probe.checking,
+                  onPressed: _test,
+                ),
+                const SizedBox(height: Space.x3),
+                Button(label: 'Save', onPressed: _save),
+                if (endpoint.isOverridden) ...[
+                  const SizedBox(height: Space.x2),
+                  Button(
+                    label: 'Use the default server',
+                    variant: ButtonVariant.ghost,
+                    onPressed: _reset,
+                  ),
+                ],
+              ],
             ),
           ),
-          if (_status != null) ...[
-            const SizedBox(height: 12),
-            Text(_status!),
-          ],
-          const SizedBox(height: 24),
-          OutlinedButton(
-            onPressed: _checking ? null : _test,
-            child: Text(_checking ? 'Checking…' : 'Test connection'),
-          ),
-          const SizedBox(height: 12),
-          FilledButton(onPressed: _save, child: const Text('Save')),
-          if (endpoint.isOverridden)
-            TextButton(onPressed: _reset, child: const Text('Reset to default')),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

@@ -1,7 +1,9 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/services.dart';
+import '../../design/design.dart';
 import '../../domain/account.dart';
 import '../auth/auth_form.dart';
 
@@ -33,7 +35,7 @@ class _AddressFormPageState extends State<AddressFormPage> with FormSubmission {
       'city': TextEditingController(text: a?.city),
       'region': TextEditingController(text: a?.region),
       'postalCode': TextEditingController(text: a?.postalCode),
-      // The marketplace ships from Zambia; the common case needs no typing.
+      // The marketplace delivers within Zambia; the common case needs no typing.
       'country': TextEditingController(text: a?.country ?? 'ZM'),
     };
   }
@@ -49,16 +51,17 @@ class _AddressFormPageState extends State<AddressFormPage> with FormSubmission {
   Future<void> _save() async {
     Address? saved;
     final ok = await submit(() async {
+      String text(String key) => _fields[key]!.text;
       final draft = AddressDraft(
-        label: _fields['label']!.text,
-        recipientName: _fields['recipientName']!.text,
-        phone: _fields['phone']!.text,
-        line1: _fields['line1']!.text,
-        line2: _fields['line2']!.text,
-        city: _fields['city']!.text,
-        region: _fields['region']!.text,
-        postalCode: _fields['postalCode']!.text,
-        country: _fields['country']!.text,
+        label: text('label'),
+        recipientName: text('recipientName'),
+        phone: text('phone'),
+        line1: text('line1'),
+        line2: text('line2'),
+        city: text('city'),
+        region: text('region'),
+        postalCode: text('postalCode'),
+        country: text('country'),
       );
       final account = context.services.account;
       saved = widget.address == null
@@ -68,56 +71,117 @@ class _AddressFormPageState extends State<AddressFormPage> with FormSubmission {
     if (ok && mounted) context.pop(saved);
   }
 
-  Widget _field(String key, String label,
-      {bool required = false,
-      TextInputType? keyboard,
-      TextCapitalization caps = TextCapitalization.words,
-      String? Function(String?)? validator}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: TextFormField(
-        controller: _fields[key],
-        keyboardType: keyboard,
-        textCapitalization: caps,
-        textInputAction: TextInputAction.next,
-        decoration: InputDecoration(
-          labelText: required ? label : '$label (optional)',
-          errorText: fieldErrors[key],
-        ),
-        validator: validator ?? (required ? (v) => requiredField(v, label) : null),
-      ),
-    );
-  }
+  Widget _field(
+    String key,
+    String label, {
+    bool required = false,
+    String? helper,
+    TextInputType? keyboard,
+    TextCapitalization caps = TextCapitalization.words,
+    Iterable<String>? autofill,
+    String? Function(String value)? validator,
+  }) => Padding(
+    padding: const EdgeInsets.only(bottom: Space.x5),
+    child: InputFormField(
+      controller: _fields[key]!,
+      label: required ? label : '$label (optional)',
+      helper: helper,
+      keyboardType: keyboard,
+      textCapitalization: caps,
+      textInputAction: TextInputAction.next,
+      autofillHints: autofill,
+      serverError: fieldErrors[key],
+      validator:
+          validator ?? (required ? (v) => requiredField(v, label) : null),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(widget.address == null ? 'New address' : 'Edit address')),
-      body: Form(
-        key: formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(24),
-          children: [
-            FormErrorBanner(formError),
-            _field('recipientName', 'Full name', required: true),
-            _field('phone', 'Phone', keyboard: TextInputType.phone),
-            _field('line1', 'Address line 1', required: true),
-            _field('line2', 'Address line 2'),
-            _field('city', 'City', required: true),
-            _field('region', 'Province'),
-            _field('postalCode', 'Postal code', required: true, keyboard: TextInputType.number),
-            _field('country', 'Country code',
-                required: true,
-                caps: TextCapitalization.characters,
-                validator: (value) => RegExp(r'^[A-Za-z]{2}$').hasMatch(value?.trim() ?? '')
-                    ? null
-                    : 'Use the two-letter code, e.g. ZM'),
-            _field('label', 'Label, e.g. Home or Work'),
-            const SizedBox(height: 8),
-            SubmitButton(label: 'Save address', busy: submitting, onPressed: _save),
-          ],
-        ),
+    return PageScaffold(
+      title: widget.address == null ? 'New address' : 'Edit address',
+      bottomBar: Button(
+        label: 'Save address',
+        loading: submitting,
+        onPressed: _save,
       ),
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(
+            Space.gutter,
+            Space.x2,
+            Space.gutter,
+            0,
+          ),
+          sliver: SliverToBoxAdapter(
+            child: AutofillGroup(
+              child: Form(
+                key: formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    FormErrorBanner(formError),
+                    _field(
+                      'recipientName',
+                      'Full name',
+                      required: true,
+                      autofill: const [AutofillHints.name],
+                    ),
+                    _field(
+                      'phone',
+                      'Phone',
+                      keyboard: TextInputType.phone,
+                      helper: 'For the driver, if they need to find you',
+                      autofill: const [AutofillHints.telephoneNumber],
+                    ),
+                    _field(
+                      'line1',
+                      'Address line 1',
+                      required: true,
+                      autofill: const [AutofillHints.streetAddressLine1],
+                    ),
+                    _field(
+                      'line2',
+                      'Address line 2',
+                      autofill: const [AutofillHints.streetAddressLine2],
+                    ),
+                    _field(
+                      'city',
+                      'City',
+                      required: true,
+                      autofill: const [AutofillHints.addressCity],
+                    ),
+                    _field(
+                      'region',
+                      'Province',
+                      autofill: const [AutofillHints.addressState],
+                    ),
+                    _field(
+                      'postalCode',
+                      'Postal code',
+                      required: true,
+                      keyboard: TextInputType.number,
+                      autofill: const [AutofillHints.postalCode],
+                    ),
+                    _field(
+                      'country',
+                      'Country code',
+                      required: true,
+                      caps: TextCapitalization.characters,
+                      helper: 'Two letters, like ZM',
+                      validator: (value) =>
+                          RegExp(r'^[A-Za-z]{2}$').hasMatch(value.trim())
+                          ? null
+                          : 'Use the two-letter code, like ZM',
+                    ),
+                    _field('label', 'Label', helper: 'Home, Work, Mum’s place'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

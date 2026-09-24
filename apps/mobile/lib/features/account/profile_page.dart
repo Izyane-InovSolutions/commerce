@@ -1,8 +1,10 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 
 import '../../app/services.dart';
 import '../../core/state/loader.dart';
 import '../../core/widgets/state_views.dart';
+import '../../design/design.dart';
 import '../../domain/auth.dart';
 import '../auth/auth_form.dart';
 
@@ -46,7 +48,10 @@ class _ProfilePageState extends State<ProfilePage> with FormSubmission {
   Future<void> _save() async {
     final ok = await submit(() async {
       final updated = await context.services.account.updateProfile(
-          firstName: _first.text, lastName: _last.text, phone: _phone.text);
+        firstName: _first.text,
+        lastName: _last.text,
+        phone: _phone.text,
+      );
       _profile.replace(updated);
     });
     if (ok && mounted) showMessage(context, 'Profile saved');
@@ -54,47 +59,67 @@ class _ProfilePageState extends State<ProfilePage> with FormSubmission {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
-      body: LoaderView(
-        loader: _profile,
-        builder: (context, profile) => Form(
-          key: formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
-              FormErrorBanner(formError),
-              TextFormField(
-                initialValue: profile.email,
-                enabled: false,
-                decoration: const InputDecoration(labelText: 'Email'),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _first,
-                textCapitalization: TextCapitalization.words,
-                decoration: InputDecoration(
-                    labelText: 'First name', errorText: fieldErrors['firstName']),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _last,
-                textCapitalization: TextCapitalization.words,
-                decoration: InputDecoration(
-                    labelText: 'Last name', errorText: fieldErrors['lastName']),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _phone,
-                keyboardType: TextInputType.phone,
-                decoration: InputDecoration(
-                    labelText: 'Phone', errorText: fieldErrors['phone']),
-              ),
-              const SizedBox(height: 24),
-              SubmitButton(label: 'Save', busy: submitting, onPressed: _save),
-            ],
-          ),
+    return LoaderView(
+      loader: _profile,
+      placeholder: const PageScaffold(title: 'Profile', body: LoadingState()),
+      builder: (context, profile) => PageScaffold(
+        title: 'Profile',
+        bottomBar: Button(
+          label: 'Save profile',
+          loading: submitting,
+          onPressed: _save,
         ),
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              Space.gutter,
+              Space.x2,
+              Space.gutter,
+              0,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: Form(
+                key: formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    FormErrorBanner(formError),
+                    Text(
+                      profile.email,
+                      style: context.type.body.copyWith(
+                        color: context.colors.inkMuted,
+                      ),
+                    ),
+                    const SizedBox(height: Space.x6),
+                    InputFormField(
+                      controller: _first,
+                      label: 'First name',
+                      textCapitalization: TextCapitalization.words,
+                      autofillHints: const [AutofillHints.givenName],
+                      serverError: fieldErrors['firstName'],
+                    ),
+                    fieldGap,
+                    InputFormField(
+                      controller: _last,
+                      label: 'Last name',
+                      textCapitalization: TextCapitalization.words,
+                      autofillHints: const [AutofillHints.familyName],
+                      serverError: fieldErrors['lastName'],
+                    ),
+                    fieldGap,
+                    InputFormField(
+                      controller: _phone,
+                      label: 'Phone',
+                      keyboardType: TextInputType.phone,
+                      autofillHints: const [AutofillHints.telephoneNumber],
+                      serverError: fieldErrors['phone'],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

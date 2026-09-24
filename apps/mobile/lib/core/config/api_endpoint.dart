@@ -19,7 +19,8 @@ class ApiEndpoint extends ValueNotifier<Uri> {
   bool isOverridden;
 
   /// An endpoint that is never persisted — for probing a candidate server.
-  ApiEndpoint.fixed(Uri uri) : this._(uri, MemoryKeyValueStore(), isOverridden: false);
+  ApiEndpoint.fixed(Uri uri)
+    : this._(uri, MemoryKeyValueStore(), isOverridden: false);
 
   static Future<ApiEndpoint> load(KeyValueStore store) async {
     final saved = await store.read(_overrideKey);

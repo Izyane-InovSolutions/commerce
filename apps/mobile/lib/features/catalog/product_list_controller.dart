@@ -6,8 +6,10 @@ import '../../domain/catalog.dart';
 
 /// A paged, filterable product listing.
 class ProductListController extends ChangeNotifier {
-  ProductListController(this._catalog, {ProductQuery query = const ProductQuery()})
-      : _query = query;
+  ProductListController(
+    this._catalog, {
+    ProductQuery query = const ProductQuery(),
+  }) : _query = query;
 
   final CatalogRepository _catalog;
   static const pageSize = 20;
@@ -68,12 +70,14 @@ class ProductListController extends ChangeNotifier {
     _loadingMore = true;
     _notify();
     try {
-      final page =
-          await _catalog.products(_query, page: _page + 1, limit: pageSize);
+      final page = await _catalog.products(
+        _query,
+        page: _page + 1,
+        limit: pageSize,
+      );
       if (generation != _generation) return;
       final seen = _products.map((p) => p.id).toSet();
-      final fresh =
-          page.products.where((p) => !seen.contains(p.id)).toList();
+      final fresh = page.products.where((p) => !seen.contains(p.id)).toList();
       _products = [..._products, ...fresh];
       _page = page.page > _page ? page.page : _page + 1;
       _total = page.total;

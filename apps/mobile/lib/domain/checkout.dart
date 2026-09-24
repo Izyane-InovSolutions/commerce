@@ -6,14 +6,14 @@ enum MobileMoneyProvider { mtn, airtel }
 
 extension MobileMoneyProviderInfo on MobileMoneyProvider {
   String get wireValue => switch (this) {
-        MobileMoneyProvider.mtn => 'MTN',
-        MobileMoneyProvider.airtel => 'AIRTEL',
-      };
+    MobileMoneyProvider.mtn => 'MTN',
+    MobileMoneyProvider.airtel => 'AIRTEL',
+  };
 
   String get label => switch (this) {
-        MobileMoneyProvider.mtn => 'MTN MoMo',
-        MobileMoneyProvider.airtel => 'Airtel Money',
-      };
+    MobileMoneyProvider.mtn => 'MTN MoMo',
+    MobileMoneyProvider.airtel => 'Airtel Money',
+  };
 }
 
 /// How the customer will pay. Mobile money only in this app for now: card
@@ -33,10 +33,10 @@ class PaymentDetails {
       raw.replaceAll(RegExp(r'[\s-]'), '');
 
   Json toJson() => {
-        'paymentMethod': 'MOBILE_MONEY',
-        'provider': provider.wireValue,
-        'phoneNumber': normalizePhone(phoneNumber),
-      };
+    'paymentMethod': 'MOBILE_MONEY',
+    'provider': provider.wireValue,
+    'phoneNumber': normalizePhone(phoneNumber),
+  };
 }
 
 class ShippingGroup {
@@ -50,13 +50,13 @@ class ShippingGroup {
   });
 
   factory ShippingGroup.fromJson(Json json) => ShippingGroup(
-        subtotal: json.intOrNull('subtotal') ?? 0,
-        shippingAmount: json.intOrNull('shippingAmount') ?? 0,
-        total: json.intOrNull('total') ?? 0,
-        serviceLevel: json.strOrNull('serviceLevel') ?? 'STANDARD',
-        minDays: json.intOrNull('estimatedDeliveryMinDays'),
-        maxDays: json.intOrNull('estimatedDeliveryMaxDays'),
-      );
+    subtotal: json.intOrNull('subtotal') ?? 0,
+    shippingAmount: json.intOrNull('shippingAmount') ?? 0,
+    total: json.intOrNull('total') ?? 0,
+    serviceLevel: json.strOrNull('serviceLevel') ?? 'STANDARD',
+    minDays: json.intOrNull('estimatedDeliveryMinDays'),
+    maxDays: json.intOrNull('estimatedDeliveryMaxDays'),
+  );
 
   final int subtotal;
   final int shippingAmount;
@@ -84,12 +84,12 @@ class CheckoutQuote {
   });
 
   factory CheckoutQuote.fromJson(Json json) => CheckoutQuote(
-        currency: json.str('currency'),
-        subtotal: json.integer('subtotal'),
-        shippingAmount: json.intOrNull('shippingAmount') ?? 0,
-        total: json.integer('total'),
-        groups: json.list('shippingGroups', ShippingGroup.fromJson),
-      );
+    currency: json.str('currency'),
+    subtotal: json.integer('subtotal'),
+    shippingAmount: json.intOrNull('shippingAmount') ?? 0,
+    total: json.integer('total'),
+    groups: json.list('shippingGroups', ShippingGroup.fromJson),
+  );
 
   final String currency;
   final int subtotal;
@@ -134,15 +134,16 @@ class PaymentState {
   });
 
   factory PaymentState.fromJson(Json json) => PaymentState(
-        id: json.str('id'),
-        orderId: json.str('orderId'),
-        // `localStatus` is the API's verdict. The gateway's own status rides
-        // alongside it, but the app must never decide an order is paid from
-        // anything but the API's own state.
-        status: paymentStatusFrom(
-            json.strOrNull('localStatus') ?? json.strOrNull('status')),
-        expiresAt: json.objOrNull('gateway')?.dateOrNull('expiresAt'),
-      );
+    id: json.str('id'),
+    orderId: json.str('orderId'),
+    // `localStatus` is the API's verdict. The gateway's own status rides
+    // alongside it, but the app must never decide an order is paid from
+    // anything but the API's own state.
+    status: paymentStatusFrom(
+      json.strOrNull('localStatus') ?? json.strOrNull('status'),
+    ),
+    expiresAt: json.objOrNull('gateway')?.dateOrNull('expiresAt'),
+  );
 
   final String id;
   final String orderId;

@@ -1,13 +1,14 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' show Icons;
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/services.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/state/loader.dart';
 import '../../core/util/dates.dart';
-import '../../core/util/money.dart';
 import '../../core/widgets/api_image.dart';
 import '../../core/widgets/state_views.dart';
+import '../../design/design.dart';
 import '../../domain/catalog.dart';
 import '../../domain/orders.dart';
 import 'order_status_chip.dart';
@@ -44,12 +45,15 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
       final order = await services.orders.order(widget.orderId);
       final results = await Future.wait([
         services.catalog.offers(order.items.map((item) => item.offerId)),
-        // Shipments only exist once fulfilment starts; their absence is not
-        // an error worth failing the whole page over.
+        // Shipments exist only once fulfilment starts; their absence is not
+        // worth failing the whole page over.
         services.orders.shipments(order.id).catchError((_) => <Shipment>[]),
       ]);
-      return _OrderView(order, results[0] as Map<String, OfferDetail>,
-          results[1] as List<Shipment>);
+      return _OrderView(
+        order,
+        results[0] as Map<String, OfferDetail>,
+        results[1] as List<Shipment>,
+      );
     });
   }
 
@@ -74,95 +78,146 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Order details')),
-      body: LoaderView(
-        loader: _view,
-        builder: (context, view) {
-          final theme = Theme.of(context);
-          final order = view.order;
-          final payment = order.payment;
-          final currency = order.currency;
-
-          return RefreshIndicator(
-            onRefresh: () => _view.load(silent: true),
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                Row(children: [
-                  Expanded(
-                    child: Text('Order ${order.reference}',
-                        style: theme.textTheme.headlineSmall),
-                  ),
-                  OrderStatusChip(order: order),
-                ]),
-                const SizedBox(height: 4),
-                Text('Placed ${formatDateTime(order.createdAt)}',
-                    style: theme.textTheme.bodyMedium),
-                if (payment != null) ...[
-                  const SizedBox(height: 16),
-                  Card(
-                    child: ListTile(
-                      leading: Icon(
-                        payment.status == PaymentStatus.succeeded
-                            ? Icons.verified_rounded
-                            : payment.status.isInFlight
-                                ? Icons.hourglass_top_rounded
-                                : Icons.error_outline_rounded,
-                      ),
-                      title: Text(payment.status.label),
-                      subtitle: payment.failureReason == null
-                          ? null
-                          : Text(payment.failureReason!),
-                      trailing: payment.status.isInFlight
-                          ? TextButton(
-                              onPressed: _checkingPayment
-                                  ? null
-                                  : () => _checkPayment(payment),
-                              child: Text(_checkingPayment ? 'Checking…' : 'Check status'),
-                            )
-                          : null,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 20),
-                Text('Items', style: theme.textTheme.titleMedium),
-                const SizedBox(height: 8),
-                for (final item in order.items)
-                  _ItemRow(item: item, offer: view.offers[item.offerId]),
-                const Divider(height: 32),
-                _Total('Subtotal', formatMoney(order.subtotal, currency)),
-                _Total('Shipping', order.shippingAmount == 0
-                    ? 'Free'
-                    : formatMoney(order.shippingAmount, currency)),
-                _Total('Total', formatMoney(order.total, currency), bold: true),
-                if (order.shippingAddress != null) ...[
-                  const SizedBox(height: 24),
-                  Text('Delivering to', style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  Text(order.shippingAddress!.recipientName,
-                      style: theme.textTheme.bodyLarge),
-                  for (final line in order.shippingAddress!.lines)
-                    Text(line, style: theme.textTheme.bodyMedium),
-                ],
-                const SizedBox(height: 24),
-                Text('Tracking', style: theme.textTheme.titleMedium),
-                const SizedBox(height: 8),
-                if (view.shipments.isEmpty)
-                  Text(
-                    order.status == OrderStatus.paid
-                        ? 'Tracking appears here once your order ships.'
-                        : 'Tracking starts once payment is confirmed.',
-                    style: theme.textTheme.bodyMedium,
+    return ListenableBuilder(
+      listenable: _view,
+      builder: (context, _) {
+        final view = _view.data;
+        if (view == null) {
+          return PageScaffold(
+            title: 'Order',
+            body: _view.error != null
+                ? ErrorState(
+                    message: _view.errorMessage!,
+                    requestId: _view.requestId,
+                    onRetry: _view.load,
                   )
-                else
-                  for (final shipment in view.shipments) _ShipmentCard(shipment),
-                const SizedBox(height: 24),
-              ],
-            ),
+                : const LoadingState(),
           );
-        },
-      ),
+        }
+        final order = view.order;
+        final payment = order.payment;
+        final colors = context.colors;
+        final type = context.type;
+
+        return PageScaffold(
+          title: 'Order ${order.reference}',
+          onRefresh: () => _view.load(silent: true),
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
+              sliver: SliverList.list(
+                children: [
+                  const SizedBox(height: Space.x2),
+                  Row(
+                    children: [
+                      OrderStatusChip(order: order),
+                      const SizedBox(width: Space.x3),
+                      Expanded(
+                        child: Text(
+                          'Placed ${formatDateTime(order.createdAt)}',
+                          style: type.small.copyWith(color: colors.inkMuted),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: Space.x5),
+                  Price(order.total, order.currency, size: PriceSize.total),
+                  if (payment != null) ...[
+                    const SizedBox(height: Space.x5),
+                    InsetGroup(
+                      children: [
+                        ListRow(
+                          leading: payment.status == PaymentStatus.succeeded
+                              ? Icons.verified_rounded
+                              : payment.status.isInFlight
+                              ? Icons.hourglass_top_rounded
+                              : Icons.error_outline_rounded,
+                          title: payment.status.label,
+                          subtitle:
+                              payment.failureReason ??
+                              (payment.status.isInFlight
+                                  ? 'Approve the prompt on your phone, then check again.'
+                                  : null),
+                          trailing: payment.status.isInFlight
+                              ? (_checkingPayment
+                                    ? const Spinner(size: 20)
+                                    : Text(
+                                        'Check',
+                                        style: type.label.copyWith(
+                                          color: colors.accent,
+                                        ),
+                                      ))
+                              : null,
+                          showChevron: false,
+                          onPressed:
+                              payment.status.isInFlight && !_checkingPayment
+                              ? () => _checkPayment(payment)
+                              : null,
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: Space.x6),
+                  InsetGroup(
+                    title: 'Items',
+                    children: [
+                      for (final item in order.items)
+                        _ItemRow(item: item, offer: view.offers[item.offerId]),
+                    ],
+                  ),
+                  const SizedBox(height: Space.x6),
+                  InsetGroup(
+                    title: 'Summary',
+                    children: [
+                      ListRow(
+                        title: 'Items',
+                        trailing: Price(
+                          order.subtotal,
+                          order.currency,
+                          size: PriceSize.inline,
+                        ),
+                      ),
+                      ListRow(
+                        title: 'Delivery',
+                        trailing: order.shippingAmount == 0
+                            ? Text(
+                                'Free',
+                                style: type.label.copyWith(
+                                  color: colors.accent,
+                                ),
+                              )
+                            : Price(
+                                order.shippingAmount,
+                                order.currency,
+                                size: PriceSize.inline,
+                              ),
+                      ),
+                    ],
+                  ),
+                  if (order.shippingAddress != null) ...[
+                    const SizedBox(height: Space.x6),
+                    InsetGroup(
+                      title: 'Delivering to',
+                      children: [
+                        ListRow(
+                          leading: Icons.location_on_outlined,
+                          title: order.shippingAddress!.recipientName,
+                          subtitle: [
+                            ...order.shippingAddress!.lines,
+                            ?order.shippingAddress!.phone,
+                          ].join('\n'),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: Space.x6),
+                  _Tracking(order: order, shipments: view.shipments),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -175,108 +230,190 @@ class _ItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: InkWell(
-        onTap: offer == null ? null : () => context.push('/product/${offer!.productSlug}'),
-        child: Row(children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: SizedBox.square(dimension: 52, child: ApiImage(offer?.imageUrl)),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(offer?.title ?? 'Item',
-                    maxLines: 2, overflow: TextOverflow.ellipsis),
-                Text('Qty ${item.quantity} × ${formatMoney(item.unitAmount, item.currency)}',
-                    style: theme.textTheme.bodySmall),
-              ],
+    final colors = context.colors;
+    final type = context.type;
+    return Pressable(
+      onPressed: offer == null
+          ? null
+          : () => context.push('/product/${offer!.productSlug}'),
+      pressScale: 1,
+      dimOnPress: false,
+      focusRadius: Radii.group,
+      builder: (context, states) => AnimatedContainer(
+        duration: Motion.fast,
+        color: states.contains(PressState.pressed)
+            ? colors.tile
+            : const Color(0x00000000),
+        padding: const EdgeInsets.all(Space.x3),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: const BorderRadius.all(Radii.chip),
+              child: SizedBox.square(
+                dimension: 52,
+                child: ApiImage(offer?.imageUrl),
+              ),
             ),
-          ),
-          Text(formatMoney(item.lineTotal, item.currency),
-              style: theme.textTheme.titleSmall),
-        ]),
+            const SizedBox(width: Space.x3),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    offer?.title ?? 'Item',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: type.body,
+                  ),
+                  Text(
+                    item.quantity == 1 ? 'Qty 1' : 'Qty ${item.quantity}',
+                    style: type.caption.copyWith(color: colors.inkMuted),
+                  ),
+                ],
+              ),
+            ),
+            Price(item.lineTotal, item.currency, size: PriceSize.inline),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _Total extends StatelessWidget {
-  const _Total(this.label, this.value, {this.bold = false});
+/// Delivery progress as a timeline: newest event first, the line between
+/// dots showing it is one journey, not a list of unrelated facts.
+class _Tracking extends StatelessWidget {
+  const _Tracking({required this.order, required this.shipments});
 
-  final String label;
-  final String value;
-  final bool bold;
+  final Order order;
+  final List<Shipment> shipments;
 
   @override
   Widget build(BuildContext context) {
-    final style = bold
-        ? Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)
-        : Theme.of(context).textTheme.bodyLarge;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(children: [Expanded(child: Text(label, style: style)), Text(value, style: style)]),
+    final colors = context.colors;
+    final type = context.type;
+    if (shipments.isEmpty) {
+      return InsetGroup(
+        title: 'Tracking',
+        children: [
+          ListRow(
+            leading: Icons.local_shipping_outlined,
+            title: order.status == OrderStatus.paid
+                ? 'Tracking appears here once it ships'
+                : 'Tracking starts once payment is confirmed',
+          ),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final shipment in shipments) ...[
+          InsetGroup(
+            title: shipments.length > 1
+                ? 'Shipment ${shipment.number}'
+                : 'Tracking',
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(Space.x4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(shipment.statusLabel, style: type.heading),
+                    if (shipment.methodName.isNotEmpty)
+                      Text(
+                        shipment.methodName,
+                        style: type.small.copyWith(color: colors.inkMuted),
+                      ),
+                    if (shipment.trackingReference != null)
+                      Text(
+                        'Tracking number ${shipment.trackingReference}',
+                        style: type.small.copyWith(color: colors.inkMuted),
+                      ),
+                    if (shipment.estimatedDeliveryAt != null)
+                      Text(
+                        'Expected ${formatDate(shipment.estimatedDeliveryAt!)}',
+                        style: type.small.copyWith(color: colors.inkMuted),
+                      ),
+                    if (shipment.events.isNotEmpty)
+                      const SizedBox(height: Space.x4),
+                    for (final (index, event) in shipment.events.indexed)
+                      _TimelineEvent(
+                        event: event,
+                        latest: index == 0,
+                        last: index == shipment.events.length - 1,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: Space.x4),
+        ],
+      ],
     );
   }
 }
 
-class _ShipmentCard extends StatelessWidget {
-  const _ShipmentCard(this.shipment);
+class _TimelineEvent extends StatelessWidget {
+  const _TimelineEvent({
+    required this.event,
+    required this.latest,
+    required this.last,
+  });
 
-  final Shipment shipment;
+  final ShipmentEvent event;
+  final bool latest;
+  final bool last;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(shipment.statusLabel, style: theme.textTheme.titleSmall),
-            Text(
-              [
-                shipment.methodName,
-                if (shipment.trackingReference != null) 'Ref ${shipment.trackingReference}',
-              ].where((part) => part.isNotEmpty).join(' · '),
-              style: theme.textTheme.bodySmall,
-            ),
-            if (shipment.estimatedDeliveryAt != null)
-              Text('Expected ${formatDate(shipment.estimatedDeliveryAt!)}',
-                  style: theme.textTheme.bodySmall),
-            if (shipment.events.isNotEmpty) const SizedBox(height: 12),
-            for (final event in shipment.events)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.circle, size: 10, color: theme.colorScheme.primary),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(event.description ?? humanizeStatus(event.status)),
-                          Text(
-                            [formatDateTime(event.occurredAt), if (event.location != null) event.location!]
-                                .join(' · '),
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+    final colors = context.colors;
+    final type = context.type;
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 20,
+            child: Column(
+              children: [
+                const SizedBox(height: 5),
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: latest ? colors.accent : colors.line,
+                    shape: BoxShape.circle,
+                  ),
                 ),
+                if (!last)
+                  Expanded(child: Container(width: 2, color: colors.line)),
+              ],
+            ),
+          ),
+          const SizedBox(width: Space.x3),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: Space.x4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    event.description ?? humanizeStatus(event.status),
+                    style: latest ? type.bodyStrong : type.body,
+                  ),
+                  Text(
+                    event.location == null
+                        ? formatDateTime(event.occurredAt)
+                        : '${formatDateTime(event.occurredAt)}, ${event.location}',
+                    style: type.caption.copyWith(color: colors.inkMuted),
+                  ),
+                ],
               ),
-          ],
-        ),
+            ),
+          ),
+        ],
       ),
     );
   }

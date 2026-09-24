@@ -1,14 +1,15 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/services.dart';
 import '../../core/widgets/state_views.dart';
+import '../../design/design.dart';
 import 'auth_form.dart';
 
-/// Request a reset, then set a new password with the token from the email.
+/// Request a reset, then set a new password with the code from the email.
 ///
-/// The token is typed or pasted in: opening the email link straight into the
-/// app needs deep links, which are part of the later platform-services work.
+/// The code is pasted in: opening the email link straight into the app needs
+/// deep links, which are part of the later platform-services work.
 class PasswordResetPage extends StatefulWidget {
   const PasswordResetPage({super.key});
 
@@ -33,13 +34,18 @@ class _PasswordResetPageState extends State<PasswordResetPage>
 
   Future<void> _request() async {
     final ok = await submit(
-        () => context.services.auth.requestPasswordReset(_email.text));
+      () => context.services.auth.requestPasswordReset(_email.text),
+    );
     if (ok && mounted) setState(() => _requested = true);
   }
 
   Future<void> _confirm() async {
-    final ok = await submit(() => context.services.auth
-        .confirmPasswordReset(_token.text, _password.text));
+    final ok = await submit(
+      () => context.services.auth.confirmPasswordReset(
+        _token.text,
+        _password.text,
+      ),
+    );
     if (ok && mounted) {
       showMessage(context, 'Password updated. Sign in with your new password.');
       context.pop();
@@ -48,68 +54,89 @@ class _PasswordResetPageState extends State<PasswordResetPage>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(title: const Text('Reset password')),
-      body: SafeArea(
-        child: Form(
-          key: formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
-              FormErrorBanner(formError),
-              if (!_requested) ...[
-                Text("Enter your account's email and we'll send you a reset code.",
-                    style: theme.textTheme.bodyLarge),
-                const SizedBox(height: 24),
-                TextFormField(
-                  controller: _email,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                      labelText: 'Email', errorText: fieldErrors['email']),
-                  validator: validateEmail,
-                ),
-                const SizedBox(height: 24),
-                SubmitButton(
-                    label: 'Send reset code', busy: submitting, onPressed: _request),
-                TextButton(
-                  onPressed: () => setState(() => _requested = true),
-                  child: const Text('I already have a code'),
-                ),
-              ] else ...[
-                // The API answers the same whether or not the address has an
-                // account, so as not to reveal which emails are registered.
-                Text(
-                  'If an account exists for that email, a reset code is on its '
-                  'way. Paste it below with your new password.',
-                  style: theme.textTheme.bodyLarge,
-                ),
-                const SizedBox(height: 24),
-                TextFormField(
-                  controller: _token,
-                  decoration: InputDecoration(
-                      labelText: 'Reset code', errorText: fieldErrors['token']),
-                  validator: (value) => requiredField(value, 'Reset code'),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _password,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: 'New password',
-                    helperText: 'At least 8 characters',
-                    errorText: fieldErrors['newPassword'],
-                  ),
-                  validator: validateNewPassword,
-                ),
-                const SizedBox(height: 24),
-                SubmitButton(
-                    label: 'Update password', busy: submitting, onPressed: _confirm),
-              ],
-            ],
+    final muted = context.type.body.copyWith(color: context.colors.inkMuted);
+    return PageScaffold(
+      title: 'Reset password',
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(
+            Space.gutter,
+            Space.x2,
+            Space.gutter,
+            0,
+          ),
+          sliver: SliverToBoxAdapter(
+            child: Form(
+              key: formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  FormErrorBanner(formError),
+                  if (!_requested) ...[
+                    Text(
+                      "Enter your account's email and we'll send a reset code.",
+                      style: muted,
+                    ),
+                    const SizedBox(height: Space.x6),
+                    InputFormField(
+                      controller: _email,
+                      label: 'Email',
+                      keyboardType: TextInputType.emailAddress,
+                      autocorrect: false,
+                      serverError: fieldErrors['email'],
+                      validator: validateEmail,
+                    ),
+                    const SizedBox(height: Space.x6),
+                    Button(
+                      label: 'Send reset code',
+                      loading: submitting,
+                      onPressed: _request,
+                    ),
+                    const SizedBox(height: Space.x2),
+                    Button(
+                      label: 'I already have a code',
+                      variant: ButtonVariant.ghost,
+                      onPressed: () => setState(() => _requested = true),
+                    ),
+                  ] else ...[
+                    // The API answers the same whether or not the address has
+                    // an account, so as not to reveal which emails are
+                    // registered — and this copy must not either.
+                    Text(
+                      'If an account exists for that email, a reset code is on '
+                      'its way. Paste it here with your new password.',
+                      style: muted,
+                    ),
+                    const SizedBox(height: Space.x6),
+                    InputFormField(
+                      controller: _token,
+                      label: 'Reset code',
+                      autocorrect: false,
+                      serverError: fieldErrors['token'],
+                      validator: (value) => requiredField(value, 'Reset code'),
+                    ),
+                    fieldGap,
+                    InputFormField(
+                      controller: _password,
+                      label: 'New password',
+                      helper: 'At least 8 characters',
+                      obscureText: true,
+                      serverError: fieldErrors['newPassword'],
+                      validator: validateNewPassword,
+                    ),
+                    const SizedBox(height: Space.x6),
+                    Button(
+                      label: 'Update password',
+                      loading: submitting,
+                      onPressed: _confirm,
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
-      ),
+      ],
     );
   }
 }

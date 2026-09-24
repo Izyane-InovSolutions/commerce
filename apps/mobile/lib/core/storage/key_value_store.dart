@@ -12,9 +12,7 @@ abstract interface class KeyValueStore {
 
 /// Backed by the iOS Keychain and Android Keystore-encrypted storage.
 class SecureKeyValueStore implements KeyValueStore {
-  const SecureKeyValueStore([
-    this._storage = const FlutterSecureStorage(),
-  ]);
+  const SecureKeyValueStore([this._storage = const FlutterSecureStorage()]);
 
   final FlutterSecureStorage _storage;
 

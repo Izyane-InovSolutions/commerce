@@ -15,8 +15,8 @@ class CheckoutController extends ChangeNotifier {
   CheckoutController({
     required AccountRepository account,
     required CheckoutRepository checkout,
-  })  : _account = account,
-        _checkout = checkout;
+  }) : _account = account,
+       _checkout = checkout;
 
   final AccountRepository _account;
   final CheckoutRepository _checkout;
@@ -48,19 +48,26 @@ class CheckoutController extends ChangeNotifier {
 
   CheckoutQuote? get quote => _quote;
   bool get quoting => _quoting;
-  String? get quoteError => _quoteError == null ? null : describeError(_quoteError!);
+  String? get quoteError =>
+      _quoteError == null ? null : describeError(_quoteError!);
 
   MobileMoneyProvider get provider => _provider;
   String get phone => _phone;
 
   bool get placing => _placing;
-  String? get placeError => _placeError == null ? null : describeError(_placeError!);
+  String? get placeError =>
+      _placeError == null ? null : describeError(_placeError!);
 
-  bool get phoneValid =>
-      PaymentDetails.phonePattern.hasMatch(PaymentDetails.normalizePhone(_phone));
+  bool get phoneValid => PaymentDetails.phonePattern.hasMatch(
+    PaymentDetails.normalizePhone(_phone),
+  );
 
   bool get canPlace =>
-      _address != null && _quote != null && !_quoting && phoneValid && !_placing;
+      _address != null &&
+      _quote != null &&
+      !_quoting &&
+      phoneValid &&
+      !_placing;
 
   Future<void> start({String? defaultPhone}) async {
     if (defaultPhone != null && _phone.isEmpty) _phone = defaultPhone;
@@ -74,7 +81,8 @@ class CheckoutController extends ChangeNotifier {
     try {
       _addresses = await _account.addresses();
       final previous = select ?? _address?.id;
-      _address = _addresses.where((a) => a.id == previous).firstOrNull ??
+      _address =
+          _addresses.where((a) => a.id == previous).firstOrNull ??
           _addresses.where((a) => a.isDefault).firstOrNull ??
           _addresses.firstOrNull;
       // Pre-fill the mobile money number from the delivery contact, the

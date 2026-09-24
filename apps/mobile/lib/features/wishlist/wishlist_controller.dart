@@ -13,9 +13,9 @@ class WishlistController extends ChangeNotifier {
     required WishlistRepository wishlist,
     required CatalogRepository catalog,
     required SessionController session,
-  })  : _wishlist = wishlist,
-        _catalog = catalog,
-        _session = session {
+  }) : _wishlist = wishlist,
+       _catalog = catalog,
+       _session = session {
     _session.addListener(_onSessionChanged);
     _onSessionChanged();
   }
@@ -46,7 +46,10 @@ class WishlistController extends ChangeNotifier {
     notifyListeners();
     try {
       final items = await _wishlist.list();
-      _offers = {..._offers, ...await _catalog.offers(items.map((i) => i.offerId))};
+      _offers = {
+        ..._offers,
+        ...await _catalog.offers(items.map((i) => i.offerId)),
+      };
       _items = items;
     } catch (error) {
       _error = error;
@@ -70,7 +73,10 @@ class WishlistController extends ChangeNotifier {
       // Re-read rather than patch locally: the server decides what the
       // saved line looks like (its price, its availability).
       final items = await _wishlist.list();
-      _offers = {..._offers, ...await _catalog.offers(items.map((i) => i.offerId))};
+      _offers = {
+        ..._offers,
+        ...await _catalog.offers(items.map((i) => i.offerId)),
+      };
       _items = items;
     } finally {
       _pending.remove(offerId);

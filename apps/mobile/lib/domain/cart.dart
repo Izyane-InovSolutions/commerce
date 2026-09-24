@@ -12,13 +12,13 @@ class CartLine {
   });
 
   factory CartLine.fromJson(Json json) => CartLine(
-        id: json.str('id'),
-        offerId: json.str('offerId'),
-        quantity: json.integer('quantity'),
-        lineTotal: json.intOrNull('lineTotal') ?? 0,
-        isAvailable: json.boolean('isAvailable', fallback: true),
-        unitPrice: Money.maybe(json.objOrNull('unitPrice')),
-      );
+    id: json.str('id'),
+    offerId: json.str('offerId'),
+    quantity: json.integer('quantity'),
+    lineTotal: json.intOrNull('lineTotal') ?? 0,
+    isAvailable: json.boolean('isAvailable', fallback: true),
+    unitPrice: Money.maybe(json.objOrNull('unitPrice')),
+  );
 
   final String id;
   final String offerId;
@@ -34,17 +34,13 @@ class CartLine {
 }
 
 class Cart {
-  const Cart({
-    required this.items,
-    required this.subtotal,
-    this.currency,
-  });
+  const Cart({required this.items, required this.subtotal, this.currency});
 
   factory Cart.fromJson(Json json) => Cart(
-        items: json.list('items', CartLine.fromJson),
-        subtotal: json.intOrNull('subtotal') ?? 0,
-        currency: json.strOrNull('currency'),
-      );
+    items: json.list('items', CartLine.fromJson),
+    subtotal: json.intOrNull('subtotal') ?? 0,
+    currency: json.strOrNull('currency'),
+  );
 
   static const empty = Cart(items: [], subtotal: 0);
 
@@ -68,11 +64,11 @@ class WishlistItem {
   });
 
   factory WishlistItem.fromJson(Json json) => WishlistItem(
-        id: json.str('id'),
-        offerId: json.str('offerId'),
-        isAvailable: json.boolean('isAvailable', fallback: true),
-        price: Money.maybe(json.objOrNull('currentPrice')),
-      );
+    id: json.str('id'),
+    offerId: json.str('offerId'),
+    isAvailable: json.boolean('isAvailable', fallback: true),
+    price: Money.maybe(json.objOrNull('currentPrice')),
+  );
 
   final String id;
   final String offerId;

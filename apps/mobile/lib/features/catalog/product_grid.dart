@@ -1,30 +1,23 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' show Icons;
+import 'package:flutter/widgets.dart';
 
-import '../../core/widgets/state_views.dart';
-import 'product_card.dart';
+import '../../design/design.dart';
 import 'product_list_controller.dart';
+import 'product_tile.dart';
 
-/// A scrolling product grid over a [ProductListController], with pull to
-/// refresh and loading the next page as the end comes into view.
-class ProductGrid extends StatelessWidget {
-  const ProductGrid({
+/// The product grid, as a sliver for a [PageScaffold]. Loads the next page
+/// as the last few tiles come into view.
+class ProductGridSliver extends StatelessWidget {
+  const ProductGridSliver({
     super.key,
     required this.controller,
-    this.header = const [],
-    this.emptyTitle = 'No products yet',
+    this.emptyTitle = 'No products here yet',
     this.emptyMessage,
-    this.onRefresh,
   });
 
   final ProductListController controller;
-
-  /// Slivers shown above the grid — they scroll with it.
-  final List<Widget> header;
   final String emptyTitle;
   final String? emptyMessage;
-
-  /// Replaces the default pull-to-refresh, which reloads only the products.
-  final Future<void> Function()? onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -32,68 +25,73 @@ class ProductGrid extends StatelessWidget {
       listenable: controller,
       builder: (context, _) {
         final products = controller.products;
-        final Widget body;
 
         if (!controller.hasLoaded && controller.errorMessage != null) {
-          body = SliverFillRemaining(
+          return SliverFillRemaining(
             hasScrollBody: false,
-            child: ErrorView(
+            child: ErrorState(
               message: controller.errorMessage!,
               requestId: controller.requestId,
               onRetry: controller.load,
             ),
           );
-        } else if (!controller.hasLoaded) {
-          body = const SliverFillRemaining(
-              hasScrollBody: false, child: LoadingView());
-        } else if (products.isEmpty) {
-          body = SliverFillRemaining(
+        }
+        if (controller.hasLoaded && products.isEmpty) {
+          return SliverFillRemaining(
             hasScrollBody: false,
-            child: EmptyView(
+            child: EmptyState(
               icon: Icons.search_off_rounded,
               title: emptyTitle,
               message: emptyMessage,
             ),
           );
-        } else {
-          body = SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            sliver: SliverGrid.builder(
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 220,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 0.62,
-              ),
-              itemCount: products.length,
-              itemBuilder: (context, index) {
-                if (index >= products.length - 4) {
-                  // Ask for the next page a few cards before the end.
-                  WidgetsBinding.instance
-                      .addPostFrameCallback((_) => controller.loadMore());
-                }
-                return ProductCard(product: products[index]);
-              },
-            ),
-          );
         }
 
-        return RefreshIndicator(
-          onRefresh: onRefresh ?? controller.load,
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              ...header,
-              body,
-              if (controller.isLoadingMore)
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.only(bottom: 24),
-                    child: Center(child: CircularProgressIndicator()),
-                  ),
+        final loading = !controller.hasLoaded;
+        return SliverMainAxisGroup(
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
+              sliver: SliverLayoutBuilder(
+                builder: (context, constraints) {
+                  const gap = Space.x4;
+                  final width = (constraints.crossAxisExtent - gap) / 2;
+                  // Square image plus the text block, grown with the user's text
+                  // size so a larger font never overflows the tile.
+                  final extent =
+                      width +
+                      MediaQuery.textScalerOf(
+                        context,
+                      ).scale(ProductTile.textBlock);
+                  return SliverGrid.builder(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: gap,
+                      mainAxisSpacing: Space.x6,
+                      mainAxisExtent: extent,
+                    ),
+                    itemCount: loading ? 4 : products.length,
+                    itemBuilder: (context, index) {
+                      if (loading) return const ProductTileSkeleton();
+                      if (index >= products.length - 4) {
+                        WidgetsBinding.instance.addPostFrameCallback(
+                          (_) => controller.loadMore(),
+                        );
+                      }
+                      return ProductTile(product: products[index]);
+                    },
+                  );
+                },
+              ),
+            ),
+            if (controller.isLoadingMore)
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: Space.x6),
+                  child: Center(child: Spinner()),
                 ),
-            ],
-          ),
+              ),
+          ],
         );
       },
     );

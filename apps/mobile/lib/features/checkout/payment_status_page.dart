@@ -1,10 +1,12 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' show Icons;
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/services.dart';
 import '../../core/network/api_exception.dart';
+import '../../design/design.dart';
 import '../../domain/orders.dart';
 
 /// Waits for the payment to settle and says where it stands.
@@ -100,86 +102,131 @@ class _PaymentStatusPageState extends State<PaymentStatusPage>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final (icon, color, title, message) = switch (_status) {
+    final colors = context.colors;
+    final type = context.type;
+    final (icon, wash, ink, title, message) = switch (_status) {
       PaymentStatus.succeeded => (
-          Icons.check_circle_rounded,
-          Colors.green.shade600,
-          'Payment received',
-          'Your order is confirmed. We will let you know as it moves.',
-        ),
+        Icons.check_rounded,
+        colors.accentWash,
+        colors.accent,
+        'Payment received',
+        'Your order is confirmed. Track it any time from your orders.',
+      ),
       PaymentStatus.failed || PaymentStatus.cancelled => (
-          Icons.error_rounded,
-          theme.colorScheme.error,
-          _status.label,
-          _failureReason ??
-              'The payment did not go through, and you have not been charged.',
-        ),
+        Icons.close_rounded,
+        colors.dangerWash,
+        colors.danger,
+        _status.label,
+        _failureReason ??
+            "The payment didn't go through, and you haven't been charged.",
+      ),
       _ when _gaveUp => (
-          Icons.schedule_rounded,
-          theme.colorScheme.primary,
-          'Still waiting for approval',
-          'Your order is saved. If you approve the prompt later, it will '
-              'update — check it any time from your orders.',
-        ),
+        Icons.schedule_rounded,
+        colors.warningWash,
+        colors.warning,
+        'Still waiting for approval',
+        'Your order is saved. If you approve the prompt later it updates '
+            'by itself; check it any time from your orders.',
+      ),
       _ => (
-          Icons.phone_iphone_rounded,
-          theme.colorScheme.primary,
-          'Approve the payment on your phone',
-          'We have sent a mobile money prompt to your number. Enter your PIN '
-              'to approve it, then come back here.',
-        ),
+        Icons.phone_iphone_rounded,
+        colors.warningWash,
+        colors.warning,
+        'Approve the payment on your phone',
+        'We sent a mobile money prompt to your number. Enter your PIN to '
+            'approve it, then come back here.',
+      ),
     };
+    final waiting = _status.isInFlight && !_gaveUp;
 
     return PopScope(
-      canPop: !_status.isInFlight || _gaveUp,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Payment'),
-          automaticallyImplyLeading: false,
-        ),
-        body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
+      // No backing out mid-payment by accident; the order is safe either way.
+      canPop: !waiting,
+      child: PageScaffold(
+        title: 'Payment',
+        showBack: false,
+        body: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            Space.gutter,
+            0,
+            Space.gutter,
+            Space.x4,
+          ),
+          child: SafeArea(
+            top: false,
             child: Column(
               children: [
                 const Spacer(),
-                Icon(icon, size: 88, color: color),
-                const SizedBox(height: 24),
-                Text(title,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.headlineSmall),
-                const SizedBox(height: 12),
-                Text(message,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyLarge),
-                if (_status.isInFlight && !_gaveUp) ...[
-                  const SizedBox(height: 28),
-                  const LinearProgressIndicator(),
-                ],
+                Semantics(
+                  liveRegion: true,
+                  child: Column(
+                    children: [
+                      AnimatedContainer(
+                        duration: Motion.slow,
+                        curve: Motion.standard,
+                        width: 104,
+                        height: 104,
+                        decoration: BoxDecoration(
+                          color: wash,
+                          shape: BoxShape.circle,
+                        ),
+                        child: waiting
+                            ? Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  Spinner(size: 104, color: ink, stroke: 3),
+                                  Icon(icon, size: 40, color: ink),
+                                ],
+                              )
+                            : Icon(icon, size: 48, color: ink),
+                      ),
+                      const SizedBox(height: Space.x8),
+                      Text(
+                        title,
+                        textAlign: TextAlign.center,
+                        style: type.title,
+                      ),
+                      const SizedBox(height: Space.x3),
+                      Text(
+                        message,
+                        textAlign: TextAlign.center,
+                        style: type.body.copyWith(color: colors.inkMuted),
+                      ),
+                    ],
+                  ),
+                ),
                 if (_error != null) ...[
-                  const SizedBox(height: 16),
-                  Text(_error!,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: theme.colorScheme.error)),
+                  const SizedBox(height: Space.x4),
+                  Text(
+                    _error!,
+                    textAlign: TextAlign.center,
+                    style: type.small.copyWith(color: colors.danger),
+                  ),
                 ],
                 const Spacer(),
-                if (_status.isInFlight)
-                  FilledButton.tonal(
-                    onPressed: _checking ? null : _check,
-                    child: Text(_checking ? 'Checking…' : "I've approved it"),
+                if (_status.isInFlight) ...[
+                  Button(
+                    label: "I've approved it",
+                    variant: ButtonVariant.secondary,
+                    loading: _checking,
+                    onPressed: _check,
                   ),
-                if (_orderId != null) ...[
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: () => context.go('/account/orders/$_orderId'),
-                    child: const Text('View order'),
-                  ),
+                  const SizedBox(height: Space.x3),
                 ],
-                const SizedBox(height: 8),
-                TextButton(
+                if (_orderId != null) ...[
+                  Button(
+                    label: 'View order',
+                    variant: _status == PaymentStatus.succeeded
+                        ? ButtonVariant.primary
+                        : ButtonVariant.ghost,
+                    onPressed: () => context.go('/account/orders/$_orderId'),
+                  ),
+                  const SizedBox(height: Space.x2),
+                ],
+                Button(
+                  label: 'Keep shopping',
+                  variant: ButtonVariant.ghost,
                   onPressed: () => context.go('/'),
-                  child: const Text('Continue shopping'),
                 ),
               ],
             ),

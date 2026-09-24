@@ -1,7 +1,9 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show DefaultCupertinoLocalizations;
+import 'package:flutter/material.dart' show DefaultMaterialLocalizations;
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
-import '../core/theme/app_theme.dart';
+import '../design/design.dart';
 import 'router.dart';
 import 'services.dart';
 
@@ -16,7 +18,7 @@ class CommerceApp extends StatefulWidget {
 
 class _CommerceAppState extends State<CommerceApp> {
   late final GoRouter _router = buildRouter(widget.services);
-  final _messenger = GlobalKey<ScaffoldMessengerState>();
+  final _toasts = GlobalKey<ToastHostState>();
 
   @override
   void initState() {
@@ -40,12 +42,14 @@ class _CommerceAppState extends State<CommerceApp> {
   /// every account screen is pushed.
   void _onSessionChanged() {
     if (!widget.services.session.takeExpiredNotice()) return;
-    _messenger.currentState?.showSnackBar(const SnackBar(
-        content: Text('Your session has ended. Please sign in again.')));
+    _toasts.currentState?.show(
+      'Your session has ended. Sign in again to continue.',
+    );
 
-    final matches = _router.routerDelegate.currentConfiguration.matches;
-    if (matches.isEmpty) return;
-    final top = matches.last.matchedLocation;
+    final configuration = _router.routerDelegate.currentConfiguration;
+    if (configuration.isEmpty) return;
+    // `last` descends into the tab shell to the screen actually showing.
+    final top = configuration.last.matchedLocation;
     if (isProtectedLocation(top)) {
       _router.go('/sign-in?from=${Uri.encodeComponent(top)}');
     }
@@ -55,14 +59,52 @@ class _CommerceAppState extends State<CommerceApp> {
   Widget build(BuildContext context) {
     return AppScope(
       services: widget.services,
-      child: MaterialApp.router(
+      // WidgetsApp, not MaterialApp: the visible UI is the design system's
+      // own, and nothing Material should leak in by default.
+      child: WidgetsApp.router(
         title: 'Commerce',
+        color: Palette.light.accent,
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.light(),
-        darkTheme: AppTheme.dark(),
-        scaffoldMessengerKey: _messenger,
         routerConfig: _router,
+        // The platform text-selection menus borrowed by InputField need these.
+        localizationsDelegates: const [
+          DefaultWidgetsLocalizations.delegate,
+          DefaultMaterialLocalizations.delegate,
+          DefaultCupertinoLocalizations.delegate,
+        ],
+        builder: (context, child) {
+          final dark =
+              MediaQuery.platformBrightnessOf(context) == Brightness.dark;
+          final theme = DesignTheme.of(dark ? Palette.dark : Palette.light);
+          return DesignScope(
+            theme: theme,
+            child: DefaultTextStyle(
+              style: theme.type.body,
+              child: ScrollConfiguration(
+                behavior: const _Scrolling(),
+                child: ToastHost(key: _toasts, child: child!),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
+}
+
+/// Bouncing overscroll on every platform — the design system's pull to
+/// refresh is Cupertino's, which needs it — and no Material glow.
+class _Scrolling extends ScrollBehavior {
+  const _Scrolling();
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) =>
+      const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics());
+
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) => child;
 }

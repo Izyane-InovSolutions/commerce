@@ -10,7 +10,9 @@ typedef Json = Map<String, Object?>;
 Json asJson(Object? value, [String what = 'response']) {
   if (value is Map<String, Object?>) return value;
   if (value is Map) return value.cast<String, Object?>();
-  throw FormatException('Expected an object for $what, got ${value.runtimeType}');
+  throw FormatException(
+    'Expected an object for $what, got ${value.runtimeType}',
+  );
 }
 
 List<Object?> asList(Object? value, [String what = 'response']) {
@@ -18,8 +20,11 @@ List<Object?> asList(Object? value, [String what = 'response']) {
   throw FormatException('Expected a list for $what, got ${value.runtimeType}');
 }
 
-List<T> listOf<T>(Object? value, T Function(Json json) parse,
-    [String what = 'list']) {
+List<T> listOf<T>(
+  Object? value,
+  T Function(Json json) parse, [
+  String what = 'list',
+]) {
   return asList(value, what).map((item) => parse(asJson(item, what))).toList();
 }
 

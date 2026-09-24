@@ -1,12 +1,13 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' show Icons;
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/services.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/state/loader.dart';
 import '../../core/widgets/api_image.dart';
-import '../../core/widgets/quantity_stepper.dart';
 import '../../core/widgets/state_views.dart';
+import '../../design/design.dart';
 import '../../domain/catalog.dart';
 
 class ProductPage extends StatefulWidget {
@@ -38,21 +39,17 @@ class _ProductPageState extends State<ProductPage> {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: _product,
-      builder: (context, _) {
-        final product = _product.data;
-        return Scaffold(
-          appBar: AppBar(title: Text(product?.name ?? '')),
-          body: LoaderView(
-            loader: _product,
-            builder: (context, product) => _ProductBody(
-              product: product,
-              onRefresh: () => _product.load(silent: true),
-            ),
-          ),
-        );
-      },
+    return LoaderView(
+      loader: _product,
+      placeholder: const PageScaffold(
+        title: '',
+        largeTitle: false,
+        body: _ProductSkeleton(),
+      ),
+      builder: (context, product) => _ProductBody(
+        product: product,
+        onRefresh: () => _product.load(silent: true),
+      ),
     );
   }
 }
@@ -99,24 +96,27 @@ class _ProductBodyState extends State<_ProductBody> {
     _offer = _variant?.bestOffer;
   }
 
+  String get _here => '/product/${widget.product.slug}';
+
+  bool _requireSignIn() {
+    if (context.services.session.isSignedIn) return false;
+    context.push('/sign-in?from=${Uri.encodeComponent(_here)}');
+    return true;
+  }
+
   Future<void> _addToCart() async {
     final offer = _offer;
-    if (offer == null) return;
-    final services = context.services;
-    if (!services.session.isSignedIn) {
-      context.push('/sign-in?from=${Uri.encodeComponent('/product/${widget.product.slug}')}');
-      return;
-    }
+    if (offer == null || _requireSignIn()) return;
     setState(() => _adding = true);
     try {
-      await services.cart.add(offer.id, quantity: _quantity);
+      await context.services.cart.add(offer.id, quantity: _quantity);
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(
-          content: Text('Added $_quantity to your cart'),
-          action: SnackBarAction(label: 'View cart', onPressed: () => context.go('/cart')),
-        ));
+      showMessage(
+        context,
+        _quantity == 1 ? 'Added to your cart' : 'Added $_quantity to your cart',
+        actionLabel: 'View cart',
+        onAction: () => context.go('/cart'),
+      );
     } on ApiException catch (error) {
       if (mounted) showMessage(context, error.message);
     } finally {
@@ -126,17 +126,16 @@ class _ProductBodyState extends State<_ProductBody> {
 
   Future<void> _toggleWishlist() async {
     final offer = _offer;
-    if (offer == null) return;
-    final services = context.services;
-    if (!services.session.isSignedIn) {
-      context.push('/sign-in?from=${Uri.encodeComponent('/product/${widget.product.slug}')}');
-      return;
-    }
-    final saving = !services.wishlist.contains(offer.id);
+    if (offer == null || _requireSignIn()) return;
+    final wishlist = context.services.wishlist;
+    final saving = !wishlist.contains(offer.id);
     try {
-      await services.wishlist.toggle(offer.id);
+      await wishlist.toggle(offer.id);
       if (mounted) {
-        showMessage(context, saving ? 'Saved to your wishlist' : 'Removed from your wishlist');
+        showMessage(
+          context,
+          saving ? 'Saved to your wishlist' : 'Removed from your wishlist',
+        );
       }
     } on ApiException catch (error) {
       if (mounted) showMessage(context, error.message);
@@ -145,188 +144,219 @@ class _ProductBodyState extends State<_ProductBody> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final colors = context.colors;
+    final type = context.type;
     final product = widget.product;
     final offer = _offer;
+    final wishlist = context.services.wishlist;
+    final pricedOffers =
+        _variant?.offers.where((o) => o.price != null).toList() ??
+        const <Offer>[];
 
-    return Column(
-      children: [
-        Expanded(
-          child: RefreshIndicator(
-            onRefresh: widget.onRefresh,
-            child: ListView(
-              padding: EdgeInsets.zero,
-              children: [
-                _Gallery(images: product.images),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (product.category != null)
-                        Text(product.category!.name.toUpperCase(),
-                            style: theme.textTheme.labelMedium
-                                ?.copyWith(color: theme.colorScheme.primary)),
-                      const SizedBox(height: 4),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Text(product.name,
-                                style: theme.textTheme.headlineSmall),
-                          ),
-                          if (offer != null)
-                            ListenableBuilder(
-                              listenable: context.services.wishlist,
-                              builder: (context, _) {
-                                final wishlist = context.services.wishlist;
-                                final saved = wishlist.contains(offer.id);
-                                return IconButton(
-                                  tooltip: saved ? 'Remove from wishlist' : 'Save to wishlist',
-                                  onPressed: wishlist.isPending(offer.id) ? null : _toggleWishlist,
-                                  icon: Icon(saved ? Icons.favorite : Icons.favorite_border,
-                                      color: saved ? theme.colorScheme.error : null),
-                                );
-                              },
-                            ),
-                        ],
-                      ),
-                      if (product.ratingCount > 0 && product.averageRating != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Row(children: [
-                            Icon(Icons.star_rounded, color: Colors.amber.shade700, size: 20),
-                            const SizedBox(width: 4),
-                            Flexible(
-                              child: Text('${product.averageRating!.toStringAsFixed(1)} · '
-                                  '${product.ratingCount} ${product.ratingCount == 1 ? 'review' : 'reviews'}'),
-                            ),
-                          ]),
-                        ),
-                      const SizedBox(height: 12),
-                      Text(
-                        offer?.price?.formatted ?? 'Currently unavailable',
-                        style: theme.textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: offer?.price == null ? theme.colorScheme.outline : null,
-                        ),
-                      ),
-                      if (offer != null) ...[
-                        const SizedBox(height: 4),
-                        Text(offer.sellerName, style: theme.textTheme.bodyMedium),
-                        if (!offer.inStock)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text('Out of stock',
-                                style: TextStyle(color: theme.colorScheme.error,
-                                    fontWeight: FontWeight.w600)),
-                          ),
-                        if (offer.shippingCost != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text('Shipping from ${offer.shippingCost!.formatted}',
-                                style: theme.textTheme.bodySmall),
-                          ),
-                      ],
-                      if (product.variants.length > 1) ...[
-                        const SizedBox(height: 20),
-                        Text('Options', style: theme.textTheme.titleSmall),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            for (final variant in product.variants)
-                              ChoiceChip(
-                                label: Text(variant.label),
-                                selected: variant.id == _variant?.id,
-                                onSelected: (_) => setState(() {
-                                  _variant = variant;
-                                  _offer = variant.bestOffer;
-                                }),
-                              ),
-                          ],
-                        ),
-                      ],
-                      if ((_variant?.offers.where((o) => o.price != null).length ?? 0) > 1) ...[
-                        const SizedBox(height: 20),
-                        Text('Choose a seller', style: theme.textTheme.titleSmall),
-                        const SizedBox(height: 8),
-                        RadioGroup<String>(
-                          groupValue: _offer?.id,
-                          onChanged: (id) => setState(() => _offer =
-                              _variant!.offers.firstWhere((o) => o.id == id)),
-                          child: Column(
-                            children: [
-                              for (final candidate in _variant!.offers.where((o) => o.price != null))
-                                RadioListTile<String>(
-                                  contentPadding: EdgeInsets.zero,
-                                  value: candidate.id,
-                                  enabled: candidate.inStock,
-                                  title: Text(candidate.price!.formatted),
-                                  subtitle: Text(candidate.inStock
-                                      ? candidate.sellerName
-                                      : '${candidate.sellerName} · out of stock'),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
-                      if (product.isReturnable) ...[
-                        const SizedBox(height: 16),
-                        Row(children: [
-                          Icon(Icons.assignment_return_outlined,
-                              size: 18, color: theme.colorScheme.onSurfaceVariant),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(product.returnWindowDays == null
-                                ? 'Returns accepted'
-                                : 'Returnable within ${product.returnWindowDays} days'),
-                          ),
-                        ]),
-                      ],
-                      if (product.description != null && product.description!.trim().isNotEmpty) ...[
-                        const SizedBox(height: 20),
-                        Text('About this product', style: theme.textTheme.titleSmall),
-                        const SizedBox(height: 8),
-                        Text(product.description!, style: theme.textTheme.bodyMedium),
-                      ],
-                      const SizedBox(height: 24),
-                    ],
-                  ),
-                ),
-              ],
+    return PageScaffold(
+      title: '',
+      largeTitle: false,
+      onRefresh: widget.onRefresh,
+      actions: [
+        if (offer != null)
+          ListenableBuilder(
+            listenable: wishlist,
+            builder: (context, _) {
+              final saved = wishlist.contains(offer.id);
+              return IconAction(
+                icon: saved
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_rounded,
+                color: saved ? colors.danger : null,
+                semanticLabel: saved
+                    ? 'Remove from wishlist'
+                    : 'Save to wishlist',
+                haptic: Haptic.light,
+                onPressed: wishlist.isPending(offer.id)
+                    ? null
+                    : _toggleWishlist,
+              );
+            },
+          ),
+      ],
+      bottomBar: Row(
+        children: [
+          QuantityStepper(
+            value: _quantity,
+            enabled: offer?.isPurchasable ?? false,
+            onChanged: (value) => setState(() => _quantity = value),
+          ),
+          const SizedBox(width: Space.x3),
+          Expanded(
+            child: Button(
+              label: offer == null
+                  ? 'Unavailable'
+                  : offer.inStock
+                  ? 'Add to cart'
+                  : 'Out of stock',
+              icon: Icons.add_shopping_cart_rounded,
+              loading: _adding,
+              haptic: Haptic.medium,
+              onPressed: (offer?.isPurchasable ?? false) ? _addToCart : null,
             ),
           ),
+        ],
+      ),
+      slivers: [
+        const SliverToBoxAdapter(child: SizedBox(height: Space.x3)),
+        SliverToBoxAdapter(
+          child: _Gallery(images: product.images, name: product.name),
         ),
-        SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: Row(
-              children: [
-                QuantityStepper(
-                  value: _quantity,
-                  enabled: offer?.isPurchasable ?? false,
-                  onChanged: (value) => setState(() => _quantity = value),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: (offer?.isPurchasable ?? false) && !_adding ? _addToCart : null,
-                    icon: _adding
-                        ? const SizedBox.square(
-                            dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.add_shopping_cart),
-                    label: Text(offer == null
-                        ? 'Unavailable'
-                        : offer.inStock
-                            ? 'Add to cart'
-                            : 'Out of stock'),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(
+            Space.gutter,
+            Space.x5,
+            Space.gutter,
+            0,
+          ),
+          sliver: SliverList.list(
+            children: [
+              if (product.category != null)
+                Text(
+                  product.category!.name,
+                  style: type.small.copyWith(
+                    color: colors.accent,
+                    fontVariations: const [FontVariation('wght', 600)],
                   ),
                 ),
+              const SizedBox(height: Space.x1),
+              Semantics(
+                header: true,
+                child: Text(product.name, style: type.title),
+              ),
+              if (product.ratingCount > 0 && product.averageRating != null) ...[
+                const SizedBox(height: Space.x2),
+                Row(
+                  children: [
+                    Icon(Icons.star_rounded, color: colors.star, size: 19),
+                    const SizedBox(width: Space.x1),
+                    Flexible(
+                      child: Text(
+                        '${product.averageRating!.toStringAsFixed(1)} '
+                        '(${product.ratingCount} ${product.ratingCount == 1 ? 'review' : 'reviews'})',
+                        style: type.small.copyWith(color: colors.inkMuted),
+                      ),
+                    ),
+                  ],
+                ),
               ],
-            ),
+              const SizedBox(height: Space.x5),
+              if (offer?.price != null)
+                Price(
+                  offer!.price!.amount,
+                  offer.price!.currency,
+                  size: PriceSize.hero,
+                )
+              else
+                Text(
+                  'Not currently sold in kwacha',
+                  style: type.heading.copyWith(color: colors.inkMuted),
+                ),
+              if (offer != null) ...[
+                const SizedBox(height: Space.x2),
+                Wrap(
+                  spacing: Space.x2,
+                  runSpacing: Space.x1,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      offer.sellerName,
+                      style: type.small.copyWith(color: colors.inkMuted),
+                    ),
+                    if (!offer.inStock)
+                      const StatusBadge('Out of stock', tone: Tone.danger),
+                  ],
+                ),
+                if (offer.shippingCost != null) ...[
+                  const SizedBox(height: Space.x1),
+                  Text(
+                    'Delivery from ${offer.shippingCost!.formatted}',
+                    style: type.small.copyWith(color: colors.inkMuted),
+                  ),
+                ],
+              ],
+              if (product.variants.length > 1) ...[
+                const SizedBox(height: Space.x6),
+                Text('Options', style: type.label),
+                const SizedBox(height: Space.x3),
+                Wrap(
+                  spacing: Space.x2,
+                  runSpacing: Space.x2,
+                  children: [
+                    for (final variant in product.variants)
+                      SelectChip(
+                        label: variant.label,
+                        selected: variant.id == _variant?.id,
+                        onPressed: () => setState(() {
+                          _variant = variant;
+                          _offer = variant.bestOffer;
+                        }),
+                      ),
+                  ],
+                ),
+              ],
+              if (pricedOffers.length > 1) ...[
+                const SizedBox(height: Space.x6),
+                InsetGroup(
+                  title: 'Sold by ${pricedOffers.length} sellers',
+                  children: [
+                    for (final candidate in pricedOffers)
+                      ListRow(
+                        title: candidate.sellerName.replaceFirst(
+                          'Sold by ',
+                          '',
+                        ),
+                        subtitle: candidate.inStock ? null : 'Out of stock',
+                        trailing: Price(
+                          candidate.price!.amount,
+                          candidate.price!.currency,
+                          size: PriceSize.inline,
+                        ),
+                        selected: candidate.id == _offer?.id,
+                        onPressed: candidate.inStock
+                            ? () => setState(() => _offer = candidate)
+                            : null,
+                      ),
+                  ],
+                ),
+              ],
+              if (product.isReturnable) ...[
+                const SizedBox(height: Space.x6),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.assignment_return_outlined,
+                      size: 20,
+                      color: colors.inkMuted,
+                    ),
+                    const SizedBox(width: Space.x3),
+                    Expanded(
+                      child: Text(
+                        product.returnWindowDays == null
+                            ? 'Returns accepted'
+                            : 'Free to return within ${product.returnWindowDays} days',
+                        style: type.small,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              if (product.description != null &&
+                  product.description!.trim().isNotEmpty) ...[
+                const SizedBox(height: Space.x6),
+                Text('About this product', style: type.label),
+                const SizedBox(height: Space.x2),
+                Text(
+                  product.description!,
+                  style: type.body.copyWith(color: colors.inkMuted),
+                ),
+              ],
+            ],
           ),
         ),
       ],
@@ -335,9 +365,10 @@ class _ProductBodyState extends State<_ProductBody> {
 }
 
 class _Gallery extends StatefulWidget {
-  const _Gallery({required this.images});
+  const _Gallery({required this.images, required this.name});
 
   final List<ProductImage> images;
+  final String name;
 
   @override
   State<_Gallery> createState() => _GalleryState();
@@ -348,47 +379,83 @@ class _GalleryState extends State<_Gallery> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     final images = widget.images;
-    if (images.isEmpty) {
-      return const AspectRatio(aspectRatio: 1, child: ApiImage(null));
-    }
-    return AspectRatio(
-      aspectRatio: 1,
-      child: Stack(
-        children: [
-          PageView.builder(
-            itemCount: images.length,
-            onPageChanged: (index) => setState(() => _index = index),
-            itemBuilder: (context, index) =>
-                ApiImage(images[index].url, fit: BoxFit.contain),
-          ),
-          if (images.length > 1)
-            Positioned(
-              bottom: 12,
-              left: 0,
-              right: 0,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  for (var i = 0; i < images.length; i++)
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      margin: const EdgeInsets.symmetric(horizontal: 3),
-                      width: i == _index ? 18 : 7,
-                      height: 7,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .primary
-                            .withValues(alpha: i == _index ? 1 : 0.35),
-                        borderRadius: BorderRadius.circular(4),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: ClipRRect(
+          borderRadius: const BorderRadius.all(Radii.group),
+          child: images.isEmpty
+              ? const ApiImage(null)
+              : Stack(
+                  children: [
+                    PageView.builder(
+                      itemCount: images.length,
+                      onPageChanged: (index) => setState(() => _index = index),
+                      itemBuilder: (context, index) => ApiImage(
+                        images[index].url,
+                        fit: BoxFit.contain,
+                        semanticLabel:
+                            '${widget.name}, image ${index + 1} of ${images.length}',
                       ),
                     ),
-                ],
-              ),
-            ),
-        ],
+                    if (images.length > 1)
+                      Positioned(
+                        bottom: Space.x3,
+                        left: 0,
+                        right: 0,
+                        child: ExcludeSemantics(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              for (var i = 0; i < images.length; i++)
+                                AnimatedContainer(
+                                  duration: Motion.base,
+                                  margin: const EdgeInsets.symmetric(
+                                    horizontal: 3,
+                                  ),
+                                  width: i == _index ? 18 : 6,
+                                  height: 6,
+                                  decoration: BoxDecoration(
+                                    color: colors.ink.withValues(
+                                      alpha: i == _index ? 0.75 : 0.25,
+                                    ),
+                                    borderRadius: const BorderRadius.all(
+                                      Radius.circular(3),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+        ),
       ),
     );
   }
+}
+
+class _ProductSkeleton extends StatelessWidget {
+  const _ProductSkeleton();
+
+  @override
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.all(Space.gutter),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AspectRatio(aspectRatio: 1, child: Skeleton(radius: Radii.group)),
+        SizedBox(height: Space.x6),
+        Skeleton(width: 80),
+        SizedBox(height: Space.x3),
+        Skeleton(width: 240, height: 24),
+        SizedBox(height: Space.x5),
+        Skeleton(width: 150, height: 36),
+      ],
+    ),
+  );
 }

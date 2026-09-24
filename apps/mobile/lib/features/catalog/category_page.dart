@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 import '../../app/services.dart';
 import '../../data/catalog_repository.dart';
+import '../../design/design.dart';
 import 'product_grid.dart';
 import 'product_list_controller.dart';
 import 'sort_button.dart';
@@ -11,8 +12,7 @@ class CategoryPage extends StatefulWidget {
 
   final String slug;
 
-  /// Passed along when navigating from a category chip, so the title shows
-  /// immediately instead of after a lookup.
+  /// Passed from the category chip, so the title shows at once.
   final String? title;
 
   @override
@@ -28,9 +28,10 @@ class _CategoryPageState extends State<CategoryPage> {
     super.didChangeDependencies();
     if (_initialised) return;
     _initialised = true;
-    _products = ProductListController(context.services.catalog,
-        query: ProductQuery(categorySlug: widget.slug))
-      ..load();
+    _products = ProductListController(
+      context.services.catalog,
+      query: ProductQuery(categorySlug: widget.slug),
+    )..load();
   }
 
   @override
@@ -41,24 +42,27 @@ class _CategoryPageState extends State<CategoryPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title ?? 'Category'),
-        actions: [
-          ListenableBuilder(
-            listenable: _products,
-            builder: (context, _) => SortButton(
-              value: _products.query.sort,
-              onChanged: (sort) =>
-                  _products.load(_products.query.copyWith(sort: sort)),
-            ),
+    return PageScaffold(
+      title: widget.title ?? 'Category',
+      onRefresh: _products.load,
+      actions: [
+        ListenableBuilder(
+          listenable: _products,
+          builder: (context, _) => SortButton(
+            value: _products.query.sort,
+            onChanged: (sort) =>
+                _products.load(_products.query.copyWith(sort: sort)),
           ),
-        ],
-      ),
-      body: ProductGrid(
-        controller: _products,
-        emptyTitle: 'Nothing in this category yet',
-      ),
+        ),
+      ],
+      slivers: [
+        const SliverToBoxAdapter(child: SizedBox(height: Space.x3)),
+        ProductGridSliver(
+          controller: _products,
+          emptyTitle: 'Nothing in this category yet',
+          emptyMessage: 'New listings appear here as sellers add them.',
+        ),
+      ],
     );
   }
 }

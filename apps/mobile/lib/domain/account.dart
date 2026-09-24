@@ -16,18 +16,18 @@ class Address {
   });
 
   factory Address.fromJson(Json json) => Address(
-        id: json.str('id'),
-        label: json.strOrNull('label'),
-        recipientName: json.str('recipientName'),
-        phone: json.strOrNull('phone'),
-        line1: json.str('line1'),
-        line2: json.strOrNull('line2'),
-        city: json.str('city'),
-        region: json.strOrNull('region'),
-        postalCode: json.str('postalCode'),
-        country: json.str('country'),
-        isDefault: json.boolean('isDefault'),
-      );
+    id: json.str('id'),
+    label: json.strOrNull('label'),
+    recipientName: json.str('recipientName'),
+    phone: json.strOrNull('phone'),
+    line1: json.str('line1'),
+    line2: json.strOrNull('line2'),
+    city: json.str('city'),
+    region: json.strOrNull('region'),
+    postalCode: json.str('postalCode'),
+    country: json.str('country'),
+    isDefault: json.boolean('isDefault'),
+  );
 
   final String id;
   final String? label;
@@ -42,13 +42,13 @@ class Address {
   final bool isDefault;
 
   List<String> get lines => formatAddressLines(
-        line1: line1,
-        line2: line2,
-        city: city,
-        region: region,
-        postalCode: postalCode,
-        country: country,
-      );
+    line1: line1,
+    line2: line2,
+    city: city,
+    region: region,
+    postalCode: postalCode,
+    country: country,
+  );
 }
 
 /// The editable fields of an address, for create and update.
@@ -66,16 +66,16 @@ class AddressDraft {
   });
 
   factory AddressDraft.from(Address address) => AddressDraft(
-        label: address.label,
-        recipientName: address.recipientName,
-        phone: address.phone,
-        line1: address.line1,
-        line2: address.line2,
-        city: address.city,
-        region: address.region,
-        postalCode: address.postalCode,
-        country: address.country,
-      );
+    label: address.label,
+    recipientName: address.recipientName,
+    phone: address.phone,
+    line1: address.line1,
+    line2: address.line2,
+    city: address.city,
+    region: address.region,
+    postalCode: address.postalCode,
+    country: address.country,
+  );
 
   final String? label;
   final String recipientName;
@@ -114,10 +114,11 @@ List<String> formatAddressLines({
   required String postalCode,
   required String country,
 }) {
-  final locality = [city, region, postalCode]
-      .whereType<String>()
-      .where((part) => part.trim().isNotEmpty)
-      .join(', ');
+  final locality = [
+    city,
+    region,
+    postalCode,
+  ].whereType<String>().where((part) => part.trim().isNotEmpty).join(', ');
   return [
     line1,
     if (line2 != null && line2.trim().isNotEmpty) line2,

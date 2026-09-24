@@ -50,33 +50,54 @@ void main() {
     expect(order.payment!.status, PaymentStatus.succeeded);
   });
 
-  test('a response missing a required field fails as a readable ApiException',
-      () {
-    final broken = fixture('offer')..remove('product');
-    expect(
-      () => parseResponse(() => OfferDetail.fromJson(broken)),
-      throwsA(isA<ApiException>()
-          .having((e) => e.kind, 'kind', ApiErrorKind.badResponse)),
-    );
-  });
+  test(
+    'a response missing a required field fails as a readable ApiException',
+    () {
+      final broken = fixture('offer')..remove('product');
+      expect(
+        () => parseResponse(() => OfferDetail.fromJson(broken)),
+        throwsA(
+          isA<ApiException>().having(
+            (e) => e.kind,
+            'kind',
+            ApiErrorKind.badResponse,
+          ),
+        ),
+      );
+    },
+  );
 
   test('prefers the image marked primary over position order', () {
     final json = fixture('product_page');
     final product = asJson((json['data']! as List).first);
     product['media'] = [
-      {'id': 'a', 'mediaAssetId': 'a', 'position': 0, 'isPrimary': false, 'mimeType': 'image/png', 'url': '/a'},
-      {'id': 'b', 'mediaAssetId': 'b', 'position': 1, 'isPrimary': true, 'mimeType': 'image/png', 'url': '/b'},
+      {
+        'id': 'a',
+        'mediaAssetId': 'a',
+        'position': 0,
+        'isPrimary': false,
+        'mimeType': 'image/png',
+        'url': '/a',
+      },
+      {
+        'id': 'b',
+        'mediaAssetId': 'b',
+        'position': 1,
+        'isPrimary': true,
+        'mimeType': 'image/png',
+        'url': '/b',
+      },
     ];
     expect(Product.fromJson(product).primaryImage!.url, '/b');
   });
 
   test('a variant leads with its cheapest purchasable offer', () {
     Json offer(String id, int amount, {bool inStock = true}) => {
-          'id': id,
-          'inStock': inStock,
-          'isFirstParty': false,
-          'currentPrice': {'amount': amount, 'currency': 'ZMW'},
-        };
+      'id': id,
+      'inStock': inStock,
+      'isFirstParty': false,
+      'currentPrice': {'amount': amount, 'currency': 'ZMW'},
+    };
     final variant = Variant.fromJson({
       'id': 'v',
       'skuCode': 'SKU',

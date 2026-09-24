@@ -1,12 +1,12 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' show Icons;
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/services.dart';
 import '../../core/network/api_exception.dart';
-import '../../core/util/money.dart';
 import '../../core/widgets/api_image.dart';
-import '../../core/widgets/quantity_stepper.dart';
 import '../../core/widgets/state_views.dart';
+import '../../design/design.dart';
 import '../../domain/cart.dart';
 import '../auth/sign_in_prompt.dart';
 
@@ -16,68 +16,84 @@ class CartPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final services = context.services;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Cart')),
-      body: ListenableBuilder(
-        listenable: Listenable.merge([services.session, services.cart]),
-        builder: (context, _) {
-          if (!services.session.isSignedIn) {
-            return const SignInPrompt(
-              icon: Icons.shopping_cart_outlined,
-              title: 'Your cart lives in your account',
-              message: 'Sign in to add items and check out.',
-              from: '/cart',
-            );
-          }
-          final controller = services.cart;
-          final cart = controller.cart;
+    return ListenableBuilder(
+      listenable: Listenable.merge([services.session, services.cart]),
+      builder: (context, _) {
+        final controller = services.cart;
+        final cart = controller.cart;
+        final signedIn = services.session.isSignedIn;
 
-          if (cart.isEmpty && controller.isLoading) return const LoadingView();
-          if (cart.isEmpty && controller.errorMessage != null) {
-            return ErrorView(
-                message: controller.errorMessage!, onRetry: controller.refresh);
-          }
-          if (cart.isEmpty) {
-            return EmptyView(
-              icon: Icons.shopping_cart_outlined,
-              title: 'Your cart is empty',
-              message: 'Anything you add shows up here.',
-              action: FilledButton.tonal(
-                onPressed: () => context.go('/'),
-                child: const Text('Start shopping'),
-              ),
-            );
-          }
+        Widget? fill;
+        if (!signedIn) {
+          fill = const SignInPrompt(
+            icon: Icons.shopping_bag_outlined,
+            title: 'Your cart lives in your account',
+            message: 'Sign in to add things and check out with mobile money.',
+            from: '/cart',
+          );
+        } else if (cart.isEmpty && controller.isLoading) {
+          fill = const LoadingState();
+        } else if (cart.isEmpty && controller.errorMessage != null) {
+          fill = ErrorState(
+            message: controller.errorMessage!,
+            onRetry: controller.refresh,
+          );
+        } else if (cart.isEmpty) {
+          fill = EmptyState(
+            icon: Icons.shopping_bag_outlined,
+            title: 'Your cart is empty',
+            message: 'Anything you add shows up here.',
+            action: Button(
+              label: 'Browse the shop',
+              variant: ButtonVariant.secondary,
+              expand: false,
+              onPressed: () => context.go('/'),
+            ),
+          );
+        }
 
-          return Column(
-            children: [
-              Expanded(
-                child: RefreshIndicator(
-                  onRefresh: controller.refresh,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: cart.items.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) =>
-                        _CartLineTile(line: cart.items[index]),
+        return PageScaffold(
+          title: 'Cart',
+          showBack: false,
+          onRefresh: signedIn ? controller.refresh : null,
+          bottomBar: fill == null ? _CheckoutBar(cart: cart) : null,
+          slivers: [
+            if (fill != null)
+              SliverFillRemaining(hasScrollBody: false, child: fill)
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(
+                  Space.gutter,
+                  Space.x3,
+                  Space.gutter,
+                  0,
+                ),
+                sliver: SliverList.separated(
+                  itemCount: cart.items.length,
+                  separatorBuilder: (_, _) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: Space.x4),
+                    child: Container(height: 0.8, color: context.colors.line),
                   ),
+                  itemBuilder: (context, index) =>
+                      _CartLine(line: cart.items[index]),
                 ),
               ),
-              _CartSummary(cart: cart),
-            ],
-          );
-        },
-      ),
+          ],
+        );
+      },
     );
   }
 }
 
-class _CartLineTile extends StatelessWidget {
-  const _CartLineTile({required this.line});
+class _CartLine extends StatelessWidget {
+  const _CartLine({required this.line});
 
   final CartLine line;
 
-  Future<void> _run(BuildContext context, Future<void> Function() action) async {
+  Future<void> _run(
+    BuildContext context,
+    Future<void> Function() action,
+  ) async {
     try {
       await action();
     } on ApiException catch (error) {
@@ -87,125 +103,137 @@ class _CartLineTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final colors = context.colors;
+    final type = context.type;
     final controller = context.services.cart;
     final offer = controller.offerFor(line);
     final busy = controller.isBusy(line);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            InkWell(
-              onTap: offer == null ? null : () => context.push('/product/${offer.productSlug}'),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: SizedBox.square(dimension: 76, child: ApiImage(offer?.imageUrl)),
-              ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Pressable(
+          onPressed: offer == null
+              ? null
+              : () => context.push('/product/${offer.productSlug}'),
+          semanticLabel: offer == null ? null : 'Open ${offer.title}',
+          focusRadius: Radii.tile,
+          builder: (context, _) => ClipRRect(
+            borderRadius: const BorderRadius.all(Radii.tile),
+            child: SizedBox.square(
+              dimension: 84,
+              child: ApiImage(offer?.imageUrl),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          ),
+        ),
+        const SizedBox(width: Space.x4),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                offer?.title ?? 'Item',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: type.bodyStrong,
+              ),
+              const SizedBox(height: Space.x1),
+              if (line.unitPrice != null)
+                Price(
+                  line.lineTotal,
+                  line.unitPrice!.currency,
+                  size: PriceSize.inline,
+                ),
+              if (line.quantity > 1 && line.unitPrice != null)
+                Text(
+                  '${line.unitPrice!.formatted} each',
+                  style: type.caption.copyWith(color: colors.inkMuted),
+                ),
+              if (!line.isAvailable) ...[
+                const SizedBox(height: Space.x2),
+                const StatusBadge('No longer available', tone: Tone.danger),
+                const SizedBox(height: Space.x1),
+                Text(
+                  'Remove it to check out.',
+                  style: type.caption.copyWith(color: colors.danger),
+                ),
+              ],
+              const SizedBox(height: Space.x3),
+              Row(
                 children: [
-                  Text(offer?.title ?? 'Item',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall),
-                  if (line.unitPrice != null)
-                    Text('${line.unitPrice!.formatted} each',
-                        style: theme.textTheme.bodySmall),
-                  if (!line.isAvailable)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text('No longer available — remove it to check out',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.error,
-                              fontWeight: FontWeight.w600)),
+                  QuantityStepper(
+                    value: line.quantity,
+                    enabled: !busy && line.isAvailable,
+                    onChanged: (quantity) => _run(
+                      context,
+                      () => controller.setQuantity(line, quantity),
                     ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      QuantityStepper(
-                        value: line.quantity,
-                        enabled: !busy && line.isAvailable,
-                        onChanged: (quantity) =>
-                            _run(context, () => controller.setQuantity(line, quantity)),
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        tooltip: 'Remove',
-                        onPressed: busy ? null : () => _run(context, () => controller.remove(line)),
-                        icon: busy
-                            ? const SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2))
-                            : const Icon(Icons.delete_outline),
-                      ),
-                    ],
                   ),
+                  const Spacer(),
+                  busy
+                      ? const Padding(
+                          padding: EdgeInsets.all(Space.x3),
+                          child: Spinner(size: 20),
+                        )
+                      : IconAction(
+                          icon: Icons.delete_outline_rounded,
+                          semanticLabel: 'Remove ${offer?.title ?? 'item'}',
+                          color: colors.inkMuted,
+                          onPressed: () =>
+                              _run(context, () => controller.remove(line)),
+                        ),
                 ],
               ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              line.unitPrice == null
-                  ? '—'
-                  : formatMoney(line.lineTotal, line.unitPrice!.currency),
-              style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
+      ],
     );
   }
 }
 
-class _CartSummary extends StatelessWidget {
-  const _CartSummary({required this.cart});
+class _CheckoutBar extends StatelessWidget {
+  const _CheckoutBar({required this.cart});
 
   final Cart cart;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final type = context.type;
+    final colors = context.colors;
     final blocked = cart.hasUnavailable;
-    return Material(
-      elevation: 8,
-      color: theme.colorScheme.surfaceContainer,
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
+    final subtotal = cart.subtotalMoney;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text('Subtotal (${cart.itemCount} ${cart.itemCount == 1 ? 'item' : 'items'})',
-                        style: theme.textTheme.bodyLarge),
+                  Text(
+                    'Subtotal, ${cart.itemCount} ${cart.itemCount == 1 ? 'item' : 'items'}',
+                    style: type.small.copyWith(color: colors.inkMuted),
                   ),
-                  Text(cart.subtotalMoney?.formatted ?? '—',
-                      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                  Text(
+                    'Delivery is added at checkout',
+                    style: type.caption.copyWith(color: colors.inkSubtle),
+                  ),
                 ],
               ),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text('Shipping is calculated at checkout.',
-                    style: theme.textTheme.bodySmall),
-              ),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: blocked ? null : () => context.push('/checkout'),
-                child: Text(blocked ? 'Remove unavailable items to continue' : 'Checkout'),
-              ),
-            ],
-          ),
+            ),
+            if (subtotal != null)
+              Price(subtotal.amount, subtotal.currency, size: PriceSize.total),
+          ],
         ),
-      ),
+        const SizedBox(height: Space.x3),
+        Button(
+          label: blocked ? 'Remove unavailable items first' : 'Check out',
+          onPressed: blocked ? null : () => context.push('/checkout'),
+        ),
+      ],
     );
   }
 }

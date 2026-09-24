@@ -11,12 +11,12 @@ class Category {
   });
 
   factory Category.fromJson(Json json) => Category(
-        id: json.str('id'),
-        name: json.str('name'),
-        slug: json.str('slug'),
-        description: json.strOrNull('description'),
-        parentId: json.strOrNull('parentId'),
-      );
+    id: json.str('id'),
+    name: json.str('name'),
+    slug: json.str('slug'),
+    description: json.strOrNull('description'),
+    parentId: json.strOrNull('parentId'),
+  );
 
   final String id;
   final String name;
@@ -28,11 +28,8 @@ class Category {
 class Brand {
   const Brand({required this.id, required this.name, required this.slug});
 
-  factory Brand.fromJson(Json json) => Brand(
-        id: json.str('id'),
-        name: json.str('name'),
-        slug: json.str('slug'),
-      );
+  factory Brand.fromJson(Json json) =>
+      Brand(id: json.str('id'), name: json.str('name'), slug: json.str('slug'));
 
   final String id;
   final String name;
@@ -43,10 +40,10 @@ class SellerSummary {
   const SellerSummary({required this.id, this.displayName, this.slug});
 
   factory SellerSummary.fromJson(Json json) => SellerSummary(
-        id: json.str('id'),
-        displayName: json.strOrNull('displayName'),
-        slug: json.strOrNull('storefrontSlug') ?? json.strOrNull('slug'),
-      );
+    id: json.str('id'),
+    displayName: json.strOrNull('displayName'),
+    slug: json.strOrNull('storefrontSlug') ?? json.strOrNull('slug'),
+  );
 
   final String id;
   final String? displayName;
@@ -56,17 +53,17 @@ class SellerSummary {
 enum OfferCondition { newItem, used, refurbished }
 
 OfferCondition _condition(String? value) => switch (value) {
-      'USED' => OfferCondition.used,
-      'REFURBISHED' => OfferCondition.refurbished,
-      _ => OfferCondition.newItem,
-    };
+  'USED' => OfferCondition.used,
+  'REFURBISHED' => OfferCondition.refurbished,
+  _ => OfferCondition.newItem,
+};
 
 extension OfferConditionLabel on OfferCondition {
   String get label => switch (this) {
-        OfferCondition.newItem => 'New',
-        OfferCondition.used => 'Used',
-        OfferCondition.refurbished => 'Refurbished',
-      };
+    OfferCondition.newItem => 'New',
+    OfferCondition.used => 'Used',
+    OfferCondition.refurbished => 'Refurbished',
+  };
 }
 
 /// One seller's listing of a variant, as embedded in a product.
@@ -81,17 +78,17 @@ class Offer {
   });
 
   factory Offer.fromJson(Json json) => Offer(
-        id: json.str('id'),
-        // Missing means "not told otherwise"; the server re-checks stock at
-        // checkout regardless.
-        inStock: json.boolean('inStock', fallback: true),
-        isFirstParty: json.boolean('isFirstParty'),
-        seller: json.objOrNull('seller') == null
-            ? null
-            : SellerSummary.fromJson(json.obj('seller')),
-        price: Money.maybe(json.objOrNull('currentPrice')),
-        shippingCost: Money.maybe(json.objOrNull('shippingCost')),
-      );
+    id: json.str('id'),
+    // Missing means "not told otherwise"; the server re-checks stock at
+    // checkout regardless.
+    inStock: json.boolean('inStock', fallback: true),
+    isFirstParty: json.boolean('isFirstParty'),
+    seller: json.objOrNull('seller') == null
+        ? null
+        : SellerSummary.fromJson(json.obj('seller')),
+    price: Money.maybe(json.objOrNull('currentPrice')),
+    shippingCost: Money.maybe(json.objOrNull('shippingCost')),
+  );
 
   final String id;
   final bool inStock;
@@ -119,18 +116,19 @@ class Variant {
   });
 
   factory Variant.fromJson(Json json) => Variant(
-        id: json.str('id'),
-        skuCode: json.strOrNull('skuCode') ?? '',
-        name: json.strOrNull('name'),
-        offers: json.list('offers', Offer.fromJson),
-      );
+    id: json.str('id'),
+    skuCode: json.strOrNull('skuCode') ?? '',
+    name: json.strOrNull('name'),
+    offers: json.list('offers', Offer.fromJson),
+  );
 
   final String id;
   final String skuCode;
   final String? name;
   final List<Offer> offers;
 
-  String get label => (name != null && name!.trim().isNotEmpty) ? name! : skuCode;
+  String get label =>
+      (name != null && name!.trim().isNotEmpty) ? name! : skuCode;
 
   /// Cheapest purchasable offer, else the first priced one, else none.
   Offer? get bestOffer {
@@ -154,11 +152,11 @@ class ProductImage {
   });
 
   factory ProductImage.fromJson(Json json) => ProductImage(
-        id: json.str('id'),
-        url: json.str('url'),
-        position: json.intOrNull('position') ?? 0,
-        isPrimary: json.boolean('isPrimary'),
-      );
+    id: json.str('id'),
+    url: json.str('url'),
+    position: json.intOrNull('position') ?? 0,
+    isPrimary: json.boolean('isPrimary'),
+  );
 
   /// Origin-relative and signed (`/api/v1/media/...?signature=`). Resolve
   /// against the API origin before loading — see `ApiImage`.
@@ -303,8 +301,7 @@ class OfferDetail {
   final Money? price;
   final bool checkoutSupported;
 
-  String get title =>
-      (listingTitle != null && listingTitle!.trim().isNotEmpty)
-          ? listingTitle!
-          : productName;
+  String get title => (listingTitle != null && listingTitle!.trim().isNotEmpty)
+      ? listingTitle!
+      : productName;
 }

@@ -18,9 +18,9 @@ class CartController extends ChangeNotifier {
     required CartRepository carts,
     required CatalogRepository catalog,
     required SessionController session,
-  })  : _carts = carts,
-        _catalog = catalog,
-        _session = session {
+  }) : _carts = carts,
+       _catalog = catalog,
+       _session = session {
     _session.addListener(_onSessionChanged);
     _onSessionChanged();
   }
@@ -94,8 +94,9 @@ class CartController extends ChangeNotifier {
 
   Future<void> _adopt(Cart cart) async {
     _cart = cart;
-    final missing =
-        cart.items.map((line) => line.offerId).where((id) => !_offers.containsKey(id));
+    final missing = cart.items
+        .map((line) => line.offerId)
+        .where((id) => !_offers.containsKey(id));
     if (missing.isNotEmpty) {
       _offers = {..._offers, ...await _catalog.offers(missing)};
     }

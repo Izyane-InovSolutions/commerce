@@ -36,8 +36,8 @@ class SessionController extends ChangeNotifier implements AccessTokenSource {
   SessionController({
     required AuthRepository auth,
     required SecureTokenStore tokens,
-  })  : _auth = auth,
-        _tokens = tokens;
+  }) : _auth = auth,
+       _tokens = tokens;
 
   final AuthRepository _auth;
   final SecureTokenStore _tokens;
@@ -138,7 +138,8 @@ class SessionController extends ChangeNotifier implements AccessTokenSource {
       await _adopt(await _auth.refresh(stored));
       return _RefreshResult.renewed;
     } on ApiException catch (error) {
-      final definitive = error.isUnauthorized ||
+      final definitive =
+          error.isUnauthorized ||
           (error.kind == ApiErrorKind.http &&
               error.statusCode != null &&
               error.statusCode! >= 400 &&

@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' show Icons;
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/services.dart';
 import '../../core/state/loader.dart';
 import '../../core/util/dates.dart';
-import '../../core/widgets/state_views.dart';
+import '../../design/design.dart';
 import '../../domain/orders.dart';
 import 'order_status_chip.dart';
 
@@ -35,70 +36,129 @@ class _OrdersPageState extends State<OrdersPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Orders')),
-      body: LoaderView(
-        loader: _orders,
-        builder: (context, orders) {
-          if (orders.isEmpty) {
-            return EmptyView(
-              icon: Icons.receipt_long_outlined,
-              title: 'No orders yet',
-              message: 'Orders you place will show up here.',
-              action: FilledButton.tonal(
-                  onPressed: () => context.go('/'), child: const Text('Start shopping')),
-            );
-          }
-          return RefreshIndicator(
-            onRefresh: () => _orders.load(silent: true),
-            child: ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: orders.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final order = orders[index];
-                final theme = Theme.of(context);
-                return Card(
-                  child: InkWell(
-                    onTap: () async {
-                      await context.push('/account/orders/${order.id}');
-                      // A payment may have settled while the detail was open.
-                      _orders.load(silent: true);
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Order ${order.reference}',
-                                    style: theme.textTheme.titleSmall),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${formatDate(order.createdAt)} · ${order.itemCount} '
-                                  '${order.itemCount == 1 ? 'item' : 'items'}',
-                                  style: theme.textTheme.bodySmall,
-                                ),
-                                const SizedBox(height: 8),
-                                OrderStatusChip(order: order),
-                              ],
-                            ),
-                          ),
-                          Text(order.totalMoney.formatted,
-                              style: theme.textTheme.titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w700)),
-                          const Icon(Icons.chevron_right),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
+    return ListenableBuilder(
+      listenable: _orders,
+      builder: (context, _) {
+        final orders = _orders.data;
+        Widget fill;
+        if (orders == null && _orders.error != null) {
+          fill = SliverFillRemaining(
+            hasScrollBody: false,
+            child: ErrorState(
+              message: _orders.errorMessage!,
+              requestId: _orders.requestId,
+              onRetry: _orders.load,
             ),
           );
-        },
+        } else if (orders == null) {
+          fill = const SliverFillRemaining(
+            hasScrollBody: false,
+            child: LoadingState(),
+          );
+        } else if (orders.isEmpty) {
+          fill = SliverFillRemaining(
+            hasScrollBody: false,
+            child: EmptyState(
+              icon: Icons.receipt_long_outlined,
+              title: 'No orders yet',
+              message:
+                  'Orders you place show up here, with their delivery progress.',
+              action: Button(
+                label: 'Browse the shop',
+                variant: ButtonVariant.secondary,
+                expand: false,
+                onPressed: () => context.go('/'),
+              ),
+            ),
+          );
+        } else {
+          fill = SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              Space.gutter,
+              Space.x3,
+              Space.gutter,
+              0,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: InsetGroup(
+                children: [
+                  for (final order in orders)
+                    _OrderRow(
+                      order: order,
+                      onReturn: () => _orders.load(silent: true),
+                    ),
+                ],
+              ),
+            ),
+          );
+        }
+        return PageScaffold(
+          title: 'Orders',
+          onRefresh: () => _orders.load(silent: true),
+          slivers: [fill],
+        );
+      },
+    );
+  }
+}
+
+class _OrderRow extends StatelessWidget {
+  const _OrderRow({required this.order, required this.onReturn});
+
+  final Order order;
+
+  /// A payment may have settled while the detail was open.
+  final VoidCallback onReturn;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final type = context.type;
+    final items = order.itemCount == 1 ? '1 item' : '${order.itemCount} items';
+    return Pressable(
+      onPressed: () async {
+        await context.push('/account/orders/${order.id}');
+        onReturn();
+      },
+      pressScale: 1,
+      dimOnPress: false,
+      semanticLabel:
+          'Order ${order.reference}, ${formatDate(order.createdAt)}, $items, '
+          '${order.totalMoney.formatted}',
+      excludeChildSemantics: true,
+      focusRadius: Radii.group,
+      builder: (context, states) => AnimatedContainer(
+        duration: Motion.fast,
+        color: states.contains(PressState.pressed)
+            ? colors.tile
+            : const Color(0x00000000),
+        padding: const EdgeInsets.all(Space.x4),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Order ${order.reference}', style: type.bodyStrong),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${formatDate(order.createdAt)}, $items',
+                    style: type.small.copyWith(color: colors.inkMuted),
+                  ),
+                  const SizedBox(height: Space.x2),
+                  OrderStatusChip(order: order),
+                ],
+              ),
+            ),
+            Price(order.total, order.currency, size: PriceSize.inline),
+            const SizedBox(width: Space.x1),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: colors.inkSubtle,
+              size: 22,
+            ),
+          ],
+        ),
       ),
     );
   }

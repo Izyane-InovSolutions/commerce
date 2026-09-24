@@ -16,8 +16,8 @@ const _refreshKey = 'commerce.refresh_token';
 /// and revokes the whole family — including the token that replaced it.
 class _RotatingRefresh {
   _RotatingRefresh(String initial, {int generation = 1})
-      : _valid = {initial},
-        _counter = generation;
+    : _valid = {initial},
+      _counter = generation;
 
   final Set<String> _valid;
   final Set<String> _spent = {};
@@ -34,7 +34,11 @@ class _RotatingRefresh {
     if (_spent.contains(token)) {
       revoked = true;
       _valid.clear();
-      return FakeApi.error(401, 'UNAUTHORIZED', 'Refresh token has already been used');
+      return FakeApi.error(
+        401,
+        'UNAUTHORIZED',
+        'Refresh token has already been used',
+      );
     }
     if (revoked || !_valid.remove(token)) {
       return FakeApi.error(401, 'UNAUTHORIZED', 'Invalid refresh token');
@@ -63,7 +67,9 @@ void main() {
       retryDelays: const [],
     );
     session = SessionController(
-        auth: AuthRepository(client), tokens: SecureTokenStore(store));
+      auth: AuthRepository(client),
+      tokens: SecureTokenStore(store),
+    );
     client.tokenSource = session;
   });
 
@@ -100,13 +106,19 @@ void main() {
 
     test('an unreachable server keeps the token and offers a retry', () async {
       store.values[_refreshKey] = 'refresh-1';
-      api.on('POST /auth/refresh', (_) => throw http.ClientException('offline'));
+      api.on(
+        'POST /auth/refresh',
+        (_) => throw http.ClientException('offline'),
+      );
 
       await session.restore();
 
       expect(session.status, SessionStatus.unreachable);
-      expect(store.values[_refreshKey], 'refresh-1',
-          reason: 'being offline says nothing about whether the session is valid');
+      expect(
+        store.values[_refreshKey],
+        'refresh-1',
+        reason: 'being offline says nothing about whether the session is valid',
+      );
     });
   });
 
@@ -119,53 +131,72 @@ void main() {
     });
 
     test(
-        'concurrent 401s share ONE refresh — two would revoke the session',
-        () async {
-      final refresh = _RotatingRefresh('refresh-2', generation: 2)
-        ..latency = const Duration(milliseconds: 30);
-      api.on('POST /auth/refresh', refresh.call);
-      // The current access token (access-2) has expired server-side: every
-      // data request rejects anything but a token issued after this point.
-      api.on('GET /cart', (r) => refresh.latestAccess != null &&
-              r.headers['Authorization'] == 'Bearer ${refresh.latestAccess}'
-          ? FakeApi.ok({'items': <Object>[]})
-          : FakeApi.error(401, 'UNAUTHORIZED', 'Token expired'));
+      'concurrent 401s share ONE refresh — two would revoke the session',
+      () async {
+        final refresh = _RotatingRefresh('refresh-2', generation: 2)
+          ..latency = const Duration(milliseconds: 30);
+        api.on('POST /auth/refresh', refresh.call);
+        // The current access token (access-2) has expired server-side: every
+        // data request rejects anything but a token issued after this point.
+        api.on(
+          'GET /cart',
+          (r) =>
+              refresh.latestAccess != null &&
+                  r.headers['Authorization'] == 'Bearer ${refresh.latestAccess}'
+              ? FakeApi.ok({'items': <Object>[]})
+              : FakeApi.error(401, 'UNAUTHORIZED', 'Token expired'),
+        );
 
-      final results = await Future.wait([
-        client.get('/cart'),
-        client.get('/cart'),
-        client.get('/cart'),
-        client.get('/cart'),
-      ]);
+        final results = await Future.wait([
+          client.get('/cart'),
+          client.get('/cart'),
+          client.get('/cart'),
+          client.get('/cart'),
+        ]);
 
-      expect(results, everyElement({'items': <Object>[]}));
-      expect(api.calls('POST /auth/refresh'), hasLength(1));
-      expect(refresh.revoked, isFalse);
-      expect(session.status, SessionStatus.signedIn);
-      expect(store.values[_refreshKey], 'refresh-3');
-    });
+        expect(results, everyElement({'items': <Object>[]}));
+        expect(api.calls('POST /auth/refresh'), hasLength(1));
+        expect(refresh.revoked, isFalse);
+        expect(session.status, SessionStatus.signedIn);
+        expect(store.values[_refreshKey], 'refresh-3');
+      },
+    );
 
-    test('a request rejected with an already-replaced token just retries',
-        () async {
-      // The session is on access-2. A request that went out with an older
-      // token and came back 401 must not spend another rotation.
-      expect(await session.renewAccessToken('access-1'), isTrue);
-      expect(api.calls('POST /auth/refresh'), isEmpty);
-    });
+    test(
+      'a request rejected with an already-replaced token just retries',
+      () async {
+        // The session is on access-2. A request that went out with an older
+        // token and came back 401 must not spend another rotation.
+        expect(await session.renewAccessToken('access-1'), isTrue);
+        expect(api.calls('POST /auth/refresh'), isEmpty);
+      },
+    );
 
-    test('a refused refresh ends the session and flags it as expired', () async {
-      api.on('POST /auth/refresh', (_) =>
-          FakeApi.error(401, 'UNAUTHORIZED', 'Refresh token has already been used'));
+    test(
+      'a refused refresh ends the session and flags it as expired',
+      () async {
+        api.on(
+          'POST /auth/refresh',
+          (_) => FakeApi.error(
+            401,
+            'UNAUTHORIZED',
+            'Refresh token has already been used',
+          ),
+        );
 
-      expect(await session.renewAccessToken('access-2'), isFalse);
-      expect(session.status, SessionStatus.signedOut);
-      expect(session.takeExpiredNotice(), isTrue);
-      expect(session.takeExpiredNotice(), isFalse, reason: 'reported once');
-      expect(store.values.containsKey(_refreshKey), isFalse);
-    });
+        expect(await session.renewAccessToken('access-2'), isFalse);
+        expect(session.status, SessionStatus.signedOut);
+        expect(session.takeExpiredNotice(), isTrue);
+        expect(session.takeExpiredNotice(), isFalse, reason: 'reported once');
+        expect(store.values.containsKey(_refreshKey), isFalse);
+      },
+    );
 
     test('a refresh that cannot reach the server keeps the session', () async {
-      api.on('POST /auth/refresh', (_) => throw http.ClientException('offline'));
+      api.on(
+        'POST /auth/refresh',
+        (_) => throw http.ClientException('offline'),
+      );
       expect(await session.renewAccessToken('access-2'), isFalse);
       expect(session.status, SessionStatus.signedIn);
       expect(store.values[_refreshKey], 'refresh-2');
@@ -174,41 +205,53 @@ void main() {
 
   group('sign in and out', () {
     test('sign-in stores only the refresh token', () async {
-      api.on('POST /auth/login',
-          (_) => FakeApi.ok(sessionJson(access: 'a-login', refresh: 'r-login')));
+      api.on(
+        'POST /auth/login',
+        (_) => FakeApi.ok(sessionJson(access: 'a-login', refresh: 'r-login')),
+      );
       await session.signIn('buyer@example.test', 'correct horse');
 
       expect(session.isSignedIn, isTrue);
-      expect(store.values, {_refreshKey: 'r-login'},
-          reason: 'the access token stays in memory');
+      expect(store.values, {
+        _refreshKey: 'r-login',
+      }, reason: 'the access token stays in memory');
     });
 
-    test('sign-out revokes on the server while still authorised, then clears',
-        () async {
-      api.on('POST /auth/login',
-          (_) => FakeApi.ok(sessionJson(access: 'a-login', refresh: 'r-login')));
-      api.on('POST /auth/logout', (_) => http.Response('', 204));
-      await session.signIn('buyer@example.test', 'correct horse');
+    test(
+      'sign-out revokes on the server while still authorised, then clears',
+      () async {
+        api.on(
+          'POST /auth/login',
+          (_) => FakeApi.ok(sessionJson(access: 'a-login', refresh: 'r-login')),
+        );
+        api.on('POST /auth/logout', (_) => http.Response('', 204));
+        await session.signIn('buyer@example.test', 'correct horse');
 
-      await session.signOut();
+        await session.signOut();
 
-      final logout = api.calls('POST /auth/logout').single;
-      // /auth/logout is not @Public on the API; it needs the bearer token.
-      expect(logout.headers['Authorization'], 'Bearer a-login');
-      expect(FakeApi.body(logout)['refreshToken'], 'r-login');
-      expect(session.status, SessionStatus.signedOut);
-      expect(store.values, isEmpty);
-    });
+        final logout = api.calls('POST /auth/logout').single;
+        // /auth/logout is not @Public on the API; it needs the bearer token.
+        expect(logout.headers['Authorization'], 'Bearer a-login');
+        expect(FakeApi.body(logout)['refreshToken'], 'r-login');
+        expect(session.status, SessionStatus.signedOut);
+        expect(store.values, isEmpty);
+      },
+    );
 
-    test('sign-out still completes locally if the server is unreachable',
-        () async {
-      api.on('POST /auth/login', (_) => FakeApi.ok(sessionJson()));
-      api.on('POST /auth/logout', (_) => throw http.ClientException('offline'));
-      await session.signIn('buyer@example.test', 'correct horse');
+    test(
+      'sign-out still completes locally if the server is unreachable',
+      () async {
+        api.on('POST /auth/login', (_) => FakeApi.ok(sessionJson()));
+        api.on(
+          'POST /auth/logout',
+          (_) => throw http.ClientException('offline'),
+        );
+        await session.signIn('buyer@example.test', 'correct horse');
 
-      await session.signOut();
-      expect(session.status, SessionStatus.signedOut);
-      expect(store.values, isEmpty);
-    });
+        await session.signOut();
+        expect(session.status, SessionStatus.signedOut);
+        expect(store.values, isEmpty);
+      },
+    );
   });
 }
