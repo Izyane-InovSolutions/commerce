@@ -80,6 +80,7 @@ export function ProductImages({
                     fill
                     sizes="(min-width: 1024px) 20vw, 40vw"
                     className="object-cover"
+                    unoptimized
                   />
                 ) : (
                   <span className="text-muted-foreground absolute inset-0 grid place-items-center text-xs">

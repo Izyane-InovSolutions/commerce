@@ -37,7 +37,15 @@ export function ProductImage({
 
   return (
     <div className={`bg-muted relative overflow-hidden ${className ?? ''}`}>
-      <Image src={src} alt={alt} fill sizes={sizes} className="object-cover" />
+      {/* <Image src={src} alt={alt} fill sizes={sizes} className="object-cover" /> */}
+      <Image
+        src={src}
+        alt={alt}
+        fill
+        sizes={sizes}
+        className="object-cover"
+        unoptimized
+      />
     </div>
   );
 }
