@@ -1,23 +1,22 @@
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'key_value_store.dart';
 
+/// Where the refresh token lives between launches.
+///
+/// Only the refresh token is persisted. The access token is short-lived
+/// (fifteen minutes) and stays in memory, so a copied device backup or a
+/// compromised storage read yields at most a credential that must still be
+/// exchanged — and exchanging it rotates it.
 class SecureTokenStore {
-  const SecureTokenStore({
-    FlutterSecureStorage storage = const FlutterSecureStorage(),
-  }) : _storage = storage;
+  const SecureTokenStore(this._store);
 
-  final FlutterSecureStorage _storage;
+  final KeyValueStore _store;
 
   static const _refreshTokenKey = 'commerce.refresh_token';
 
-  Future<String?> readRefreshToken() {
-    return _storage.read(key: _refreshTokenKey);
-  }
+  Future<String?> readRefreshToken() => _store.read(_refreshTokenKey);
 
-  Future<void> saveRefreshToken(String token) {
-    return _storage.write(key: _refreshTokenKey, value: token);
-  }
+  Future<void> saveRefreshToken(String token) =>
+      _store.write(_refreshTokenKey, token);
 
-  Future<void> clear() {
-    return _storage.delete(key: _refreshTokenKey);
-  }
+  Future<void> clear() => _store.delete(_refreshTokenKey);
 }

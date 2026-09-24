@@ -1,74 +1,125 @@
-# Commerce Mobile App
+# Commerce mobile
 
-Customer-facing mobile application for the Commerce platform.
+The customer app for the Commerce marketplace — Android and iOS, one Flutter
+codebase, a client of the Commerce API at `/api/v1`. Architecture and
+delivery plan: [docs/mobile-architecture.md](../../docs/mobile-architecture.md).
 
-## Targets
+## What it does
 
-- Android
-- iOS
+Browse, search and filter the catalogue; product pages with variants and
+seller choice; cart; checkout with delivery quotes and **MTN MoMo / Airtel
+Money** payment; payment status that recovers if the app is closed mid-payment;
+order history and tracking; wishlist; profile and address book; sign up, sign
+in, password reset, and a session that survives restarts.
 
-## Technology
-
-Flutter + Dart.
-
-The mobile app is a single Flutter codebase targeting Android and iOS, with platform-specific integrations added only where required.
-
-The app is a client of the NestJS Commerce API under:
-
-```text
-/api/v1
-```
-
-Business rules remain on the backend.
-
-See [docs/mobile-architecture.md](../../docs/mobile-architecture.md) for the full architecture and delivery plan.
-
-## Planned structure
-
-```text
-apps/mobile/
-├── android/
-├── ios/
-├── lib/
-│   ├── core/
-│   ├── features/
-│   ├── data/
-│   ├── domain/
-│   └── presentation/
-├── test/
-└── pubspec.yaml
-```
-
-Feature modules should keep UI, state, domain models, repositories, and API access separated. The exact structure can evolve as implementation starts.
-
-## Local setup
-
-Install the Flutter SDK and configure Android Studio and/or Xcode for the target platforms.
-
-From `apps/mobile/`:
+## Run it
 
 ```bash
 flutter pub get
-flutter run
+flutter run                     # a connected device or simulator
 ```
 
-For iOS development, use the macOS/Xcode toolchain. Android can be run from Android Studio or a connected device.
+The API address is compiled in with a default (see
+`lib/core/config/app_config.dart`) and can be overridden per build:
 
-## API configuration
+```bash
+flutter run --dart-define=COMMERCE_API_BASE_URL=https://api.example.com/api/v1
+```
 
-Development environments should point at the Commerce API base URL:
+It can also be changed **inside the app** without rebuilding: Account → Server,
+or the server icon on the sign-in screen. That exists because the internal-test
+backend sits behind a Cloudflare quick tunnel whose hostname changes every time
+it restarts. Changing server signs you out.
+
+Release builds need HTTPS: Android and iOS both refuse plain `http://` by
+default.
+
+## Tests
+
+```bash
+flutter test                    # 82 unit, widget and design-system tests
+```
+
+They run against a scripted fake API (`test/support/fake_api.dart`), with
+response fixtures captured from the real backend in `test/fixtures/`.
+
+```bash
+flutter test integration_test/purchase_flow_test.dart -d <device>
+```
+
+The integration test drives the real app against the **real API**: it registers
+a new account, buys a product with mobile money and checks the order.
+**It places a real order** — only point it at a test environment whose payment
+gateway is a sandbox. The API allows 5 auth requests a minute per client, so
+back-to-back runs can hit the limit.
+
+## Design system
+
+`lib/design/` is the app's own component library, built from Flutter's
+widgets-layer primitives. The app runs on `WidgetsApp`, not `MaterialApp`, and
+no Material or Cupertino component is used for anything visible. Patterns are
+borrowed where they earn it:
+
+- **From Cupertino:** large titles that collapse into the bar, inset grouped
+  lists, the sliding segmented control, action sheets in place of pop-up menus,
+  frosted bars, press-to-dim feedback, pull to refresh.
+- **From Material:** keyboard focus rings, state tracking, the pill indicator
+  behind the selected tab.
+- **Kept native per platform:** text selection and the copy/paste menu, the back
+  glyph, and page transitions (including iOS's edge-swipe back). These are
+  muscle memory.
+
+The signature element is `Price`: a small raised **K**, heavy tabular whole
+kwacha, small ngwee. On any screen with a price, the price is the loudest
+thing. Screen readers hear it as one amount.
+
+Rules for working in it:
+
+- **Tokens live in `lib/design/tokens.dart` only.** Colour, type, spacing,
+  radius and motion; no component hard-codes a value. Rebranding means editing
+  that one file.
+- **Contrast is tested.** `test/design/design_system_test.dart` checks every
+  text-on-background pairing, in light and dark, against WCAG AA. A palette
+  change that would be unreadable fails the build.
+- **Build on `Pressable`.** It carries semantics, keyboard activation, the focus
+  ring, press feedback and haptics, so no tappable thing can forget them.
+- **Large text must not overflow.** A test renders the storefront and product
+  page at 1.6× text size; any overflow fails it.
+- Typeface: Schibsted Grotesk (variable, OFL — licence in `assets/fonts/`).
+
+## Structure
 
 ```text
-/api/v1
+lib/
+├── app/        wiring: services, router, tab shell
+├── core/       API client, config, storage, loaders, shared widgets
+├── data/       repositories — the only code that talks to the API
+├── design/     the design system
+├── domain/     typed models, parsed defensively from API responses
+└── features/   screens and their controllers, one folder per area
 ```
 
-Do not hard-code production credentials or secrets into the mobile project.
+Screens never touch HTTP; they call controllers or repositories. Prices,
+totals, stock and payment state always come from the API as-is.
 
-## Rules
+## Things to know
 
-- UI does not call the HTTP client directly.
-- API and persistence access go through repositories.
-- Payment confirmation is always backend-controlled.
-- Tokens and session credentials use secure platform storage.
-- Mobile must not duplicate server-side pricing, inventory, order or marketplace rules.
-- Use platform-native capabilities through Flutter plugins or platform channels only when necessary.
+- **Refresh tokens rotate, and reuse revokes the session.** The API treats a
+  spent refresh token as theft and kills the whole session. So
+  `SessionController` refreshes single-flight, and persists the new token before
+  anything else. There's a test that fails if two refreshes ever go out
+  together.
+- **Checkout is idempotent.** One UUID v4 key per attempt, reused on retry, so a
+  dropped connection can't create a second order or charge twice.
+- **Card payments are deliberately not offered.** The API takes raw card numbers,
+  which would put the app in PCI scope. That's a decision to take on purpose,
+  not by default.
+- **Price sorting isn't offered.** The API accepts `price:asc` but ignores it.
+- **Not built yet** (the plan's platform-services phase): push notifications,
+  deep links (so the password-reset code is pasted in rather than opened from
+  the email), crash reporting and analytics.
+- Identifiers are `com.izyane.commerce_mobile` (Android) and
+  `com.izyane.commerceMobile` (iOS). Change them before the first store upload;
+  they're hard to change after.
+- `flutter_secure_storage` doesn't support Swift Package Manager yet; Flutter
+  warns this will become an error in a future release.

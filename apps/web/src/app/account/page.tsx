@@ -123,23 +123,6 @@ export default async function AccountPage({
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-12">
-      <Card className="max-w-md">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            {user.email}
-            <Badge variant="secondary">{user.role}</Badge>
-          </CardTitle>
-          <CardDescription>You&apos;re signed in.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form action={signOutAction}>
-            <Button type="submit" variant="outline">
-              Sign out
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
       <SellerAccountCard
         seller={seller}
         becomeSeller={becomeSellerAction}
