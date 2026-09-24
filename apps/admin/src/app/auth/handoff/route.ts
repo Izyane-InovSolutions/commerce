@@ -18,6 +18,9 @@ type HandoffExchangeResponse = {
  * it's redeemed here, server-to-server, exactly like `middleware.ts`'s own
  * refresh call — a spent, expired, or missing code just falls back to a
  * normal sign-in.
+ *
+ * Mirrors apps/seller's route of the same name; apps/web's /launch is the
+ * caller for both.
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const code = request.nextUrl.searchParams.get('code');

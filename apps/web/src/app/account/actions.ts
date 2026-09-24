@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 import { apiClient } from '@/lib/api';
+import { safeNext } from '@/lib/safe-next';
 import type { AuthTokens, SuccessEnvelope } from '@/lib/auth-types';
 import { mergeGuestCart } from '@/lib/cart';
 import { env } from '@/lib/env';
@@ -49,7 +50,7 @@ export async function signInAction(
   // Written first, so the merge below is made as the signed-in user rather
   // than as the guest whose cart it is folding in.
   await adoptGuestCart();
-  redirect(String(formData.get('next') || '/account'));
+  redirect(safeNext(formData.get('next'), '/account'));
 }
 
 export async function signUpAction(
@@ -75,7 +76,7 @@ export async function signUpAction(
 
   await writeSession(tokens.accessToken, tokens.refreshToken, tokens.expiresIn);
   await adoptGuestCart();
-  redirect(String(formData.get('next') || '/account'));
+  redirect(safeNext(formData.get('next'), '/account'));
 }
 
 /**
