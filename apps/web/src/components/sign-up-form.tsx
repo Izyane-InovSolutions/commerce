@@ -1,11 +1,12 @@
 'use client';
 
 import { useActionState } from 'react';
+import { Lock, Mail } from 'lucide-react';
 
+import { AuthInput } from '@/components/auth-input';
 import { FieldError } from '@/components/field-error';
 import { FormError } from '@/components/form-error';
 import { SubmitButton } from '@/components/submit-button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { idleFormState, type FormState } from '@/lib/form';
 
@@ -30,11 +31,15 @@ export function SignUpForm({ action, next }: SignUpFormProps) {
       <FormError state={state} />
 
       <div className="space-y-1.5">
-        <Label htmlFor="signup-email">Email</Label>
-        <Input
+        <Label htmlFor="signup-email" className="sr-only">
+          Email
+        </Label>
+        <AuthInput
+          icon={Mail}
           id="signup-email"
           name="email"
           type="email"
+          placeholder="Email"
           required
           autoComplete="email"
           aria-invalid={fieldErrors.email !== undefined}
@@ -43,11 +48,15 @@ export function SignUpForm({ action, next }: SignUpFormProps) {
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="signup-password">Password</Label>
-        <Input
+        <Label htmlFor="signup-password" className="sr-only">
+          Password
+        </Label>
+        <AuthInput
+          icon={Lock}
           id="signup-password"
           name="password"
-          type="password"
+          placeholder="Password"
+          toggleable
           required
           autoComplete="new-password"
           aria-invalid={fieldErrors.password !== undefined}
@@ -56,8 +65,11 @@ export function SignUpForm({ action, next }: SignUpFormProps) {
         <FieldError messages={fieldErrors.password} />
       </div>
 
-      <SubmitButton pendingLabel="Creating account…">
-        Create account
+      <SubmitButton
+        pendingLabel="Creating account…"
+        className="rounded-full bg-blue-700 text-white hover:bg-blue-700/90"
+      >
+        Sign up
       </SubmitButton>
     </form>
   );

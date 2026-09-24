@@ -9,8 +9,10 @@ import type {
   BackendAdminOffer,
   BackendAdminProduct,
   BackendPage,
+  BackendProductSubmission,
   BackendRatedProduct,
   BackendProductStatus,
+  BackendReviewProductSubmissionInput,
   BackendUpdateOfferShippingInput,
   BackendVariant,
 } from '@commerce/contracts';
@@ -55,6 +57,21 @@ export function backendDeleteCategory(
 
 export function backendListBrands(client: ApiClient): Promise<BackendBrand[]> {
   return client.get('/admin/catalog/brands', { cache: 'no-store' });
+}
+
+/** Public reads — the same list anyone browsing the storefront sees, for a
+ * caller (e.g. a seller submitting a product) that can't reach the admin
+ * routes above. */
+export function backendListPublicBrands(
+  client: ApiClient,
+): Promise<BackendBrand[]> {
+  return client.get('/catalog/brands', { cache: 'no-store' });
+}
+
+export function backendListPublicCategories(
+  client: ApiClient,
+): Promise<BackendCategory[]> {
+  return client.get('/catalog/categories', { cache: 'no-store' });
 }
 
 export function backendCreateBrand(
@@ -215,6 +232,39 @@ export function backendSetOfferShipping(
   input: BackendUpdateOfferShippingInput,
 ): Promise<BackendAdminOffer> {
   return client.patch(`/admin/catalog/offers/${offerId}/shipping`, {
+    body: input,
+  });
+}
+
+/**
+ * Seller-submitted products waiting on a decision — the review queue.
+ * Approving also publishes the product and every variant on it; rejecting
+ * leaves it a draft with the reason attached.
+ */
+export function backendListPendingProductSubmissions(
+  client: ApiClient,
+): Promise<BackendProductSubmission[]> {
+  return client.get('/admin/catalog/products/submissions/pending', {
+    cache: 'no-store',
+  });
+}
+
+export function backendApproveProductSubmission(
+  client: ApiClient,
+  id: string,
+  input: BackendReviewProductSubmissionInput,
+): Promise<BackendProductSubmission> {
+  return client.post(`/admin/catalog/products/${id}/submissions/approve`, {
+    body: input,
+  });
+}
+
+export function backendRejectProductSubmission(
+  client: ApiClient,
+  id: string,
+  input: BackendReviewProductSubmissionInput,
+): Promise<BackendProductSubmission> {
+  return client.post(`/admin/catalog/products/${id}/submissions/reject`, {
     body: input,
   });
 }

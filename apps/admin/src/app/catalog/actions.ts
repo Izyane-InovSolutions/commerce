@@ -6,8 +6,10 @@ import { redirect } from 'next/navigation';
 import {
   backendAddPrice,
   backendAddVariant,
+  backendApproveProductSubmission,
   backendCreateOffer,
   backendCreateProduct,
+  backendRejectProductSubmission,
   backendSetOfferShipping,
   backendSetOfferStatus,
   backendSetProductStatus,
@@ -290,4 +292,54 @@ export async function setOfferShippingAction(
 
   revalidateCatalog(productId);
   return { status: 'idle', message: 'Shipping cost updated.' };
+}
+
+const SUBMISSION_REVIEWERS = {
+  approve: backendApproveProductSubmission,
+  reject: backendRejectProductSubmission,
+} as const;
+
+type SubmissionDecision = keyof typeof SUBMISSION_REVIEWERS;
+
+const SUBMISSION_CONFIRMATIONS: Record<SubmissionDecision, string> = {
+  approve: 'Approved and published.',
+  reject: 'Rejected.',
+};
+
+function isSubmissionDecision(value: string): value is SubmissionDecision {
+  return value in SUBMISSION_REVIEWERS;
+}
+
+/**
+ * Approve or reject a seller's product submission — a reason is required
+ * either way. Approving publishes the product and every variant on it in
+ * the same step, so there's no separate publish click after.
+ */
+export async function reviewSubmissionAction(
+  productId: string,
+  _state: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const decision = String(formData.get('decision') ?? '');
+  if (!isSubmissionDecision(decision)) {
+    return { status: 'error', message: 'Choose a decision.' };
+  }
+
+  const reason = String(formData.get('reason') ?? '').trim();
+  if (reason === '') {
+    return {
+      status: 'error',
+      fieldErrors: { reason: ['Say why.'] },
+    };
+  }
+
+  try {
+    await SUBMISSION_REVIEWERS[decision](apiClient, productId, { reason });
+  } catch (error) {
+    return toFormState(error);
+  }
+
+  revalidatePath('/catalog/submissions');
+  revalidateCatalog(productId);
+  return { status: 'idle', message: SUBMISSION_CONFIRMATIONS[decision] };
 }

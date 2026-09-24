@@ -225,3 +225,36 @@ export function getPrimaryImage(product: Product): ProductMedia | null {
   );
   return ordered.find((image) => image.isPrimary) ?? ordered[0] ?? null;
 }
+
+/**
+ * Stands in for real trending data (view/purchase counts), which the API
+ * doesn't track yet — deterministic per product, so the same product reads
+ * as trending everywhere it's shown, rather than flickering per render.
+ *
+ * A plain function, not a component, so it can be called equally from a
+ * server component (the homepage) and a client one (`StorefrontCatalog`'s
+ * filters) — it must not live in a `'use client'` file, or Next treats the
+ * export itself as a client reference and refuses to call it on the server.
+ */
+export function isTrendingProduct(product: Product): boolean {
+  if (product.variants.length > 1) return true;
+  const hash = product.id
+    .split('')
+    .reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  return hash % 2 === 0;
+}
+
+/** Same idea as `isTrendingProduct`, standing in for a real "recently
+ * added" signal beyond `createdAt` — kept alongside it for the same
+ * server/client-callable reason. */
+export function isNewArrival(
+  product: Product,
+  index: number,
+  total: number,
+): boolean {
+  if (index >= total - 6) return true;
+  const hash = product.slug
+    .split('')
+    .reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  return hash % 3 === 0;
+}

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 
+import { SideNav } from '@/components/side-nav';
 import { StorefrontCatalog } from '@/components/storefront-catalog';
 import { listCategories, listProducts } from '@/lib/catalog';
 import type { Category, Product } from '@/lib/catalog-types';
@@ -34,17 +35,21 @@ export default async function ProductsPage({
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-12">
-      <StorefrontCatalog
-        products={products}
-        categories={categories}
-        initialCategory={category}
-        initialFilter={filter}
-        initialSort={sort}
-        initialQuery={q}
-        title="All Products"
-        description="Browse all products by category, filter by trending or new arrivals, and find the best deals."
-      />
+    <div className="flex flex-col gap-10 px-4 py-12 sm:flex-row">
+      <SideNav categories={categories} />
+
+      <div className="min-w-0 flex-1 space-y-6">
+        <StorefrontCatalog
+          products={products}
+          categories={categories}
+          initialCategory={category}
+          initialFilter={filter}
+          initialSort={sort}
+          initialQuery={q}
+          title="All Products"
+          description="Browse all products by category, filter by trending or new arrivals, and find the best deals."
+        />
+      </div>
     </div>
   );
 }

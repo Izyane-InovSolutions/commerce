@@ -9,6 +9,7 @@ import {
   OfferStockSource,
   ProductRatingSummary,
   ProductStatus,
+  ProductSubmissionStatus,
   ReviewVisibility,
   SellerStatus,
   type Prisma,
@@ -34,11 +35,13 @@ import {
 import { formatReviewerLabel } from '../reviews/reviewer-label';
 import { reviewOrderBy } from '../reviews/review-sort';
 import { ReviewListQueryDto } from '../reviews/dto/review-list-query.dto';
+import { SellersService } from '../sellers/sellers.service';
 import { PUBLIC_STOREFRONT_SELECT } from '../sellers/storefronts.service';
 import { AttachMediaDto } from './dto/attach-media.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
+import { ReviewProductSubmissionDto } from './dto/review-product-submission.dto';
 import { UpdateProductMediaDto } from './dto/update-product-media.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
@@ -115,6 +118,7 @@ export class ProductsService {
     private readonly prisma: PrismaService,
     private readonly media: MediaService,
     private readonly inventory: InventoryService,
+    private readonly sellers: SellersService,
   ) {}
 
   async findPublished(
@@ -533,6 +537,232 @@ export class ProductsService {
   async detachMedia(productId: string, productMediaId: string): Promise<void> {
     await this.findProductMedia(productId, productMediaId);
     await this.prisma.productMedia.delete({ where: { id: productMediaId } });
+  }
+
+  // ---------------------------------------------------------------------
+  // Seller product submissions — a brand-new catalog product a seller
+  // creates themselves, rather than listing an offer against one the
+  // platform already published. Held at PENDING until an admin reviews it;
+  // everything else (variant, media) is the same shape admin-created
+  // products use, just scoped to the submitting seller until approved.
+  // ---------------------------------------------------------------------
+
+  async submitProduct(
+    userId: string,
+    dto: CreateProductDto,
+  ): Promise<ProductWithRelations> {
+    const seller = await this.sellers.requireApproved(userId);
+
+    try {
+      const product = await this.prisma.product.create({
+        data: {
+          ...dto,
+          createdBySellerId: seller.id,
+          submissionStatus: ProductSubmissionStatus.PENDING,
+        },
+      });
+      return this.findOwnSubmission(userId, product.id);
+    } catch (error) {
+      throw this.mapWriteError(
+        error,
+        'A product with this slug already exists',
+      );
+    }
+  }
+
+  async addSellerVariant(
+    userId: string,
+    productId: string,
+    dto: CreateVariantDto,
+  ): Promise<VariantWithRelations> {
+    await this.ownedSubmission(userId, productId);
+
+    try {
+      const variant = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.productVariant.create({
+          data: { productId, skuCode: dto.skuCode, name: dto.name },
+        });
+
+        if (dto.attributeValueIds?.length) {
+          await tx.productVariantAttributeValue.createMany({
+            data: dto.attributeValueIds.map((attributeValueId) => ({
+              variantId: created.id,
+              attributeValueId,
+            })),
+          });
+        }
+
+        return created;
+      });
+
+      return this.findVariantOrThrow(variant.id);
+    } catch (error) {
+      throw this.mapWriteError(
+        error,
+        'A variant with this SKU code already exists',
+      );
+    }
+  }
+
+  async attachSellerMedia(
+    userId: string,
+    productId: string,
+    dto: AttachMediaDto,
+  ): Promise<ProductWithRelations> {
+    await this.ownedSubmission(userId, productId);
+    await this.requireOwnedMediaAsset(userId, dto.mediaAssetId);
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await this.media.lockForProductAttachment(dto.mediaAssetId, tx);
+        if (dto.isPrimary) {
+          await tx.productMedia.updateMany({
+            where: { productId },
+            data: { isPrimary: false },
+          });
+        }
+
+        await tx.productMedia.create({
+          data: {
+            productId,
+            mediaAssetId: dto.mediaAssetId,
+            position: dto.position ?? 0,
+            isPrimary: dto.isPrimary ?? false,
+          },
+        });
+      });
+
+      return this.findOwnSubmission(userId, productId);
+    } catch (error) {
+      throw this.mapWriteError(
+        error,
+        'This media asset is already attached to the product',
+      );
+    }
+  }
+
+  async listOwnSubmissions(userId: string): Promise<ProductWithRelations[]> {
+    const seller = await this.sellers.mine(userId);
+    const products = await this.prisma.product.findMany({
+      where: { createdBySellerId: seller.id },
+      include: PRODUCT_DETAIL_INCLUDE,
+      orderBy: { createdAt: 'desc' },
+    });
+    return products.map((product) => this.withMediaUrls(product));
+  }
+
+  async findOwnSubmission(
+    userId: string,
+    id: string,
+  ): Promise<ProductWithRelations> {
+    const seller = await this.sellers.mine(userId);
+    const product = await this.prisma.product.findUnique({
+      where: { id },
+      include: PRODUCT_DETAIL_INCLUDE,
+    });
+    if (!product || product.createdBySellerId !== seller.id)
+      throw new NotFoundException('Product not found');
+    return this.withMediaUrls(product);
+  }
+
+  /** Every seller-submitted product waiting on a decision — the admin
+   * review queue. */
+  async listPendingSubmissions(): Promise<ProductWithRelations[]> {
+    const products = await this.prisma.product.findMany({
+      where: {
+        createdBySellerId: { not: null },
+        submissionStatus: ProductSubmissionStatus.PENDING,
+      },
+      include: PRODUCT_DETAIL_INCLUDE,
+      orderBy: { createdAt: 'asc' },
+    });
+    return products.map((product) => this.withMediaUrls(product));
+  }
+
+  /**
+   * Approves or rejects a seller-submitted product. Approving publishes it
+   * — and every variant on it — in the same step, rather than leaving the
+   * seller a separate "now go publish it" click once an admin has already
+   * signed off; rejecting leaves it Draft with a reason attached.
+   */
+  async reviewSubmission(
+    actorUserId: string,
+    id: string,
+    status: 'APPROVED' | 'REJECTED',
+    dto: ReviewProductSubmissionDto,
+  ): Promise<ProductWithRelations> {
+    const targetStatus =
+      status === 'APPROVED'
+        ? ProductSubmissionStatus.APPROVED
+        : ProductSubmissionStatus.REJECTED;
+
+    await this.prisma.$transaction(async (tx) => {
+      const product = await tx.product.findUnique({ where: { id } });
+      if (!product || !product.createdBySellerId)
+        throw new NotFoundException('Product submission not found');
+
+      const claimed = await tx.product.updateMany({
+        where: { id, submissionStatus: ProductSubmissionStatus.PENDING },
+        data: {
+          submissionStatus: targetStatus,
+          reviewReason: dto.reason,
+          reviewedBy: actorUserId,
+          reviewedAt: new Date(),
+          ...(targetStatus === ProductSubmissionStatus.APPROVED
+            ? { status: ProductStatus.PUBLISHED }
+            : {}),
+        },
+      });
+      if (claimed.count !== 1)
+        throw new ConflictException(
+          'This submission has already been reviewed',
+        );
+
+      if (targetStatus === ProductSubmissionStatus.APPROVED) {
+        await tx.productVariant.updateMany({
+          where: { productId: id },
+          data: { status: ProductStatus.PUBLISHED },
+        });
+      }
+    });
+
+    return this.findByIdAdmin(id);
+  }
+
+  /** Confirms the product exists, is this seller's own submission, and
+   * hasn't already been decided — the gate every write against a
+   * submission (adding a variant, attaching media) shares. */
+  private async ownedSubmission(
+    userId: string,
+    productId: string,
+  ): Promise<void> {
+    const seller = await this.sellers.requireApproved(userId);
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+    });
+    if (!product || product.createdBySellerId !== seller.id)
+      throw new NotFoundException('Product not found');
+    if (product.submissionStatus !== ProductSubmissionStatus.PENDING)
+      throw new ConflictException(
+        'This submission has already been reviewed',
+      );
+  }
+
+  /** Unlike the admin media-attach path, a seller may only attach a media
+   * asset they themselves uploaded — never someone else's asset id. */
+  private async requireOwnedMediaAsset(
+    userId: string,
+    mediaAssetId: string,
+  ): Promise<void> {
+    await this.media.requireProductAsset(mediaAssetId);
+    const asset = await this.prisma.mediaAsset.findUnique({
+      where: { id: mediaAssetId },
+      select: { ownerUserId: true },
+    });
+    if (asset?.ownerUserId !== userId)
+      throw new BadRequestException(
+        'Media asset does not exist or is not available',
+      );
   }
 
   private async findProductVariant(

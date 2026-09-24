@@ -123,6 +123,11 @@ export default async function NewProductPage({
       <PageHeader
         title={TITLE}
         description="Find the product you want to sell, then pick the exact variant. Only published products appear here."
+        action={
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/products/submit">Submit a new product</Link>
+          </Button>
+        }
       />
 
       <form className="flex flex-wrap items-end gap-2" action="/products/new">
