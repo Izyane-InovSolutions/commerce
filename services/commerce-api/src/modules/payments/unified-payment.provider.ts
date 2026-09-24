@@ -369,9 +369,10 @@ export class UnifiedPaymentProvider implements PaymentProvider {
     } catch {
       throw new ServiceUnavailableException('Invalid gateway base URL');
     }
-    const allowsHttp = ['development', 'test'].includes(
-      this.config.get<string>('NODE_ENV', 'production'),
-    );
+    const allowsHttp =
+      ['development', 'test'].includes(
+        this.config.get<string>('NODE_ENV', 'production'),
+      ) || this.config.get<string>('UNIFIED_PAYMENTS_ALLOW_HTTP') === 'true';
 
     if (
       (url.protocol !== 'https:' &&
