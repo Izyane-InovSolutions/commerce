@@ -2,20 +2,12 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { BASE_PATH } from '@/lib/base-path';
 import { env } from '@/lib/env';
+import { safeNext } from '@/lib/safe-next';
 import { writeSession } from '@/lib/session-cookie';
 
 type HandoffExchangeResponse = {
   data: { accessToken: string; refreshToken: string; expiresIn: number };
 };
-
-/** Only an in-app path is ever honoured — an absolute or protocol-relative
- * `next` would turn this into an open redirect. */
-function safeNext(rawNext: string | null): string {
-  if (!rawNext || !rawNext.startsWith('/') || rawNext.startsWith('//')) {
-    return '/';
-  }
-  return rawNext;
-}
 
 /**
  * Lands a user already signed in on another app (e.g. apps/web) here signed
@@ -29,7 +21,7 @@ function safeNext(rawNext: string | null): string {
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const code = request.nextUrl.searchParams.get('code');
-  const next = safeNext(request.nextUrl.searchParams.get('next'));
+  const next = safeNext(request.nextUrl.searchParams.get('next'), '/');
 
   if (!code) {
     return NextResponse.redirect(new URL(`${BASE_PATH}/sign-in`, request.url));

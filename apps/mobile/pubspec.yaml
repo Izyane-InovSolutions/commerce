@@ -18,7 +18,18 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  integration_test:
+    sdk: flutter
   flutter_lints: ^6.0.0
 
 flutter:
+  # The Material Icons glyph font only; no Material components are used for
+  # the visible UI — see lib/design.
   uses-material-design: true
+
+  fonts:
+    # Variable font (wght 400–900). Weights are selected through the `wght`
+    # axis in lib/design/tokens.dart. Licensed OFL-1.1; see the .txt beside it.
+    - family: Schibsted Grotesk
+      fonts:
+        - asset: assets/fonts/SchibstedGrotesk-Variable.ttf

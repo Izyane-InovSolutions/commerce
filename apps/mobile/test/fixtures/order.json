@@ -1,0 +1,113 @@
+{
+ "id": "a4c887f6-590d-46a4-9ec0-8aabca8bb6fe",
+ "userId": "8f71e700-a1ba-4805-8a94-e5da554e69e1",
+ "status": "PAID",
+ "currency": "ZMW",
+ "subtotal": 900000,
+ "shippingAmount": 0,
+ "total": 900000,
+ "shippingAddress": {
+  "city": "Lusaka",
+  "label": null,
+  "line1": "Plot 12 Cairo Rd",
+  "line2": null,
+  "phone": "0971234567",
+  "region": null,
+  "country": "ZM",
+  "postalCode": "10101",
+  "recipientName": "Test Buyer"
+ },
+ "createdAt": "2026-09-24T12:13:55.700Z",
+ "updatedAt": "2026-09-24T12:17:05.062Z",
+ "idempotencyKey": "4f22b1aa-e1d2-44b8-9cde-39f30ffcbf64",
+ "items": [
+  {
+   "id": "84596a43-b26f-4c61-88ee-21bd663631f7",
+   "orderId": "a4c887f6-590d-46a4-9ec0-8aabca8bb6fe",
+   "sellerOrderId": "b5f550c5-84b3-4724-987b-a47520915d34",
+   "shippingGroupId": "1fdd7631-4ca4-4c1b-88bc-4b0982568763",
+   "offerId": "052f27df-6bfb-4a54-b1fe-0dd874dc1817",
+   "quantity": 2,
+   "unitAmount": 450000,
+   "currency": "ZMW",
+   "lineTotal": 900000,
+   "reservationId": "777894a0-f48c-4bec-8dae-ede76bbaff16",
+   "createdAt": "2026-09-24T12:13:55.708Z"
+  }
+ ],
+ "sellerOrders": [
+  {
+   "id": "b5f550c5-84b3-4724-987b-a47520915d34",
+   "orderId": "a4c887f6-590d-46a4-9ec0-8aabca8bb6fe",
+   "sellerId": "8d8e8f60-b0c9-4ffb-acf4-2a1dff72d46d",
+   "status": "PAID",
+   "subtotal": 900000,
+   "shippingAmount": 0,
+   "total": 900000,
+   "refundedAmount": 0,
+   "currency": "ZMW",
+   "createdAt": "2026-09-24T12:13:55.706Z",
+   "updatedAt": "2026-09-24T12:17:05.052Z",
+   "items": [
+    {
+     "id": "84596a43-b26f-4c61-88ee-21bd663631f7",
+     "orderId": "a4c887f6-590d-46a4-9ec0-8aabca8bb6fe",
+     "sellerOrderId": "b5f550c5-84b3-4724-987b-a47520915d34",
+     "shippingGroupId": "1fdd7631-4ca4-4c1b-88bc-4b0982568763",
+     "offerId": "052f27df-6bfb-4a54-b1fe-0dd874dc1817",
+     "quantity": 2,
+     "unitAmount": 450000,
+     "currency": "ZMW",
+     "lineTotal": 900000,
+     "reservationId": "777894a0-f48c-4bec-8dae-ede76bbaff16",
+     "createdAt": "2026-09-24T12:13:55.708Z"
+    }
+   ],
+   "shippingGroups": [
+    {
+     "id": "1fdd7631-4ca4-4c1b-88bc-4b0982568763",
+     "orderId": "a4c887f6-590d-46a4-9ec0-8aabca8bb6fe",
+     "sellerOrderId": "b5f550c5-84b3-4724-987b-a47520915d34",
+     "fulfillmentMode": "SELLER",
+     "serviceLevel": "STANDARD",
+     "rateCode": "DOMESTIC_STANDARD_FREE_V1",
+     "providerCode": "ZONE",
+     "carrierCode": "MANUAL",
+     "methodCode": "DOMESTIC_STANDARD_FREE_V1",
+     "methodName": "Standard Shipping (Free)",
+     "subtotal": 900000,
+     "shippingAmount": 0,
+     "total": 900000,
+     "currency": "ZMW",
+     "quoteId": "f9423e17-da55-42f9-bc47-e9236fa2e69e",
+     "quoteExpiresAt": "2026-09-24T13:13:55.699Z",
+     "estimatedDeliveryMinDays": 2,
+     "estimatedDeliveryMaxDays": 5,
+     "createdAt": "2026-09-24T12:13:55.708Z",
+     "items": [
+      {
+       "id": "84596a43-b26f-4c61-88ee-21bd663631f7",
+       "orderId": "a4c887f6-590d-46a4-9ec0-8aabca8bb6fe",
+       "sellerOrderId": "b5f550c5-84b3-4724-987b-a47520915d34",
+       "shippingGroupId": "1fdd7631-4ca4-4c1b-88bc-4b0982568763",
+       "offerId": "052f27df-6bfb-4a54-b1fe-0dd874dc1817",
+       "quantity": 2,
+       "unitAmount": 450000,
+       "currency": "ZMW",
+       "lineTotal": 900000,
+       "reservationId": "777894a0-f48c-4bec-8dae-ede76bbaff16",
+       "createdAt": "2026-09-24T12:13:55.708Z"
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "payment": {
+  "id": "48b35e25-497c-41b9-b445-b51677cdce16",
+  "status": "SUCCEEDED",
+  "failureReason": null
+ },
+ "fulfillmentSummary": "PREPARING",
+ "packedAt": null
+}

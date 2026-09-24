@@ -10,6 +10,7 @@ import {
 import type { BackendSession } from '@commerce/contracts';
 
 import { apiClient } from '@/lib/api';
+import { safeNext } from '@/lib/safe-next';
 import { toFormState, type FormState } from '@/lib/form';
 import { clearSession, writeSession } from '@/lib/session-cookie';
 
@@ -36,7 +37,7 @@ export async function signInAction(
   }
 
   await writeSession(session);
-  redirect(String(formData.get('next') || '/'));
+  redirect(safeNext(formData.get('next'), '/'));
 }
 
 export async function signUpAction(
@@ -52,7 +53,7 @@ export async function signUpAction(
   }
 
   await writeSession(session);
-  redirect(String(formData.get('next') || '/'));
+  redirect(safeNext(formData.get('next'), '/'));
 }
 
 export async function signOutAction(): Promise<void> {
