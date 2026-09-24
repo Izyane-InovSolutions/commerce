@@ -31,8 +31,8 @@ class BottomTabs extends StatelessWidget {
     required this.onSelect,
   });
 
-  static const height = 62.0;
-  static const _side = Space.x4;
+  static const height = 72.0;
+  static const _side = Space.x6;
 
   /// How far the dock sits above the bottom edge: clear of the home
   /// indicator where there is one, and never flush with the glass.
@@ -62,7 +62,7 @@ class BottomTabs extends StatelessWidget {
           heightFactor: 1,
           child: ConstrainedBox(
             // On a tablet the dock stays a dock, not a full-width bar.
-            constraints: const BoxConstraints(maxWidth: 440),
+            constraints: const BoxConstraints(maxWidth: 400),
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: colors.dock,
