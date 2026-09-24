@@ -8,7 +8,7 @@ import type { Category } from '@/lib/catalog-types';
 const quickLinks = [
   { label: 'All Products', href: '/products' },
   { label: 'Trending', href: '/products?filter=trending' },
-  { label: 'New Arrivals', href: '/new-arrivals' },
+  { label: 'New Arrivals', href: '/products?filter=new-arrivals' },
   { label: 'Best Sellers', href: '/best-sellers' },
   { label: 'Deals', href: '/deals' },
 ] as const;

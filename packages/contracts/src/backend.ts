@@ -334,6 +334,63 @@ export const backendAdminProductSchema = backendProductSchema.extend({
 });
 export type BackendAdminProduct = z.infer<typeof backendAdminProductSchema>;
 
+export const backendProductSubmissionStatuses = [
+  'PENDING',
+  'APPROVED',
+  'REJECTED',
+] as const;
+export const backendProductSubmissionStatusSchema = z.enum(
+  backendProductSubmissionStatuses,
+);
+export type BackendProductSubmissionStatus = z.infer<
+  typeof backendProductSubmissionStatusSchema
+>;
+
+/**
+ * A product as a seller (their own) or admin (the review queue) sees it —
+ * the same admin read shape, plus who submitted it and where that review
+ * stands. `createdBySellerId` is null for an ordinary platform product,
+ * which is never returned by the seller-scoped endpoints anyway.
+ */
+export const backendProductSubmissionSchema = backendAdminProductSchema.extend({
+  // Present on every product (Prisma's own scalar columns), but never
+  // needed by the admin/public reads this schema otherwise shares —
+  // reviewing a submission is the one place a return policy matters yet.
+  isReturnable: z.boolean(),
+  returnWindowDays: z.int().nullable(),
+  createdBySellerId: z.uuid().nullable(),
+  submissionStatus: backendProductSubmissionStatusSchema,
+  reviewReason: z.string().nullable(),
+  reviewedBy: z.uuid().nullable(),
+  reviewedAt: z.iso.datetime().nullable(),
+});
+export type BackendProductSubmission = z.infer<
+  typeof backendProductSubmissionSchema
+>;
+
+/** Required whichever way it goes, approving or rejecting — always a
+ * record of why. No `version`: Product carries no such column, unlike
+ * Seller; the review call itself is the atomic guard. */
+export const backendReviewProductSubmissionSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(3, 'Enter at least a few words.')
+    .max(1000, 'Keep it under 1000 characters.'),
+});
+export type BackendReviewProductSubmissionInput = z.input<
+  typeof backendReviewProductSubmissionSchema
+>;
+
+export const backendAttachProductMediaSchema = z.object({
+  mediaAssetId: z.uuid(),
+  position: z.int().min(0).optional(),
+  isPrimary: z.boolean().optional(),
+});
+export type BackendAttachProductMediaInput = z.input<
+  typeof backendAttachProductMediaSchema
+>;
+
 export const backendWarehouseSchema = z.object({
   id: z.uuid(),
   name: z.string(),
