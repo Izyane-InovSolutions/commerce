@@ -3,10 +3,15 @@ import Link from 'next/link';
 import { ShoppingCart, User } from 'lucide-react';
 
 import izyaneLogo from '@/assets/izyane-black.svg';
+import { AccountMenu } from '@/components/account-menu';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { signOutAction } from '@/app/account/actions';
+import { getCurrentUser } from '@/lib/session';
 
 export async function SiteHeader() {
+  const user = await getCurrentUser();
+
   return (
     <header className="bg-background sticky top-0 z-40 border-b">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-4 py-3">
@@ -35,17 +40,21 @@ export async function SiteHeader() {
         </form>
 
         <nav className="ml-auto flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            asChild
-            className="hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-950 dark:hover:text-blue-300"
-          >
-            <Link href="/account">
-              <User data-icon="inline-start" />
-              Account
-            </Link>
-          </Button>
+          {user ? (
+            <AccountMenu email={user.email} signOut={signOutAction} />
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              asChild
+              className="hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-950 dark:hover:text-blue-300"
+            >
+              <Link href="/account">
+                <User data-icon="inline-start" />
+                Account
+              </Link>
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"

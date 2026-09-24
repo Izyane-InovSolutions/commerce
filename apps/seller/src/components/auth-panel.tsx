@@ -22,8 +22,8 @@ type AuthPanelProps = {
 };
 
 /**
- * The signed-out account page: one card that switches between sign-in and
- * sign-up, rather than showing both forms at once.
+ * The sign-in page: one card that switches between signing in and creating
+ * an account, rather than showing both forms at once.
  */
 export function AuthPanel({ signIn, signUp, next }: AuthPanelProps) {
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
@@ -32,16 +32,23 @@ export function AuthPanel({ signIn, signUp, next }: AuthPanelProps) {
   return (
     <Card className="mx-auto max-w-sm">
       <CardHeader>
-        <CardTitle>{isSignIn ? 'Sign in' : 'Create an account'}</CardTitle>
+        <CardTitle>{isSignIn ? 'Sign in' : 'Start selling'}</CardTitle>
         <CardDescription>
           {isSignIn
-            ? 'Sign in to your account and access your orders, saved items, and more.'
-            : 'Create an account and get started.'}
+            ? 'Manage your store, offers, and orders.'
+            : 'Creating an account gives you a customer login first — apply to sell once you are signed in, and an administrator will review it.'}
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-6">
         {isSignIn ? (
-          <SignInForm action={signIn} next={next} />
+          <>
+            <SignInForm action={signIn} next={next} />
+            <p className="text-muted-foreground border-t pt-4 text-xs">
+              Signs in against the Commerce API. Roles are assigned in the
+              database — registering here creates a{' '}
+              <code className="font-mono">CUSTOMER</code>.
+            </p>
+          </>
         ) : (
           <SignUpForm action={signUp} next={next} />
         )}
@@ -54,7 +61,7 @@ export function AuthPanel({ signIn, signUp, next }: AuthPanelProps) {
           onClick={() => setMode(isSignIn ? 'sign-up' : 'sign-in')}
         >
           {isSignIn
-            ? "Don't have an account? Sign up"
+            ? "Don't have an account? Start selling"
             : 'Already have an account? Sign in'}
         </Button>
       </CardFooter>
