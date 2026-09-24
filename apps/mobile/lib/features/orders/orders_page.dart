@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
@@ -59,7 +58,7 @@ class _OrdersPageState extends State<OrdersPage> {
           fill = SliverFillRemaining(
             hasScrollBody: false,
             child: EmptyState(
-              icon: Icons.receipt_long_outlined,
+              icon: Glyphs.receipt,
               title: 'No orders yet',
               message:
                   'Orders you place show up here, with their delivery progress.',
@@ -152,11 +151,7 @@ class _OrderRow extends StatelessWidget {
             ),
             Price(order.total, order.currency, size: PriceSize.inline),
             const SizedBox(width: Space.x1),
-            Icon(
-              Icons.chevron_right_rounded,
-              color: colors.inkSubtle,
-              size: 22,
-            ),
+            Glyph(Glyphs.forward, color: colors.inkSubtle, size: 22),
           ],
         ),
       ),

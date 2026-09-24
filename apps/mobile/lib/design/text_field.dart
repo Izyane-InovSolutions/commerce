@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart'
     show
         CupertinoAdaptiveTextSelectionToolbar,
         cupertinoTextSelectionHandleControls;
+import 'glyphs.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart'
     show AdaptiveTextSelectionToolbar, materialTextSelectionHandleControls;
@@ -18,8 +19,9 @@ bool get _isApple =>
 /// A text input built on [EditableText].
 ///
 /// The field's look is the design system's: a label that stays put above the
-/// box (a floating label hides what was asked the moment you type), a box
-/// that turns accent on focus and danger on error. Its *behaviour* is each
+/// box (a floating label hides what was asked the moment you type), a filled
+/// box that lifts to the surface with an accent ring on focus, and takes a
+/// danger ring on error. Its *behaviour* is each
 /// platform's own: selection handles, the copy/paste menu, force-press and
 /// the cursor are borrowed from Cupertino on Apple platforms and Material
 /// elsewhere, because those are muscle memory and not a place for novelty.
@@ -46,6 +48,7 @@ class InputField extends StatefulWidget {
     this.onSubmitted,
     this.inputFormatters,
     this.dense = false,
+    this.sensitive = false,
   });
 
   final TextEditingController controller;
@@ -54,7 +57,7 @@ class InputField extends StatefulWidget {
   final String? helper;
   final String? error;
   final FocusNode? focusNode;
-  final IconData? leading;
+  final GlyphData? leading;
   final Widget? trailing;
   final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
@@ -70,6 +73,11 @@ class InputField extends StatefulWidget {
 
   /// A shorter box without a label — for search in a top bar.
   final bool dense;
+
+  /// Card numbers and security codes: no autocorrect, no suggestions, and
+  /// the keyboard is asked not to learn what is typed (Android's incognito
+  /// keyboard mode), so the digits do not resurface as a suggestion later.
+  final bool sensitive;
 
   @override
   State<InputField> createState() => _InputFieldState();
@@ -125,11 +133,13 @@ class _InputFieldState extends State<InputField>
     final type = context.type;
     final focused = _focus.hasFocus;
     final hasError = widget.error != null;
-    final borderColor = hasError
+    // Filled and borderless at rest — an outline box is Material's field.
+    // The ring appears only when it means something: focus or an error.
+    final ring = hasError
         ? colors.danger
         : focused
         ? colors.accent
-        : colors.line;
+        : const Color(0x00000000);
 
     final style = type.body.copyWith(
       color: widget.enabled ? colors.ink : colors.inkMuted,
@@ -151,8 +161,10 @@ class _InputFieldState extends State<InputField>
       textCapitalization: widget.textCapitalization,
       autofillHints: widget.enabled ? widget.autofillHints : null,
       obscureText: widget.obscureText,
-      autocorrect: widget.autocorrect && !widget.obscureText,
-      enableSuggestions: !widget.obscureText,
+      autocorrect:
+          widget.autocorrect && !widget.obscureText && !widget.sensitive,
+      enableSuggestions: !widget.obscureText && !widget.sensitive,
+      enableIMEPersonalizedLearning: !widget.sensitive,
       readOnly: !widget.enabled,
       autofocus: widget.autofocus,
       maxLines: 1,
@@ -184,18 +196,15 @@ class _InputFieldState extends State<InputField>
         constraints: BoxConstraints(minHeight: widget.dense ? 44 : 52),
         padding: const EdgeInsets.symmetric(horizontal: Space.x4),
         decoration: BoxDecoration(
-          color: widget.enabled ? colors.surface : colors.tile,
+          color: focused ? colors.surface : colors.tile,
           borderRadius: const BorderRadius.all(Radii.control),
-          border: Border.all(
-            color: borderColor,
-            width: focused || hasError ? 1.8 : 1,
-          ),
+          border: Border.all(color: ring, width: 1.8),
         ),
         child: Row(
           children: [
             if (widget.leading != null) ...[
-              Icon(
-                widget.leading,
+              Glyph(
+                widget.leading!,
                 size: 20,
                 color: focused ? colors.accent : colors.inkMuted,
               ),
@@ -270,7 +279,7 @@ class InputFormField extends FormField<String> {
     String? label,
     String? hint,
     String? helper,
-    IconData? leading,
+    GlyphData? leading,
     Widget? trailing,
     TextInputType? keyboardType,
     TextInputAction? textInputAction,

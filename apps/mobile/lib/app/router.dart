@@ -1,6 +1,4 @@
 import 'package:flutter/cupertino.dart' show CupertinoPage;
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show Icons, MaterialPage;
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
@@ -8,6 +6,7 @@ import '../core/state/loader.dart';
 import '../core/widgets/state_views.dart';
 import '../design/design.dart';
 import '../domain/account.dart';
+import '../domain/checkout.dart';
 import '../features/account/account_page.dart';
 import '../features/account/address_form_page.dart';
 import '../features/account/addresses_page.dart';
@@ -62,17 +61,12 @@ String? safeFrom(String? from) {
   return from;
 }
 
-/// Each platform's own page transition: Cupertino's slide with the
-/// edge-swipe back gesture on Apple platforms, Material's elsewhere. Navigation
-/// feel is muscle memory, so it is borrowed rather than reinvented.
-Page<void> _page(GoRouterState state, Widget child) {
-  final apple =
-      defaultTargetPlatform == TargetPlatform.iOS ||
-      defaultTargetPlatform == TargetPlatform.macOS;
-  return apple
-      ? CupertinoPage<void>(key: state.pageKey, child: child)
-      : MaterialPage<void>(key: state.pageKey, child: child);
-}
+/// One page transition on every platform: the horizontal slide with an
+/// edge-swipe back, borrowed from Cupertino because it shows where you came
+/// from and lets a thumb go back without reaching for the top corner.
+/// Android's system back and predictive-back gestures still pop the route.
+Page<void> _page(GoRouterState state, Widget child) =>
+    CupertinoPage<void>(key: state.pageKey, child: child);
 
 String _encode(GoRouterState state) =>
     Uri.encodeComponent(state.uri.toString());
@@ -277,6 +271,9 @@ GoRouter buildRouter(AppServices services) {
           PaymentStatusPage(
             paymentId: state.pathParameters['paymentId']!,
             orderId: state.uri.queryParameters['order'],
+            method: state.uri.queryParameters['method'] == 'card'
+                ? PaymentMethod.card
+                : PaymentMethod.mobileMoney,
           ),
         ),
       ),
@@ -339,7 +336,7 @@ class _AddressByIdState extends State<_AddressById> {
           return const PageScaffold(
             title: 'Address',
             body: EmptyState(
-              icon: Icons.location_off_outlined,
+              icon: Glyphs.pinOff,
               title: 'This address no longer exists',
             ),
           );

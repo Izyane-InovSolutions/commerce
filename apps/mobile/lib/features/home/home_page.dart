@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
@@ -114,20 +113,19 @@ class _SearchEntry extends StatelessWidget {
         height: 50,
         padding: const EdgeInsets.symmetric(horizontal: Space.x4),
         decoration: BoxDecoration(
-          color: colors.surface,
+          color: colors.tile,
           borderRadius: const BorderRadius.all(Radii.control),
-          border: Border.all(color: colors.line),
         ),
         child: Row(
           children: [
-            Icon(Icons.search_rounded, size: 20, color: colors.inkMuted),
+            Glyph(Glyphs.search, size: 20, color: colors.inkMuted),
             const SizedBox(width: Space.x3),
             Expanded(
               child: Text(
                 'Search products',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: context.type.body.copyWith(color: colors.inkSubtle),
+                style: context.type.body.copyWith(color: colors.inkMuted),
               ),
             ),
           ],

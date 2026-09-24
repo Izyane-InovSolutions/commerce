@@ -34,6 +34,10 @@ class Palette {
     required this.warningWash,
     required this.star,
     required this.scrim,
+    required this.dock,
+    required this.onDock,
+    required this.onDockMuted,
+    required this.dockAccent,
   });
 
   final Brightness brightness;
@@ -70,6 +74,17 @@ class Palette {
   final Color star;
   final Color scrim;
 
+  /// The floating tab dock and top notices: a raised surface that follows
+  /// the theme — white over the light page, a lifted green-black over the
+  /// dark one — set apart by its shadow and floating shape, not by colour.
+  final Color dock;
+  final Color onDock;
+  final Color onDockMuted;
+
+  /// "You are here" on the dock — malachite, lifted in dark mode to read on
+  /// [dock].
+  final Color dockAccent;
+
   static const light = Palette(
     brightness: Brightness.light,
     paper: Color(0xFFF5F6F2),
@@ -89,6 +104,10 @@ class Palette {
     warningWash: Color(0xFFF6EACB),
     star: Color(0xFFD99A06),
     scrim: Color(0x7310231D),
+    dock: Color(0xFFFFFFFF),
+    onDock: Color(0xFF10231D),
+    onDockMuted: Color(0xFF56655E),
+    dockAccent: Color(0xFF0C7250),
   );
 
   static const dark = Palette(
@@ -110,6 +129,10 @@ class Palette {
     warningWash: Color(0xFF33260C),
     star: Color(0xFFF2B705),
     scrim: Color(0x99000000),
+    dock: Color(0xFF223330),
+    onDock: Color(0xFFE6EEE9),
+    onDockMuted: Color(0xFFA3B4AC),
+    dockAccent: Color(0xFF5AD6A1),
   );
 }
 

@@ -10,6 +10,7 @@ import 'package:commerce_mobile/app/services.dart';
 import 'package:commerce_mobile/core/storage/key_value_store.dart';
 import 'package:commerce_mobile/design/design.dart';
 import 'package:commerce_mobile/features/catalog/search_page.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -43,117 +44,156 @@ Future<void> tapWhenVisible(WidgetTester tester, Finder finder) async {
   await tester.pump(const Duration(milliseconds: 300));
 }
 
+/// A brand-new customer finds the earbuds, adds them to the cart, adds an
+/// address from checkout, and ends up on checkout ready to pay.
+Future<AppServices> newCustomerAtCheckout(WidgetTester tester) async {
+  // A fresh in-memory store: no keychain residue from other runs.
+  final services = await AppServices.create(store: MemoryKeyValueStore());
+  await tester.pumpWidget(CommerceApp(services: services));
+  await services.session.restore();
+
+  // Storefront loads from the live API.
+  await pumpUntil(tester, find.text('New arrivals'));
+  await pumpUntil(tester, find.bySemanticsLabel(RegExp(r'^Laptop, K')));
+  await linger(tester);
+
+  // Create an account from the Account tab.
+  await tester.tap(find.text('Account'));
+  await linger(tester);
+  await tapWhenVisible(
+    tester,
+    find.widgetWithText(Button, 'Create an account'),
+  );
+  await linger(tester);
+  final email =
+      'mobile-e2e-${DateTime.now().millisecondsSinceEpoch}@example.test';
+  Finder field(String label) => find.widgetWithText(InputFormField, label);
+  await pumpUntil(tester, field('Email'));
+  await tester.enterText(field('Email'), email);
+  await tester.enterText(field('Password'), 'MobileE2e123!');
+  await tester.enterText(field('Confirm password'), 'MobileE2e123!');
+  await tapWhenVisible(tester, find.widgetWithText(Button, 'Create account'));
+  // Not find.text(email): the email is already on screen, in the form's
+  // own field. The signed-in Account screen is the real signal.
+  await pumpUntil(tester, find.widgetWithText(ListRow, 'Sign out'));
+  expect(services.session.isSignedIn, isTrue);
+  await linger(tester);
+
+  // Find a product through search.
+  await tester.tap(find.text('Search'));
+  await pumpUntil(tester, find.byKey(SearchPage.fieldKey));
+  await tester.enterText(find.byKey(SearchPage.fieldKey), 'Aria');
+  await pumpUntil(tester, find.text('1 product'));
+  await linger(tester);
+  await tapWhenVisible(tester, find.text('Aria Wireless Earbuds'));
+  await linger(tester);
+
+  // Add it to the cart.
+  await tapWhenVisible(tester, find.widgetWithText(Button, 'Add to cart'));
+  await pumpUntil(tester, find.text('Added to your cart'));
+  expect(services.cart.itemCount, 1);
+  await linger(tester);
+
+  // Cart → checkout.
+  await tester.tap(find.bySemanticsLabel('Back').last);
+  await linger(tester);
+  await tester.tap(find.text('Cart'));
+  await linger(tester);
+  await tapWhenVisible(tester, find.widgetWithText(Button, 'Check out'));
+  await linger(tester);
+
+  // A brand-new account has no address yet: add one from checkout.
+  await tapWhenVisible(tester, find.widgetWithText(ListRow, 'Add an address'));
+  await pumpUntil(tester, find.text('New address'));
+  await tester.enterText(field('Full name'), 'E2E Buyer');
+  await tester.enterText(field('Phone (optional)'), '0971234567');
+  await tester.enterText(field('Address line 1'), 'Plot 12 Cairo Rd');
+  await tester.enterText(field('City'), 'Lusaka');
+  await tester.enterText(field('Postal code'), '10101');
+  await linger(tester);
+  await tapWhenVisible(tester, find.widgetWithText(Button, 'Save address'));
+
+  // Back on checkout: the server's quote arrives and the mobile money
+  // number is pre-filled from the address.
+  await pumpUntil(tester, find.text('Summary'));
+  // Let the address form finish sliding away before counting what is shown.
+  await linger(tester);
+  expect(find.text('New address'), findsNothing);
+  expect(find.text('E2E Buyer'), findsOneWidget);
+  await pumpUntil(tester, find.widgetWithText(Button, 'Pay with MTN MoMo'));
+  await linger(tester);
+  return services;
+}
+
+Future<void> expectPaidOrder(WidgetTester tester, AppServices services) async {
+  expect(services.cart.itemCount, 0, reason: 'checkout empties the cart');
+  await linger(tester);
+
+  // The order is there, and it is paid according to the API.
+  await tapWhenVisible(tester, find.widgetWithText(Button, 'View order'));
+  await pumpUntil(tester, find.text('Aria Wireless Earbuds'));
+  expect(find.text('Payment received'), findsOneWidget);
+  // The item row is one screen-reader stop that includes its price.
+  expect(find.bySemanticsLabel(RegExp(r'K220\.00')), findsWidgets);
+  await linger(tester);
+
+  // The payment screen replaced the whole stack to get here; there must
+  // still be a way back — to the order list, inside the Account tab.
+  await tester.tap(find.bySemanticsLabel('Back').last);
+  await pumpUntil(tester, find.text('Orders'));
+  await pumpUntil(
+    tester,
+    find.bySemanticsLabel(RegExp(r'^Order [0-9A-F]{8}, ')),
+  );
+  await linger(tester);
+  await linger(tester);
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('a new customer can buy something end to end', (tester) async {
-    // A fresh in-memory store: no keychain residue from other runs.
-    final services = await AppServices.create(store: MemoryKeyValueStore());
-    await tester.pumpWidget(CommerceApp(services: services));
-    await services.session.restore();
+  testWidgets('a new customer can buy something by card', (tester) async {
+    final services = await newCustomerAtCheckout(tester);
 
-    // Storefront loads from the live API.
-    await pumpUntil(tester, find.text('New arrivals'));
-    await pumpUntil(tester, find.bySemanticsLabel(RegExp(r'^Laptop, K')));
-    await linger(tester);
-
-    // Create an account from the Account tab.
-    await tester.tap(find.text('Account'));
-    await linger(tester);
-    await tapWhenVisible(
-      tester,
-      find.widgetWithText(Button, 'Create an account'),
-    );
-    await linger(tester);
-    final email =
-        'mobile-e2e-${DateTime.now().millisecondsSinceEpoch}@example.test';
-    Finder field(String label) => find.widgetWithText(InputFormField, label);
-    await pumpUntil(tester, field('Email'));
-    await tester.enterText(field('Email'), email);
-    await tester.enterText(field('Password'), 'MobileE2e123!');
-    await tester.enterText(field('Confirm password'), 'MobileE2e123!');
-    await tapWhenVisible(tester, find.widgetWithText(Button, 'Create account'));
-    // Not find.text(email): the email is already on screen, in the form's
-    // own field. The signed-in Account screen is the real signal.
-    await pumpUntil(tester, find.widgetWithText(ListRow, 'Sign out'));
-    expect(services.session.isSignedIn, isTrue);
+    await tapWhenVisible(tester, find.text('Card'));
+    Finder input(String label) => find.widgetWithText(InputField, label);
+    await pumpUntil(tester, input('Card number'));
+    // The gateway sandbox's approved test card.
+    await tester.enterText(input('Card number'), '4111111111111111');
+    await tester.enterText(input('Expiry'), '1230');
+    await tester.enterText(input('Security code'), '123');
+    await tester.enterText(input('Name on card'), 'E2E Buyer');
+    await tester.pump(const Duration(milliseconds: 300));
+    FocusManager.instance.primaryFocus?.unfocus();
+    expect(find.text('Visa'), findsOneWidget);
     await linger(tester);
 
-    // Find a product through search.
-    await tester.tap(find.text('Search'));
-    await pumpUntil(tester, find.byKey(SearchPage.fieldKey));
-    await tester.enterText(find.byKey(SearchPage.fieldKey), 'Aria');
-    await pumpUntil(tester, find.text('1 product'));
-    await linger(tester);
-    await tapWhenVisible(tester, find.text('Aria Wireless Earbuds'));
-    await linger(tester);
-
-    // Add it to the cart.
-    await tapWhenVisible(tester, find.widgetWithText(Button, 'Add to cart'));
-    await pumpUntil(tester, find.text('Added to your cart'));
-    expect(services.cart.itemCount, 1);
-    await linger(tester);
-
-    // Cart → checkout.
-    await tester.tap(find.bySemanticsLabel('Back').last);
-    await linger(tester);
-    await tester.tap(find.text('Cart'));
-    await linger(tester);
-    await tapWhenVisible(tester, find.widgetWithText(Button, 'Check out'));
-    await linger(tester);
-
-    // A brand-new account has no address yet: add one from checkout.
-    await tapWhenVisible(
-      tester,
-      find.widgetWithText(ListRow, 'Add an address'),
-    );
-    await pumpUntil(tester, find.text('New address'));
-    await tester.enterText(field('Full name'), 'E2E Buyer');
-    await tester.enterText(field('Phone (optional)'), '0971234567');
-    await tester.enterText(field('Address line 1'), 'Plot 12 Cairo Rd');
-    await tester.enterText(field('City'), 'Lusaka');
-    await tester.enterText(field('Postal code'), '10101');
-    await linger(tester);
-    await tapWhenVisible(tester, find.widgetWithText(Button, 'Save address'));
-
-    // Back on checkout: the server's quote arrives and the mobile money
-    // number is pre-filled from the address.
-    await pumpUntil(tester, find.text('Summary'));
-    // Let the address form finish sliding away before counting what is shown.
-    await linger(tester);
-    expect(find.text('New address'), findsNothing);
-    expect(find.text('E2E Buyer'), findsOneWidget);
-    final pay = find.widgetWithText(Button, 'Pay with MTN MoMo');
-    await pumpUntil(tester, pay);
-    await linger(tester);
-
-    // Place the order; the sandbox gateway approves mobile money by itself.
-    await tapWhenVisible(tester, pay);
+    // A card is charged inside the checkout request; the payment screen
+    // then confirms it with the API.
+    await tapWhenVisible(tester, find.widgetWithText(Button, 'Pay by card'));
     await pumpUntil(
       tester,
       find.text('Payment received'),
       timeout: const Duration(seconds: 90),
     );
-    expect(services.cart.itemCount, 0, reason: 'checkout empties the cart');
-    await linger(tester);
+    await expectPaidOrder(tester, services);
+  });
 
-    // The order is there, and it is paid according to the API.
-    await tapWhenVisible(tester, find.widgetWithText(Button, 'View order'));
-    await pumpUntil(tester, find.text('Aria Wireless Earbuds'));
-    expect(find.text('Payment received'), findsOneWidget);
-    // The item row is one screen-reader stop that includes its price.
-    expect(find.bySemanticsLabel(RegExp(r'K220\.00')), findsWidgets);
-    await linger(tester);
+  testWidgets('a new customer can buy something by mobile money', (
+    tester,
+  ) async {
+    final services = await newCustomerAtCheckout(tester);
 
-    // The payment screen replaced the whole stack to get here; there must
-    // still be a way back — to the order list, inside the Account tab.
-    await tester.tap(find.bySemanticsLabel('Back').last);
-    await pumpUntil(tester, find.text('Orders'));
+    // Place the order; the sandbox gateway approves mobile money by itself.
+    await tapWhenVisible(
+      tester,
+      find.widgetWithText(Button, 'Pay with MTN MoMo'),
+    );
     await pumpUntil(
       tester,
-      find.bySemanticsLabel(RegExp(r'^Order [0-9A-F]{8}, ')),
+      find.text('Payment received'),
+      timeout: const Duration(seconds: 90),
     );
-    await linger(tester);
-    await linger(tester);
+    await expectPaidOrder(tester, services);
   });
 }

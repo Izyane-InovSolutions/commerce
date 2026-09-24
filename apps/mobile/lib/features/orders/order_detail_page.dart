@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
@@ -128,10 +127,10 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                       children: [
                         ListRow(
                           leading: payment.status == PaymentStatus.succeeded
-                              ? Icons.verified_rounded
+                              ? Glyphs.verified
                               : payment.status.isInFlight
-                              ? Icons.hourglass_top_rounded
-                              : Icons.error_outline_rounded,
+                              ? Glyphs.hourglass
+                              : Glyphs.alert,
                           title: payment.status.label,
                           subtitle:
                               payment.failureReason ??
@@ -200,7 +199,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                       title: 'Delivering to',
                       children: [
                         ListRow(
-                          leading: Icons.location_on_outlined,
+                          leading: Glyphs.pin,
                           title: order.shippingAddress!.recipientName,
                           subtitle: [
                             ...order.shippingAddress!.lines,
@@ -297,7 +296,7 @@ class _Tracking extends StatelessWidget {
         title: 'Tracking',
         children: [
           ListRow(
-            leading: Icons.local_shipping_outlined,
+            leading: Glyphs.truck,
             title: order.status == OrderStatus.paid
                 ? 'Tracking appears here once it ships'
                 : 'Tracking starts once payment is confirmed',

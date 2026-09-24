@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import 'glyphs.dart';
 import 'pressable.dart';
 import 'spinner.dart';
 import 'theme.dart';
@@ -47,7 +48,7 @@ class Button extends StatelessWidget {
   final VoidCallback? onPressed;
   final ButtonVariant variant;
   final ButtonSize size;
-  final IconData? icon;
+  final GlyphData? icon;
 
   /// Shows a spinner in place of the label and ignores taps, while keeping
   /// the button's size so nothing around it moves.
@@ -94,7 +95,7 @@ class Button extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             if (icon != null) ...[
-              Icon(icon, size: size.fontSize + 4, color: textStyle.color),
+              Glyph(icon!, size: size.fontSize + 4, color: textStyle.color),
               const SizedBox(width: Space.x2),
             ],
             Flexible(
@@ -153,9 +154,13 @@ class IconAction extends StatelessWidget {
     this.color,
     this.haptic = Haptic.none,
     this.size = 24,
+    this.active = false,
   });
 
-  final IconData icon;
+  final GlyphData icon;
+
+  /// Draws the glyph filled — a saved item's heart.
+  final bool active;
   final String semanticLabel;
   final VoidCallback? onPressed;
   final IconButtonVariant variant;
@@ -196,7 +201,7 @@ class IconAction extends StatelessWidget {
               padding: EdgeInsets.all(
                 variant == IconButtonVariant.plain ? 0 : 8,
               ),
-              child: Icon(icon, size: size, color: foreground),
+              child: Glyph(icon, size: size, color: foreground, active: active),
             ),
           ),
         ),

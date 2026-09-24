@@ -1,7 +1,6 @@
 import 'package:flutter/cupertino.dart'
     show CupertinoSliverRefreshControl, RefreshIndicatorMode;
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show Icons;
+import 'glyphs.dart';
 import 'package:flutter/widgets.dart';
 
 import 'button.dart';
@@ -177,18 +176,13 @@ class _BackButton extends StatelessWidget {
   final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) {
-    // Each platform's own back glyph: people look for the one they know.
-    final apple =
-        defaultTargetPlatform == TargetPlatform.iOS ||
-        defaultTargetPlatform == TargetPlatform.macOS;
-    return IconAction(
-      icon: apple ? Icons.arrow_back_ios_new_rounded : Icons.arrow_back_rounded,
-      semanticLabel: 'Back',
-      size: apple ? 21 : 24,
-      onPressed: onPressed,
-    );
-  }
+  Widget build(BuildContext context) => IconAction(
+    // One back glyph on every platform: the app's own chevron, placed where
+    // both platforms put back.
+    icon: Glyphs.back,
+    semanticLabel: 'Back',
+    onPressed: onPressed,
+  );
 }
 
 class _CompactBar extends StatelessWidget {

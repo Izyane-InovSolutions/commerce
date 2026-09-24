@@ -23,8 +23,9 @@ dev_dependencies:
   flutter_lints: ^6.0.0
 
 flutter:
-  # The Material Icons glyph font only; no Material components are used for
-  # the visible UI — see lib/design.
+  # Not for the app's own UI, which draws its own glyphs (lib/design/
+  # glyphs.dart) — only for Android's native text-selection menu, whose
+  # overflow button is a Material icon.
   uses-material-design: true
 
   fonts:

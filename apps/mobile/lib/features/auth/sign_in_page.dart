@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
@@ -46,7 +45,7 @@ class _SignInPageState extends State<SignInPage> with FormSubmission {
       title: 'Sign in',
       actions: [
         IconAction(
-          icon: Icons.dns_outlined,
+          icon: Glyphs.server,
           semanticLabel: 'Server settings',
           onPressed: () => context.push('/settings/server'),
         ),
@@ -95,9 +94,7 @@ class _SignInPageState extends State<SignInPage> with FormSubmission {
                       serverError: fieldErrors['password'],
                       validator: (value) => requiredField(value, 'Password'),
                       trailing: IconAction(
-                        icon: _obscure
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
+                        icon: _obscure ? Glyphs.eye : Glyphs.eyeOff,
                         semanticLabel: _obscure
                             ? 'Show password'
                             : 'Hide password',

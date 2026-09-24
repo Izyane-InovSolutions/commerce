@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
@@ -164,9 +163,8 @@ class _ProductBodyState extends State<_ProductBody> {
             builder: (context, _) {
               final saved = wishlist.contains(offer.id);
               return IconAction(
-                icon: saved
-                    ? Icons.favorite_rounded
-                    : Icons.favorite_border_rounded,
+                icon: Glyphs.heart,
+                active: saved,
                 color: saved ? colors.danger : null,
                 semanticLabel: saved
                     ? 'Remove from wishlist'
@@ -194,7 +192,7 @@ class _ProductBodyState extends State<_ProductBody> {
                   : offer.inStock
                   ? 'Add to cart'
                   : 'Out of stock',
-              icon: Icons.add_shopping_cart_rounded,
+              icon: Glyphs.bagAdd,
               loading: _adding,
               haptic: Haptic.medium,
               onPressed: (offer?.isPurchasable ?? false) ? _addToCart : null,
@@ -233,7 +231,7 @@ class _ProductBodyState extends State<_ProductBody> {
                 const SizedBox(height: Space.x2),
                 Row(
                   children: [
-                    Icon(Icons.star_rounded, color: colors.star, size: 19),
+                    Glyph(Glyphs.star, color: colors.star, size: 19),
                     const SizedBox(width: Space.x1),
                     Flexible(
                       child: Text(
@@ -329,11 +327,7 @@ class _ProductBodyState extends State<_ProductBody> {
                 const SizedBox(height: Space.x6),
                 Row(
                   children: [
-                    Icon(
-                      Icons.assignment_return_outlined,
-                      size: 20,
-                      color: colors.inkMuted,
-                    ),
+                    Glyph(Glyphs.returnItem, size: 20, color: colors.inkMuted),
                     const SizedBox(width: Space.x3),
                     Expanded(
                       child: Text(

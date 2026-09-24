@@ -2,6 +2,7 @@ import 'package:commerce_mobile/core/config/api_endpoint.dart';
 import 'package:commerce_mobile/core/network/api_client.dart';
 import 'package:commerce_mobile/data/commerce_repositories.dart';
 import 'package:commerce_mobile/domain/checkout.dart';
+import 'package:commerce_mobile/domain/orders.dart';
 import 'package:commerce_mobile/features/checkout/checkout_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -51,6 +52,8 @@ void main() {
     checkout = CheckoutController(
       account: AccountRepository(client),
       checkout: CheckoutRepository(client),
+      email: 'buyer@example.test',
+      now: () => DateTime(2026, 9, 24),
     );
     await checkout.start();
   });
@@ -138,6 +141,159 @@ void main() {
       'paymentMethod': 'MOBILE_MONEY',
       'provider': 'MTN',
       'phoneNumber': '0971234567',
+    });
+  });
+
+  group('card', () {
+    void fillCard() {
+      checkout.setMethod(PaymentMethod.card);
+      checkout.setCardNumber('4111 1111 1111 1111');
+      checkout.setCardExpiry('12/30');
+      checkout.setCardCode('123');
+      checkout.setCardName('Test Buyer');
+    }
+
+    test('sends the card in the shape the API validates', () async {
+      api.on(
+        'POST /checkout',
+        (_) => FakeApi.ok({
+          'order': {'id': 'order-1'},
+          'payment': {'id': 'pay-1', 'status': 'SUCCEEDED'},
+        }),
+      );
+      fillCard();
+      final result = await checkout.placeOrder();
+
+      expect(result!.paymentStatus, PaymentStatus.succeeded);
+      final body = FakeApi.body(api.calls('POST /checkout').single);
+      expect(body['paymentDetails'], {
+        'paymentMethod': 'CARD',
+        'card': {
+          'number': '4111111111111111',
+          'expiryMonth': '12',
+          'expiryYear': '2030',
+          'securityCode': '123',
+          'holderName': 'Test Buyer',
+          'billing': {
+            'firstName': 'Test',
+            'lastName': 'Buyer',
+            'address1': 'Plot 12 Cairo Rd',
+            'locality': 'Lusaka',
+            'administrativeArea': 'Lusaka',
+            'postalCode': '10101',
+            'country': 'ZM',
+            'email': 'buyer@example.test',
+          },
+        },
+      });
+    });
+
+    test('forgets the card once the order is placed', () async {
+      api.on(
+        'POST /checkout',
+        (_) => FakeApi.ok({
+          'order': {'id': 'order-1'},
+          'payment': {'id': 'pay-1', 'status': 'SUCCEEDED'},
+        }),
+      );
+      fillCard();
+      await checkout.placeOrder();
+      expect(checkout.cardValid, isFalse, reason: 'nothing left in memory');
+    });
+
+    test('an incomplete card is pointed out, not sent', () async {
+      checkout.setMethod(PaymentMethod.card);
+      checkout.setCardNumber('4111 1111');
+      expect(
+        checkout.canSubmit,
+        isTrue,
+        reason: 'the tap shows what is missing',
+      );
+      expect(checkout.cardNumberError, isNull, reason: 'not while typing');
+
+      expect(await checkout.placeOrder(), isNull);
+      expect(api.calls('POST /checkout'), isEmpty);
+      expect(checkout.cardNumberError, 'Check the card number');
+      expect(checkout.cardExpiryError, isNotNull);
+      expect(checkout.cardCodeError, isNotNull);
+      expect(checkout.cardNameError, isNotNull);
+    });
+
+    test('a decline keeps the shopper on checkout with a fresh key', () async {
+      var attempt = 0;
+      api.on('POST /checkout', (_) {
+        attempt++;
+        return FakeApi.ok({
+          'order': {'id': 'order-$attempt', 'status': 'CANCELLED'},
+          'payment': {
+            'id': 'pay-$attempt',
+            'status': attempt == 1 ? 'FAILED' : 'SUCCEEDED',
+            'failureReason':
+                'VALIDATION_ERROR: The payment request was rejected as invalid',
+          },
+        });
+      });
+      fillCard();
+
+      expect(await checkout.placeOrder(), isNull);
+      expect(checkout.placeError, contains('Check the number'));
+      expect(checkout.cardValid, isTrue, reason: 'details kept to correct');
+
+      final retry = await checkout.placeOrder();
+      expect(retry!.orderId, 'order-2');
+      final keys = api
+          .calls('POST /checkout')
+          .map((r) => r.headers['Idempotency-Key'])
+          .toSet();
+      expect(
+        keys,
+        hasLength(2),
+        reason: 'the declined order is closed; its key would replay it',
+      );
+    });
+
+    test('switching method is a different order, so a new key', () async {
+      api.on(
+        'POST /checkout',
+        (_) => throw http.ClientException('connection reset'),
+      );
+      await checkout.placeOrder();
+      fillCard();
+      await checkout.placeOrder();
+      final keys = api
+          .calls('POST /checkout')
+          .map((r) => r.headers['Idempotency-Key'])
+          .toSet();
+      expect(keys, hasLength(2));
+    });
+
+    test('billing typed by hand is validated and sent', () async {
+      api.on(
+        'POST /checkout',
+        (_) => FakeApi.ok({
+          'order': {'id': 'order-1'},
+          'payment': {'id': 'pay-1', 'status': 'SUCCEEDED'},
+        }),
+      );
+      fillCard();
+      checkout.setBillingSameAsDelivery(false);
+      expect(checkout.cardValid, isFalse);
+      checkout.setBilling(
+        const BillingDraft(
+          line1: '1 Main St',
+          city: 'Ndola',
+          postalCode: '10101',
+          country: 'zm',
+        ),
+      );
+      await checkout.placeOrder();
+      final card =
+          (FakeApi.body(api.calls('POST /checkout').single)['paymentDetails']
+                  as Map)['card']
+              as Map;
+      expect(card['billing'], containsPair('locality', 'Ndola'));
+      expect(card['billing'], containsPair('administrativeArea', 'Ndola'));
+      expect(card['billing'], containsPair('country', 'ZM'));
     });
   });
 }

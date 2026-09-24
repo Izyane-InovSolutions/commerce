@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
@@ -54,7 +53,7 @@ class _WishlistPageState extends State<WishlistPage> {
           );
         } else if (items.isEmpty) {
           fill = const EmptyState(
-            icon: Icons.favorite_border_rounded,
+            icon: Glyphs.heart,
             title: 'Nothing saved yet',
             message: 'Tap the heart on a product to keep it here for later.',
           );
@@ -123,7 +122,7 @@ class _WishlistPageState extends State<WishlistPage> {
                           ),
                           if (item.isAvailable)
                             IconAction(
-                              icon: Icons.add_shopping_cart_rounded,
+                              icon: Glyphs.bagAdd,
                               semanticLabel:
                                   'Add ${offer?.title ?? 'item'} to cart',
                               variant: IconButtonVariant.tinted,
@@ -134,7 +133,7 @@ class _WishlistPageState extends State<WishlistPage> {
                               ),
                             ),
                           IconAction(
-                            icon: Icons.close_rounded,
+                            icon: Glyphs.close,
                             semanticLabel:
                                 'Remove ${offer?.title ?? 'item'} from wishlist',
                             color: colors.inkMuted,

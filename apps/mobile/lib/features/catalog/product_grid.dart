@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 
 import '../../design/design.dart';
@@ -40,7 +39,7 @@ class ProductGridSliver extends StatelessWidget {
           return SliverFillRemaining(
             hasScrollBody: false,
             child: EmptyState(
-              icon: Icons.search_off_rounded,
+              icon: Glyphs.searchOff,
               title: emptyTitle,
               message: emptyMessage,
             ),

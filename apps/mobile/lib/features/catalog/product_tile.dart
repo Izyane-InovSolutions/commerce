@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
@@ -76,7 +75,7 @@ class ProductTile extends StatelessWidget {
               padding: const EdgeInsets.only(top: 2),
               child: Row(
                 children: [
-                  Icon(Icons.star_rounded, size: 15, color: colors.star),
+                  Glyph(Glyphs.star, size: 15, color: colors.star),
                   const SizedBox(width: 3),
                   Flexible(
                     child: Text(

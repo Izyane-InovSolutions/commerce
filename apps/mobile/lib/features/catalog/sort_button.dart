@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 
 import '../../data/catalog_repository.dart';
@@ -13,7 +12,7 @@ class SortButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => IconAction(
-    icon: Icons.swap_vert_rounded,
+    icon: Glyphs.sort,
     semanticLabel: 'Sort, currently ${value.label}',
     onPressed: () async {
       final chosen = await chooseOption<ProductSort>(
