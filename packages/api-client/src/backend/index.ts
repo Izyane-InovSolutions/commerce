@@ -18,6 +18,7 @@ export * from './reviews.ts';
 export * from './seller-inventory.ts';
 export * from './seller-offers.ts';
 export * from './seller-orders.ts';
+export * from './seller-products.ts';
 export * from './seller-fulfillment.ts';
 export * from './sellers.ts';
 export * from './shipments.ts';

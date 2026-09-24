@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import type { Category, Product } from '@/lib/catalog-types';
-import { getDisplayPrice } from '@/lib/catalog-types';
+import { getDisplayPrice, isNewArrival, isTrendingProduct } from '@/lib/catalog-types';
 
 export type StorefrontCatalogProps = {
   products: Product[];
@@ -35,23 +35,6 @@ type SortOption =
   | 'price-asc'
   | 'price-desc'
   | 'name-asc';
-
-function isTrendingProduct(product: Product): boolean {
-  // Deterministic calculation: products with multiple variants/offers or matching pattern
-  if (product.variants.length > 1) return true;
-  const hash = product.id
-    .split('')
-    .reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  return hash % 2 === 0;
-}
-
-function isNewArrival(product: Product, index: number, total: number): boolean {
-  if (index >= total - 6) return true;
-  const hash = product.slug
-    .split('')
-    .reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  return hash % 3 === 0;
-}
 
 export function StorefrontCatalog({
   products,

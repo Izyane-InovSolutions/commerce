@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -42,23 +42,18 @@ const category: ProductSection = {
 };
 
 describe('ProductCategorySection', () => {
-  it('shows only the first four products until expanded', () => {
+  it('shows only the first four products, with a link to the category page for the rest', () => {
     render(<ProductCategorySection category={category} />);
 
     expect(screen.getByText('Product 0')).toBeInTheDocument();
     expect(screen.getByText('Product 3')).toBeInTheDocument();
     expect(screen.queryByText('Product 4')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'View more' }));
-
-    expect(screen.getByText('Product 4')).toBeInTheDocument();
-    expect(screen.getByText('Product 5')).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'View less' }),
-    ).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: 'View more' });
+    expect(link).toHaveAttribute('href', '/products?category=test-category');
   });
 
-  it('hides the toggle when there is nothing more to show', () => {
+  it('hides the link when there is nothing more to show', () => {
     render(
       <ProductCategorySection
         category={{ ...category, products: category.products.slice(0, 2) }}
@@ -66,7 +61,7 @@ describe('ProductCategorySection', () => {
     );
 
     expect(
-      screen.queryByRole('button', { name: /view (more|less)/i }),
+      screen.queryByRole('link', { name: /view more/i }),
     ).not.toBeInTheDocument();
   });
 });

@@ -82,6 +82,10 @@ model Seller {
   createdAt          DateTime              @default(now()) @map("created_at")
   updatedAt          DateTime              @updatedAt @map("updated_at")
   ProductReview      ProductReview[]
+  // Brand-new catalog products this seller submitted directly, distinct
+  // from `offers` (which can also list against a platform-created product).
+  submittedProducts  Product[]             @relation("ProductCreatedBySeller")
+  savedBy            SavedSeller[]
 
   @@index([status, createdAt])
   @@map("sellers")
@@ -123,6 +127,18 @@ enum ProductStatus {
   ARCHIVED
 }
 
+/**
+ * Only meaningful when `Product.createdBySellerId` is set — a platform
+ * (admin-created) product has no submission to review, so it defaults
+ * straight to APPROVED rather than sitting in a queue that doesn't apply
+ * to it. Mirrors SellerStatus's own PENDING/APPROVED/REJECTED shape.
+ */
+enum ProductSubmissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id                     String                @id @default(uuid()) @db.Uuid
   email                  String                @unique
@@ -141,6 +157,7 @@ model User {
   addresses              Address[]
   cart                   Cart?
   wishlistItems          WishlistItem[]
+  savedSellers           SavedSeller[]
   orders                 Order[]
   seller                 Seller?
   returnRequests         ReturnRequest[]       @relation("ReturnRequestCustomer")
@@ -373,30 +390,40 @@ model AttributeValue {
 }
 
 model Product {
-  id               String                @id @default(uuid()) @db.Uuid
-  name             String
-  slug             String                @unique
-  description      String?
-  brandId          String?               @map("brand_id") @db.Uuid
-  brand            Brand?                @relation(fields: [brandId], references: [id], onDelete: SetNull)
-  categoryId       String?               @map("category_id") @db.Uuid
-  category         Category?             @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  status           ProductStatus         @default(DRAFT)
+  id                String                  @id @default(uuid()) @db.Uuid
+  name              String
+  slug              String                  @unique
+  description       String?
+  brandId           String?                 @map("brand_id") @db.Uuid
+  brand             Brand?                  @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  categoryId        String?                 @map("category_id") @db.Uuid
+  category          Category?               @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  status            ProductStatus           @default(DRAFT)
   // Return policy: isReturnable gates whether the item can be returned at
   // all; returnWindowDays overrides the platform default (30 days, applied
   // in application code when null) for this product specifically.
-  isReturnable     Boolean               @default(true) @map("is_returnable")
-  returnWindowDays Int?                  @map("return_window_days")
-  variants         ProductVariant[]
-  media            ProductMedia[]
-  reviews          ProductReview[]
-  ratingSummary    ProductRatingSummary?
-  createdAt        DateTime              @default(now()) @map("created_at")
-  updatedAt        DateTime              @updatedAt @map("updated_at")
+  isReturnable      Boolean                 @default(true) @map("is_returnable")
+  returnWindowDays  Int?                    @map("return_window_days")
+  variants          ProductVariant[]
+  media             ProductMedia[]
+  reviews           ProductReview[]
+  ratingSummary     ProductRatingSummary?
+  // Null means platform/admin-created — the only kind that existed before
+  // sellers could submit their own. A seller-submitted product still lives
+  // here as ordinary catalog data; this is just who authored it.
+  createdBySellerId String?                 @map("created_by_seller_id") @db.Uuid
+  createdBySeller   Seller?                 @relation("ProductCreatedBySeller", fields: [createdBySellerId], references: [id], onDelete: SetNull)
+  submissionStatus  ProductSubmissionStatus @default(APPROVED) @map("submission_status")
+  reviewReason      String?                 @map("review_reason")
+  reviewedBy        String?                 @map("reviewed_by") @db.Uuid
+  reviewedAt        DateTime?               @map("reviewed_at")
+  createdAt         DateTime                @default(now()) @map("created_at")
+  updatedAt         DateTime                @updatedAt @map("updated_at")
 
   @@index([brandId])
   @@index([categoryId])
   @@index([status])
+  @@index([createdBySellerId, submissionStatus])
   @@map("products")
 }
 
@@ -637,6 +664,18 @@ model WishlistItem {
 
   @@unique([userId, offerId])
   @@map("wishlist_items")
+}
+
+model SavedSeller {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sellerId  String   @map("seller_id") @db.Uuid
+  seller    Seller   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, sellerId])
+  @@map("saved_sellers")
 }
 
 enum OrderStatus {

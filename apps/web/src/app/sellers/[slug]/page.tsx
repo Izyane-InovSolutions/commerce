@@ -1,11 +1,17 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { ApiErrorNotice } from '@/components/api-error-notice';
 import { BackButton } from '@/components/back-button';
+import { SaveSellerButton } from '@/components/save-seller-button';
 import { StorefrontOfferCard } from '@/components/storefront-offer-card';
+import { Button } from '@/components/ui/button';
 import { getStorefront, listStorefrontOffers } from '@/lib/catalog';
 import type { StorefrontOffer } from '@/lib/catalog-types';
+import { getCurrentUser } from '@/lib/session';
+
+import { saveSellerAction } from '../actions';
 
 type SellerPageProps = PageProps<'/sellers/[slug]'>;
 
@@ -42,7 +48,10 @@ export default async function SellerStorefrontPage({
   params,
 }: SellerPageProps) {
   const { slug } = await params;
-  const storefront = await getStorefront(slug);
+  const [storefront, user] = await Promise.all([
+    getStorefront(slug),
+    getCurrentUser(),
+  ]);
 
   if (!storefront) {
     notFound();
@@ -66,9 +75,21 @@ export default async function SellerStorefrontPage({
       <BackButton />
 
       <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight text-balance">
-          {storefront.displayName ?? 'Seller'}
-        </h1>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight text-balance">
+            {storefront.displayName ?? 'Seller'}
+          </h1>
+          {user ? (
+            <SaveSellerButton
+              displayName={storefront.displayName ?? 'Seller'}
+              save={saveSellerAction.bind(null, storefront.id)}
+            />
+          ) : (
+            <Button variant="outline" asChild>
+              <Link href="/account">Sign in to save</Link>
+            </Button>
+          )}
+        </div>
         <RatingSummary
           averageRating={storefront.averageRating}
           ratingCount={storefront.ratingCount}

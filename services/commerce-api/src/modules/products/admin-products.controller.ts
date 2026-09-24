@@ -12,10 +12,13 @@ import {
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
 
+import type { AuthenticatedUser } from '../../common/auth/authenticated-user';
+import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { Roles } from '../../common/auth/roles.decorator';
 import { AttachMediaDto } from './dto/attach-media.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { CreateVariantDto } from './dto/create-variant.dto';
+import { ReviewProductSubmissionDto } from './dto/review-product-submission.dto';
 import { UpdateProductMediaDto } from './dto/update-product-media.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
@@ -31,6 +34,14 @@ export class AdminProductsController {
   @Get()
   findAll(): Promise<ProductWithRelations[]> {
     return this.productsService.findAllAdmin();
+  }
+
+  /** Every seller-submitted product still waiting on a decision — the
+   * review queue. A literal path segment, so it never collides with the
+   * single-segment `:id` route below. */
+  @Get('submissions/pending')
+  pendingSubmissions(): Promise<ProductWithRelations[]> {
+    return this.productsService.listPendingSubmissions();
   }
 
   @Get(':id')
@@ -65,6 +76,26 @@ export class AdminProductsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     return this.productsService.remove(id);
+  }
+
+  /** Approving also publishes the product and every variant on it — there's
+   * no separate publish step once a seller's submission is signed off. */
+  @Post(':id/submissions/approve')
+  approveSubmission(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReviewProductSubmissionDto,
+  ): Promise<ProductWithRelations> {
+    return this.productsService.reviewSubmission(user.id, id, 'APPROVED', dto);
+  }
+
+  @Post(':id/submissions/reject')
+  rejectSubmission(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReviewProductSubmissionDto,
+  ): Promise<ProductWithRelations> {
+    return this.productsService.reviewSubmission(user.id, id, 'REJECTED', dto);
   }
 
   @Post(':id/variants')

@@ -40,6 +40,7 @@ import { AdminReviewsModule } from './modules/reviews/admin/admin-reviews.module
 import { ShipmentsModule } from './modules/shipments/shipments.module';
 import { UsersModule } from './modules/users/users.module';
 import { WishlistModule } from './modules/wishlist/wishlist.module';
+import { SavedSellersModule } from './modules/saved-sellers/saved-sellers.module';
 import { SellersModule } from './modules/sellers/sellers.module';
 import { WorkersModule } from './infrastructure/workers/workers.module';
 
@@ -69,6 +70,7 @@ import { WorkersModule } from './infrastructure/workers/workers.module';
     ProcurementModule,
     CartModule,
     WishlistModule,
+    SavedSellersModule,
     OrdersModule,
     CheckoutModule,
     SellersModule,
