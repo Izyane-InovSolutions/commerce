@@ -1,0 +1,32 @@
+{
+ "id": "052f27df-6bfb-4a54-b1fe-0dd874dc1817",
+ "variantId": "740c0dfe-6690-4d30-bd83-d30806d42c1d",
+ "listingTitle": "Laptop",
+ "seller": {
+  "id": "8d8e8f60-b0c9-4ffb-acf4-2a1dff72d46d",
+  "storefrontSlug": "zawadi-dealers",
+  "displayName": "Zawadi",
+  "description": "Your number 1 tech dealer"
+ },
+ "isFirstParty": false,
+ "condition": "NEW",
+ "stockSource": "SELLER",
+ "fulfillmentMode": "SELLER",
+ "product": {
+  "id": "4bf960e8-f636-4839-a4f4-eeda0760dadb",
+  "name": "Laptop",
+  "slug": "laptop-computer",
+  "image": {
+   "url": "/api/v1/media/a7c1f9a6-049d-4fe9-ba30-a14db59f4e7a/download?expires=1790339772&signature=c74711dbc20ce9e7e3354ba6ccb52df91cbc40fff56e9e57e373dc14f8fed7a7",
+   "mimeType": "image/png"
+  }
+ },
+ "currentPrice": {
+  "amount": 450000,
+  "currency": "ZMW"
+ },
+ "currencies": [
+  "ZMW"
+ ],
+ "checkoutSupported": true
+}
