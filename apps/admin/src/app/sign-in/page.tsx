@@ -6,6 +6,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -37,15 +38,17 @@ export default async function SignInPage({
               : 'Administrator access to the Commerce platform.'}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent>
           <SignInForm action={signInAction} next="/" />
-          <p className="text-muted-foreground border-t pt-4 text-xs">
+        </CardContent>
+        <CardFooter>
+          <p className="text-muted-foreground text-xs">
             Signs in against the Commerce API. This portal needs an{' '}
             <code className="font-mono">ADMIN</code> or{' '}
             <code className="font-mono">STAFF</code> account; roles are assigned
             in the database.
           </p>
-        </CardContent>
+        </CardFooter>
       </Card>
     </div>
   );
