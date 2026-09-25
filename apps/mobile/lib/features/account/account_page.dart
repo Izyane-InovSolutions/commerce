@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/services.dart';
 import '../../design/design.dart';
 import '../auth/sign_in_prompt.dart';
+import '../updates/about_app.dart';
 
 class AccountPage extends StatelessWidget {
   const AccountPage({super.key});
@@ -25,16 +26,7 @@ class AccountPage extends StatelessWidget {
     return ListenableBuilder(
       listenable: session,
       builder: (context, _) {
-        final server = InsetGroup(
-          children: [
-            ListRow(
-              leading: Glyphs.server,
-              title: 'Server',
-              subtitle: services.endpoint.value.host,
-              onPressed: () => context.push('/settings/server'),
-            ),
-          ],
-        );
+        const server = AboutAppGroup();
 
         if (!session.isSignedIn) {
           return PageScaffold(

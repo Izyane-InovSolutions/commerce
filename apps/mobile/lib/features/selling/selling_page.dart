@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/brand.dart';
 import '../../app/services.dart';
 import '../../core/state/loader.dart';
 import '../../core/util/money.dart';
@@ -27,7 +28,7 @@ class SellingPage extends StatelessWidget {
             showBack: false,
             body: SignInPrompt(
               icon: Glyphs.tag,
-              title: 'Sell on Commerce',
+              title: 'Sell on ${AppBrand.name}',
               message:
                   'Sign in to manage your orders, listings, stock and '
                   'earnings.',
@@ -140,7 +141,7 @@ class _Gate extends StatelessWidget {
           icon: Glyphs.hourglass,
           title: 'Your application is being reviewed',
           message:
-              '${a.businessName} is with the Commerce team. Once it is '
+              '${a.businessName} is with the ${AppBrand.name} team. Once it is '
               'approved, you can start selling here.',
           action: checkAgain,
         ),
@@ -163,7 +164,7 @@ class _Gate extends StatelessWidget {
           message: [
             if (a.reviewReason != null) '"${a.reviewReason}"',
             'Your shop is hidden and new orders are paused. Contact the '
-                'Commerce team to reopen it.',
+                '${AppBrand.name} team to reopen it.',
           ].join('\n\n'),
           action: checkAgain,
         ),

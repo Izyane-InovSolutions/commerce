@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../app/brand.dart';
 import '../../app/services.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/state/loader.dart';
@@ -148,7 +149,7 @@ class _StockPageState extends State<StockPage> {
                   icon: Glyphs.bag,
                   title: 'No stock to count',
                   message:
-                      "Listings stocked from Commerce's warehouse are counted "
+                      'Listings stocked in the ${AppBrand.name} warehouse are counted '
                       'there. Ones you stock yourself appear here.',
                 ),
               );

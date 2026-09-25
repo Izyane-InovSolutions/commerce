@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+ draws its own splash: the app icon on this colour. Flutter's
+         splash (StartupPage) follows with the full "Good for Goods by iZyane". -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <!-- Status bar icons that read on the splash: dark on light, light on dark. -->
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowSplashScreenBackground">@color/splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/ic_launcher_background</item>
+    </style>
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <!-- Status bar icons that read on the splash: dark on light, light on dark. -->
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowBackground">?android:colorBackground</item>
+    </style>
+</resources>

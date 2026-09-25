@@ -204,7 +204,7 @@ void main() {
       FakeApi.body(api.calls('POST /sellers/me/products/prod-1/media').single),
       {'mediaAssetId': 'asset-1', 'position': 0, 'isPrimary': true},
     );
-    expect(find.textContaining('With the Commerce team'), findsOneWidget);
+    expect(find.textContaining('With the Good for Goods team'), findsOneWidget);
   });
 
   testWidgets('a new listing is found in the catalog, created, then priced', (

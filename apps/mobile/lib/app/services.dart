@@ -1,3 +1,4 @@
+import 'package:app_update/app_update.dart';
 import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 
@@ -14,6 +15,7 @@ import '../data/selling_repository.dart';
 import '../features/auth/session_controller.dart';
 import '../features/cart/cart_controller.dart';
 import '../features/shop/browsing_history.dart';
+import '../features/updates/update_controller.dart';
 import '../features/wishlist/wishlist_controller.dart';
 
 /// Everything the app is wired from, built once at launch.
@@ -40,12 +42,14 @@ class AppServices {
     required this.cart,
     required this.wishlist,
     required this.history,
+    required this.updates,
   });
 
   static Future<AppServices> create({
     KeyValueStore store = const SecureKeyValueStore(),
     http.Client? httpClient,
     FileSource files = const PlatformFileSource(),
+    AppUpdate appUpdate = const AppUpdate(),
   }) async {
     final endpoint = await ApiEndpoint.load(store);
     final api = ApiClient(endpoint: endpoint, httpClient: httpClient);
@@ -81,6 +85,7 @@ class AppServices {
         session: session,
       ),
       history: BrowsingHistory(store: store, session: session),
+      updates: UpdateController(appUpdate),
     );
     await services.history.load();
 
@@ -110,6 +115,7 @@ class AppServices {
   final CartController cart;
   final WishlistController wishlist;
   final BrowsingHistory history;
+  final UpdateController updates;
 }
 
 class AppScope extends InheritedWidget {

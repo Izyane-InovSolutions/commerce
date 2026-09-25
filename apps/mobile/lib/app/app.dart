@@ -1,8 +1,10 @@
 import 'package:flutter/cupertino.dart' show DefaultCupertinoLocalizations;
 import 'package:flutter/material.dart' show DefaultMaterialLocalizations;
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
+import 'brand.dart';
 import '../design/design.dart';
 import 'router.dart';
 import 'services.dart';
@@ -24,11 +26,37 @@ class _CommerceAppState extends State<CommerceApp> {
   void initState() {
     super.initState();
     widget.services.session.addListener(_onSessionChanged);
+    widget.services.updates.start();
+    _router.routerDelegate.addListener(_afterSplash);
+  }
+
+  /// Once the splash has gone, a tester who has signed in to App
+  /// Distribution hears about a newer build without going looking.
+  void _afterSplash() {
+    final configuration = _router.routerDelegate.currentConfiguration;
+    if (configuration.isEmpty ||
+        configuration.last.matchedLocation == '/startup') {
+      return;
+    }
+    _router.routerDelegate.removeListener(_afterSplash);
+    _offerUpdate();
+  }
+
+  Future<void> _offerUpdate() async {
+    final updates = widget.services.updates;
+    final release = await updates.checkQuietly();
+    if (release == null || !mounted) return;
+    _toasts.currentState?.show(
+      'Build ${release.build} is ready to install',
+      actionLabel: 'Update',
+      onAction: updates.install,
+    );
   }
 
   @override
   void dispose() {
     widget.services.session.removeListener(_onSessionChanged);
+    _router.routerDelegate.removeListener(_afterSplash);
     _router.dispose();
     super.dispose();
   }
@@ -62,7 +90,7 @@ class _CommerceAppState extends State<CommerceApp> {
       // WidgetsApp, not MaterialApp: the visible UI is the design system's
       // own, and nothing Material should leak in by default.
       child: WidgetsApp.router(
-        title: 'Commerce',
+        title: AppBrand.name,
         color: Palette.light.accent,
         debugShowCheckedModeBanner: false,
         routerConfig: _router,
@@ -76,13 +104,16 @@ class _CommerceAppState extends State<CommerceApp> {
           final dark =
               MediaQuery.platformBrightnessOf(context) == Brightness.dark;
           final theme = DesignTheme.of(dark ? Palette.dark : Palette.light);
-          return DesignScope(
-            theme: theme,
-            child: DefaultTextStyle(
-              style: theme.type.body,
-              child: ScrollConfiguration(
-                behavior: const _Scrolling(),
-                child: ToastHost(key: _toasts, child: child!),
+          return AnnotatedRegion<SystemUiOverlayStyle>(
+            value: systemBarsFor(theme.palette),
+            child: DesignScope(
+              theme: theme,
+              child: DefaultTextStyle(
+                style: theme.type.body,
+                child: ScrollConfiguration(
+                  behavior: const _Scrolling(),
+                  child: ToastHost(key: _toasts, child: child!),
+                ),
               ),
             ),
           );
@@ -90,6 +121,28 @@ class _CommerceAppState extends State<CommerceApp> {
       ),
     );
   }
+}
+
+/// The system bars' look for a palette: dark icons on the light page, light
+/// on the dark one, over bars the app draws behind (edge to edge).
+///
+/// Material's app bars set this themselves; this app has none, so without it
+/// Android keeps its default of light icons — white on a light page.
+SystemUiOverlayStyle systemBarsFor(Palette palette) {
+  final light = palette.brightness == Brightness.light;
+  final icons = light ? Brightness.dark : Brightness.light;
+  return SystemUiOverlayStyle(
+    statusBarColor: const Color(0x00000000),
+    // Android reads the icon brightness; iOS reads the bar's brightness,
+    // which is the opposite way round.
+    statusBarIconBrightness: icons,
+    statusBarBrightness: palette.brightness,
+    systemNavigationBarColor: const Color(0x00000000),
+    systemNavigationBarDividerColor: const Color(0x00000000),
+    systemNavigationBarIconBrightness: icons,
+    // No grey scrim behind the gesture bar; the dock floats clear of it.
+    systemNavigationBarContrastEnforced: false,
+  );
 }
 
 /// Bouncing overscroll on every platform — the design system's pull to

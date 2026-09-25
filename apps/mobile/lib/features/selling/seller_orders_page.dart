@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/brand.dart';
 import '../../app/services.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/state/loader.dart';
@@ -452,7 +453,7 @@ class _SellerOrderPageState extends State<SellerOrderPage> {
               : 'Delivery',
           footer: group.sellerShips
               ? null
-              : 'Commerce packs and sends this part from its warehouse; '
+              : '${AppBrand.name} packs and sends this part from its warehouse; '
                     "there's nothing for you to do.",
           children: [
             if (group.destination.isNotEmpty)

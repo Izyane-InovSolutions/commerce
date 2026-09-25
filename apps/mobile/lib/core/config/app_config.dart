@@ -20,6 +20,18 @@ class AppConfig {
         'https://lexmark-undertaken-watched-depth.trycloudflare.com/api/v1',
   );
 
+  /// Which build this is, stamped by `tool/distribute.sh` — so a tester's
+  /// report can say exactly what they were running.
+  static const build = String.fromEnvironment(
+    'APP_BUILD',
+    defaultValue: 'development build',
+  );
+
+  /// How long the branded splash ("Good for Goods, by iZyane") stays up on
+  /// a cold start, at least. Android 12+ draws only the icon in its own
+  /// splash, so without this the wordmark could flash by unseen.
+  static const splashMinimum = Duration(milliseconds: 1000);
+
   /// The only currency the API currently prices in.
   static const currency = 'ZMW';
 }

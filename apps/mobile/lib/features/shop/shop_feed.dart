@@ -110,11 +110,13 @@ class ShopFeed extends ChangeNotifier {
         const ProductQuery(),
         limit: poolSize,
       );
-      final categoriesRequest = _catalog.categories();
-      final page = await pageRequest;
-      final categories = await categoriesRequest.catchError(
+      // Its failure is handled where it starts: if the products request
+      // fails first, nobody would be waiting on this one to catch it.
+      final categoriesRequest = _catalog.categories().catchError(
         (_) => const <Category>[],
       );
+      final page = await pageRequest;
+      final categories = await categoriesRequest;
       _pool = page.products;
       _categories = categories;
       _compute();

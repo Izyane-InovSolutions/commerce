@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../app/brand.dart';
 import '../../app/services.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/state/loader.dart';
@@ -91,7 +92,7 @@ class _PayoutsPageState extends State<PayoutsPage> {
       context,
       title: method.label,
       message: current == null
-          ? 'The Commerce team checks new accounts before paying into them.'
+          ? 'The ${AppBrand.name} team checks new accounts before paying into them.'
           : 'Changes are checked again before the next payout.',
       fields: [
         AskField(

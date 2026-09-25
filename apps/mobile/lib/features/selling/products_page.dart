@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/brand.dart';
 import '../../app/services.dart';
 import '../../core/files/file_source.dart';
 import '../../core/network/api_exception.dart';
@@ -74,7 +75,7 @@ class _ProductsPageState extends State<ProductsPage> {
                   title: 'Nothing submitted yet',
                   message:
                       "If what you sell isn't in the catalog yet, submit it. "
-                      'Once the Commerce team approves it, you can list it '
+                      'Once the ${AppBrand.name} team approves it, you can list it '
                       'for sale.',
                 ),
               );
@@ -195,7 +196,7 @@ class _SubmissionPageState extends State<SubmissionPage> {
                     Callout(
                       message: switch (p.status) {
                         SubmissionStatus.pending =>
-                          'With the Commerce team for review. You can list '
+                          'With the ${AppBrand.name} team for review. You can list '
                               "it for sale once it's approved.",
                         SubmissionStatus.approved =>
                           'Approved and in the catalog. List it to start '

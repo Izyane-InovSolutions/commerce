@@ -1,8 +1,13 @@
-# Commerce mobile
+# Good for Goods
 
-The customer app for the Commerce marketplace — Android and iOS, one Flutter
-codebase, a client of the Commerce API at `/api/v1`. Architecture and
-delivery plan: [docs/mobile-architecture.md](../../docs/mobile-architecture.md).
+**Good for Goods, by iZyane.** The marketplace app for Android and iOS, from
+one Flutter codebase, and a client of the Commerce API at `/api/v1` (the code
+base keeps its "commerce" names).
+
+- Architecture and delivery plan:
+  [docs/mobile-architecture.md](../../docs/mobile-architecture.md)
+- Internal testing builds, through Firebase App Distribution:
+  [DISTRIBUTION.md](DISTRIBUTION.md)
 
 ## What it does
 
@@ -150,7 +155,7 @@ totals, stock and payment state always come from the API as-is.
   - **Stock:** recount stock and see its history.
   - **Money:** earnings and the ledger; payout accounts, and asking for a
     payout.
-  - **Customers:** returns (read-only; the Commerce team handles them), and
+  - **Customers:** returns (read-only; the Good for Goods team handles them), and
     reviews and ratings.
   - **Shop details:** name, web address and description.
 

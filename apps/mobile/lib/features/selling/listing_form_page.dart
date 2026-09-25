@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/brand.dart';
 import '../../app/services.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/util/money.dart';
@@ -332,7 +333,7 @@ class _ListingFormPageState extends State<ListingFormPage> {
               ),
               ChoiceTile(
                 Handling.platform,
-                'Commerce',
+                AppBrand.name,
                 glyph: Glyphs.truck,
                 detail: 'Stocked in and sent from our warehouse',
               ),

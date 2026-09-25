@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/brand.dart';
 import '../../app/services.dart';
 import '../../core/network/api_exception.dart';
 import '../../design/design.dart';
@@ -64,7 +65,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final services = context.services;
     return PageScaffold(
-      title: 'Commerce',
+      title: AppBrand.name,
       showBack: false,
       onRefresh: _refresh,
       actions: [

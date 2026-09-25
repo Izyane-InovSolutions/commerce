@@ -4,7 +4,7 @@
          fails every request, which reads as "the API is down". -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="Commerce"
+        android:label="Good for Goods"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

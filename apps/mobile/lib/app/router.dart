@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart' show CupertinoPage;
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/config/app_config.dart';
 import '../core/state/loader.dart';
 import '../core/widgets/state_views.dart';
 import '../design/design.dart';
@@ -132,18 +135,30 @@ class _SessionRouterRefresh extends ChangeNotifier {
   }
 }
 
-GoRouter buildRouter(AppServices services) {
+GoRouter buildRouter(
+  AppServices services, {
+  Duration splash = AppConfig.splashMinimum,
+}) {
   final session = services.session;
+
+  // The splash stays for at least [splash], however quickly the session
+  // settles, so the wordmark is seen on every cold start.
+  final splashShown = ValueNotifier(splash == Duration.zero);
+  if (!splashShown.value) Timer(splash, () => splashShown.value = true);
 
   return GoRouter(
     initialLocation: '/',
-    refreshListenable: _SessionRouterRefresh(session),
+    refreshListenable: Listenable.merge([
+      _SessionRouterRefresh(session),
+      splashShown,
+    ]),
     redirect: (context, state) {
       final location = state.matchedLocation;
       final status = session.status;
 
       if (status == SessionStatus.restoring ||
-          status == SessionStatus.unreachable) {
+          status == SessionStatus.unreachable ||
+          !splashShown.value) {
         // Server settings stay reachable from the startup gate: a stale
         // tunnel hostname is the likeliest reason the gate is showing.
         if (location == '/startup' || location == '/settings/server') {

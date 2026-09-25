@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import '../../app/brand.dart';
 import '../../app/services.dart';
 import '../../core/state/loader.dart';
 import '../../core/util/dates.dart';
@@ -99,7 +100,7 @@ class _ReturnsPageState extends State<ReturnsPage> {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: Space.x4),
                     child: Text(
-                      'The Commerce team receives and inspects returns and '
+                      'The ${AppBrand.name} team receives and inspects returns and '
                       'handles refunds.',
                       style: context.type.caption.copyWith(
                         color: context.colors.inkMuted,

@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/brand.dart';
 import '../../app/services.dart';
 import '../../core/files/file_source.dart';
 import '../../core/network/api_exception.dart';
@@ -150,7 +151,7 @@ class _ApplyPageState extends State<ApplyPage> {
                     _resubmitting
                         ? 'Correct what the team asked about, attach the '
                               'documents again, and it goes back for review.'
-                        : 'The Commerce team checks these details against '
+                        : 'The ${AppBrand.name} team checks these details against '
                               'your registration documents before you can '
                               'start selling.',
                     style: type.body.copyWith(color: colors.inkMuted),

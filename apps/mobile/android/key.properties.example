@@ -1,0 +1,11 @@
+# Copy to android/key.properties (git-ignored) to sign release builds with
+# the shared upload key. Create the key once, keep it somewhere safe, and give
+# the same file to everyone who uploads builds:
+#
+#   keytool -genkey -v -keystore ~/keys/goodforgoods-upload.jks \
+#     -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+#
+storeFile=/Users/you/keys/goodforgoods-upload.jks
+storePassword=change-me
+keyAlias=upload
+keyPassword=change-me

@@ -1,3 +1,4 @@
+import '../app/brand.dart';
 import '../core/network/json.dart';
 import 'money.dart';
 
@@ -152,7 +153,7 @@ class Offer {
   bool get isPurchasable => price != null && inStock;
 
   String get sellerName => isFirstParty
-      ? 'Sold by Commerce'
+      ? 'Sold by ${AppBrand.name}'
       : 'Sold by ${seller?.displayName ?? 'a marketplace seller'}';
 }
 

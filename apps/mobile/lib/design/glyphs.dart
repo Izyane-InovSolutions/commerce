@@ -174,6 +174,9 @@ class Glyphs {
   static const sort = GlyphData(
     'M8 4v16M4.5 7.5L8 4l3.5 3.5M16 20V4M12.5 16.5L16 20l3.5-3.5',
   );
+  static const download = GlyphData(
+    'M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19.5h14',
+  );
   static const signOut = GlyphData(
     'M14 4H6.5A1.5 1.5 0 0 0 5 5.5v13A1.5 1.5 0 0 0 6.5 20H14M10 12h10'
     'M16.5 8.5L20 12l-3.5 3.5',
@@ -236,6 +239,7 @@ class Glyphs {
     'trash': trash,
     'filters': filters,
     'sort': sort,
+    'download': download,
     'signOut': signOut,
     'eye': eye,
     'eyeOff': eyeOff,
