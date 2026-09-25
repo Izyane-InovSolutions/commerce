@@ -50,6 +50,55 @@ class SellerSummary {
   final String? slug;
 }
 
+/// A seller's public shop page: who they are and how customers rate them.
+class Storefront {
+  const Storefront({
+    required this.id,
+    required this.slug,
+    required this.name,
+    this.description,
+    this.averageRating,
+    this.ratingCount = 0,
+  });
+
+  factory Storefront.fromJson(Json json) => Storefront(
+    id: json.str('id'),
+    slug: json.str('storefrontSlug'),
+    name: json.strOrNull('displayName') ?? 'Seller',
+    description: json.strOrNull('description'),
+    averageRating: json.doubleOrNull('averageRating'),
+    ratingCount: json.intOrNull('ratingCount') ?? 0,
+  );
+
+  final String id;
+  final String slug;
+  final String name;
+  final String? description;
+  final double? averageRating;
+  final int ratingCount;
+}
+
+class StorefrontRating {
+  const StorefrontRating({
+    required this.rating,
+    required this.reviewer,
+    required this.createdAt,
+    this.comment,
+  });
+
+  factory StorefrontRating.fromJson(Json json) => StorefrontRating(
+    rating: json.intOrNull('rating') ?? 0,
+    reviewer: json.strOrNull('reviewerLabel') ?? 'A customer',
+    createdAt: json.dateOrNull('createdAt') ?? DateTime.now(),
+    comment: json.strOrNull('comment'),
+  );
+
+  final int rating;
+  final String reviewer;
+  final DateTime createdAt;
+  final String? comment;
+}
+
 enum OfferCondition { newItem, used, refurbished }
 
 OfferCondition _condition(String? value) => switch (value) {

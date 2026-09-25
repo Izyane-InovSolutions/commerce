@@ -166,7 +166,26 @@ totals, stock and payment state always come from the API as-is.
   Approval makes a customer a seller on the server, but a token's role is fixed
   when it's minted, and the listings and stock endpoints check it. So the
   dashboard renews the session once when the token still says customer.
-- **Price sorting isn't offered.** The API accepts `price:asc` but ignores it.
+- **The Shop tab is built from rails** (`lib/features/shop`). Each rail scrolls
+  sideways and shows three tiles with a peek of the next:
+  - recently viewed, based on your search, your wishlist, more like what you
+    viewed;
+  - deals, shop by category, top rated, recommended sellers, under K500.
+
+  The API has no recommendations or promotions, so every rail is worked out
+  from real listings and says why an item is there:
+  - **Deals** are items sold for less than another seller's price, or with a
+    delivery charge of zero.
+  - **Sellers** are ranked by their storefront rating, then by how often
+    they're the cheapest.
+
+  Views and searches are kept on the phone only (`BrowsingHistory`), and
+  cleared on sign-out.
+- **Price sorting and most filters run on the phone.** The API accepts
+  `price:asc` but ignores it, and only filters by search, category and brand.
+  So price, rating, stock, free delivery and returnable filters, and the price
+  sorts, apply to loaded results. When a filter is on, the list reads ahead up
+  to 200 results to find matches, and says so if there are more.
 - **Not built yet** (the plan's platform-services phase): push notifications,
   deep links (so the password-reset code is pasted in rather than opened from
   the email), crash reporting and analytics.

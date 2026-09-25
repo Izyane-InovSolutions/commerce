@@ -73,6 +73,10 @@ class _ProductBodyState extends State<_ProductBody> {
   void initState() {
     super.initState();
     _selectDefault();
+    // Remembered once it has loaded, for "recently viewed" on the Shop tab.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.services.history.viewedProduct(widget.product);
+    });
   }
 
   @override
@@ -262,10 +266,30 @@ class _ProductBodyState extends State<_ProductBody> {
                   runSpacing: Space.x1,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Text(
-                      offer.sellerName,
-                      style: type.small.copyWith(color: colors.inkMuted),
-                    ),
+                    if (offer.seller?.slug case final slug?
+                        when !offer.isFirstParty)
+                      // The seller's name leads to their shop.
+                      Pressable(
+                        onPressed: () => context.push(
+                          '/seller/$slug',
+                          extra: offer.seller?.displayName,
+                        ),
+                        focusRadius: Radii.badge,
+                        semanticLabel: '${offer.sellerName}, see their shop',
+                        excludeChildSemantics: true,
+                        builder: (context, _) => Text(
+                          '${offer.sellerName} ›',
+                          style: type.small.copyWith(
+                            color: colors.accent,
+                            fontVariations: const [FontVariation('wght', 600)],
+                          ),
+                        ),
+                      )
+                    else
+                      Text(
+                        offer.sellerName,
+                        style: type.small.copyWith(color: colors.inkMuted),
+                      ),
                     if (!offer.inStock)
                       const StatusBadge('Out of stock', tone: Tone.danger),
                   ],

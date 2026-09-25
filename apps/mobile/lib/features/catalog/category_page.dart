@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import '../../app/services.dart';
 import '../../data/catalog_repository.dart';
 import '../../design/design.dart';
+import 'filter_sheet.dart';
 import 'product_grid.dart';
 import 'product_list_controller.dart';
 import 'sort_button.dart';
@@ -48,15 +49,27 @@ class _CategoryPageState extends State<CategoryPage> {
       actions: [
         ListenableBuilder(
           listenable: _products,
-          builder: (context, _) => SortButton(
-            value: _products.query.sort,
-            onChanged: (sort) =>
-                _products.load(_products.query.copyWith(sort: sort)),
-          ),
+          builder: (context, _) => SortButton(products: _products),
         ),
       ],
       slivers: [
-        const SliverToBoxAdapter(child: SizedBox(height: Space.x3)),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              Space.gutter,
+              Space.x3,
+              Space.gutter,
+              Space.x4,
+            ),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: ListenableBuilder(
+                listenable: _products,
+                builder: (context, _) => FiltersChip(products: _products),
+              ),
+            ),
+          ),
+        ),
         ProductGridSliver(
           controller: _products,
           emptyTitle: 'Nothing in this category yet',

@@ -53,7 +53,6 @@ Future<AppServices> newCustomerAtCheckout(WidgetTester tester) async {
   await services.session.restore();
 
   // Storefront loads from the live API.
-  await pumpUntil(tester, find.text('New arrivals'));
   await pumpUntil(tester, find.bySemanticsLabel(RegExp(r'^Laptop, K')));
   await linger(tester);
 

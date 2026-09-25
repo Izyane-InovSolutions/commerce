@@ -40,6 +40,7 @@ import '../features/selling/seller_orders_page.dart';
 import '../features/selling/selling_page.dart';
 import '../features/selling/stock_page.dart';
 import '../features/settings/server_settings_page.dart';
+import '../features/shop/storefront_page.dart' as shop;
 import '../features/wishlist/wishlist_page.dart';
 import 'services.dart';
 import 'shell.dart';
@@ -247,7 +248,7 @@ GoRouter buildRouter(AppServices services) {
                 path: '/search',
                 pageBuilder: (_, state) => NoTransitionPage(
                   key: state.pageKey,
-                  child: const SearchPage(),
+                  child: SearchPage(query: state.uri.queryParameters['q']),
                 ),
               ),
             ],
@@ -400,6 +401,16 @@ GoRouter buildRouter(AppServices services) {
         path: '/product/:slug',
         pageBuilder: (_, state) =>
             _page(state, ProductPage(slug: state.pathParameters['slug']!)),
+      ),
+      GoRoute(
+        path: '/seller/:slug',
+        pageBuilder: (_, state) => _page(
+          state,
+          shop.StorefrontPage(
+            slug: state.pathParameters['slug']!,
+            name: state.extra is String ? state.extra! as String : null,
+          ),
+        ),
       ),
       GoRoute(
         path: '/wishlist',

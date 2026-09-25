@@ -53,8 +53,15 @@ class ProductGridSliver extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
               sliver: SliverLayoutBuilder(
                 builder: (context, constraints) {
-                  const gap = Space.x4;
-                  final width = (constraints.crossAxisExtent - gap) / 2;
+                  const gap = Space.x3;
+                  // Three across a phone, more on a tablet; never tiles so
+                  // small the names become unreadable.
+                  final columns = (constraints.crossAxisExtent / 120)
+                      .floor()
+                      .clamp(3, 6);
+                  final width =
+                      (constraints.crossAxisExtent - gap * (columns - 1)) /
+                      columns;
                   // Square image plus the text block, grown with the user's text
                   // size so a larger font never overflows the tile.
                   final extent =
@@ -64,15 +71,15 @@ class ProductGridSliver extends StatelessWidget {
                       ).scale(ProductTile.textBlock);
                   return SliverGrid.builder(
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
+                      crossAxisCount: columns,
                       crossAxisSpacing: gap,
-                      mainAxisSpacing: Space.x6,
+                      mainAxisSpacing: Space.x5,
                       mainAxisExtent: extent,
                     ),
-                    itemCount: loading ? 4 : products.length,
+                    itemCount: loading ? 6 : products.length,
                     itemBuilder: (context, index) {
                       if (loading) return const ProductTileSkeleton();
-                      if (index >= products.length - 4) {
+                      if (index >= products.length - 6) {
                         WidgetsBinding.instance.addPostFrameCallback(
                           (_) => controller.loadMore(),
                         );

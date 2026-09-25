@@ -66,12 +66,17 @@ void main() {
     await boot(tester);
 
     expect(find.text('Commerce'), findsWidgets);
-    expect(find.text('New arrivals'), findsOneWidget);
-    expect(find.text('Electronics'), findsOneWidget);
-    expect(find.text('Laptop'), findsOneWidget);
+    expect(find.text('Electronics'), findsWidgets);
+    expect(find.text('Laptop'), findsWidgets);
     // A tile is one screen-reader stop: name and price together, the price
     // read as one amount although it is drawn in three parts.
-    expect(find.bySemanticsLabel('Laptop, K4,500.00'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'^Laptop, K4,500\.00')), findsWidgets);
+    await tester.scrollUntilVisible(
+      find.text('New arrivals'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('New arrivals'), findsOneWidget);
   });
 
   testWidgets('opening a product shows its price and the add-to-cart action', (
@@ -79,18 +84,22 @@ void main() {
   ) async {
     await boot(tester);
 
-    await tester.tap(find.text('Laptop'));
+    await tester.ensureVisible(find.text('Laptop').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Laptop').first);
     await tester.pumpAndSettle();
 
     expect(find.text('Add to cart'), findsOneWidget);
-    expect(find.text('Sold by Zawadi'), findsOneWidget);
+    expect(find.text('Sold by Zawadi ›'), findsOneWidget);
   });
 
   testWidgets('adding to cart while signed out asks to sign in first', (
     tester,
   ) async {
     await boot(tester);
-    await tester.tap(find.text('Laptop'));
+    await tester.ensureVisible(find.text('Laptop').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Laptop').first);
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Add to cart'));
@@ -183,9 +192,21 @@ void main() {
       tester.platformDispatcher.textScaleFactorTestValue = 1.6;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       await boot(tester);
-      expect(find.text('New arrivals'), findsOneWidget);
+      // Scrolling past every rail lays each one out at the large size.
+      await tester.scrollUntilVisible(
+        find.text('New arrivals'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.scrollUntilVisible(
+        find.text('Laptop').first,
+        -300,
+        scrollable: find.byType(Scrollable).first,
+      );
 
-      await tester.tap(find.text('Laptop'));
+      await tester.ensureVisible(find.text('Laptop').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Laptop').first);
       await tester.pumpAndSettle();
       expect(find.text('Add to cart'), findsOneWidget);
     },

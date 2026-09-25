@@ -13,6 +13,7 @@ import '../data/media_repository.dart';
 import '../data/selling_repository.dart';
 import '../features/auth/session_controller.dart';
 import '../features/cart/cart_controller.dart';
+import '../features/shop/browsing_history.dart';
 import '../features/wishlist/wishlist_controller.dart';
 
 /// Everything the app is wired from, built once at launch.
@@ -38,6 +39,7 @@ class AppServices {
     required this.files,
     required this.cart,
     required this.wishlist,
+    required this.history,
   });
 
   static Future<AppServices> create({
@@ -78,7 +80,9 @@ class AppServices {
         catalog: catalog,
         session: session,
       ),
+      history: BrowsingHistory(store: store, session: session),
     );
+    await services.history.load();
 
     // Tokens minted by one backend are meaningless to another, so repointing
     // the app drops the session rather than sending them somewhere new.
@@ -105,6 +109,7 @@ class AppServices {
   final FileSource files;
   final CartController cart;
   final WishlistController wishlist;
+  final BrowsingHistory history;
 }
 
 class AppScope extends InheritedWidget {
