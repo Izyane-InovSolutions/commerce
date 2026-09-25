@@ -47,8 +47,9 @@ response fixtures captured from the real backend in `test/fixtures/`.
 flutter test integration_test/purchase_flow_test.dart -d <device>
 ```
 
-The integration test drives the real app against the **real API**: it registers
-a new account, buys a product with mobile money and checks the order.
+The integration test drives the real app against the **real API**: twice, it
+registers a new account, buys a product — once by card with the sandbox test
+card `4111 1111 1111 1111`, once with mobile money — and checks the order.
 **It places a real order** — only point it at a test environment whose payment
 gateway is a sandbox. The API allows 5 auth requests a minute per client, so
 back-to-back runs can hit the limit.
@@ -56,17 +57,32 @@ back-to-back runs can hit the limit.
 ## Design system
 
 `lib/design/` is the app's own component library, built from Flutter's
-widgets-layer primitives. The app runs on `WidgetsApp`, not `MaterialApp`, and
-no Material or Cupertino component is used for anything visible. Patterns are
-borrowed where they earn it:
+widgets-layer primitives. The app runs on `WidgetsApp`, not `MaterialApp`; no
+Material or Cupertino component, and no platform icon font, is used for
+anything visible. It looks the same on iOS and Android:
+
+- **Its own glyph set** (`glyphs.dart`): 41 outline glyphs on a 24-unit grid,
+  written as SVG path data, with filled variants for active states. A test
+  fails if `Icons.` appears anywhere in `lib/`.
+- **One-row bars:** back, a left-aligned title and the actions share one line
+  on every screen, and nothing collapses as the page scrolls.
+- **A floating dock** for the tabs (Shop, Search, Cart, Selling; Account opens
+  from the Shop screen's profile button): a raised capsule above the page that
+  follows light and dark mode, neither platform's bar.
+- **Filled, borderless fields and tags.** A ring appears only on focus or
+  error; a selected tag turns solid ink.
+- **Notices drop from the top**, in the dock's colours, rather than rising as a
+  snackbar.
+
+Patterns are borrowed where they earn it:
 
 - **From Cupertino:** large titles that collapse into the bar, inset grouped
   lists, the sliding segmented control, action sheets in place of pop-up menus,
-  frosted bars, press-to-dim feedback, pull to refresh.
-- **From Material:** keyboard focus rings, state tracking, the pill indicator
-  behind the selected tab.
-- **Kept native per platform:** text selection and the copy/paste menu, the back
-  glyph, and page transitions (including iOS's edge-swipe back). These are
+  press-to-dim feedback, pull to refresh, and the slide-with-edge-swipe page
+  transition (used on both platforms; Android's system back still works).
+- **From Material:** keyboard focus rings, state tracking, and a bolder
+  selected state (the selected tab's glyph fills in).
+- **Kept native per platform:** only text selection and the copy/paste menu —
   muscle memory.
 
 The signature element is `Price`: a small raised **K**, heavy tabular whole
@@ -111,9 +127,45 @@ totals, stock and payment state always come from the API as-is.
   together.
 - **Checkout is idempotent.** One UUID v4 key per attempt, reused on retry, so a
   dropped connection can't create a second order or charge twice.
-- **Card payments are deliberately not offered.** The API takes raw card numbers,
-  which would put the app in PCI scope. That's a decision to take on purpose,
-  not by default.
+- **Card payments send the raw card to the API**, as the web storefront does;
+  there's no hosted payment page or SDK. That puts the app in PCI scope, so card
+  data is held in memory only, for the checkout screen. It's never stored,
+  logged or put in a route; card fields turn off autocorrect, suggestions and
+  keyboard learning; and it's wiped once the order is placed. See
+  `lib/domain/card.dart`.
+- **Cards settle inside the checkout request.** A decline comes back straight
+  away (the API cancels that order and keeps the cart), so checkout shows it in
+  place and uses a new idempotency key for the retry. American Express isn't
+  accepted: the API only takes a 3-digit security code. Cards are charged in US
+  dollars (`UNIFIED_PAYMENTS_CARD_CURRENCY` on the server), and checkout says
+  so.
+- **Selling** (`lib/features/selling`, `/sellers/me/*`) is the seller portal on
+  a phone:
+  - **Applying:** apply to sell, or resubmit after a rejection.
+  - **Catalog:** submit new products with photos for review, and create
+    listings from the catalog. For each listing: price, on sale or hidden,
+    details while hidden, archive.
+  - **Orders:** accept or decline, pack, send with a courier and tracking
+    number, post tracking updates, cancel what hasn't been sent.
+  - **Stock:** recount stock and see its history.
+  - **Money:** earnings and the ledger; payout accounts, and asking for a
+    payout.
+  - **Customers:** returns (read-only; the Commerce team handles them), and
+    reviews and ratings.
+  - **Shop details:** name, web address and description.
+
+  Promotions, customer lists and sales insights aren't in the app because the
+  API has no endpoints for them yet; the web portal's pages for them are
+  placeholders too.
+
+  Uploads (application documents, product photos) go through `file_picker`,
+  one file at a time: reserve a slot, then PUT the bytes as multipart to the
+  signed address. On Android this needs `android.builtInKotlin=true`, since
+  file_picker leaves its Kotlin to AGP 9's built-in Kotlin support.
+
+  Approval makes a customer a seller on the server, but a token's role is fixed
+  when it's minted, and the listings and stock endpoints check it. So the
+  dashboard renews the session once when the token still says customer.
 - **Price sorting isn't offered.** The API accepts `price:asc` but ignores it.
 - **Not built yet** (the plan's platform-services phase): push notifications,
   deep links (so the password-reset code is pasted in rather than opened from

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart' show MediaType;
 
 import '../config/api_endpoint.dart';
 import '../util/uuid.dart';
@@ -80,13 +81,52 @@ class ApiClient {
     String path, {
     Object? body,
     Map<String, Object?>? query,
+    Map<String, String>? headers,
     bool authenticated = true,
   }) => _request(
     'PATCH',
     path,
     body: body,
     query: query,
+    headers: headers,
     authenticated: authenticated,
+  );
+
+  Future<Object?> put(
+    String path, {
+    Object? body,
+    Map<String, Object?>? query,
+    Map<String, String>? headers,
+    bool authenticated = true,
+  }) => _request(
+    'PUT',
+    path,
+    body: body,
+    query: query,
+    headers: headers,
+    authenticated: authenticated,
+  );
+
+  /// Sends one file as `multipart/form-data` — media uploads. Not retried:
+  /// like any write, a timed-out upload may have landed.
+  Future<Object?> putFile(
+    String path, {
+    required String field,
+    required String fileName,
+    required String contentType,
+    required List<int> bytes,
+    Map<String, Object?>? query,
+  }) => _request(
+    'PUT',
+    path,
+    query: query,
+    upload: (
+      field: field,
+      fileName: fileName,
+      contentType: contentType,
+      bytes: bytes,
+    ),
+    authenticated: true,
   );
 
   Future<Object?> delete(
@@ -125,6 +165,7 @@ class ApiClient {
     Object? body,
     Map<String, Object?>? query,
     Map<String, String>? headers,
+    _Upload? upload,
     required bool authenticated,
   }) async {
     // Only reads are retried. A POST that timed out may well have been
@@ -144,6 +185,7 @@ class ApiClient {
           method,
           resolve(path, query),
           body: body,
+          upload: upload,
           headers: {
             'Accept': 'application/json',
             'X-Request-Id': requestId,
@@ -203,13 +245,28 @@ class ApiClient {
     String method,
     Uri uri, {
     Object? body,
+    _Upload? upload,
     required Map<String, String> headers,
-  }) {
+  }) async {
+    if (upload != null) {
+      final request = http.MultipartRequest(method, uri)
+        ..headers.addAll(headers)
+        ..files.add(
+          http.MultipartFile.fromBytes(
+            upload.field,
+            upload.bytes,
+            filename: upload.fileName,
+            contentType: MediaType.parse(upload.contentType),
+          ),
+        );
+      return http.Response.fromStream(await _http.send(request));
+    }
     final encoded = body == null ? null : jsonEncode(body);
     return switch (method) {
       'GET' => _http.get(uri, headers: headers),
       'POST' => _http.post(uri, headers: headers, body: encoded),
       'PATCH' => _http.patch(uri, headers: headers, body: encoded),
+      'PUT' => _http.put(uri, headers: headers, body: encoded),
       'DELETE' => _http.delete(uri, headers: headers, body: encoded),
       _ => throw ArgumentError.value(method, 'method'),
     };
@@ -305,3 +362,10 @@ class ApiClient {
 
   void close() => _http.close();
 }
+
+typedef _Upload = ({
+  String field,
+  String fileName,
+  String contentType,
+  List<int> bytes,
+});

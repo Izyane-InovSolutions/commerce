@@ -1,7 +1,6 @@
 import 'package:flutter/cupertino.dart'
     show CupertinoSliverRefreshControl, RefreshIndicatorMode;
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show Icons;
+import 'glyphs.dart';
 import 'package:flutter/widgets.dart';
 
 import 'button.dart';
@@ -12,11 +11,12 @@ import 'tokens.dart';
 
 /// The frame of every screen.
 ///
-/// With [slivers], the title starts large and left-aligned and collapses
-/// into the bar as the page scrolls — Cupertino's large-title navigation,
-/// which names the screen boldly without costing the content any room once
-/// you are reading it. With [body], the bar is compact and fixed, for
-/// screens that are one fixed layout (a form, a payment in progress).
+/// The bar is one row on every screen: back, then the title, left-aligned
+/// beside it, then the actions — all on the same line, so the eye reads the
+/// screen's name and what can be done there in one pass, and nothing moves
+/// as the page scrolls. With [slivers] the bar stays pinned over scrolling
+/// content and draws its hairline once something passes beneath it; with
+/// [body] it sits above a fixed layout (a form, a payment in progress).
 class PageScaffold extends StatelessWidget {
   const PageScaffold({
     super.key,
@@ -43,6 +43,10 @@ class PageScaffold extends StatelessWidget {
   /// Pinned to the bottom, over frosted glass; rises with the keyboard.
   final Widget? bottomBar;
   final Future<void> Function()? onRefresh;
+
+  /// A tab's own screen names itself at title size; a screen pushed on top
+  /// of one uses the smaller heading size, as the back button already says
+  /// where it sits.
   final bool largeTitle;
 
   /// Replaces the default back behaviour (popping the route).
@@ -73,7 +77,7 @@ class PageScaffold extends StatelessWidget {
             pinned: true,
             delegate: _TitleHeader(
               title: title,
-              large: largeTitle,
+              large: largeTitle && back == null,
               back: back,
               actions: actions,
               topInset: media.padding.top,
@@ -99,11 +103,13 @@ class PageScaffold extends StatelessWidget {
     } else {
       content = Column(
         children: [
-          _CompactBar(
+          _Bar(
             title: title,
+            large: largeTitle && back == null,
             back: back,
             actions: actions,
             topInset: media.padding.top,
+            divided: true,
           ),
           Expanded(child: body!),
         ],
@@ -177,57 +183,81 @@ class _BackButton extends StatelessWidget {
   final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) {
-    // Each platform's own back glyph: people look for the one they know.
-    final apple =
-        defaultTargetPlatform == TargetPlatform.iOS ||
-        defaultTargetPlatform == TargetPlatform.macOS;
-    return IconAction(
-      icon: apple ? Icons.arrow_back_ios_new_rounded : Icons.arrow_back_rounded,
-      semanticLabel: 'Back',
-      size: apple ? 21 : 24,
-      onPressed: onPressed,
-    );
-  }
+  Widget build(BuildContext context) => IconAction(
+    // One back glyph on every platform: the app's own chevron, placed where
+    // both platforms put back.
+    icon: Glyphs.back,
+    semanticLabel: 'Back',
+    onPressed: onPressed,
+  );
 }
 
-class _CompactBar extends StatelessWidget {
-  const _CompactBar({
+/// The one-row bar: back, title, actions.
+class _Bar extends StatelessWidget {
+  const _Bar({
     required this.title,
+    required this.large,
     required this.back,
     required this.actions,
     required this.topInset,
+    required this.divided,
   });
 
+  static const height = 56.0;
+
   final String title;
+  final bool large;
   final Widget? back;
   final List<Widget> actions;
   final double topInset;
 
+  /// Draws the hairline under the bar.
+  final bool divided;
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return Container(
+    final type = context.type;
+    final style = large ? type.title : type.heading;
+    return AnimatedContainer(
+      duration: Motion.fast,
       padding: EdgeInsets.only(top: topInset),
       decoration: BoxDecoration(
         color: colors.paper,
-        border: Border(bottom: BorderSide(color: colors.line, width: 0.8)),
+        border: Border(
+          bottom: BorderSide(
+            color: divided ? colors.line : const Color(0x00000000),
+            width: 0.8,
+          ),
+        ),
       ),
       child: SizedBox(
-        height: 52,
-        child: NavigationToolbar(
-          leading: back ?? const SizedBox(width: Space.x2),
-          middle: Semantics(
-            header: true,
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: context.type.label.copyWith(fontSize: 17),
+        height: height,
+        child: Row(
+          children: [
+            if (back != null) ...[
+              const SizedBox(width: Space.x1),
+              back!,
+            ] else
+              const SizedBox(width: Space.gutter),
+            Expanded(
+              child: Semantics(
+                header: true,
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: style,
+                ),
+              ),
             ),
-          ),
-          trailing: Row(mainAxisSize: MainAxisSize.min, children: actions),
-          middleSpacing: Space.x2,
+            if (actions.isNotEmpty) ...[
+              const SizedBox(width: Space.x2),
+              ...actions,
+              const SizedBox(width: Space.x1),
+            ] else
+              const SizedBox(width: Space.gutter),
+          ],
         ),
       ),
     );
@@ -253,82 +283,25 @@ class _TitleHeader extends SliverPersistentHeaderDelegate {
   final Palette colors;
   final TypeScale type;
 
-  static const _bar = 52.0;
-  static const _largeExtra = 50.0;
+  @override
+  double get minExtent => topInset + _Bar.height;
 
   @override
-  double get minExtent => topInset + _bar;
-
-  @override
-  double get maxExtent => topInset + _bar + (large ? _largeExtra : 0);
+  double get maxExtent => minExtent;
 
   @override
   Widget build(
     BuildContext context,
     double shrinkOffset,
     bool overlapsContent,
-  ) {
-    final range = maxExtent - minExtent;
-    final t = range == 0 ? 1.0 : (shrinkOffset / range).clamp(0.0, 1.0);
-    final collapsed = !large || t > 0.85;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: colors.paper,
-        border: Border(
-          bottom: BorderSide(
-            color: collapsed || overlapsContent
-                ? colors.line
-                : const Color(0x00000000),
-            width: 0.8,
-          ),
-        ),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            top: topInset,
-            left: 0,
-            right: 0,
-            height: _bar,
-            child: NavigationToolbar(
-              leading: back ?? const SizedBox(width: Space.x2),
-              middle: AnimatedOpacity(
-                opacity: collapsed ? 1 : 0,
-                duration: Motion.fast,
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: type.label.copyWith(fontSize: 17),
-                ),
-              ),
-              trailing: Row(mainAxisSize: MainAxisSize.min, children: actions),
-              middleSpacing: Space.x2,
-            ),
-          ),
-          if (large)
-            Positioned(
-              left: Space.gutter,
-              right: Space.gutter,
-              bottom: 6,
-              child: Opacity(
-                opacity: (1 - t * 1.3).clamp(0.0, 1.0),
-                child: Semantics(
-                  header: true,
-                  child: Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: type.display,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
+  ) => _Bar(
+    title: title,
+    large: large,
+    back: back,
+    actions: actions,
+    topInset: topInset,
+    divided: overlapsContent || shrinkOffset > 0,
+  );
 
   @override
   bool shouldRebuild(_TitleHeader old) =>
@@ -337,7 +310,8 @@ class _TitleHeader extends SliverPersistentHeaderDelegate {
       old.back != back ||
       old.actions != actions ||
       old.topInset != topInset ||
-      old.colors != colors;
+      old.colors != colors ||
+      old.type != type;
 }
 
 /// A section heading inside a page — plain, sentence case, no eyebrow.

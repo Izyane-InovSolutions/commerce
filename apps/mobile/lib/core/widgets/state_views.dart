@@ -47,3 +47,33 @@ void showMessage(
   String? actionLabel,
   VoidCallback? onAction,
 }) => context.toast(message, actionLabel: actionLabel, onAction: onAction);
+
+/// [LoaderView] for a scrolling page: a sliver that fills the page with the
+/// spinner or the error, and is [builder]'s sliver once there is data.
+class LoaderSliver<T> extends StatelessWidget {
+  const LoaderSliver({super.key, required this.loader, required this.builder});
+
+  final Loader<T> loader;
+  final Widget Function(BuildContext context, T data) builder;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: loader,
+      builder: (context, _) {
+        final data = loader.data;
+        if (data != null) return builder(context, data);
+        return SliverFillRemaining(
+          hasScrollBody: false,
+          child: loader.error != null
+              ? ErrorState(
+                  message: loader.errorMessage!,
+                  requestId: loader.requestId,
+                  onRetry: loader.load,
+                )
+              : const LoadingState(),
+        );
+      },
+    );
+  }
+}

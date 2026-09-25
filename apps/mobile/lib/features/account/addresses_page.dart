@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
@@ -60,17 +59,17 @@ class _AddressesPageState extends State<AddressesPage> {
       context,
       title: address.label ?? address.recipientName,
       options: [
-        const SheetOption(_Action.edit, 'Edit', icon: Icons.edit_outlined),
+        const SheetOption(_Action.edit, 'Edit', icon: Glyphs.edit),
         if (!address.isDefault)
           const SheetOption(
             _Action.makeDefault,
             'Use as default',
-            icon: Icons.check_circle_outline_rounded,
+            icon: Glyphs.checkCircle,
           ),
         const SheetOption(
           _Action.delete,
           'Delete',
-          icon: Icons.delete_outline_rounded,
+          icon: Glyphs.trash,
           destructive: true,
         ),
       ],
@@ -125,7 +124,7 @@ class _AddressesPageState extends State<AddressesPage> {
           content = const SliverFillRemaining(
             hasScrollBody: false,
             child: EmptyState(
-              icon: Icons.location_on_outlined,
+              icon: Glyphs.pin,
               title: 'No saved addresses',
               message: 'Add one and checkout picks it up automatically.',
             ),
@@ -143,9 +142,7 @@ class _AddressesPageState extends State<AddressesPage> {
                 children: [
                   for (final address in addresses)
                     ListRow(
-                      leading: address.isDefault
-                          ? Icons.home_rounded
-                          : Icons.location_on_outlined,
+                      leading: address.isDefault ? Glyphs.home : Glyphs.pin,
                       title: address.label ?? address.recipientName,
                       subtitle: [
                         if (address.label != null) address.recipientName,
@@ -166,7 +163,7 @@ class _AddressesPageState extends State<AddressesPage> {
           onRefresh: () => _addresses.load(silent: true),
           bottomBar: Button(
             label: 'Add an address',
-            icon: Icons.add_rounded,
+            icon: Glyphs.add,
             onPressed: () => _open('/address/new'),
           ),
           slivers: [content],

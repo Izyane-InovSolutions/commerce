@@ -17,7 +17,7 @@ class AppConfig {
   static const defaultApiBaseUrl = String.fromEnvironment(
     'COMMERCE_API_BASE_URL',
     defaultValue:
-        'https://promo-sheet-neighbor-traveling.trycloudflare.com/api/v1',
+        'https://lexmark-undertaken-watched-depth.trycloudflare.com/api/v1',
   );
 
   /// The only currency the API currently prices in.

@@ -1,5 +1,5 @@
 name: commerce_mobile
-description: Customer-facing Commerce marketplace mobile application.
+description: Customer-facing marketplace mobile application by iZyane.
 publish_to: "none"
 
 version: 0.1.0+1
@@ -14,6 +14,8 @@ dependencies:
   go_router: ^16.0.0
   http: ^1.5.0
   flutter_secure_storage: ^9.2.4
+  file_picker: ^11.0.3
+  http_parser: ^4.1.2
 
 dev_dependencies:
   flutter_test:
@@ -23,8 +25,9 @@ dev_dependencies:
   flutter_lints: ^6.0.0
 
 flutter:
-  # The Material Icons glyph font only; no Material components are used for
-  # the visible UI — see lib/design.
+  # Not for the app's own UI, which draws its own glyphs (lib/design/
+  # glyphs.dart) — only for Android's native text-selection menu, whose
+  # overflow button is a Material icon.
   uses-material-design: true
 
   fonts:

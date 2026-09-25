@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 
 import '../../app/services.dart';
@@ -27,7 +26,7 @@ class ApiImage extends StatelessWidget {
     final placeholder = ColoredBox(
       color: colors.tile,
       child: Center(
-        child: Icon(Icons.image_outlined, color: colors.inkSubtle, size: 28),
+        child: Glyph(Glyphs.image, color: colors.inkSubtle, size: 28),
       ),
     );
 

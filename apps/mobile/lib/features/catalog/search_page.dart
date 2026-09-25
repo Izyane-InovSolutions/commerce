@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -106,7 +105,7 @@ class _SearchPageState extends State<SearchPage> {
               controller: _text,
               dense: true,
               hint: 'Search products',
-              leading: Icons.search_rounded,
+              leading: Glyphs.search,
               textInputAction: TextInputAction.search,
               onChanged: _onTyped,
               onSubmitted: (value) {
@@ -118,7 +117,7 @@ class _SearchPageState extends State<SearchPage> {
                 builder: (context, _) => _text.text.isEmpty
                     ? const SizedBox.shrink()
                     : IconAction(
-                        icon: Icons.cancel_rounded,
+                        icon: Glyphs.closeCircle,
                         semanticLabel: 'Clear search',
                         size: 20,
                         color: context.colors.inkSubtle,
@@ -195,7 +194,7 @@ class _Filters extends StatelessWidget {
                     padding: const EdgeInsets.only(right: Space.x2),
                     child: SelectChip(
                       label: brandName ?? 'Brand',
-                      icon: Icons.tune_rounded,
+                      icon: Glyphs.filters,
                       selected: brandName != null,
                       onPressed: () => onChooseBrand(brands),
                     ),
