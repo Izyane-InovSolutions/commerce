@@ -3,6 +3,12 @@ allprojects {
         google()
         mavenCentral()
     }
+    configurations.all {
+        resolutionStrategy {
+            force("androidx.test.espresso:espresso-core:3.6.1")
+            force("androidx.test.espresso:espresso-idling-resource:3.6.1")
+        }
+    }
 }
 
 val newBuildDir: Directory =
