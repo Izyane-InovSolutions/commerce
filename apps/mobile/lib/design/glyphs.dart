@@ -58,6 +58,14 @@ class Glyphs {
     fill: 'M15.5 8a3.5 3.5 0 1 1-7 0a3.5 3.5 0 1 1 7 0zM5 20a7 7 0 0 1 14 0z',
   );
 
+  static const tag = GlyphData(
+    'M3.5 12.1V4.5a1 1 0 0 1 1-1h7.6l8.4 8.4a1.4 1.4 0 0 1 0 2l-6.6 6.6'
+    'a1.4 1.4 0 0 1-2 0zM9.5 8a1.5 1.5 0 1 1-3 0a1.5 1.5 0 1 1 3 0z',
+    fill:
+        'M3.5 12.1V4.5a1 1 0 0 1 1-1h7.6l8.4 8.4a1.4 1.4 0 0 1 0 2l-6.6 6.6'
+        'a1.4 1.4 0 0 1-2 0z',
+  );
+
   // Commerce
   static const bagAdd = GlyphData(
     'M5.5 8h13l-.9 11.1a1 1 0 0 1-1 .9H7.4a1 1 0 0 1-1-.9zM9 10.5V7'
@@ -201,6 +209,7 @@ class Glyphs {
     'search': search,
     'bag': bag,
     'person': person,
+    'tag': tag,
     'bagAdd': bagAdd,
     'heart': heart,
     'star': star,

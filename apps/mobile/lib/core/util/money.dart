@@ -43,3 +43,14 @@ String formatMoney(int minorUnits, String currency) {
   return '${parts.negative ? '-' : ''}${currencySymbol(currency)}'
       '${parts.whole}.${parts.minor}';
 }
+
+/// Reads an amount typed in major units — `4500`, `4,500.50`, `K 99.9` — as
+/// minor units. Null when it is not an amount.
+int? parseMoneyInput(String text) {
+  final cleaned = text.replaceAll(RegExp(r'[^\d.]'), '');
+  final match = RegExp(r'^(\d+)(?:\.(\d{1,2}))?$').firstMatch(cleaned);
+  if (match == null) return null;
+  final whole = int.parse(match[1]!);
+  final minor = int.parse((match[2] ?? '').padRight(2, '0'));
+  return whole * 100 + minor;
+}

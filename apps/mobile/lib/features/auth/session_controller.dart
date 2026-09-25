@@ -115,6 +115,13 @@ class SessionController extends ChangeNotifier implements AccessTokenSource {
     _setStatus(SessionStatus.signedOut);
   }
 
+  /// Renews the session now, through the same single-flight refresh, so the
+  /// next token reflects a change on the server — a customer approved as a
+  /// seller only gets the seller role in a freshly minted token.
+  Future<bool> renewNow() async =>
+      _status == SessionStatus.signedIn &&
+      await _refreshOnce() == _RefreshResult.renewed;
+
   @override
   Future<bool> renewAccessToken(String rejectedToken) async {
     if (_accessToken != null && _accessToken != rejectedToken) {

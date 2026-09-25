@@ -46,6 +46,13 @@ class _HomePageState extends State<HomePage> {
       title: 'Commerce',
       showBack: false,
       onRefresh: _refresh,
+      actions: [
+        IconAction(
+          icon: Glyphs.person,
+          semanticLabel: 'Account',
+          onPressed: () => context.push('/account'),
+        ),
+      ],
       slivers: [
         SliverToBoxAdapter(
           child: Padding(

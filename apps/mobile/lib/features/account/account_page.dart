@@ -39,7 +39,6 @@ class AccountPage extends StatelessWidget {
         if (!session.isSignedIn) {
           return PageScaffold(
             title: 'Account',
-            showBack: false,
             slivers: [
               const SliverFillRemaining(
                 hasScrollBody: false,
@@ -63,7 +62,6 @@ class AccountPage extends StatelessWidget {
         final colors = context.colors;
         return PageScaffold(
           title: 'Account',
-          showBack: false,
           slivers: [
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: Space.gutter),

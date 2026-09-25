@@ -7,6 +7,8 @@ import '../core/widgets/state_views.dart';
 import '../design/design.dart';
 import '../domain/account.dart';
 import '../domain/checkout.dart';
+import '../domain/seller_catalog.dart';
+import '../domain/selling.dart';
 import '../features/account/account_page.dart';
 import '../features/account/address_form_page.dart';
 import '../features/account/addresses_page.dart';
@@ -25,6 +27,18 @@ import '../features/checkout/payment_status_page.dart';
 import '../features/home/home_page.dart';
 import '../features/orders/order_detail_page.dart';
 import '../features/orders/orders_page.dart';
+import '../features/selling/apply_page.dart';
+import '../features/selling/earnings_page.dart';
+import '../features/selling/listing_form_page.dart';
+import '../features/selling/payouts_page.dart';
+import '../features/selling/products_page.dart';
+import '../features/selling/returns_page.dart';
+import '../features/selling/reviews_page.dart';
+import '../features/selling/storefront_page.dart';
+import '../features/selling/listings_page.dart';
+import '../features/selling/seller_orders_page.dart';
+import '../features/selling/selling_page.dart';
+import '../features/selling/stock_page.dart';
 import '../features/settings/server_settings_page.dart';
 import '../features/wishlist/wishlist_page.dart';
 import 'services.dart';
@@ -32,9 +46,9 @@ import 'shell.dart';
 
 /// Routes that need an account and redirect to sign-in without one.
 ///
-/// The Cart and Account *tabs* are deliberately not here: they render a
-/// sign-in prompt in place, which is kinder than bouncing someone to a form
-/// for tapping a tab.
+/// The Cart and Selling tabs and the Account screen are deliberately not
+/// here: they render a sign-in prompt in place, which is kinder than
+/// bouncing someone to a form for tapping a tab.
 const _protectedPrefixes = [
   '/checkout',
   '/wishlist',
@@ -42,6 +56,16 @@ const _protectedPrefixes = [
   '/account/orders',
   '/account/addresses',
   '/account/profile',
+  '/selling/orders',
+  '/selling/listings',
+  '/selling/stock',
+  '/selling/earnings',
+  '/selling/apply',
+  '/selling/products',
+  '/selling/returns',
+  '/selling/reviews',
+  '/selling/payouts',
+  '/selling/storefront',
 ];
 
 bool isProtectedLocation(String location) => _protectedPrefixes.any(
@@ -168,12 +192,52 @@ GoRouter buildRouter(AppServices services) {
         branches: [
           StatefulShellBranch(
             routes: [
+              // Account opens from the Shop screen's profile button, so its
+              // pages stack on the Shop tab: they keep the dock and a real
+              // back stack, and `go('/account/orders/:id')` from anywhere
+              // (the payment screen) builds Shop → Account → Orders → Order
+              // rather than an orphan screen with no way back.
               GoRoute(
                 path: '/',
                 pageBuilder: (_, state) => NoTransitionPage(
                   key: state.pageKey,
                   child: const HomePage(),
                 ),
+                routes: [
+                  GoRoute(
+                    path: 'account',
+                    pageBuilder: (_, state) =>
+                        _page(state, const AccountPage()),
+                    routes: [
+                      GoRoute(
+                        path: 'orders',
+                        pageBuilder: (_, state) =>
+                            _page(state, const OrdersPage()),
+                        routes: [
+                          GoRoute(
+                            path: ':id',
+                            pageBuilder: (_, state) => _page(
+                              state,
+                              OrderDetailPage(
+                                orderId: state.pathParameters['id']!,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      GoRoute(
+                        path: 'profile',
+                        pageBuilder: (_, state) =>
+                            _page(state, const ProfilePage()),
+                      ),
+                      GoRoute(
+                        path: 'addresses',
+                        pageBuilder: (_, state) =>
+                            _page(state, const AddressesPage()),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ],
           ),
@@ -199,41 +263,122 @@ GoRouter buildRouter(AppServices services) {
               ),
             ],
           ),
-          // Account pages live inside the Account tab, so they keep the tab
-          // bar and a real back stack — and `go('/account/orders/:id')` from
-          // anywhere (the payment screen) builds Account → Orders → Order
-          // rather than an orphan screen with no way back.
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/account',
+                path: '/selling',
                 pageBuilder: (_, state) => NoTransitionPage(
                   key: state.pageKey,
-                  child: const AccountPage(),
+                  child: const SellingPage(),
                 ),
                 routes: [
                   GoRoute(
                     path: 'orders',
-                    pageBuilder: (_, state) => _page(state, const OrdersPage()),
+                    pageBuilder: (_, state) =>
+                        _page(state, const SellerOrdersPage()),
                     routes: [
                       GoRoute(
                         path: ':id',
                         pageBuilder: (_, state) => _page(
                           state,
-                          OrderDetailPage(orderId: state.pathParameters['id']!),
+                          SellerOrderPage(id: state.pathParameters['id']!),
                         ),
                       ),
                     ],
                   ),
                   GoRoute(
-                    path: 'profile',
-                    pageBuilder: (_, state) =>
-                        _page(state, const ProfilePage()),
+                    path: 'apply',
+                    pageBuilder: (_, state) => _page(
+                      state,
+                      ApplyPage(
+                        rejected: state.extra is SellerAccount
+                            ? state.extra! as SellerAccount
+                            : null,
+                      ),
+                    ),
                   ),
                   GoRoute(
-                    path: 'addresses',
+                    path: 'listings',
                     pageBuilder: (_, state) =>
-                        _page(state, const AddressesPage()),
+                        _page(state, const ListingsPage()),
+                    routes: [
+                      GoRoute(
+                        path: 'new',
+                        pageBuilder: (_, state) => _page(
+                          state,
+                          ListingFormPage(
+                            product: state.extra is CatalogProduct
+                                ? state.extra! as CatalogProduct
+                                : null,
+                          ),
+                        ),
+                      ),
+                      GoRoute(
+                        path: 'edit',
+                        // Needs the listing in hand; without it (a restored
+                        // route) there is nothing to edit, so start a new one.
+                        pageBuilder: (_, state) => _page(
+                          state,
+                          ListingFormPage(
+                            listing: state.extra is Listing
+                                ? state.extra! as Listing
+                                : null,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  GoRoute(
+                    path: 'products',
+                    pageBuilder: (_, state) =>
+                        _page(state, const ProductsPage()),
+                    routes: [
+                      GoRoute(
+                        path: 'new',
+                        pageBuilder: (_, state) =>
+                            _page(state, const SubmitProductPage()),
+                      ),
+                      GoRoute(
+                        path: ':id',
+                        pageBuilder: (_, state) => _page(
+                          state,
+                          SubmissionPage(id: state.pathParameters['id']!),
+                        ),
+                      ),
+                    ],
+                  ),
+                  GoRoute(
+                    path: 'returns',
+                    pageBuilder: (_, state) =>
+                        _page(state, const ReturnsPage()),
+                  ),
+                  GoRoute(
+                    path: 'reviews',
+                    pageBuilder: (_, state) =>
+                        _page(state, const ReviewsPage()),
+                  ),
+                  GoRoute(
+                    path: 'payouts',
+                    pageBuilder: (_, state) =>
+                        _page(state, const PayoutsPage()),
+                  ),
+                  GoRoute(
+                    path: 'storefront',
+                    redirect: (_, state) =>
+                        state.extra is SellerAccount ? null : '/selling',
+                    pageBuilder: (_, state) => _page(
+                      state,
+                      StorefrontPage(account: state.extra! as SellerAccount),
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'stock',
+                    pageBuilder: (_, state) => _page(state, const StockPage()),
+                  ),
+                  GoRoute(
+                    path: 'earnings',
+                    pageBuilder: (_, state) =>
+                        _page(state, const EarningsPage()),
                   ),
                 ],
               ),

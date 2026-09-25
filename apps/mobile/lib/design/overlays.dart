@@ -3,11 +3,13 @@ import 'glyphs.dart';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'button.dart';
 import 'lists.dart';
 import 'pressable.dart';
+import 'text_field.dart';
 import 'theme.dart';
 import 'tokens.dart';
 
@@ -444,6 +446,163 @@ Future<T?> showSheet<T>(
   return Navigator.of(context, rootNavigator: true).push(
     SheetRoute<T>(builder: builder, scrim: context.colors.scrim, label: label),
   );
+}
+
+/// One field of an [askFor] sheet.
+class AskField {
+  const AskField({
+    required this.label,
+    this.hint,
+    this.initial = '',
+    this.helper,
+    this.keyboardType,
+    this.inputFormatters,
+    this.optional = false,
+    this.validate,
+  });
+
+  final String label;
+  final String? hint;
+  final String initial;
+  final String? helper;
+  final TextInputType? keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
+  final bool optional;
+
+  /// A message when the value is not acceptable; null when it is.
+  final String? Function(String value)? validate;
+}
+
+/// A short form in a sheet — a reason, a price, a count — for an action
+/// that needs a word or a number before it can happen. Returns the trimmed
+/// values in field order, or null if dismissed.
+Future<List<String>?> askFor(
+  BuildContext context, {
+  required String title,
+  String? message,
+  required List<AskField> fields,
+  required String confirmLabel,
+  bool destructive = false,
+}) {
+  return showSheet<List<String>>(
+    context,
+    label: title,
+    builder: (context) => _AskSheet(
+      title: title,
+      message: message,
+      fields: fields,
+      confirmLabel: confirmLabel,
+      destructive: destructive,
+    ),
+  );
+}
+
+class _AskSheet extends StatefulWidget {
+  const _AskSheet({
+    required this.title,
+    required this.message,
+    required this.fields,
+    required this.confirmLabel,
+    required this.destructive,
+  });
+
+  final String title;
+  final String? message;
+  final List<AskField> fields;
+  final String confirmLabel;
+  final bool destructive;
+
+  @override
+  State<_AskSheet> createState() => _AskSheetState();
+}
+
+class _AskSheetState extends State<_AskSheet> {
+  late final _controllers = [
+    for (final f in widget.fields) TextEditingController(text: f.initial),
+  ];
+  List<String?> _errors = const [];
+
+  @override
+  void dispose() {
+    for (final c in _controllers) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  void _submit() {
+    final values = [for (final c in _controllers) c.text.trim()];
+    final errors = [
+      for (final (i, f) in widget.fields.indexed)
+        values[i].isEmpty
+            ? (f.optional ? null : 'Required')
+            : f.validate?.call(values[i]),
+    ];
+    if (errors.any((e) => e != null)) {
+      setState(() => _errors = errors);
+      return;
+    }
+    Navigator.of(context).pop(values);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(
+        Space.gutter,
+        0,
+        Space.gutter,
+        Space.x2,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(widget.title, style: context.type.heading),
+          if (widget.message != null) ...[
+            const SizedBox(height: Space.x2),
+            Text(
+              widget.message!,
+              style: context.type.body.copyWith(color: context.colors.inkMuted),
+            ),
+          ],
+          for (final (i, f) in widget.fields.indexed) ...[
+            const SizedBox(height: Space.x4),
+            InputField(
+              controller: _controllers[i],
+              label: f.label,
+              hint: f.hint,
+              helper: f.helper,
+              keyboardType: f.keyboardType,
+              inputFormatters: f.inputFormatters,
+              autofocus: i == 0,
+              textInputAction: i == widget.fields.length - 1
+                  ? TextInputAction.done
+                  : TextInputAction.next,
+              onSubmitted: i == widget.fields.length - 1
+                  ? (_) => _submit()
+                  : null,
+              error: i < _errors.length ? _errors[i] : null,
+            ),
+          ],
+          const SizedBox(height: Space.x6),
+          Button(
+            label: widget.confirmLabel,
+            variant: widget.destructive
+                ? ButtonVariant.danger
+                : ButtonVariant.primary,
+            onPressed: _submit,
+          ),
+          const SizedBox(height: Space.x2),
+          Button(
+            label: 'Cancel',
+            variant: ButtonVariant.ghost,
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class SheetOption<T> {

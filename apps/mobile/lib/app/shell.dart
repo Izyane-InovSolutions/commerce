@@ -44,7 +44,7 @@ class AppShell extends StatelessWidget {
                 const TabItem(icon: Glyphs.store, label: 'Shop'),
                 const TabItem(icon: Glyphs.search, label: 'Search'),
                 TabItem(icon: Glyphs.bag, label: 'Cart', badge: cart.itemCount),
-                const TabItem(icon: Glyphs.person, label: 'Account'),
+                const TabItem(icon: Glyphs.tag, label: 'Selling'),
               ],
             ),
           ),

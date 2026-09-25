@@ -58,7 +58,8 @@ Future<AppServices> newCustomerAtCheckout(WidgetTester tester) async {
   await linger(tester);
 
   // Create an account from the Account tab.
-  await tester.tap(find.text('Account'));
+  // Account opens from the Shop screen's profile button.
+  await tester.tap(find.bySemanticsLabel('Account').first);
   await linger(tester);
   await tapWhenVisible(
     tester,
@@ -177,6 +178,12 @@ void main() {
       timeout: const Duration(seconds: 90),
     );
     await expectPaidOrder(tester, services);
+
+    // Someone who has never applied to sell is shown how to start — the
+    // API's 404 for "no seller account" is a state, not an error.
+    await tester.tap(find.text('Selling'));
+    await pumpUntil(tester, find.text('Start selling'));
+    await linger(tester);
   });
 
   testWidgets('a new customer can buy something by mobile money', (

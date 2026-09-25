@@ -2,12 +2,15 @@ import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 
 import '../core/config/api_endpoint.dart';
+import '../core/files/file_source.dart';
 import '../core/network/api_client.dart';
 import '../core/storage/key_value_store.dart';
 import '../core/storage/secure_token_store.dart';
 import '../data/auth_repository.dart';
 import '../data/catalog_repository.dart';
 import '../data/commerce_repositories.dart';
+import '../data/media_repository.dart';
+import '../data/selling_repository.dart';
 import '../features/auth/session_controller.dart';
 import '../features/cart/cart_controller.dart';
 import '../features/wishlist/wishlist_controller.dart';
@@ -30,6 +33,9 @@ class AppServices {
     required this.account,
     required this.checkout,
     required this.orders,
+    required this.selling,
+    required this.media,
+    required this.files,
     required this.cart,
     required this.wishlist,
   });
@@ -37,6 +43,7 @@ class AppServices {
   static Future<AppServices> create({
     KeyValueStore store = const SecureKeyValueStore(),
     http.Client? httpClient,
+    FileSource files = const PlatformFileSource(),
   }) async {
     final endpoint = await ApiEndpoint.load(store);
     final api = ApiClient(endpoint: endpoint, httpClient: httpClient);
@@ -62,6 +69,9 @@ class AppServices {
       account: AccountRepository(api),
       checkout: CheckoutRepository(api),
       orders: OrderRepository(api),
+      selling: SellingRepository(api),
+      media: MediaRepository(api),
+      files: files,
       cart: CartController(carts: carts, catalog: catalog, session: session),
       wishlist: WishlistController(
         wishlist: wishlists,
@@ -75,6 +85,7 @@ class AppServices {
     endpoint.addListener(() {
       session.forget();
       services.catalog.clearCache();
+      services.selling.clearCache();
     });
     return services;
   }
@@ -89,6 +100,9 @@ class AppServices {
   final AccountRepository account;
   final CheckoutRepository checkout;
   final OrderRepository orders;
+  final SellingRepository selling;
+  final MediaRepository media;
+  final FileSource files;
   final CartController cart;
   final WishlistController wishlist;
 }

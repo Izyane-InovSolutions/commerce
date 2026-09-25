@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:commerce_mobile/app/app.dart';
 import 'package:commerce_mobile/app/services.dart';
+import 'package:commerce_mobile/core/files/file_source.dart';
 import 'package:commerce_mobile/core/storage/key_value_store.dart';
 import 'package:commerce_mobile/design/design.dart';
 import 'package:flutter/widgets.dart';
@@ -16,6 +17,7 @@ Future<(AppServices, FakeApi)> boot(
   WidgetTester tester, {
   MemoryKeyValueStore? store,
   void Function(FakeApi api)? configure,
+  FileSource? files,
 }) async {
   // A phone, not the default 800×600 test surface.
   tester.view.physicalSize = const Size(1170, 2532);
@@ -49,6 +51,7 @@ Future<(AppServices, FakeApi)> boot(
   final services = await AppServices.create(
     store: store ?? MemoryKeyValueStore(),
     httpClient: api.client,
+    files: files ?? const _NoFiles(),
   );
   await tester.pumpWidget(CommerceApp(services: services));
   await services.session.restore();
@@ -124,7 +127,8 @@ void main() {
     api.on('GET /wishlist', (_) => FakeApi.ok(<Object>[]));
     api.on('GET /orders', (_) => FakeApi.ok(<Object>[]));
 
-    await tester.tap(find.text('Account'));
+    // Account opens from the Shop screen's profile button.
+    await tester.tap(find.bySemanticsLabel('Account').first);
     await tester.pumpAndSettle();
     expect(find.text('Your account'), findsOneWidget);
 
@@ -186,4 +190,11 @@ void main() {
       expect(find.text('Add to cart'), findsOneWidget);
     },
   );
+}
+
+class _NoFiles implements FileSource {
+  const _NoFiles();
+
+  @override
+  Future<PickedFile?> pick(Set<FileKind> kinds) async => null;
 }

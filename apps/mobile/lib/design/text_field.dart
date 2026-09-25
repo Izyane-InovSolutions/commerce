@@ -49,6 +49,7 @@ class InputField extends StatefulWidget {
     this.inputFormatters,
     this.dense = false,
     this.sensitive = false,
+    this.maxLines = 1,
   });
 
   final TextEditingController controller;
@@ -78,6 +79,10 @@ class InputField extends StatefulWidget {
   /// the keyboard is asked not to learn what is typed (Android's incognito
   /// keyboard mode), so the digits do not resurface as a suggestion later.
   final bool sensitive;
+
+  /// More than 1 grows the box with its text, up to this many lines — an
+  /// address, a description.
+  final int maxLines;
 
   @override
   State<InputField> createState() => _InputFieldState();
@@ -156,7 +161,9 @@ class _InputFieldState extends State<InputField>
       cursorWidth: 2,
       cursorRadius: const Radius.circular(2),
       cursorOpacityAnimates: _isApple,
-      keyboardType: widget.keyboardType,
+      keyboardType: widget.maxLines > 1
+          ? TextInputType.multiline
+          : widget.keyboardType,
       textInputAction: widget.textInputAction,
       textCapitalization: widget.textCapitalization,
       autofillHints: widget.enabled ? widget.autofillHints : null,
@@ -167,7 +174,8 @@ class _InputFieldState extends State<InputField>
       enableIMEPersonalizedLearning: !widget.sensitive,
       readOnly: !widget.enabled,
       autofocus: widget.autofocus,
-      maxLines: 1,
+      minLines: 1,
+      maxLines: widget.maxLines,
       inputFormatters: widget.inputFormatters,
       onChanged: widget.onChanged,
       onSubmitted: widget.onSubmitted,
@@ -290,6 +298,8 @@ class InputFormField extends FormField<String> {
     bool enabled = true,
     ValueChanged<String>? onSubmitted,
     ValueChanged<String>? onChanged,
+    int maxLines = 1,
+    List<TextInputFormatter>? inputFormatters,
   }) : super(
          initialValue: controller.text,
          // Validate the controller, not FormField's copy: the controller is
@@ -313,6 +323,8 @@ class InputFormField extends FormField<String> {
            autocorrect: autocorrect,
            enabled: enabled,
            onSubmitted: onSubmitted,
+           maxLines: maxLines,
+           inputFormatters: inputFormatters,
            onChanged: (value) {
              field.didChange(value);
              onChanged?.call(value);

@@ -1,5 +1,5 @@
 name: commerce_mobile
-description: Customer-facing Commerce marketplace mobile application.
+description: Customer-facing marketplace mobile application by iZyane.
 publish_to: "none"
 
 version: 0.1.0+1
@@ -14,6 +14,8 @@ dependencies:
   go_router: ^16.0.0
   http: ^1.5.0
   flutter_secure_storage: ^9.2.4
+  file_picker: ^11.0.3
+  http_parser: ^4.1.2
 
 dev_dependencies:
   flutter_test:
