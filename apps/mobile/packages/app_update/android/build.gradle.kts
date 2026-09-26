@@ -46,6 +46,9 @@ android {
 // updates come through the store.
 val appDistribution = "16.0.0-beta20"
 dependencies {
+    // For the installer's theme (see AndroidManifest.xml); the SDK already
+    // brings AppCompat, this lets the plugin's resources name it.
+    implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("com.google.firebase:firebase-appdistribution-api:$appDistribution")
     if (!rootProject.hasProperty("storeBuild")) {
         implementation("com.google.firebase:firebase-appdistribution:$appDistribution")

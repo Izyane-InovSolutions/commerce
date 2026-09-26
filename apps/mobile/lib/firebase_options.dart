@@ -56,7 +56,6 @@ class DefaultFirebaseOptions {
     projectId: 'good-for-goods',
     storageBucket: 'good-for-goods.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyALC2RcPv6W1jYWVav9pHgDnKkULjO19Ds',
     appId: '1:538169518184:ios:b29f728e93feb7224073dd',

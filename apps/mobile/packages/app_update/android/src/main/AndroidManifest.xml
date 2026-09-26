@@ -1,1 +1,19 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application>
+        <!-- App Distribution's in-app installer is an AppCompatActivity, and
+             declares no theme, so it inherits the app's. Flutter apps have no
+             AppCompat theme, and AppCompat refuses to start without one: the
+             app crashed at the moment the download finished. -->
+        <activity
+            android:name="com.google.firebase.appdistribution.impl.InstallActivity"
+            android:theme="@style/AppUpdate.Install"
+            tools:node="merge" />
+        <!-- Same trap on the screen that catches the return from tester
+             sign-in; it gets away with it only by finishing before it draws. -->
+        <activity
+            android:name="com.google.firebase.appdistribution.impl.SignInResultActivity"
+            android:theme="@style/AppUpdate.Install"
+            tools:node="merge" />
+    </application>
+</manifest>
