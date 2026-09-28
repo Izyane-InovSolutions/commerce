@@ -6,6 +6,10 @@
  * place instead of inside every page.
  */
 export * from './admin-orders.ts';
+export * from './admin-users.ts';
+export * from './analytics.ts';
+export * from './attributes.ts';
+export * from './audit.ts';
 export * from './auth.ts';
 export * from './catalog.ts';
 export * from './financials.ts';
@@ -13,6 +17,8 @@ export * from './fulfillment.ts';
 export * from './inventory.ts';
 export * from './media.ts';
 export * from './operations.ts';
+export * from './payments.ts';
+export * from './procurement.ts';
 export * from './returns.ts';
 export * from './reviews.ts';
 export * from './seller-inventory.ts';

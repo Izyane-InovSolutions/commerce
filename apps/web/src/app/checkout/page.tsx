@@ -27,7 +27,7 @@ export default async function CheckoutPage({
   // order belongs to an account, and so does the address it ships to.
   if (!user) {
     return (
-      <div className="mx-auto max-w-5xl space-y-4 px-4 py-12">
+      <div className="space-y-4">
         <h1 className="text-2xl font-semibold tracking-tight">Checkout</h1>
         <p className="text-muted-foreground text-sm text-pretty">
           Sign in to check out. Your cart comes with you.
@@ -54,7 +54,7 @@ export default async function CheckoutPage({
     labels = await labelOffers(cart.items.map((line) => line.offerId));
   } catch (error) {
     return (
-      <div className="mx-auto max-w-5xl space-y-4 px-4 py-12">
+      <div className="space-y-4">
         <h1 className="text-2xl font-semibold tracking-tight">Checkout</h1>
         <ApiErrorNotice error={error} />
       </div>
@@ -62,7 +62,7 @@ export default async function CheckoutPage({
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-12">
+    <div>
       <h1 className="text-2xl font-semibold tracking-tight">Checkout</h1>
       <p className="text-muted-foreground mt-1 text-sm text-pretty">
         Prices and stock are confirmed by the Commerce API as the order is

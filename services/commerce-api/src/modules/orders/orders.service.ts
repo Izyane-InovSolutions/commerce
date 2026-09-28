@@ -42,6 +42,12 @@ import {
   type ShippingLine,
   type ShippingQuoteGroup,
 } from '../shipping/shipping.service';
+import {
+  ADMIN_ORDER_CUSTOMER_SELECT,
+  ADMIN_ORDER_ITEM_OFFER_SELECT,
+  type AdminOrderDetail,
+  toAdminOrderDetail,
+} from './admin-order-detail';
 
 export type ShippingGroupWithItems = ShippingGroup & { items: OrderItem[] };
 export type SellerOrderWithItems = SellerOrder & {
@@ -609,11 +615,11 @@ export class OrdersService {
       data: { status: OrderStatus.PAID },
     });
 
-    // Enqueued directly (not driven by the outbox, which has no consumer
-    // yet — see BackgroundJobsService.enqueue usage elsewhere, e.g.
-    // InventoryService's reservation-expiry job) so provisioning is
-    // reliably retried on failure without needing a separate relay. The
-    // outbox write alongside it is for external/downstream listeners only.
+    // Provisioning is enqueued as its own job rather than driven by the
+    // outbox, so it is created and retried independently of the outbox's
+    // subscribers. The `order.paid` event alongside it is consumed by the
+    // OutboxDispatcherService's subscribers (NotificationsOutboxSubscriber sends
+    // the customer's order confirmation); nothing there provisions stock.
     await this.backgroundJobsService.enqueue(
       { type: FULFILLMENT_PROVISION_JOB_TYPE, payload: { orderId } },
       tx,
@@ -755,10 +761,35 @@ export class OrdersService {
     return withSummary[0] ?? order;
   }
 
-  /** Admin read — no ownership check, no fulfillmentSummary (staff use the
-   * dedicated fulfillment endpoints for warehouse/staff detail instead). */
-  async findAny(orderId: string): Promise<OrderWithItems> {
-    return this.findByIdOrThrow(orderId);
+  /**
+   * Admin read — no ownership check, no fulfillmentSummary (staff use the
+   * dedicated fulfillment endpoints for warehouse/staff detail instead).
+   *
+   * Unlike the customer reads it joins each item's product/variant names and
+   * the customer's contact detail in the same query, so the admin order page
+   * can name its lines and its buyer without a lookup per line.
+   */
+  async findAny(orderId: string): Promise<AdminOrderDetail> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        items: { include: { offer: ADMIN_ORDER_ITEM_OFFER_SELECT } },
+        sellerOrders: {
+          include: {
+            items: true,
+            shippingGroups: { include: { items: true } },
+          },
+        },
+        payment: CUSTOMER_PAYMENT_SELECT,
+        user: ADMIN_ORDER_CUSTOMER_SELECT,
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    return toAdminOrderDetail(order);
   }
 
   async listAll(

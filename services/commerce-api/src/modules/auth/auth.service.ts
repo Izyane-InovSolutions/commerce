@@ -11,6 +11,8 @@ import type { Session, User } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { absoluteAppUrl } from '../notifications/app-links';
+import { MailerService } from '../notifications/delivery/mailer.service';
 import { UsersService } from '../users/users.service';
 import {
   AuthTokensResponse,
@@ -40,6 +42,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly auditService: AuditService,
+    private readonly mailer: MailerService,
   ) {}
 
   async register(
@@ -238,9 +241,43 @@ export class AuthService {
       ...context,
     });
 
-    // Delivery belongs to the later notifications phase. The raw token is
-    // deliberately never logged; only its hash is persisted.
-    this.logger.debug(`Password reset requested for user ${user.id}`);
+    // Not awaited: a known email would otherwise answer measurably slower
+    // than an unknown one (an SMTP round trip), revealing which accounts
+    // exist. Only the hash is persisted, so this is the raw token's one
+    // chance to leave the process — which is also why it is sent directly
+    // rather than as a Notification (whose body is stored, shown in the
+    // inbox, and retried from the database). A failed send is logged,
+    // token-free, and the user can simply ask again.
+    void this.sendPasswordResetEmail(user, rawToken);
+  }
+
+  private async sendPasswordResetEmail(
+    user: User,
+    rawToken: string,
+  ): Promise<void> {
+    const link = absoluteAppUrl(
+      this.configService,
+      'customer',
+      `/reset-password?token=${encodeURIComponent(rawToken)}`,
+    );
+    try {
+      await this.mailer.send({
+        to: user.email,
+        subject: 'Reset your password',
+        text: [
+          'We received a request to reset the password for your account.',
+          '',
+          `Choose a new password here (the link expires in ${PASSWORD_RESET_TOKEN_TTL_SECONDS / 60} minutes):`,
+          link,
+          '',
+          "If you didn't ask for this, you can ignore this email — your password won't change.",
+        ].join('\n'),
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Password reset email for user ${user.id} failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   async confirmPasswordReset(

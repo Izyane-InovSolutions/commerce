@@ -19,6 +19,7 @@ import { LoggingModule } from './infrastructure/logging/logging.module';
 import { MetricsInterceptor } from './infrastructure/metrics/metrics.interceptor';
 import { MetricsModule } from './infrastructure/metrics/metrics.module';
 import { StorageModule } from './infrastructure/storage/storage.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CartModule } from './modules/cart/cart.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
@@ -28,8 +29,10 @@ import { FulfillmentModule } from './modules/fulfillment/fulfillment.module';
 import { HealthModule } from './modules/health/health.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { MediaModule } from './modules/media/media.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OffersModule } from './modules/offers/offers.module';
 import { OperationsModule } from './modules/operations/operations.module';
+import { OrderCancellationModule } from './modules/orders/cancellation/order-cancellation.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { ProcurementModule } from './modules/procurement/procurement.module';
@@ -72,6 +75,7 @@ import { WorkersModule } from './infrastructure/workers/workers.module';
     WishlistModule,
     SavedSellersModule,
     OrdersModule,
+    OrderCancellationModule,
     CheckoutModule,
     SellersModule,
     WorkersModule,
@@ -79,9 +83,11 @@ import { WorkersModule } from './infrastructure/workers/workers.module';
     FulfillmentModule,
     ShipmentsModule,
     OperationsModule,
+    AnalyticsModule,
     ReturnsModule,
     ReviewsModule,
     AdminReviewsModule,
+    NotificationsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

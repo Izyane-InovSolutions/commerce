@@ -16,6 +16,11 @@ Everything you need to exercise every endpoint in `commerce-api` via Swagger UI.
 3. Start the app: `npm run start:dev`
 4. Open Swagger UI: **`http://localhost:3000/api/docs`**
 
+Optional settings worth knowing while testing (see `.env.example`):
+- **Email** — with no `SMTP_URL`/`SMTP_HOST` set, emails (password reset, order notifications) are written to the API log instead of being sent. Links in them are built from `WEB_APP_URL` and `SELLER_APP_URL` (include the seller app's `/seller` base path).
+- **Media** — `MEDIA_STORAGE_DRIVER=local` (default) stores uploads under `MEDIA_STORAGE_PATH`; `s3` uses the `S3_*` settings.
+- **Background workers** run in the API process: the outbox dispatcher and notifications subscriber, notification email delivery, payment reconciliation (unified gateway only), FX refresh, shipment tracking polls and payout processing. So a notification appears a few seconds after the action that caused it.
+
 All routes are mounted under the prefix **`/api/v1`** (Swagger UI shows this already, e.g. `POST /api/v1/auth/login`).
 
 ## 2. Auth model — read this first
@@ -42,7 +47,7 @@ Roles: `CUSTOMER | SELLER | STAFF | ADMIN`.
 Sessions are checked on every request (not just the JWT signature) — logging out, changing password, or refresh-token reuse immediately invalidates a session server-side even before the JWT expires.
 
 ### Idempotency-Key header
-Several mutating endpoints (checkout, refunds, fulfillment work, shipment creation) accept/require an `Idempotency-Key` header. Use any UUID v4, e.g. generate one per request in Swagger's header field.
+Several mutating endpoints accept or require an `Idempotency-Key` header: checkout, refunds, fulfillment work (admin and seller), shipment creation and seller tracking events, returns (request, receipts, inspections), review edits/deletes/reports and moderation, and payouts. Use any UUID v4, e.g. generate one per request in Swagger's header field.
 
 ---
 
@@ -59,8 +64,10 @@ Legend: `[Public]` no auth · `[Optional]` auth optional · unmarked = any logge
 | POST `/auth/logout` | auth | `{ "refreshToken": "<...>" }` |
 | GET `/auth/me` | auth | — |
 | PATCH `/auth/me/password` | auth | `{ "currentPassword": "...", "newPassword": "NewPassw0rd!" }` |
-| POST `/auth/password-reset/request` | [Public] | `{ "email": "user@test.com" }` — token isn't emailed; check DB `PasswordResetToken` table for the raw value when testing |
-| POST `/auth/password-reset/confirm` | [Public] | `{ "token": "<from DB>", "newPassword": "NewPassw0rd!" }` |
+| POST `/auth/password-reset/request` | [Public] | `{ "email": "user@test.com" }` — emails a `WEB_APP_URL/reset-password?token=...` link; without SMTP configured, the email (and token) is written to the API log |
+| POST `/auth/password-reset/confirm` | [Public] | `{ "token": "<from the email link>", "newPassword": "NewPassw0rd!" }` |
+| POST `/auth/handoff` | auth | — returns a one-time code for signing the same user into another app (web → seller) |
+| POST `/auth/handoff/exchange` | [Public] | `{ "code": "<from /auth/handoff>" }` → token pair |
 | GET `/auth/sessions` | auth | — |
 | DELETE `/auth/sessions/:id` | auth | — (`id` = session UUID) |
 
@@ -69,6 +76,14 @@ Legend: `[Public]` no auth · `[Optional]` auth optional · unmarked = any logge
 |---|---|---|
 | GET `/users/me` | auth | — |
 | PATCH `/users/me` | auth | `{ "firstName": "Jane", "lastName": "Doe", "phone": "+260971234567" }` (all optional) |
+
+### Admin users — `/admin/users` `[Roles: ADMIN]`
+| Method & Path | Body |
+|---|---|
+| GET `/admin/users?q=&role=&status=ACTIVE&page=&limit=` | — (`status`: ACTIVE, DISABLED) |
+| GET `/admin/users/:id` | — |
+| PATCH `/admin/users/:id/role` | `{ "role": "STAFF", "expectedRole": "CUSTOMER", "reason": "joined ops" }` (409 if the role changed since you read it) |
+| POST `/admin/users/:id/disable` \| `/enable` | `{ "reason": "..." }` (optional) — disabling revokes the user's sessions |
 
 ### Addresses — `/users/me/addresses`
 | Method & Path | Auth | Body |
@@ -89,9 +104,12 @@ Legend: `[Public]` no auth · `[Optional]` auth optional · unmarked = any logge
 | GET `/catalog/brands/:slug` | [Public] |
 | GET `/catalog/products?page=1&limit=20&currency=ZMW&q=&categorySlug=&brandSlug=` | [Public] |
 | GET `/catalog/products/:slug?currency=ZMW` | [Public] |
+| GET `/catalog/products/:slug/reviews?page=&limit=&rating=&sort=newest` | [Public] (`sort`: newest, oldest, highest, lowest) |
+| GET `/catalog/best-sellers?limit=12&days=30&currency=ZMW` | [Public] — ranked by units sold on paid orders in the window |
 | GET `/catalog/variants/:id/offers` | [Public] |
 | GET `/catalog/offers/:id` | [Public] |
 | GET `/storefronts/:slug/offers` | [Public] |
+| GET `/storefronts/:slug/ratings` | [Public] |
 
 ### Admin catalog management — `[Roles: STAFF, ADMIN]`
 | Method & Path | Body |
@@ -105,6 +123,9 @@ Legend: `[Public]` no auth · `[Optional]` auth optional · unmarked = any logge
 ### Admin products — `/admin/catalog/products` `[Roles: STAFF, ADMIN]`
 | Method & Path | Body |
 |---|---|
+| GET `/admin/catalog/products`, GET `/admin/catalog/products/:id` | — |
+| GET `/admin/catalog/products/submissions/pending` | — seller-submitted products awaiting review |
+| POST `/admin/catalog/products/:id/submissions/approve` \| `/reject` | `{ "reason": "..." }` |
 | POST `/admin/catalog/products` | `{ "name": "Wireless Mouse", "slug": "wireless-mouse", "description": "...", "brandId": "<uuid>", "categoryId": "<uuid>" }` |
 | PATCH `/admin/catalog/products/:id` | any subset |
 | PATCH `/admin/catalog/products/:id/status` | `{ "status": "PUBLISHED" }` (enum: DRAFT, PUBLISHED, ARCHIVED) |
@@ -121,7 +142,9 @@ Legend: `[Public]` no auth · `[Optional]` auth optional · unmarked = any logge
 | Method & Path | Auth | Body |
 |---|---|---|
 | POST `/admin/catalog/offers` | [Roles: STAFF, ADMIN] | `{ "variantId": "<uuid>" }` |
+| GET `/admin/catalog/offers?status=&sellerId=&variantId=&productId=&page=&limit=` | [Roles: STAFF, ADMIN] | — |
 | GET `/admin/catalog/offers/:id` | [Roles: STAFF, ADMIN] | — |
+| PATCH `/admin/catalog/offers/:id/shipping` | [Roles: STAFF, ADMIN] | `{ "amount": 3000, "currency": "ZMW" }` or `{ "amount": null }` — first-party offers; shown in the catalog, checkout still charges the zone rate |
 | PATCH `/admin/catalog/offers/:id/status` | [Roles: STAFF, ADMIN] | `{ "status": "PUBLISHED" }` |
 | DELETE `/admin/catalog/offers/:id` | [Roles: STAFF, ADMIN] | — |
 | POST `/admin/catalog/offers/:id/prices` | [Roles: STAFF, ADMIN] | `{ "amount": 15000, "currency": "ZMW" }` (amount in minor units) |
@@ -136,11 +159,25 @@ Legend: `[Public]` no auth · `[Optional]` auth optional · unmarked = any logge
 | POST `/admin/inventory/receive` | [Roles: STAFF, ADMIN] | `{ "warehouseId": "<uuid>", "variantId": "<uuid>", "quantity": 100, "note": "restock" }` |
 | POST `/admin/inventory/adjust` | [Roles: STAFF, ADMIN] | `{ "warehouseId": "<uuid>", "variantId": "<uuid>", "delta": -5, "note": "damage" }` |
 | GET `/admin/inventory/:id/movements` \| `/reservations` | [Roles: STAFF, ADMIN] | — |
+| PATCH `/admin/inventory/:id/reorder-point` | [Roles: STAFF, ADMIN] | `{ "reorderPoint": 10 }` |
 | GET `/sellers/me/inventory` | [Roles: SELLER] | — |
 | PUT `/sellers/me/inventory/:offerId` | [Roles: SELLER] | `{ "quantity": 20, "version": 0, "note": "restock" }` |
 | PATCH `/sellers/me/inventory/bulk` | [Roles: SELLER] | `{ "items": [{ "offerId": "<uuid>", "quantity": 20, "version": 0 }] }` |
 | GET `/sellers/me/inventory/:offerId/movements` | [Roles: SELLER] | — |
-| GET/POST/PATCH/DELETE `/admin/inventory/warehouses(/:id)` | [Roles: STAFF, ADMIN] | Create: `{ "name": "Main WH", "code": "MAIN-01" }` |
+| GET/POST/PATCH/DELETE `/admin/inventory/warehouses(/:id)` | [Roles: STAFF, ADMIN] | Create: `{ "name": "Main WH", "code": "MAIN-01" }`; PATCH also takes `"isActive": false`. DELETE returns 409 for a warehouse that holds stock records or is referenced by purchasing, fulfillment or return records — deactivate it instead |
+
+### Seller products — `/sellers/me/products` (approved seller)
+New catalog products a seller submits for admin review (distinct from offers on existing products).
+
+| Method & Path | Body |
+|---|---|
+| GET `/sellers/me/products`, GET `/sellers/me/products/:id` | — |
+| POST `/sellers/me/products` | `{ "name": "Handmade Basket", "slug": "handmade-basket", "description": "...", "categoryId": "<uuid>" }` |
+| PATCH `/sellers/me/products/:id` | `{ "name": "...", "description": "...", "brandId": null, "categoryId": "<uuid>" }` (any subset) |
+| DELETE `/sellers/me/products/:id` | — |
+| POST `/sellers/me/products/:id/variants` | `{ "skuCode": "BASKET-L", "name": "Large" }` |
+| PATCH/DELETE `/sellers/me/products/:id/variants/:variantId` | PATCH: any subset of the create body |
+| POST `/sellers/me/products/:id/media` | `{ "mediaAssetId": "<uuid>", "position": 0, "isPrimary": true }` |
 
 ### Procurement — all `[Roles: STAFF, ADMIN]` (approve/reject/reverse `[Roles: ADMIN]` only)
 | Method & Path | Body |
@@ -180,6 +217,9 @@ Legend: `[Public]` no auth · `[Optional]` auth optional · unmarked = any logge
 |---|---|
 | POST `/checkout` | `{ "shippingAddressId": "<uuid>", "currency": "ZMW", "paymentDetails": { "paymentMethod": "MOBILE_MONEY", "phoneNumber": "0971234567", "provider": "MTN" } }` |
 | POST `/checkout/buy-now` | `{ "offerId": "<uuid>", "quantity": 1, "shippingAddressId": "<uuid>", "currency": "ZMW", "paymentDetails": {...} }` |
+| POST `/checkout/quote` \| `/checkout/buy-now/quote` | same bodies without `paymentDetails` — returns subtotal, shipping and total without creating an order |
+
+Shipping is quoted by `ZoneShippingRateProvider`: a domestic (`SHIPPING_DOMESTIC_COUNTRY`, default `ZM`) flat rate that is free above `SHIPPING_DOMESTIC_FREE_THRESHOLD_MINOR`, and a flat international rate elsewhere. Checkout reserves stock in the same transaction that creates the order.
 
 Card payment example for `paymentDetails`:
 ```json
@@ -203,14 +243,16 @@ Card payment example for `paymentDetails`:
   }
 }
 ```
-> Note: with the default `.env` (`PAYMENTS_PROVIDER=pending`), real charges are stubbed/refused by design — checkout order creation still works, but payment capture won't succeed until `PAYMENTS_PROVIDER=unified` is configured.
+> Note: with the default `.env` (`PAYMENTS_PROVIDER=pending`), checkout does **not** leave an order behind: payment initialisation is refused with 503, and checkout cancels the order it just created (releasing the stock) before rethrowing. Set `PAYMENTS_PROVIDER=unified` with the gateway variables to place orders end to end.
 
 ### Orders
 | Method & Path | Auth | Body |
 |---|---|---|
 | GET `/orders`, GET `/orders/:id` | auth (own orders) | — |
+| POST `/orders/:id/cancel` | auth (own order) | — cancels a `PENDING_PAYMENT` order, releasing its stock and cancelling its payment; 409 once paid (use fulfillment cancellation or a return); retrying on a cancelled order returns it unchanged |
 | GET `/admin/orders?status=&page=&limit=`, GET `/admin/orders/:id` | [Roles: STAFF, ADMIN] | — |
-| GET `/sellers/me/orders`, GET `/sellers/me/orders/:id` | [Roles: SELLER] | — |
+| POST `/admin/orders/:id/cancel` | [Roles: STAFF, ADMIN] | — same rules as the customer cancel |
+| GET `/sellers/me/orders?status=&fulfillmentStatus=&fulfillmentMode=&dateFrom=&dateTo=&page=&limit=`, GET `/sellers/me/orders/:id` | approved seller | — |
 
 ### Payments
 | Method & Path | Auth | Body |
@@ -224,13 +266,34 @@ Card payment example for `paymentDetails`:
 | POST `/admin/seller-orders/:sellerOrderId/refund` | [Roles: ADMIN] + `Idempotency-Key` | `{ "reason": "...", "amount": 5000 }` |
 | POST `/admin/refunds/:refundId/status` | [Roles: ADMIN] | — |
 
+Gateway webhooks are not verified yet (the gateway's signing scheme is undocumented), so payments settle through reconciliation: `POST /payments/:id/status`, or the background reconciliation sweep when `PAYMENTS_PROVIDER=unified`. Gateway refunds are not supported by the current connectors.
+
 ### Financials
 | Method & Path | Auth | Body |
 |---|---|---|
-| GET `/admin/sellers/:id/balance` \| `/ledger` | [Roles: ADMIN] | — |
-| POST `/admin/sellers/:id/payouts` | [Roles: ADMIN] | `{ "amount": 100000, "reference": "PAYOUT-001", "note": "monthly payout" }` |
+| GET `/admin/sellers/:id/balance` \| `/ledger` \| `/balance/integrity` | [Roles: ADMIN] | — |
+| POST `/admin/sellers/:id/payouts` \| `/payouts/external` | [Roles: ADMIN] + `Idempotency-Key` | `{ "amount": 100000, "reference": "PAYOUT-001", "note": "monthly payout" }` |
 | GET `/admin/payouts` | [Roles: ADMIN] | — |
-| GET `/sellers/me/balance` \| `/ledger` | [Roles: SELLER] (must be an APPROVED seller) | — |
+| GET `/sellers/me/balance` \| `/ledger` | approved seller | — |
+
+### Seller payouts
+The payout provider is `manual`: approved payouts are batched and then confirmed or failed by an admin once the transfer is made outside the platform.
+
+| Method & Path | Auth | Body |
+|---|---|---|
+| GET/POST `/sellers/me/payout-accounts` | approved seller | `{ "method": "MOBILE_MONEY", "provider": "MTN", "accountHolderName": "Jane Doe", "destination": { "phoneNumber": "0971234567" } }` (`method`: BANK, MOBILE_MONEY) |
+| PATCH `/sellers/me/payout-accounts/:id` | approved seller | create body + `"version": 0` |
+| POST `/sellers/me/payout-accounts/:id/disable` | approved seller | `{ "version": 0 }` |
+| GET `/sellers/me/payout-requests?status=`, GET `/sellers/me/payout-requests/:id` | approved seller | — |
+| POST `/sellers/me/payout-requests` | approved seller + `Idempotency-Key` | `{ "payoutAccountId": "<uuid>", "amount": 50000 }` |
+| POST `/sellers/me/payout-requests/:id/cancel` | approved seller + `Idempotency-Key` | `{ "reason": "...", "version": 0 }` |
+| GET `/admin/payout-accounts`, GET `/admin/payout-accounts/:id` | [Roles: ADMIN] | — |
+| POST `/admin/payout-accounts/:id/verify` | [Roles: ADMIN] | `{ "status": "VERIFIED", "note": "checked", "version": 0 }` |
+| GET `/admin/payout-requests?status=&sellerId=`, GET `/admin/payout-requests/:id` | [Roles: ADMIN] | — |
+| POST `/admin/payout-requests/:id/approve` \| `/reject` \| `/retry` | [Roles: ADMIN] + `Idempotency-Key` | `{ "reason": "...", "version": 0 }` |
+| POST `/admin/payout-requests/:id/resolve` | [Roles: ADMIN] + `Idempotency-Key` | `{ "outcome": "SUCCEEDED", "providerReference": "BANK-REF-1", "note": "...", "version": 0 }` (`outcome`: SUCCEEDED, FAILED) |
+| POST `/admin/payout-batches/process` | [Roles: ADMIN] | — batches and submits approved requests now |
+| GET `/admin/payout-batches`, GET `/admin/payout-batches/:id` | [Roles: ADMIN] | — |
 
 ### Fulfillment — `/admin/fulfillments` `[Roles: STAFF, ADMIN]` (assign/resolve/cancel are `[Roles: ADMIN]` only)
 | Method & Path | Body |
@@ -246,6 +309,17 @@ Card payment example for `paymentDetails`:
 | POST `/admin/fulfillments/:id/dispatches` (header `Idempotency-Key`) | `{ "shipmentId": "<uuid>" }` |
 | POST `/admin/fulfillments/:id/cancellations` (header `Idempotency-Key`) | **[Roles: ADMIN]** `{ "lines": [{ "fulfillmentLineId": "<uuid>", "quantity": 1 }], "reason": "customer cancelled" }` |
 
+### Seller fulfillments — `/sellers/me/fulfillments` (approved seller, own fulfillment orders only)
+For seller-fulfilled orders (no warehouse). Another seller's fulfillment order is a 404.
+
+| Method & Path | Body |
+|---|---|
+| POST `/sellers/me/fulfillments/:id/accept` | `{ "version": 0 }` |
+| POST `/sellers/me/fulfillments/:id/reject` (header `Idempotency-Key`) | `{ "version": 0, "reason": "out of stock" }` |
+| POST `/sellers/me/fulfillments/:id/packs` (header `Idempotency-Key`) | `{ "lines": [{ "fulfillmentLineId": "<uuid>", "quantity": 1 }] }` |
+| POST `/sellers/me/fulfillments/:id/cancellations` (header `Idempotency-Key`) | `{ "lines": [{ "fulfillmentLineId": "<uuid>", "quantity": 1 }], "reason": "damaged" }` |
+| POST `/sellers/me/fulfillments/:id/dispatches` (header `Idempotency-Key`) | `{ "lines": [{ "fulfillmentLineId": "<uuid>", "quantity": 1 }], "carrierCode": "DHL", "trackingReference": "DHL123", "estimatedDeliveryAt": "2026-10-05T00:00:00Z" }` — creates the shipment and notifies the customer |
+
 ### Shipments
 | Method & Path | Auth | Body |
 |---|---|---|
@@ -255,7 +329,29 @@ Card payment example for `paymentDetails`:
 | POST `/admin/shipments/:id/book` \| `/cancel` | [Roles: STAFF, ADMIN] | cancel: `{ "reason": "..." }` |
 | POST `/admin/shipments/:id/tracking-events` | [Roles: STAFF, ADMIN] | `{ "normalizedStatus": "IN_TRANSIT", "description": "Left warehouse", "location": "Lusaka", "occurredAt": "2026-09-17T10:00:00Z" }` |
 | GET `/orders/:orderId/shipments` | auth (own order) | — |
+| POST `/sellers/me/shipments/:id/tracking-events` (header `Idempotency-Key`) | approved seller (own seller-fulfilled shipment) | `{ "normalizedStatus": "IN_TRANSIT", "description": "...", "location": "Lusaka", "occurredAt": "2026-09-17T10:00:00Z" }` (`normalizedStatus`: IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED) |
 | POST `/webhooks/shipping/:providerCode` | [Public] | raw provider JSON — provider-simulated, not typical Swagger testing |
+
+The only carrier is the manual one (`ManualCarrierProvider`). A shipment reaching `DELIVERED`, from any source, sends the customer a "delivered" notification. Tracking corrections (`isCorrection: true`) are ADMIN-only.
+
+### Returns
+Customer flow: check eligibility → request → admin approves (assigns a warehouse) → staff post receipts → staff post inspections → admin finalizes, which raises the refund.
+
+| Method & Path | Auth | Body |
+|---|---|---|
+| GET `/orders/:orderId/return-eligibility` | auth (own order) | — |
+| POST `/orders/:orderId/returns` (header `Idempotency-Key`, required) | auth (own order) | `{ "items": [{ "orderItemId": "<uuid>", "quantity": 1, "reasonCode": "DAMAGED", "note": "cracked" }] }` (`reasonCode`: CUSTOMER_REMORSE, WRONG_ITEM, DAMAGED, DEFECTIVE, NOT_AS_DESCRIBED, SIZE_FIT, OTHER) |
+| GET `/returns`, GET `/returns/:id` | auth (own returns) | — |
+| POST `/returns/:id/cancel` | auth (own return) | `{ "version": 0 }` |
+| GET `/sellers/me/returns?status=&dateFrom=&dateTo=&page=&limit=` | approved seller | — returns against the seller's orders |
+| POST `/admin/returns` (header `Idempotency-Key`) | [Roles: ADMIN] | `{ "orderId": "<uuid>", "userId": "<uuid>", "items": [...] }` — on the customer's behalf |
+| GET `/admin/returns?status=&warehouseId=&assignedStaffId=&dateFrom=&dateTo=&page=&limit=`, GET `/admin/returns/:id` | [Roles: STAFF, ADMIN] | — |
+| POST `/admin/returns/:id/approve` | [Roles: ADMIN] | `{ "warehouseId": "<uuid>", "assignedStaffId": "<uuid>", "version": 0 }` |
+| POST `/admin/returns/:id/reject` | [Roles: ADMIN] | `{ "rejectionReason": "outside window", "version": 0 }` |
+| POST `/admin/returns/:id/receipts` (header `Idempotency-Key`) | [Roles: STAFF, ADMIN] (staff must be the assignee) | `{ "warehouseId": "<uuid>", "lines": [{ "returnItemId": "<uuid>", "quantity": 1 }], "isClosing": false }` — a receipt that brings every item to its requested quantity moves the return to RECEIVED; `isClosing: true` closes it early and releases anything unreceived; `lines: []` is allowed only with `isClosing: true` (closes out a return whose earlier receipts covered what arrived) |
+| POST `/admin/returns/:id/inspections` (header `Idempotency-Key`) | [Roles: STAFF, ADMIN] (staff must be the assignee) | `{ "lines": [{ "returnItemId": "<uuid>", "warehouseId": "<uuid>", "acceptedQuantity": 1, "disposition": "RESTOCK", "rejectedQuantity": 0 }], "isFinal": false }` (`disposition`: RESTOCK, QUARANTINE, DAMAGED, DISPOSE; a rejected quantity needs `rejectionReason`). `isFinal: true` (with optional `shippingRefunds`) finalizes in the same call and is **ADMIN-only** |
+| POST `/admin/returns/:id/finalize-inspection` | [Roles: ADMIN] | `{ "shippingRefunds": [{ "sellerOrderId": "<uuid>", "amount": 3000 }] }` (optional) — raises the refund case(s) |
+| POST `/admin/returns/:id/refund-cases/:refundCaseId/retry` | [Roles: ADMIN] | — |
 
 ### Sellers
 | Method & Path | Auth | Body |
@@ -269,6 +365,49 @@ Card payment example for `paymentDetails`:
 | POST `/admin/sellers/:id/approve` \| `/reject` \| `/suspend` | [Roles: ADMIN] | `{ "version": 0, "reason": "meets requirements" }` |
 | GET `/storefronts/:slug` | [Public] | — |
 | PUT `/sellers/me/storefront` | [Roles: SELLER] | `{ "version": 0, "storefrontSlug": "janes-shop", "displayName": "Jane's Shop", "description": "Quality goods." }` |
+| GET `/sellers/me/reviews` \| `/sellers/me/ratings` | approved seller | — reviews of the seller's products, and ratings of the seller |
+
+### Saved sellers — `/saved-sellers` (auth)
+| Method & Path | Body |
+|---|---|
+| GET `/saved-sellers` | — |
+| POST `/saved-sellers` | `{ "sellerId": "<uuid>" }` |
+| DELETE `/saved-sellers/:sellerId` | — |
+
+### Reviews
+Customers can review a product they received (per order item) and rate a seller (per seller order) once it has been delivered.
+
+| Method & Path | Auth | Body |
+|---|---|---|
+| GET `/reviews/eligibility?orderId=<uuid>` | auth | — what in that order can be reviewed/rated |
+| GET `/reviews/me?page=&limit=` | auth | — |
+| POST `/reviews/products` | auth | `{ "orderItemId": "<uuid>", "rating": 5, "title": "Great", "body": "Works well." }` |
+| POST `/reviews/sellers` | auth | `{ "sellerOrderId": "<uuid>", "rating": 4, "comment": "Fast shipping" }` |
+| PATCH `/reviews/products/:id` \| `/reviews/sellers/:id` (header `Idempotency-Key`) | auth (own review) | `{ "version": 0, "rating": 4, ... }` |
+| DELETE `/reviews/products/:id` \| `/reviews/sellers/:id` (header `Idempotency-Key`) | auth (own review) | — withdraws it |
+| POST `/reviews/products/:id/reports` \| `/reviews/sellers/:id/reports` (header `Idempotency-Key`) | auth | `{ "reason": "SPAM", "details": "..." }` (`reason`: SPAM, HARASSMENT, HATEFUL_CONTENT, PERSONAL_INFORMATION, OFF_TOPIC, FRAUD, OTHER) |
+| GET `/admin/reviews?type=&moderationState=&visibility=&hasOpenReport=&rating=&productId=&sellerId=&page=&limit=` | [Roles: ADMIN] | — |
+| GET `/admin/reviews/:type/:id` (`type` = `product` \| `seller`) | [Roles: ADMIN] | — |
+| POST `/admin/reviews/:type/:id/approve` (header `Idempotency-Key`) | [Roles: ADMIN] | `{ "version": 0 }` |
+| POST `/admin/reviews/:type/:id/hide` \| `/remove` \| `/restore` (header `Idempotency-Key`) | [Roles: ADMIN] | `{ "version": 0, "reason": "..." }` |
+| POST `/admin/review-reports/:id/dismiss` | [Roles: ADMIN] | `{ "reason": "not abusive" }` |
+
+### Notifications — `/notifications` (auth)
+Created from domain events (order paid, payment failed, order cancelled, new seller order, dispatched, items cancelled, delivered) and also emailed.
+
+| Method & Path | Body |
+|---|---|
+| GET `/notifications?unread=true&page=&limit=` | — |
+| POST `/notifications/:id/read` | — |
+| POST `/notifications/read-all` | — |
+
+### Admin operations, analytics and audit
+| Method & Path | Auth |
+|---|---|
+| GET `/admin/operations/metrics?from=&to=` | [Roles: ADMIN] — sales, orders by status, fulfillment, inventory and returns figures for the dashboard |
+| GET `/admin/analytics/sales?from=&to=&interval=day&currency=ZMW` | [Roles: STAFF, ADMIN] (`interval`: day, week, month) |
+| GET `/admin/audit-events?action=&actorUserId=&targetType=&targetId=&from=&to=&page=&limit=` | [Roles: ADMIN] |
+| GET `/admin/audit-events/actions` | [Roles: ADMIN] — the distinct `action` values, for filtering |
 
 ### Media — `/media`
 | Method & Path | Auth | Body |
@@ -295,8 +434,9 @@ Card payment example for `paymentDetails`:
 3. Register a customer (`POST /auth/register`), log in as them, add an address, add items to cart, checkout.
 4. Register another customer, submit a seller application, switch back to admin to approve it, log in as the new seller to manage offers/inventory.
 5. As admin/staff: create a supplier → purchase order → submit → approve → place → receive goods → confirm inventory increased.
-6. As admin/staff: pick/pack/dispatch a fulfillment order created by the checkout in step 3, create a shipment, add tracking events.
-7. As admin: view payments/refunds/financials/payouts for the orders created above.
+6. As admin/staff: pick/pack/dispatch a fulfillment order created by the checkout in step 3, create a shipment, add tracking events up to `DELIVERED`. The customer's `GET /notifications` shows the dispatch and delivery notices.
+7. As the customer: review the delivered item (`POST /reviews/products`), then request a return (`POST /orders/:orderId/returns`). As admin: approve it, post a receipt and a final inspection.
+8. As admin: view payments/refunds/financials/payouts for the orders created above, and the audit trail at `GET /admin/audit-events`.
 
 ## 5. Notes & gotchas
 
@@ -305,3 +445,5 @@ Card payment example for `paymentDetails`:
 - `Idempotency-Key` header, when required/accepted, must be a valid UUID v4 — reusing the same key retries safely; a new key is needed per new logical operation.
 - The global `ValidationPipe` uses `whitelist + forbidNonWhitelisted` — any extra/misspelled field in a request body causes a 400, not a silent ignore.
 - Rate limiting: 100 req/min globally, 5 req/min on auth endpoints (register/login/password-reset) — expect 429s if you spam those in quick succession.
+- "Approved seller" routes have no role check at the route; the service requires an APPROVED seller for the caller and returns 404 for another seller's resources.
+- Automated coverage: `npm test` (unit), `npm run test:e2e` (in-memory database) and `npm run test:integration` (a real PostgreSQL database named `*_test`, set with `TEST_DATABASE_URL` and `TEST_DATABASE_NAME`; see `docs/backend-development.md`).

@@ -1,5 +1,6 @@
 import type {
   BackendAdminOrder,
+  BackendAdminOrderDetail,
   BackendItemsPage,
   BackendOrderStatus,
 } from '@commerce/contracts';
@@ -24,9 +25,22 @@ export function backendListAdminOrders(
   });
 }
 
+/** The single-order read carries the address snapshot and shipping groups too. */
 export function backendGetAdminOrder(
   client: ApiClient,
   id: string,
-): Promise<BackendAdminOrder> {
+): Promise<BackendAdminOrderDetail> {
   return client.get(`/admin/orders/${id}`, { cache: 'no-store' });
+}
+
+/**
+ * Cancels an order that was never paid. The API refuses (409) once the order
+ * has left `PENDING_PAYMENT` — a paid order is unwound through refunds and
+ * fulfillment cancellations instead.
+ */
+export function backendCancelAdminOrder(
+  client: ApiClient,
+  id: string,
+): Promise<BackendAdminOrderDetail> {
+  return client.post(`/admin/orders/${id}/cancel`);
 }

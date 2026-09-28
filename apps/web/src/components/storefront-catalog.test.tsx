@@ -1,8 +1,13 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 
 import { StorefrontCatalog } from './storefront-catalog';
 import type { Category, Product } from '@/lib/catalog-types';
+import { DEFAULT_CATALOG_SORT, type CatalogParams } from '@/lib/catalog-query';
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
 
 const mockCategories: Category[] = [
   {
@@ -117,76 +122,84 @@ const mockProducts: Product[] = [
 ];
 
 describe('StorefrontCatalog', () => {
-  it('renders all products and category pills initially', () => {
-    render(
-      <StorefrontCatalog products={mockProducts} categories={mockCategories} />,
+  const plain: CatalogParams = {
+    attributes: [],
+    sort: DEFAULT_CATALOG_SORT,
+    page: 1,
+  };
+
+  function renderCatalog(
+    params: Partial<CatalogParams> = {},
+    extra: { total?: number; bestSellerIds?: string[] } = {},
+  ) {
+    return render(
+      <StorefrontCatalog
+        products={mockProducts}
+        categories={mockCategories}
+        total={extra.total ?? mockProducts.length}
+        pageSize={24}
+        params={{ ...plain, ...params }}
+        bestSellerIds={extra.bestSellerIds}
+      />,
     );
+  }
+
+  it('renders the page of products it was given, with the API total', () => {
+    renderCatalog({}, { total: 57 });
 
     expect(screen.getByText('Wireless Headphones')).toBeInTheDocument();
     expect(screen.getByText('Smart Watch')).toBeInTheDocument();
     expect(screen.getByText('Ceramic Coffee Mug')).toBeInTheDocument();
+    expect(screen.getByText('57 items')).toBeInTheDocument();
+  });
+
+  it('links each category pill to the filtered listing', () => {
+    renderCatalog();
+
+    expect(screen.getByRole('link', { name: 'Home & Living' })).toHaveAttribute(
+      'href',
+      '/products?category=home-and-living',
+    );
+    expect(
+      screen.getByRole('link', { name: 'All Categories' }),
+    ).toHaveAttribute('aria-current', 'true');
+  });
+
+  it('marks the selected category and offers a way to clear it', () => {
+    renderCatalog({ category: 'electronics' });
+
+    expect(screen.getByRole('link', { name: 'Electronics' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    expect(
+      screen.getByRole('link', { name: 'Remove category filter' }),
+    ).toHaveAttribute('href', '/products');
+    expect(screen.getByRole('link', { name: 'Reset' })).toHaveAttribute(
+      'href',
+      '/products',
+    );
+  });
+
+  it('keeps the current search in the search-within field', () => {
+    renderCatalog({ q: 'headphones' });
 
     expect(
-      screen.getByRole('button', { name: /All Categories/ }),
-    ).toBeInTheDocument();
+      screen.getByPlaceholderText('Search within products...'),
+    ).toHaveValue('headphones');
+  });
+
+  it('badges best sellers', () => {
+    renderCatalog({}, { bestSellerIds: ['prod-2'] });
+
+    expect(screen.getAllByText('🔥 Best seller')).toHaveLength(1);
+  });
+
+  it('offers no reset when nothing is filtered', () => {
+    renderCatalog();
+
     expect(
-      screen.getByRole('button', { name: /Electronics/ }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /Home & Living/ }),
-    ).toBeInTheDocument();
-  });
-
-  it('filters products when a category pill is selected', () => {
-    render(
-      <StorefrontCatalog products={mockProducts} categories={mockCategories} />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: /Home & Living/ }));
-
-    expect(screen.getByText('Ceramic Coffee Mug')).toBeInTheDocument();
-    expect(screen.queryByText('Wireless Headphones')).not.toBeInTheDocument();
-    expect(screen.queryByText('Smart Watch')).not.toBeInTheDocument();
-  });
-
-  it('filters by trending products', () => {
-    render(
-      <StorefrontCatalog products={mockProducts} categories={mockCategories} />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: /Trending/ }));
-
-    // Smart Watch has 2 variants so it is always marked trending
-    expect(screen.getByText('Smart Watch')).toBeInTheDocument();
-  });
-
-  it('filters by search input', () => {
-    render(
-      <StorefrontCatalog products={mockProducts} categories={mockCategories} />,
-    );
-
-    const searchInput = screen.getByPlaceholderText(
-      'Search within products...',
-    );
-    fireEvent.change(searchInput, { target: { value: 'headphones' } });
-
-    expect(screen.getByText('Wireless Headphones')).toBeInTheDocument();
-    expect(screen.queryByText('Smart Watch')).not.toBeInTheDocument();
-    expect(screen.queryByText('Ceramic Coffee Mug')).not.toBeInTheDocument();
-  });
-
-  it('allows resetting filters', () => {
-    render(
-      <StorefrontCatalog products={mockProducts} categories={mockCategories} />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: /Home & Living/ }));
-    expect(screen.queryByText('Wireless Headphones')).not.toBeInTheDocument();
-
-    const resetButton = screen.getByRole('button', { name: 'Reset' });
-    fireEvent.click(resetButton);
-
-    expect(screen.getByText('Wireless Headphones')).toBeInTheDocument();
-    expect(screen.getByText('Ceramic Coffee Mug')).toBeInTheDocument();
+      screen.queryByRole('link', { name: 'Reset' }),
+    ).not.toBeInTheDocument();
   });
 });

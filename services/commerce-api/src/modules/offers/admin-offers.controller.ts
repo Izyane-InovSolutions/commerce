@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
 
@@ -16,13 +17,23 @@ import { Roles } from '../../common/auth/roles.decorator';
 import { UpdateStatusDto } from '../../common/catalog/dto/update-status.dto';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { CreatePriceDto } from './dto/create-price.dto';
+import { ListAdminOffersDto } from './dto/list-admin-offers.dto';
 import { UpdateOfferShippingDto } from './dto/update-offer-shipping.dto';
-import { OffersService, OfferWithPrices } from './offers.service';
+import {
+  AdminOfferPage,
+  OffersService,
+  OfferWithPrices,
+} from './offers.service';
 
 @Roles(Role.STAFF, Role.ADMIN)
 @Controller('admin/catalog/offers')
 export class AdminOffersController {
   constructor(private readonly offersService: OffersService) {}
+
+  @Get()
+  findAll(@Query() query: ListAdminOffersDto): Promise<AdminOfferPage> {
+    return this.offersService.listAdmin(query);
+  }
 
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string): Promise<OfferWithPrices> {

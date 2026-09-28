@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:commerce_mobile/design/design.dart';
@@ -58,7 +59,12 @@ void main() {
         'danger on its wash': (palette.danger, palette.dangerWash, 4.5),
         'warning on its wash': (palette.warning, palette.warningWash, 4.5),
         'danger text on surface': (palette.danger, palette.surface, 4.5),
-        'toast text (inverted)': (palette.paper, palette.ink, 4.5),
+        'selected chip label (inverted)': (palette.paper, palette.ink, 4.5),
+        'text in a field or chip (tile)': (palette.ink, palette.tile, 4.5),
+        'muted text on tile': (palette.inkMuted, palette.tile, 4.5),
+        'dock and notice text': (palette.onDock, palette.dock, 4.5),
+        'dock tab labels at rest': (palette.onDockMuted, palette.dock, 4.5),
+        'dock selected tab': (palette.dockAccent, palette.dock, 4.5),
       };
       pairs.forEach((label, pair) {
         test('$name: $label', () {
@@ -211,5 +217,31 @@ void main() {
       tester.getSemantics(find.text('Airtel Money')),
       isSemantics(isSelected: true, isButton: true),
     );
+  });
+
+  group('glyphs', () {
+    for (final MapEntry(key: name, value: glyph) in Glyphs.all.entries) {
+      test('$name parses and stays on the 24-unit grid', () {
+        for (final data in [glyph.strokes, ?glyph.fill]) {
+          if (data.isEmpty) continue;
+          final bounds = parseGlyphPath(data).getBounds();
+          expect(bounds.left, greaterThanOrEqualTo(1), reason: name);
+          expect(bounds.top, greaterThanOrEqualTo(1), reason: name);
+          expect(bounds.right, lessThanOrEqualTo(23), reason: name);
+          expect(bounds.bottom, lessThanOrEqualTo(23), reason: name);
+        }
+      });
+    }
+
+    test('nothing visible uses the Material icon font', () {
+      final offenders = Directory('lib')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart'))
+          .where((f) => RegExp(r'\bIcons\.').hasMatch(f.readAsStringSync()))
+          .map((f) => f.path)
+          .toList();
+      expect(offenders, isEmpty);
+    });
   });
 }

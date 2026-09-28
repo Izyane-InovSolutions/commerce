@@ -61,3 +61,22 @@ describe('AccountTabs', () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe('AccountTabs settings', () => {
+  it('adds a Settings tab when a settings panel is given, and can open on it', () => {
+    render(
+      <AccountTabs
+        defaultTab="settings"
+        recentlyViewed={<p>A</p>}
+        wishlist={<p>B</p>}
+        savedSellers={<p>E</p>}
+        orders={<p>C</p>}
+        addresses={<p>D</p>}
+        settings={<p>Settings panel</p>}
+      />,
+    );
+
+    expect(screen.getByRole('tab', { name: 'Settings' })).toBeInTheDocument();
+    expect(screen.getByText('Settings panel')).toBeVisible();
+  });
+});

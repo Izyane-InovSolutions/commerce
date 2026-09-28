@@ -67,7 +67,10 @@ class CatalogRepository {
   /// visit — which matters against a 100-requests-a-minute rate limit.
   final Map<String, Future<OfferDetail>> _offers = {};
 
-  void clearCache() => _offers.clear();
+  void clearCache() {
+    _offers.clear();
+    _storefronts.clear();
+  }
 
   Future<List<Category>> categories() async {
     final data = await _api.get('/catalog/categories', authenticated: false);
@@ -107,6 +110,39 @@ class CatalogRepository {
       query: {'currency': AppConfig.currency},
     );
     return parseResponse(() => Product.fromJson(asJson(data)));
+  }
+
+  final Map<String, Future<Storefront>> _storefronts = {};
+
+  /// A seller's public page. Cached for the session: ratings move slowly,
+  /// and the Shop screen asks for several at once.
+  Future<Storefront> storefront(String slug) =>
+      _storefronts.putIfAbsent(slug, () async {
+        try {
+          final data = await _api.get(
+            '/storefronts/${Uri.encodeComponent(slug)}',
+            authenticated: false,
+          );
+          final storefront = parseResponse(
+            () => Storefront.fromJson(asJson(data)),
+          );
+          return storefront;
+        } catch (_) {
+          _storefronts.remove(slug);
+          rethrow;
+        }
+      });
+
+  /// What customers have said about a seller, newest first.
+  Future<List<StorefrontRating>> storefrontRatings(String slug) async {
+    final data = await _api.get(
+      '/storefronts/${Uri.encodeComponent(slug)}/ratings',
+      authenticated: false,
+      query: {'limit': 5, 'sort': 'newest'},
+    );
+    return parseResponse(
+      () => asJson(data).list('data', StorefrontRating.fromJson),
+    );
   }
 
   Future<OfferDetail> offer(String id) {

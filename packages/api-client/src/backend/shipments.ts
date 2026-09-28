@@ -1,5 +1,7 @@
 import type {
   BackendAddTrackingEventInput,
+  BackendAdminTrackingEvent,
+  BackendCancelShipmentInput,
   BackendCreateShipmentInput,
   BackendItemsPage,
   BackendShipment,
@@ -64,4 +66,26 @@ export function backendAddTrackingEvent(
   input: BackendAddTrackingEventInput,
 ): Promise<BackendTrackingEvent> {
   return client.post(`/admin/shipments/${id}/tracking-events`, { body: input });
+}
+
+/** Every tracking event on a shipment, most recent `occurredAt` first. */
+export function backendListTrackingEvents(
+  client: ApiClient,
+  id: string,
+): Promise<BackendAdminTrackingEvent[]> {
+  return client.get(`/admin/shipments/${id}/tracking-events`, {
+    cache: 'no-store',
+  });
+}
+
+/**
+ * Cancels a shipment that has not been dispatched (`PENDING_BOOKING` or
+ * `BOOKED`), releasing its packed quantity for another shipment.
+ */
+export function backendCancelShipment(
+  client: ApiClient,
+  id: string,
+  input: BackendCancelShipmentInput,
+): Promise<BackendShipment> {
+  return client.post(`/admin/shipments/${id}/cancel`, { body: input });
 }

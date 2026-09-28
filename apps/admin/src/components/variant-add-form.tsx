@@ -2,6 +2,10 @@
 
 import { useActionState } from 'react';
 
+import {
+  AttributeValuePicker,
+  type AttributeChoice,
+} from '@/components/attribute-value-picker';
 import { FieldError } from '@/components/field-error';
 import { FormError } from '@/components/form-error';
 import { SubmitButton } from '@/components/submit-button';
@@ -11,8 +15,11 @@ import { idleFormState, type FormState } from '@/lib/form';
 
 export function VariantAddForm({
   action,
+  attributes,
 }: {
   action: (state: FormState, formData: FormData) => Promise<FormState>;
+  /** Values the new variant can carry from the start; omit for none. */
+  attributes?: AttributeChoice[];
 }) {
   const [state, formAction] = useActionState(action, idleFormState);
 
@@ -34,6 +41,12 @@ export function VariantAddForm({
           <Label htmlFor="variant-name">Name</Label>
           <Input id="variant-name" name="name" placeholder="Oak / 140cm" />
         </div>
+        {attributes ? (
+          <AttributeValuePicker
+            attributes={attributes}
+            idPrefix="new-variant"
+          />
+        ) : null}
         <SubmitButton pendingLabel="Adding…">Add variant</SubmitButton>
       </div>
       <FieldError messages={state.fieldErrors?.skuCode} />

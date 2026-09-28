@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Ad hoc ("release testing"): installable on the devices registered to
+	     the team, which is what Firebase App Distribution needs for iOS. -->
+	<key>method</key>
+	<string>release-testing</string>
+	<key>teamID</key>
+	<string>A6J69MLA7W</string>
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<key>compileBitcode</key>
+	<false/>
+</dict>
+</plist>

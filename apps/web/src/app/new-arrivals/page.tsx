@@ -17,7 +17,7 @@ export default async function NewArrivalsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-12">
+    <div className="space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight">New Arrivals</h1>
       <ProductGrid products={products} />
     </div>

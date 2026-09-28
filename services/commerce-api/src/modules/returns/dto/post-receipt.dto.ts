@@ -1,6 +1,5 @@
 import { Type } from 'class-transformer';
 import {
-  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsOptional,
@@ -14,8 +13,8 @@ export class PostReceiptDto {
   @IsUUID()
   warehouseId!: string;
 
+  // May be empty only on a closing receipt (enforced by ReturnsService).
   @IsArray()
-  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => ReceiptLineDto)
   lines!: ReceiptLineDto[];

@@ -8,6 +8,7 @@ import { readCurrency } from '@/lib/currency-cookie';
 import { checkout, createAddress, getCheckoutQuote } from '@/lib/orders';
 import { toFormState, type FormState } from '@/lib/form';
 import { buildPaymentDetails } from '@/lib/payment-details';
+import { nextStepAfterCheckout } from '@/lib/payment-redirect';
 
 /**
  * Turns the cart into an order.
@@ -35,7 +36,7 @@ export async function placeOrderAction(
     };
   }
 
-  let orderId: string;
+  let nextStep: string;
 
   try {
     const result = await checkout(
@@ -46,14 +47,16 @@ export async function placeOrderAction(
       itemIds,
     );
 
-    orderId = result.order.id;
+    // Either the gateway's own page, when the payment needs the shopper
+    // there first (3-D Secure), or the order's confirmation.
+    nextStep = nextStepAfterCheckout(result);
   } catch (error) {
     return toFormState(error);
   }
 
   revalidatePath('/cart');
   revalidatePath('/account');
-  redirect(`/account?tab=orders&placed=${orderId}`);
+  redirect(nextStep);
 }
 
 /**

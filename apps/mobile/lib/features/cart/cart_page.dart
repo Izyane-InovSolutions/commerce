@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
@@ -26,7 +25,7 @@ class CartPage extends StatelessWidget {
         Widget? fill;
         if (!signedIn) {
           fill = const SignInPrompt(
-            icon: Icons.shopping_bag_outlined,
+            icon: Glyphs.bag,
             title: 'Your cart lives in your account',
             message: 'Sign in to add things and check out with mobile money.',
             from: '/cart',
@@ -40,7 +39,7 @@ class CartPage extends StatelessWidget {
           );
         } else if (cart.isEmpty) {
           fill = EmptyState(
-            icon: Icons.shopping_bag_outlined,
+            icon: Glyphs.bag,
             title: 'Your cart is empty',
             message: 'Anything you add shows up here.',
             action: Button(
@@ -176,7 +175,7 @@ class _CartLine extends StatelessWidget {
                           child: Spinner(size: 20),
                         )
                       : IconAction(
-                          icon: Icons.delete_outline_rounded,
+                          icon: Glyphs.trash,
                           semanticLabel: 'Remove ${offer?.title ?? 'item'}',
                           color: colors.inkMuted,
                           onPressed: () =>

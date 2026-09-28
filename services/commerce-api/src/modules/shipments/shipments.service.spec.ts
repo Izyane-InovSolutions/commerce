@@ -367,6 +367,58 @@ describe('ShipmentsService', () => {
           data: expect.objectContaining({ status: ShipmentStatus.IN_TRANSIT }) as object,
         }),
       );
+      expect(outboxService.record).not.toHaveBeenCalled();
+    });
+
+    it('emits shipment.delivered in the same transaction when a shipment becomes DELIVERED', async () => {
+      prisma.tx.shipment.findUnique.mockResolvedValue({
+        id: 'ship-1',
+        orderId: 'order-1',
+        status: ShipmentStatus.OUT_FOR_DELIVERY,
+      });
+      prisma.tx.trackingEvent.create.mockResolvedValue({ id: 'te-1' });
+      const occurredAt = new Date('2026-09-01T10:00:00.000Z');
+
+      await service.addManualTrackingEvent(
+        'ship-1',
+        { normalizedStatus: ShipmentStatus.DELIVERED, occurredAt: occurredAt.toISOString() },
+        'admin-1',
+        Role.ADMIN,
+      );
+
+      expect(outboxService.record).toHaveBeenCalledTimes(1);
+      expect(outboxService.record).toHaveBeenCalledWith(
+        {
+          topic: 'shipment.delivered',
+          aggregateType: 'Shipment',
+          aggregateId: 'ship-1',
+          payload: {
+            shipmentId: 'ship-1',
+            orderId: 'order-1',
+            deliveredAt: occurredAt.toISOString(),
+          },
+        },
+        prisma.tx,
+      );
+    });
+
+    it('does not re-emit shipment.delivered for an already delivered shipment', async () => {
+      prisma.tx.shipment.findUnique.mockResolvedValue({
+        id: 'ship-1',
+        orderId: 'order-1',
+        status: ShipmentStatus.DELIVERED,
+      });
+      prisma.tx.trackingEvent.create.mockResolvedValue({ id: 'te-2' });
+
+      await service.addManualTrackingEvent(
+        'ship-1',
+        { normalizedStatus: ShipmentStatus.DELIVERED, occurredAt: new Date().toISOString() },
+        'admin-1',
+        Role.ADMIN,
+      );
+
+      expect(prisma.tx.shipment.update).not.toHaveBeenCalled();
+      expect(outboxService.record).not.toHaveBeenCalled();
     });
 
     it('does not regress a terminal status from a normal event', async () => {

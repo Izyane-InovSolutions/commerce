@@ -8,6 +8,7 @@ import { readCurrency } from '@/lib/currency-cookie';
 import { checkoutOffer, createAddress, getBuyNowQuote } from '@/lib/orders';
 import { toFormState, type FormState } from '@/lib/form';
 import { buildPaymentDetails } from '@/lib/payment-details';
+import { nextStepAfterCheckout } from '@/lib/payment-redirect';
 
 /**
  * Turns one offer directly into an order — "buy now" rather than
@@ -27,7 +28,7 @@ export async function buyNowAction(
     return { status: 'error', message: 'Choose a delivery address.' };
   }
 
-  let orderId: string;
+  let nextStep: string;
 
   try {
     const result = await checkoutOffer(
@@ -39,13 +40,15 @@ export async function buyNowAction(
       buildPaymentDetails(formData),
     );
 
-    orderId = result.order.id;
+    // Either the gateway's own page, when the payment needs the shopper
+    // there first (3-D Secure), or the order's confirmation.
+    nextStep = nextStepAfterCheckout(result);
   } catch (error) {
     return toFormState(error);
   }
 
   revalidatePath('/account');
-  redirect(`/account?tab=orders&placed=${orderId}`);
+  redirect(nextStep);
 }
 
 /** The cost breakdown this "buy now" checkout would charge right now. */

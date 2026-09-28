@@ -3,7 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, ReviewVisibility, SellerStatus } from '@prisma/client';
+import {
+  Prisma,
+  ProductStatus,
+  ReviewVisibility,
+  SellerStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import {
   PaginatedResult,
@@ -39,6 +44,14 @@ export type PublicStorefrontDetail = PublicStorefront & {
   ratingHistogram: RatingHistogram;
 };
 
+/** One store in the public directory (`GET storefronts`). */
+export type PublicStorefrontListing = PublicStorefront & {
+  averageRating: number | null;
+  ratingCount: number;
+  /** Published offers a shopper can see on the storefront right now. */
+  listingCount: number;
+};
+
 export const PUBLIC_STOREFRONT_SELECT = {
   id: true,
   storefrontSlug: true,
@@ -65,6 +78,8 @@ export type PublicSellerRating = {
   updatedAt: Date;
 };
 
+const STOREFRONT_DIRECTORY_LIMIT = 200;
+
 @Injectable()
 export class StorefrontsService {
   constructor(
@@ -83,6 +98,39 @@ export class StorefrontsService {
     });
     if (!storefront) throw new NotFoundException('Storefront not found');
     return this.withRatingAggregate(storefront);
+  }
+
+  /**
+   * Every approved store with a public storefront, A–Z, for the shop-by-store
+   * menu and directory. Stores with nothing listed are included — a new
+   * seller's page still exists — but callers can sort by `listingCount`.
+   */
+  async listPublic(): Promise<PublicStorefrontListing[]> {
+    const stores = await this.prisma.seller.findMany({
+      where: {
+        status: SellerStatus.APPROVED,
+        storefrontSlug: { not: null },
+        ownerUser: { isActive: true },
+      },
+      select: {
+        ...PUBLIC_STOREFRONT_SELECT,
+        ratingSummary: true,
+        _count: {
+          select: {
+            offers: { where: { status: ProductStatus.PUBLISHED } },
+          },
+        },
+      },
+      orderBy: [{ displayName: 'asc' }, { storefrontSlug: 'asc' }],
+      take: STOREFRONT_DIRECTORY_LIMIT,
+    });
+
+    return stores.map(({ ratingSummary, _count, ...store }) => ({
+      ...store,
+      averageRating: averageRatingFromSummary(ratingSummary),
+      ratingCount: ratingSummary?.ratingCount ?? 0,
+      listingCount: _count.offers,
+    }));
   }
 
   async findPublicRatings(

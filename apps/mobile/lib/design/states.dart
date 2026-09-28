@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 
+import 'glyphs.dart';
 import 'button.dart';
+import 'controls.dart';
 import 'spinner.dart';
 import 'theme.dart';
 import 'tokens.dart';
@@ -34,7 +35,7 @@ class ErrorState extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     return _Centered(
-      icon: Icons.wifi_off_rounded,
+      icon: Glyphs.offline,
       iconColor: colors.inkMuted,
       title: message,
       footer: [
@@ -71,7 +72,7 @@ class EmptyState extends StatelessWidget {
     this.action,
   });
 
-  final IconData icon;
+  final GlyphData icon;
   final String title;
   final String? message;
   final Widget? action;
@@ -95,7 +96,7 @@ class _Centered extends StatelessWidget {
     this.footer = const [],
   });
 
-  final IconData icon;
+  final GlyphData icon;
   final Color iconColor;
   final String title;
   final String? message;
@@ -120,7 +121,7 @@ class _Centered extends StatelessWidget {
                 color: colors.tile,
                 borderRadius: const BorderRadius.all(Radii.tile),
               ),
-              child: Icon(icon, size: 30, color: iconColor),
+              child: Glyph(icon, size: 30, color: iconColor),
             ),
             const SizedBox(height: Space.x5),
             Text(
@@ -140,6 +141,50 @@ class _Centered extends StatelessWidget {
               const SizedBox(height: Space.x6),
               ...footer,
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Something the person needs to read before going on — a declined card —
+/// set on its tone's wash, with a glyph so the tone is not colour alone.
+/// Announced as it appears.
+class Callout extends StatelessWidget {
+  const Callout({super.key, required this.message, this.tone = Tone.neutral});
+
+  final String message;
+  final Tone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final (background, foreground, glyph) = switch (tone) {
+      Tone.danger => (colors.dangerWash, colors.danger, Glyphs.alert),
+      Tone.warning => (colors.warningWash, colors.warning, Glyphs.clock),
+      Tone.accent => (colors.accentWash, colors.accent, Glyphs.checkCircle),
+      Tone.neutral => (colors.tile, colors.inkMuted, Glyphs.alert),
+    };
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        padding: const EdgeInsets.all(Space.x4),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: const BorderRadius.all(Radii.tile),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Glyph(glyph, size: 20, color: foreground),
+            const SizedBox(width: Space.x3),
+            Expanded(
+              child: Text(
+                message,
+                style: context.type.small.copyWith(color: colors.ink),
+              ),
+            ),
           ],
         ),
       ),

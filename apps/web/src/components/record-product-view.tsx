@@ -18,6 +18,7 @@ export function RecordProductView({
   imageUrl,
   priceAmount,
   priceCurrency,
+  categorySlug = null,
 }: {
   id: string;
   slug: string;
@@ -25,6 +26,7 @@ export function RecordProductView({
   imageUrl: string | null;
   priceAmount: number | null;
   priceCurrency: string | null;
+  categorySlug?: string | null;
 }) {
   useEffect(() => {
     recordProductView({
@@ -36,8 +38,9 @@ export function RecordProductView({
         priceAmount !== null && priceCurrency !== null
           ? { amount: priceAmount, currency: priceCurrency }
           : null,
+      categorySlug,
     });
-  }, [id, slug, name, imageUrl, priceAmount, priceCurrency]);
+  }, [id, slug, name, imageUrl, priceAmount, priceCurrency, categorySlug]);
 
   return null;
 }

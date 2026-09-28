@@ -7,6 +7,7 @@ import { Heart } from 'lucide-react';
 import { SubmitButton } from '@/components/submit-button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { buyNowHref } from '@/lib/buy-now';
 import { idleFormState, type FormState } from '@/lib/form';
 
 /**
@@ -23,6 +24,8 @@ export function ProductDetailActions({
   inStock,
   addToCart,
   addToWishlist,
+  canBuyNow = true,
+  variantId,
 }: {
   name: string;
   slug: string;
@@ -32,6 +35,11 @@ export function ProductDetailActions({
   inStock: boolean;
   addToCart: (state: FormState, formData: FormData) => Promise<FormState>;
   addToWishlist: () => Promise<FormState>;
+  /** False when the offer on show can't be bought outright. */
+  canBuyNow?: boolean;
+  /** The selected variant, passed on to buy-now so it buys that variant's
+   * offer rather than the product's lead one. */
+  variantId?: string;
 }) {
   const [state, formAction] = useActionState(addToCart, idleFormState);
   const [wishlistState, wishlistAction] = useActionState(
@@ -115,11 +123,13 @@ export function ProductDetailActions({
             Add to cart
           </SubmitButton>
         </form>
-        <Button asChild>
-          <Link href={`/buy-now/${slug}?quantity=${quantity}`}>
-            Buy it now
-          </Link>
-        </Button>
+        {canBuyNow ? (
+          <Button asChild>
+            <Link href={buyNowHref(slug, quantity, variantId)}>
+              Buy it now
+            </Link>
+          </Button>
+        ) : null}
       </div>
 
       {wishlistForm}

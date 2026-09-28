@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 
 import { backendListCategories } from '@commerce/api-client';
 
@@ -101,6 +102,12 @@ export default async function CategoriesPage() {
                 save={updateCategoryAction.bind(null, category.id)}
                 remove={deleteCategoryAction.bind(null, category.id)}
               />
+              <Link
+                href={`/categories/${category.id}`}
+                className="text-muted-foreground hover:text-foreground mt-1 inline-block text-xs underline underline-offset-4"
+              >
+                Attributes
+              </Link>
             </div>
           ))}
         </CardContent>

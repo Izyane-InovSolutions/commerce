@@ -56,13 +56,17 @@ const PACKED_OR_LATER = new Set<FulfillmentSummary>([
 
 type StepState = 'done' | 'current' | 'upcoming' | 'issue';
 
-type Step = {
+/** One milestone on a timeline — also what the return timeline is built
+ * from (`buildReturnTimeline`), so both read the same way. */
+export type TimelineStep = {
   key: string;
   label: string;
   detail?: string | null;
   timestamp?: string | null;
   state: StepState;
 };
+
+type Step = TimelineStep;
 
 function formatTimestamp(iso: string): string {
   return new Date(iso).toLocaleString('en-GB', {
@@ -99,7 +103,7 @@ function allEvents(shipments: OrderShipment[]): ShipmentTrackingEvent[] {
     .sort((a, b) => Date.parse(a.occurredAt) - Date.parse(b.occurredAt));
 }
 
-function TimelineList({ steps }: { steps: Step[] }) {
+export function TimelineList({ steps }: { steps: Step[] }) {
   return (
     <ol className="space-y-0">
       {steps.map((step, index) => {

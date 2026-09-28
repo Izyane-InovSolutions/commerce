@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 
 import { SiteFooter } from '@/components/site-footer';
+import { pageFrame } from '@/lib/page-frame';
 import { SiteHeader } from '@/components/site-header';
 
 import './globals.css';
@@ -33,7 +34,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
     >
       <body className="flex min-h-screen flex-col">
         <SiteHeader />
-        <main className="flex-1">{children}</main>
+        <main className={`${pageFrame} flex-1 py-12`}>{children}</main>
         <SiteFooter />
       </body>
     </html>

@@ -8,6 +8,7 @@ import {
 import { ProductStatus, ReviewVisibility, SellerStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import type { CategoryAttributesService } from '../catalog/categories/category-attributes.service';
 import type { InventoryService } from '../inventory/inventory.service';
 import type { SellersService } from '../sellers/sellers.service';
 import { ProductsService } from './products.service';
@@ -35,6 +36,7 @@ function buildPrisma(): {
   };
   productVariant: {
     findUnique: jest.Mock;
+    findMany: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
     updateMany: jest.Mock;
@@ -54,7 +56,12 @@ function buildPrisma(): {
   mediaAsset: { findUnique: jest.Mock; updateMany: jest.Mock };
   productRatingSummary: { findMany: jest.Mock };
   productReview: { findMany: jest.Mock; count: jest.Mock };
+  orderItem: { count: jest.Mock };
+  attributeValue: { findMany: jest.Mock };
+  category: { findMany: jest.Mock };
+  inventoryMovement: { count: jest.Mock };
   $transaction: jest.Mock;
+  $queryRaw: jest.Mock;
 } {
   const prisma = {
     product: {
@@ -76,6 +83,7 @@ function buildPrisma(): {
     },
     productVariant: {
       findUnique: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
       create: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
@@ -96,7 +104,12 @@ function buildPrisma(): {
       findUnique: jest.fn(),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
+    orderItem: { count: jest.fn().mockResolvedValue(0) },
+    attributeValue: { findMany: jest.fn().mockResolvedValue([]) },
+    category: { findMany: jest.fn().mockResolvedValue([]) },
+    inventoryMovement: { count: jest.fn().mockResolvedValue(0) },
     $transaction: jest.fn(),
+    $queryRaw: jest.fn().mockResolvedValue([]),
   };
   // Runs the callback with `prisma` standing in for the transaction client.
   prisma.$transaction.mockImplementation(
@@ -109,12 +122,14 @@ describe('ProductsService', () => {
   let prisma: ReturnType<typeof buildPrisma>;
   let inventory: ReturnType<typeof buildInventory>;
   let sellers: { requireApproved: jest.Mock; mine: jest.Mock };
+  let categoryAttributes: { effective: jest.Mock };
   let service: ProductsService;
 
   beforeEach(() => {
     prisma = buildPrisma();
     inventory = buildInventory();
     sellers = { requireApproved: jest.fn(), mine: jest.fn() };
+    categoryAttributes = { effective: jest.fn().mockResolvedValue([]) };
     service = new ProductsService(
       prisma as unknown as PrismaService,
       new MediaService(
@@ -124,6 +139,7 @@ describe('ProductsService', () => {
       ),
       inventory as unknown as InventoryService,
       sellers as unknown as SellersService,
+      categoryAttributes as unknown as CategoryAttributesService,
     );
   });
 
@@ -351,9 +367,15 @@ describe('ProductsService', () => {
       ]);
     });
 
-    it('filters by category slug, brand slug, and search text', async () => {
+    it('filters by category (sub-categories included), brand slug, and search text', async () => {
       prisma.product.findMany.mockResolvedValue([]);
       prisma.product.count.mockResolvedValue(0);
+      prisma.category.findMany.mockResolvedValue([
+        { id: 'shoes', slug: 'shoes', parentId: null },
+        { id: 'running', slug: 'running-shoes', parentId: 'shoes' },
+        { id: 'trail', slug: 'trail', parentId: 'running' },
+        { id: 'hats', slug: 'hats', parentId: null },
+      ]);
 
       await service.findPublished({
         currency: 'USD',
@@ -366,9 +388,9 @@ describe('ProductsService', () => {
 
       expect(prisma.product.count).toHaveBeenCalledWith({
         where: expect.objectContaining({
-          category: { slug: 'shoes' },
+          categoryId: { in: ['shoes', 'running', 'trail'] },
           brand: { slug: 'acme' },
-          OR: expect.any(Array) as unknown[],
+          AND: [{ OR: expect.any(Array) as unknown[] }],
         }) as object,
       });
     });
@@ -385,10 +407,10 @@ describe('ProductsService', () => {
       });
 
       const countCall = prisma.product.count.mock.calls[0] as [
-        { where: { OR: unknown[] } },
+        { where: { AND: { OR: unknown[] }[] } },
       ];
       const call = countCall[0];
-      expect(call.where.OR).toContainEqual({
+      expect(call.where.AND[0]?.OR).toContainEqual({
         variants: {
           some: {
             status: ProductStatus.PUBLISHED,
@@ -407,6 +429,109 @@ describe('ProductsService', () => {
             },
           },
         },
+      });
+    });
+
+    describe('multi-term search', () => {
+      async function searchWhere(q: string): Promise<Record<string, unknown>> {
+        prisma.product.findMany.mockResolvedValue([]);
+        prisma.product.count.mockResolvedValue(0);
+        await service.findPublished({ currency: 'USD', page: 1, limit: 20, q });
+        const [countArgs] = prisma.product.count.mock.calls[0] as [
+          { where: Record<string, unknown> },
+        ];
+        return countArgs.where;
+      }
+
+      function termFields(term: string): unknown[] {
+        const matches = { contains: term, mode: 'insensitive' };
+        return [
+          { name: matches },
+          { description: matches },
+          { brand: { name: matches } },
+          { category: { name: matches } },
+          {
+            variants: {
+              some: { status: ProductStatus.PUBLISHED, skuCode: matches },
+            },
+          },
+          {
+            variants: {
+              some: {
+                status: ProductStatus.PUBLISHED,
+                offers: {
+                  some: {
+                    status: ProductStatus.PUBLISHED,
+                    seller: {
+                      is: {
+                        displayName: matches,
+                        status: SellerStatus.APPROVED,
+                        storefrontSlug: { not: null },
+                        ownerUser: { isActive: true },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        ];
+      }
+
+      it('requires every term to match, each on any searchable field', async () => {
+        const where = await searchWhere('  acme   Red ');
+
+        expect(where.AND).toEqual([
+          { OR: termFields('acme') },
+          { OR: termFields('Red') },
+        ]);
+        expect(where.OR).toBeUndefined();
+      });
+
+      it('keeps the other filters and published-only status alongside the terms', async () => {
+        prisma.product.findMany.mockResolvedValue([]);
+        prisma.product.count.mockResolvedValue(0);
+
+        await service.findPublished({
+          currency: 'USD',
+          page: 1,
+          limit: 20,
+          q: 'red shoes',
+          brandSlug: 'acme',
+        });
+
+        const [countArgs] = prisma.product.count.mock.calls[0] as [
+          { where: Record<string, unknown> },
+        ];
+        expect(countArgs.where).toMatchObject({
+          status: ProductStatus.PUBLISHED,
+          brand: { slug: 'acme' },
+        });
+        expect(countArgs.where.AND).toHaveLength(2);
+      });
+
+      it('applies no text filter when the query has no usable terms', async () => {
+        const where = await searchWhere('   ,, -- ');
+
+        expect(where.AND).toBeUndefined();
+        expect(where.OR).toBeUndefined();
+      });
+
+      it('leaves ordering exactly as it was without a search', async () => {
+        prisma.product.findMany.mockResolvedValue([]);
+        prisma.product.count.mockResolvedValue(0);
+
+        await service.findPublished({
+          currency: 'USD',
+          page: 1,
+          limit: 20,
+          q: 'red shoes',
+          sort: 'name:asc',
+        });
+
+        expect(prisma.product.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ orderBy: [{ name: 'asc' }] }),
+        );
       });
     });
   });
@@ -673,6 +798,191 @@ describe('ProductsService', () => {
     });
   });
 
+  describe('remove / removeVariant', () => {
+    beforeEach(() => {
+      prisma.product.findUnique.mockResolvedValue({ id: 'p1', media: [] });
+      prisma.productVariant.findUnique.mockResolvedValue({
+        id: 'v1',
+        productId: 'p1',
+      });
+    });
+
+    it('deletes a product that has never sold or held stock', async () => {
+      await service.remove('p1');
+
+      expect(prisma.orderItem.count).toHaveBeenCalledWith({
+        where: { offer: { variant: { productId: 'p1' } } },
+      });
+      expect(prisma.product.delete).toHaveBeenCalledWith({
+        where: { id: 'p1' },
+      });
+    });
+
+    it('refuses to delete a product with order history', async () => {
+      prisma.orderItem.count.mockResolvedValue(3);
+
+      await expect(service.remove('p1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(prisma.product.delete).not.toHaveBeenCalled();
+    });
+
+    it('refuses to delete a variant with stock movements', async () => {
+      prisma.inventoryMovement.count.mockResolvedValue(1);
+
+      await expect(service.removeVariant('p1', 'v1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(prisma.inventoryMovement.count).toHaveBeenCalledWith({
+        where: { inventoryRecord: { variant: { id: 'v1' } } },
+      });
+      expect(prisma.productVariant.delete).not.toHaveBeenCalled();
+    });
+
+    it('maps a restricting foreign key to the same conflict', async () => {
+      prisma.productVariant.delete.mockRejectedValue({ code: 'P2003' });
+
+      await expect(service.removeVariant('p1', 'v1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+    });
+  });
+
+  describe('category attribute rules on variants', () => {
+    const rule = (
+      attributeId: string,
+      name: string,
+      isRequired: boolean,
+    ): Record<string, unknown> => ({
+      attributeId,
+      code: name.toLowerCase(),
+      name,
+      isRequired,
+      inheritedFrom: null,
+      values: [],
+    });
+    const value = (
+      id: string,
+      attributeId: string,
+      name: string,
+    ): Record<string, unknown> => ({
+      id,
+      value: id,
+      attributeId,
+      attribute: { name },
+    });
+
+    beforeEach(() => {
+      // findByIdAdmin, then the rule lookup inside the transaction.
+      prisma.product.findUnique.mockResolvedValue({
+        id: 'p1',
+        media: [],
+        category: { id: 'phones', name: 'Smartphones' },
+      });
+      categoryAttributes.effective.mockResolvedValue([
+        rule('color', 'Color', true),
+        rule('storage', 'Storage', true),
+        rule('carrier', 'Carrier', false),
+      ]);
+      prisma.productVariant.create.mockResolvedValue({ id: 'v1' });
+      prisma.productVariant.findUnique.mockResolvedValue({
+        id: 'v1',
+        attributeValues: [],
+        offers: [],
+      });
+    });
+
+    it('accepts one value per attribute with every required one present', async () => {
+      prisma.attributeValue.findMany.mockResolvedValue([
+        value('black', 'color', 'Color'),
+        value('256', 'storage', 'Storage'),
+      ]);
+
+      await service.addVariant('p1', {
+        skuCode: 'P-BLK-256',
+        attributeValueIds: ['black', '256'],
+      });
+
+      expect(prisma.productVariant.create).toHaveBeenCalled();
+    });
+
+    it('refuses a variant missing a required attribute', async () => {
+      prisma.attributeValue.findMany.mockResolvedValue([
+        value('black', 'color', 'Color'),
+      ]);
+
+      await expect(
+        service.addVariant('p1', {
+          skuCode: 'P-BLK',
+          attributeValueIds: ['black'],
+        }),
+      ).rejects.toThrow('Variants in Smartphones need Storage');
+      expect(prisma.productVariant.create).not.toHaveBeenCalled();
+    });
+
+    it("refuses an attribute the category doesn't use", async () => {
+      prisma.attributeValue.findMany.mockResolvedValue([
+        value('black', 'color', 'Color'),
+        value('256', 'storage', 'Storage'),
+        value('xl', 'size', 'Size'),
+      ]);
+
+      await expect(
+        service.addVariant('p1', {
+          skuCode: 'P-BLK-256-XL',
+          attributeValueIds: ['black', '256', 'xl'],
+        }),
+      ).rejects.toThrow("Size isn't an attribute of Smartphones");
+    });
+
+    it('refuses two values of the same attribute', async () => {
+      prisma.attributeValue.findMany.mockResolvedValue([
+        value('black', 'color', 'Color'),
+        value('silver', 'color', 'Color'),
+        value('256', 'storage', 'Storage'),
+      ]);
+
+      await expect(
+        service.addVariant('p1', {
+          skuCode: 'P-X',
+          attributeValueIds: ['black', 'silver', '256'],
+        }),
+      ).rejects.toThrow('A variant can have only one Color');
+    });
+
+    it('refuses a combination another variant already has', async () => {
+      prisma.attributeValue.findMany.mockResolvedValue([
+        value('black', 'color', 'Color'),
+        value('256', 'storage', 'Storage'),
+      ]);
+      prisma.productVariant.findMany.mockResolvedValue([
+        {
+          skuCode: 'P-BLK-256',
+          attributeValues: [
+            { attributeValueId: '256' },
+            { attributeValueId: 'black' },
+          ],
+        },
+      ]);
+
+      await expect(
+        service.addVariant('p1', {
+          skuCode: 'P-BLK-256-2',
+          attributeValueIds: ['black', '256'],
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('leaves a product without category rules unrestricted', async () => {
+      categoryAttributes.effective.mockResolvedValue([]);
+
+      await service.addVariant('p1', { skuCode: 'P-ANY' });
+
+      expect(prisma.attributeValue.findMany).not.toHaveBeenCalled();
+      expect(prisma.productVariant.create).toHaveBeenCalled();
+    });
+  });
+
   describe('attachMedia', () => {
     it('rejects when the media asset does not exist', async () => {
       prisma.product.findUnique.mockResolvedValue({ id: 'p1', media: [] });
@@ -874,6 +1184,293 @@ describe('ProductsService', () => {
         }) as object,
       });
       expect(prisma.productVariant.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findBestSellers', () => {
+    const publishedProduct = (id: string): Record<string, unknown> => ({
+      id,
+      name: `Product ${id}`,
+      slug: id,
+      description: null,
+      status: ProductStatus.PUBLISHED,
+      isReturnable: true,
+      returnWindowDays: null,
+      brand: null,
+      category: null,
+      media: [],
+      variants: [
+        {
+          id: `${id}-v`,
+          skuCode: `${id}-SKU`,
+          name: null,
+          status: ProductStatus.PUBLISHED,
+          attributeValues: [],
+          offers: [
+            {
+              id: `${id}-o`,
+              status: ProductStatus.PUBLISHED,
+              sellerId: null,
+              stockSource: 'PLATFORM',
+              shippingAmount: null,
+              shippingCurrency: null,
+              prices: [
+                {
+                  id: `${id}-price`,
+                  amount: 1500,
+                  currency: 'ZMW',
+                  startsAt: new Date(Date.now() - 1000),
+                  endsAt: null,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    it('returns an empty list without loading products when nothing sold', async () => {
+      prisma.$queryRaw.mockResolvedValue([]);
+
+      await expect(
+        service.findBestSellers({ limit: 24, days: 30, currency: 'ZMW' }),
+      ).resolves.toEqual({ items: [] });
+      expect(prisma.product.findMany).not.toHaveBeenCalled();
+    });
+
+    it('keeps sales rank order, skips ineligible products and maps items like the listing', async () => {
+      prisma.$queryRaw.mockResolvedValue([
+        { productId: 'p-top' },
+        { productId: 'p-hidden' },
+        { productId: 'p-second' },
+      ]);
+      prisma.product.findMany
+        // Eligibility check: the hidden product's only seller isn't approved.
+        .mockResolvedValueOnce([{ id: 'p-second' }, { id: 'p-top' }])
+        // Full load comes back in arbitrary order.
+        .mockResolvedValueOnce([
+          publishedProduct('p-second'),
+          publishedProduct('p-top'),
+        ]);
+
+      const result = await service.findBestSellers({
+        limit: 24,
+        days: 30,
+        currency: 'ZMW',
+      });
+
+      expect(result.items.map((item) => item.id)).toEqual(['p-top', 'p-second']);
+      expect(result.items[0]?.variants[0]?.offers[0]?.currentPrice).toEqual({
+        amount: 1500,
+        currency: 'ZMW',
+      });
+      expect(result.items[0]).toHaveProperty('ratingHistogram');
+      const eligibilityWhere = (
+        prisma.product.findMany.mock.calls[0] as [
+          { where: Record<string, unknown> },
+        ]
+      )[0].where;
+      expect(eligibilityWhere).toMatchObject({
+        id: { in: ['p-top', 'p-hidden', 'p-second'] },
+        status: ProductStatus.PUBLISHED,
+      });
+    });
+
+    it('stops at the requested limit', async () => {
+      prisma.$queryRaw.mockResolvedValue([
+        { productId: 'a' },
+        { productId: 'b' },
+        { productId: 'c' },
+      ]);
+      prisma.product.findMany
+        .mockResolvedValueOnce([{ id: 'a' }, { id: 'b' }, { id: 'c' }])
+        .mockResolvedValueOnce([publishedProduct('a'), publishedProduct('b')]);
+
+      await service.findBestSellers({ limit: 2, days: 7, currency: 'ZMW' });
+
+      expect(prisma.product.findMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({ where: { id: { in: ['a', 'b'] } } }),
+      );
+    });
+  });
+
+  describe('seller product edits', () => {
+    beforeEach(() => {
+      sellers.requireApproved.mockResolvedValue({ id: 'seller-1' });
+      sellers.mine.mockResolvedValue({ id: 'seller-1' });
+    });
+
+    it('404s for a product submitted by another seller', async () => {
+      prisma.product.findUnique.mockResolvedValue({
+        createdBySellerId: 'someone-else',
+      });
+
+      await expect(
+        service.updateSellerProduct('user-1', 'p1', { name: 'New' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.product.update).not.toHaveBeenCalled();
+    });
+
+    it('edits a pending or rejected submission and (re)queues it for review', async () => {
+      prisma.product.findUnique
+        .mockResolvedValueOnce({ createdBySellerId: 'seller-1' })
+        .mockResolvedValueOnce({
+          id: 'p1',
+          createdBySellerId: 'seller-1',
+          media: [],
+        });
+
+      await service.updateSellerProduct('user-1', 'p1', {
+        name: 'Better name',
+        brandId: null,
+      });
+
+      expect(prisma.product.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'p1',
+          createdBySellerId: 'seller-1',
+          submissionStatus: { in: ['PENDING', 'REJECTED'] },
+        },
+        data: {
+          submissionStatus: 'PENDING',
+          reviewReason: null,
+          reviewedBy: null,
+          reviewedAt: null,
+        },
+      });
+      expect(prisma.product.update).toHaveBeenCalledWith({
+        where: { id: 'p1' },
+        data: { name: 'Better name', brandId: null },
+      });
+    });
+
+    it('refuses to edit an approved (live) product with 409', async () => {
+      prisma.product.findUnique.mockResolvedValue({
+        createdBySellerId: 'seller-1',
+      });
+      prisma.product.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.updateSellerProduct('user-1', 'p1', { name: 'New' }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.product.update).not.toHaveBeenCalled();
+    });
+
+    it('edits a variant on the seller own submission', async () => {
+      prisma.product.findUnique.mockResolvedValue({
+        createdBySellerId: 'seller-1',
+      });
+      prisma.productVariant.findUnique
+        .mockResolvedValueOnce({ id: 'v1', productId: 'p1' })
+        .mockResolvedValueOnce({ id: 'v1', attributeValues: [], offers: [] });
+
+      await service.updateSellerVariant('user-1', 'p1', 'v1', {
+        skuCode: 'NEW-SKU',
+        attributeValueIds: ['av-1'],
+      });
+
+      expect(prisma.productVariant.update).toHaveBeenCalledWith({
+        where: { id: 'v1' },
+        data: { skuCode: 'NEW-SKU', name: undefined },
+      });
+      expect(prisma.productVariantAttributeValue.createMany).toHaveBeenCalledWith(
+        { data: [{ variantId: 'v1', attributeValueId: 'av-1' }] },
+      );
+    });
+
+    it('404s for a variant that belongs to a different product', async () => {
+      prisma.product.findUnique.mockResolvedValue({
+        createdBySellerId: 'seller-1',
+      });
+      prisma.productVariant.findUnique.mockResolvedValue({
+        id: 'v1',
+        productId: 'other',
+      });
+
+      await expect(
+        service.updateSellerVariant('user-1', 'p1', 'v1', { name: 'x' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('maps a duplicate SKU on edit to 409', async () => {
+      prisma.product.findUnique.mockResolvedValue({
+        createdBySellerId: 'seller-1',
+      });
+      prisma.productVariant.findUnique.mockResolvedValue({
+        id: 'v1',
+        productId: 'p1',
+      });
+      prisma.productVariant.update.mockRejectedValue({ code: 'P2002' });
+
+      await expect(
+        service.updateSellerVariant('user-1', 'p1', 'v1', { skuCode: 'DUP' }),
+      ).rejects.toThrow('A variant with this SKU code already exists');
+    });
+
+    it('deletes an unreviewed submission with no history', async () => {
+      prisma.product.findUnique.mockResolvedValue({
+        createdBySellerId: 'seller-1',
+      });
+
+      await service.removeSellerProduct('user-1', 'p1');
+
+      expect(prisma.product.delete).toHaveBeenCalledWith({
+        where: { id: 'p1' },
+      });
+    });
+
+    it('refuses to delete a product with order or stock history', async () => {
+      prisma.product.findUnique.mockResolvedValue({
+        createdBySellerId: 'seller-1',
+      });
+      prisma.orderItem.count.mockResolvedValue(1);
+
+      await expect(
+        service.removeSellerProduct('user-1', 'p1'),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.product.delete).not.toHaveBeenCalled();
+    });
+
+    it('refuses to delete an approved product', async () => {
+      prisma.product.findUnique.mockResolvedValue({
+        createdBySellerId: 'seller-1',
+      });
+      prisma.product.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.removeSellerProduct('user-1', 'p1'),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.product.delete).not.toHaveBeenCalled();
+    });
+
+    it('deletes a variant and resubmits the product', async () => {
+      prisma.product.findUnique.mockResolvedValue({
+        createdBySellerId: 'seller-1',
+      });
+      prisma.productVariant.findUnique.mockResolvedValue({
+        id: 'v1',
+        productId: 'p1',
+      });
+
+      await service.removeSellerVariant('user-1', 'p1', 'v1');
+
+      expect(prisma.product.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ submissionStatus: 'PENDING' }) as object,
+        }),
+      );
+      expect(prisma.productVariant.delete).toHaveBeenCalledWith({
+        where: { id: 'v1' },
+      });
+    });
+
+    it('requires an approved seller', async () => {
+      sellers.requireApproved.mockRejectedValue(new Error('Seller approval is required'));
+
+      await expect(
+        service.removeSellerVariant('user-1', 'p1', 'v1'),
+      ).rejects.toThrow('Seller approval is required');
+      expect(prisma.productVariant.delete).not.toHaveBeenCalled();
     });
   });
 });

@@ -10,6 +10,7 @@ import {
 
 import { apiClient } from '@/lib/api';
 import { toFormState, type FormState } from '@/lib/form';
+import { guardAction } from '@/lib/session';
 
 const REVIEWERS = {
   approve: backendApproveSeller,
@@ -43,6 +44,11 @@ export async function reviewSellerAction(
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const denied = await guardAction(true);
+  if (denied) {
+    return denied;
+  }
+
   const decision = String(formData.get('decision') ?? '');
   if (!isDecision(decision)) {
     return { status: 'error', message: 'Choose a decision.' };

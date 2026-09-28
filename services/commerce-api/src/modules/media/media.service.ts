@@ -17,6 +17,7 @@ import type {
   StoredObject,
 } from '../../infrastructure/storage/storage-provider';
 import { ReserveUploadDto } from './dto/reserve-upload.dto';
+import { contentMatchesMediaType } from './media-signature';
 
 export type SignedMediaUrl = { url: string; expiresAt: string };
 export type SerializedMediaAsset = Omit<MediaAsset, 'byteSize'> & {
@@ -137,6 +138,15 @@ export class MediaService {
         'Uploaded file does not match its reservation',
       );
     }
+    // The MIME type above is whatever the client put in the part's
+    // Content-Type, so on its own it proves nothing. Sniff the bytes too:
+    // this is what stops an HTML or SVG payload being stored as an "image"
+    // and later served back under an image type from our own origin.
+    if (!contentMatchesMediaType(file.buffer, asset.mimeType)) {
+      throw new BadRequestException(
+        `Uploaded file content is not a valid ${asset.mimeType} file`,
+      );
+    }
     await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.mediaAsset.updateMany({
         where: {
@@ -148,7 +158,7 @@ export class MediaService {
       });
       if (claimed.count !== 1)
         throw new ConflictException('Upload is already completed');
-      await this.storage.put(asset.storageKey, file.buffer, file.mimetype);
+      await this.storage.put(asset.storageKey, file.buffer, asset.mimeType);
     });
   }
 

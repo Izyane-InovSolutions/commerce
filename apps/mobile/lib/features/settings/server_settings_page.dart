@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import '../../app/brand.dart';
 import '../../app/services.dart';
 import '../../core/config/api_endpoint.dart';
 import '../../core/config/app_config.dart';
@@ -104,7 +105,7 @@ class _ServerSettingsPageState extends State<ServerSettingsPage> {
       _Probe.idle || _Probe.checking => (null, colors.inkMuted),
       _Probe.healthy => ('Connected. The API is healthy.', colors.accent),
       _Probe.notCommerce => (
-        'Something answered, but it is not the Commerce API.',
+        'Something answered, but it is not the ${AppBrand.name} API.',
         colors.warning,
       ),
       _Probe.failed => (_probeMessage, colors.danger),

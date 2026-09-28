@@ -1,10 +1,16 @@
 import type {
+  BackendAssignWorkItemInput,
+  BackendCancelFulfillmentLinesInput,
+  BackendCreateFulfillmentExceptionInput,
   BackendDispatchInput,
   BackendFulfillmentDispatch,
+  BackendFulfillmentEvent,
   BackendFulfillmentOrder,
   BackendFulfillmentStatus,
   BackendItemsPage,
+  BackendFulfillmentWorkItemType,
   BackendRecordQuantitiesInput,
+  BackendResolveFulfillmentExceptionInput,
   BackendVersionInput,
 } from '@commerce/contracts';
 
@@ -116,6 +122,62 @@ export function backendDispatchFulfillment(
   idempotencyKey: string,
 ): Promise<BackendFulfillmentDispatch> {
   return client.post(`/admin/fulfillments/${id}/dispatches`, {
+    body: input,
+    idempotencyKey,
+  });
+}
+
+/** The fulfillment order's own history, newest first. */
+export function backendListFulfillmentEvents(
+  client: ApiClient,
+  id: string,
+): Promise<BackendFulfillmentEvent[]> {
+  return client.get(`/admin/fulfillments/${id}/events`, { cache: 'no-store' });
+}
+
+/** ADMIN-only. `version` is the work item's own, not the fulfillment order's. */
+export function backendAssignWorkItem(
+  client: ApiClient,
+  id: string,
+  type: BackendFulfillmentWorkItemType,
+  input: BackendAssignWorkItemInput,
+): Promise<BackendFulfillmentOrder> {
+  return client.post(
+    `/admin/fulfillments/${id}/work-items/${type.toLowerCase()}/assign`,
+    { body: input },
+  );
+}
+
+/** Raising an exception puts the whole fulfillment order on hold. */
+export function backendCreateFulfillmentException(
+  client: ApiClient,
+  id: string,
+  input: BackendCreateFulfillmentExceptionInput,
+): Promise<BackendFulfillmentOrder> {
+  return client.post(`/admin/fulfillments/${id}/exceptions`, { body: input });
+}
+
+/** ADMIN-only. Resolving an already-resolved exception is a no-op. */
+export function backendResolveFulfillmentException(
+  client: ApiClient,
+  id: string,
+  exceptionId: string,
+  input: BackendResolveFulfillmentExceptionInput,
+): Promise<BackendFulfillmentOrder> {
+  return client.post(
+    `/admin/fulfillments/${id}/exceptions/${exceptionId}/resolve`,
+    { body: input },
+  );
+}
+
+/** ADMIN-only. Cancels quantity off lines and returns that stock. */
+export function backendCancelFulfillmentLines(
+  client: ApiClient,
+  id: string,
+  input: BackendCancelFulfillmentLinesInput,
+  idempotencyKey: string,
+): Promise<BackendFulfillmentOrder> {
+  return client.post(`/admin/fulfillments/${id}/cancellations`, {
     body: input,
     idempotencyKey,
   });

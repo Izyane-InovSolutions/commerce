@@ -1,17 +1,22 @@
+import { CategoriesModule } from '../catalog/categories/categories.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { MediaModule } from '../media/media.module';
 import { Module } from '@nestjs/common';
 
 import { SellersModule } from '../sellers/sellers.module';
 import { AdminProductsController } from './admin-products.controller';
+import { BestSellersController } from './best-sellers.controller';
+import { DealsController } from './deals.controller';
 import { ProductsController } from './products.controller';
 import { ProductsService } from './products.service';
 import { SellerProductsController } from './seller-products.controller';
 
 @Module({
-  imports: [MediaModule, InventoryModule, SellersModule],
+  imports: [MediaModule, InventoryModule, SellersModule, CategoriesModule],
   controllers: [
     ProductsController,
+    BestSellersController,
+    DealsController,
     AdminProductsController,
     SellerProductsController,
   ],

@@ -905,6 +905,41 @@ describe('FulfillmentsService', () => {
         );
       });
 
+      it('emits fulfillment.dispatched with the warehouse path\'s payload shape', async () => {
+        prisma.tx.fulfillmentOrder.findUnique.mockResolvedValue(
+          sellerFoRow({
+            status: 'PACKED',
+            lines: [fulfillmentLine({ packedQuantity: 10 })],
+          }),
+        );
+        prisma.tx.shipment.create.mockResolvedValue({ id: 'ship-1', lines: [] });
+        prisma.tx.fulfillmentDispatch.create.mockResolvedValue({ id: 'disp-1', lines: [] });
+
+        await service.dispatchSellerFulfillment(
+          'fo-1',
+          'user-1',
+          { lines: [{ fulfillmentLineId: 'fl-1', quantity: 4 }], carrierCode: 'DHL' },
+          'user-1',
+          'idem-d4',
+        );
+
+        expect(outboxService.record).toHaveBeenCalledWith(
+          {
+            topic: 'fulfillment.dispatched',
+            aggregateType: 'FulfillmentDispatch',
+            aggregateId: 'disp-1',
+            payload: {
+              fulfillmentOrderId: 'fo-1',
+              orderId: 'order-1',
+              dispatchNumber: 'FD-2026-000001',
+              shipmentId: 'ship-1',
+              lines: [{ lineId: 'fl-1', quantity: 4 }],
+            },
+          },
+          prisma.tx,
+        );
+      });
+
       it('replays a dispatch idempotency key without re-dispatching', async () => {
         prisma.tx.fulfillmentOrder.findUnique.mockResolvedValue(
           sellerFoRow({ status: 'PACKED', lines: [fulfillmentLine({ packedQuantity: 10 })] }),
@@ -929,6 +964,7 @@ describe('FulfillmentsService', () => {
         );
 
         expect(prisma.tx.shipment.create).not.toHaveBeenCalled();
+        expect(outboxService.record).not.toHaveBeenCalled();
       });
 
       it('rejects dispatching more than the packed-but-undispatched quantity', async () => {

@@ -14,7 +14,7 @@ class SignInPrompt extends StatelessWidget {
     required this.from,
   });
 
-  final IconData icon;
+  final GlyphData icon;
   final String title;
   final String message;
   final String from;

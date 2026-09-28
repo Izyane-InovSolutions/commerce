@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
@@ -6,6 +5,7 @@ import '../../app/services.dart';
 import '../../design/design.dart';
 import '../../domain/account.dart';
 import '../../domain/checkout.dart';
+import 'card_form.dart';
 import 'checkout_controller.dart';
 
 class CheckoutPage extends StatefulWidget {
@@ -18,6 +18,7 @@ class CheckoutPage extends StatefulWidget {
 class _CheckoutPageState extends State<CheckoutPage> {
   late final CheckoutController _checkout;
   final _phone = TextEditingController();
+  final _failureKey = GlobalKey();
   bool _initialised = false;
 
   @override
@@ -29,6 +30,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     _checkout = CheckoutController(
       account: services.account,
       checkout: services.checkout,
+      email: services.session.user?.email,
     );
     _checkout.start().then((_) {
       if (mounted && _phone.text.isEmpty) _phone.text = _checkout.phone;
@@ -61,7 +63,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
             address.label ?? address.recipientName,
             subtitle: address.lines.join(', '),
           ),
-        const SheetOption('', 'Add a new address', icon: Icons.add_rounded),
+        const SheetOption('', 'Add a new address', icon: Glyphs.add),
       ],
     );
     if (!mounted || chosen == null) return;
@@ -75,13 +77,46 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   Future<void> _place() async {
+    final method = _checkout.method;
     final result = await _checkout.placeOrder();
-    if (result == null || !mounted) return;
-    // The server empties the cart once the order exists.
+    if (!mounted) return;
+    if (result == null) {
+      // A declined card is told where it can be acted on: bring the reason
+      // into view beside the card details, wherever the page was scrolled.
+      if (_checkout.placeError != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final target = _failureKey.currentContext;
+          if (target != null && target.mounted) {
+            Scrollable.ensureVisible(
+              target,
+              alignment: 0.4,
+              duration: context.reduceMotion ? Duration.zero : Motion.base,
+              curve: Motion.standard,
+            );
+          }
+        });
+      }
+      return;
+    }
+    // The server empties the cart once the order exists and its payment is
+    // under way. (A payment that failed on the spot keeps the cart, and
+    // never gets here.)
     context.services.cart.markCheckedOut();
     context.pushReplacement(
-      '/checkout/payment/${result.paymentId}?order=${result.orderId}',
+      '/checkout/payment/${result.paymentId}'
+      '?order=${result.orderId}&method=${method.name}',
     );
+  }
+
+  String get _payLabel {
+    if (_checkout.address == null) return 'Add an address to pay';
+    return switch (_checkout.method) {
+      PaymentMethod.card => 'Pay by card',
+      PaymentMethod.mobileMoney =>
+        _checkout.phoneValid
+            ? 'Pay with ${_checkout.provider.label}'
+            : 'Enter your mobile money number',
+    };
   }
 
   @override
@@ -128,14 +163,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
               Expanded(
                 child: Button(
                   // A disabled button that does not say why is a dead end.
-                  label: address == null
-                      ? 'Add an address to pay'
-                      : !_checkout.phoneValid
-                      ? 'Enter your mobile money number'
-                      : 'Pay with ${_checkout.provider.label}',
+                  label: _payLabel,
                   loading: _checkout.placing,
                   haptic: Haptic.medium,
-                  onPressed: _checkout.canPlace ? _place : null,
+                  onPressed: _checkout.canSubmit ? _place : null,
                 ),
               ),
             ],
@@ -153,7 +184,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           'Delivery times and costs appear once there is an address.',
                       children: [
                         ListRow(
-                          leading: Icons.add_location_alt_outlined,
+                          leading: Glyphs.pinAdd,
                           title: 'Add an address',
                           onPressed: _addAddress,
                         ),
@@ -164,7 +195,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       title: 'Deliver to',
                       children: [
                         ListRow(
-                          leading: Icons.location_on_outlined,
+                          leading: Glyphs.pin,
                           title: address.recipientName,
                           subtitle: address.lines.join('\n'),
                           trailing: Text(
@@ -198,7 +229,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       title: 'Delivery',
                       children: [
                         ListRow(
-                          leading: Icons.error_outline_rounded,
+                          leading: Glyphs.alert,
                           title: _checkout.quoteError!,
                           destructive: true,
                           trailing: Text(
@@ -216,7 +247,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       children: [
                         for (final (index, group) in quote.groups.indexed)
                           ListRow(
-                            leading: Icons.local_shipping_outlined,
+                            leading: Glyphs.truck,
                             title: quote.groups.length > 1
                                 ? 'Shipment ${index + 1} of ${quote.groups.length}'
                                 : 'Standard delivery',
@@ -239,44 +270,105 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       ],
                     ),
                   const SizedBox(height: Space.x6),
+                  const GroupTitle('Pay with'),
+                  ChoiceTiles<PaymentMethod>(
+                    value: _checkout.method,
+                    onChanged: _checkout.setMethod,
+                    options: const [
+                      ChoiceTile(
+                        PaymentMethod.mobileMoney,
+                        'Mobile money',
+                        glyph: Glyphs.phone,
+                        detail: 'MTN · Airtel',
+                      ),
+                      ChoiceTile(
+                        PaymentMethod.card,
+                        'Card',
+                        glyph: Glyphs.card,
+                        detail: 'Visa · Mastercard',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: Space.x3),
                   InsetGroup(
-                    title: 'Pay with',
+                    footer: _checkout.method == PaymentMethod.card
+                        ? 'Cards are charged in US dollars at today\'s rate, '
+                              'so your bank may add a foreign-currency fee. '
+                              'Card details are used for this payment only '
+                              'and never saved on this phone.'
+                        : null,
                     children: [
                       Padding(
                         padding: const EdgeInsets.all(Space.x4),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            SegmentedChoice<MobileMoneyProvider>(
-                              options: {
-                                for (final provider
-                                    in MobileMoneyProvider.values)
-                                  provider: provider.label,
-                              },
-                              value: _checkout.provider,
-                              onChanged: _checkout.setProvider,
-                            ),
-                            const SizedBox(height: Space.x4),
-                            InputField(
-                              controller: _phone,
-                              label: 'Mobile money number',
-                              hint: '097 123 4567',
-                              leading: Icons.phone_iphone_rounded,
-                              keyboardType: TextInputType.phone,
-                              onChanged: _checkout.setPhone,
-                              helper:
-                                  "You'll get a prompt on this phone to approve the payment.",
-                              error:
-                                  _phone.text.isNotEmpty &&
-                                      !_checkout.phoneValid
-                                  ? 'Enter a Zambian mobile number, like 0971234567'
-                                  : null,
-                            ),
+                            if (_checkout.method == PaymentMethod.card)
+                              CardForm(checkout: _checkout)
+                            else ...[
+                              SegmentedChoice<MobileMoneyProvider>(
+                                options: {
+                                  for (final provider
+                                      in MobileMoneyProvider.values)
+                                    provider: provider.label,
+                                },
+                                value: _checkout.provider,
+                                onChanged: _checkout.setProvider,
+                              ),
+                              const SizedBox(height: Space.x4),
+                              InputField(
+                                controller: _phone,
+                                label: 'Mobile money number',
+                                hint: '097 123 4567',
+                                leading: Glyphs.phone,
+                                keyboardType: TextInputType.phone,
+                                onChanged: _checkout.setPhone,
+                                helper:
+                                    "You'll get a prompt on this phone to approve the payment.",
+                                error:
+                                    _phone.text.isNotEmpty &&
+                                        !_checkout.phoneValid
+                                    ? 'Enter a Zambian mobile number, like 0971234567'
+                                    : null,
+                              ),
+                            ],
                           ],
                         ),
                       ),
+                      if (_checkout.method == PaymentMethod.card &&
+                          address != null)
+                        SwitchRow(
+                          title: 'Bill to the delivery address',
+                          subtitle: _checkout.billingSameAsDelivery
+                              ? address.lines.first
+                              : null,
+                          value: _checkout.billingSameAsDelivery,
+                          onChanged: _checkout.setBillingSameAsDelivery,
+                        ),
                     ],
                   ),
+                  if (_checkout.placeError != null) ...[
+                    const SizedBox(height: Space.x3),
+                    Callout(
+                      key: _failureKey,
+                      message: _checkout.placeError!,
+                      tone: Tone.danger,
+                    ),
+                  ],
+                  if (_checkout.method == PaymentMethod.card &&
+                      !_checkout.billingSameAsDelivery) ...[
+                    const SizedBox(height: Space.x6),
+                    InsetGroup(
+                      title: 'Billing address',
+                      footer: 'Where your card statements are sent.',
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(Space.x4),
+                          child: BillingForm(checkout: _checkout),
+                        ),
+                      ],
+                    ),
+                  ],
                   if (quote != null) ...[
                     const SizedBox(height: Space.x6),
                     InsetGroup(
@@ -306,16 +398,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                 ),
                         ),
                       ],
-                    ),
-                  ],
-                  if (_checkout.placeError != null) ...[
-                    const SizedBox(height: Space.x4),
-                    Semantics(
-                      liveRegion: true,
-                      child: Text(
-                        _checkout.placeError!,
-                        style: type.small.copyWith(color: colors.danger),
-                      ),
                     ),
                   ],
                 ],

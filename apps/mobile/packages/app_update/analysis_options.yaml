@@ -1,0 +1,5 @@
+# The plugin has no flutter_lints dependency of its own, so it does not
+# inherit the app's analysis_options.yaml (which includes them).
+analyzer:
+  language:
+    strict-casts: true

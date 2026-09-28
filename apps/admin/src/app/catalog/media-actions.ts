@@ -14,6 +14,7 @@ import { backendMediaTypes, type BackendMediaType } from '@commerce/contracts';
 
 import { apiClient } from '@/lib/api';
 import { toFormState, type FormState } from '@/lib/form';
+import { guardAction } from '@/lib/session';
 
 /** Matches the API's own default; it rejects anything larger on reserve. */
 const MAX_UPLOAD_BYTES = 10_485_760;
@@ -43,6 +44,11 @@ export async function uploadProductImageAction(
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   const file = formData.get('file');
 
   if (!(file instanceof File) || file.size === 0) {
@@ -106,6 +112,11 @@ export async function setPrimaryImageAction(
   productId: string,
   mediaId: string,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   try {
     await backendUpdateProductMedia(apiClient, productId, mediaId, {
       isPrimary: true,
@@ -128,6 +139,11 @@ export async function removeProductImageAction(
   productId: string,
   mediaId: string,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   try {
     await backendDetachProductMedia(apiClient, productId, mediaId);
   } catch (error) {

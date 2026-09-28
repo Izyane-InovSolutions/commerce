@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { backendRatingSummarySchema } from './reviews.ts';
+import { backendVariantAttributeValueSchema } from './backend-attributes.ts';
 
 /**
  * The Commerce API as it actually exists today (Phase 0–2).
@@ -203,6 +204,8 @@ export type BackendVariant = z.infer<typeof backendVariantSchema>;
 
 export const backendAdminVariantSchema = backendVariantSchema.extend({
   offers: z.array(backendAdminOfferSchema).default([]),
+  /** Each value nested with its attribute, e.g. Colour → Oak. */
+  attributeValues: z.array(backendVariantAttributeValueSchema).default([]),
 });
 export type BackendAdminVariant = z.infer<typeof backendAdminVariantSchema>;
 
@@ -328,6 +331,9 @@ export const backendRatedProductSchema = backendProductSchema.extend(
 export type BackendRatedProduct = z.infer<typeof backendRatedProductSchema>;
 
 export const backendAdminProductSchema = backendProductSchema.extend({
+  /** When an admin featured it on the storefront; null when not featured.
+   * Optional because older APIs don't send it. */
+  featuredAt: z.iso.datetime().nullable().optional(),
   /** The admin read carries the asset itself, including ones still uploading. */
   media: z.array(backendProductMediaSchema).default([]),
   variants: z.array(backendAdminVariantSchema).default([]),
@@ -458,6 +464,7 @@ export type BackendCreateProductInput = z.input<
 export const backendCreateVariantSchema = z.object({
   skuCode: z.string().trim().min(1, 'SKU code is required.'),
   name: z.string().trim().optional(),
+  attributeValueIds: z.array(z.uuid()).optional(),
 });
 export type BackendCreateVariantInput = z.input<
   typeof backendCreateVariantSchema
@@ -466,6 +473,11 @@ export type BackendCreateVariantInput = z.input<
 export const backendCreatePriceSchema = z.object({
   amount: z.int().min(0),
   currency: z.string().length(3),
+  /** ISO; defaults to now on the API. */
+  startsAt: z.iso.datetime({ offset: true }).optional(),
+  /** ISO. A price with an end date below the regular one is a sale: it wins
+   * until then, and the storefront shows the regular price as "was". */
+  endsAt: z.iso.datetime({ offset: true }).optional(),
 });
 export type BackendCreatePriceInput = z.input<typeof backendCreatePriceSchema>;
 
@@ -1143,7 +1155,7 @@ export const backendFulfillmentOrderSchema = z.object({
   orderId: z.uuid(),
   sellerOrderId: z.uuid(),
   shippingGroupId: z.uuid(),
-  warehouseId: z.uuid(),
+  warehouseId: z.uuid().nullable(),
   status: backendFulfillmentStatusSchema,
   priority: z.int(),
   version: z.int(),
