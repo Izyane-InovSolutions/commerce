@@ -1147,7 +1147,7 @@ export const backendFulfillmentOrderSchema = z.object({
   orderId: z.uuid(),
   sellerOrderId: z.uuid(),
   shippingGroupId: z.uuid(),
-  warehouseId: z.uuid(),
+  warehouseId: z.uuid().nullable(),
   status: backendFulfillmentStatusSchema,
   priority: z.int(),
   version: z.int(),
