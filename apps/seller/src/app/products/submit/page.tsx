@@ -17,7 +17,11 @@ import { apiClient } from '@/lib/api';
 import { getSellerAccount } from '@/lib/seller';
 import { requireUser } from '@/lib/session';
 
-import { submitProductAction, uploadProductImageAction } from './actions';
+import {
+  categoryAttributesAction,
+  submitProductAction,
+  uploadProductImageAction,
+} from './actions';
 
 export const metadata: Metadata = { title: 'Submit a product' };
 
@@ -71,6 +75,7 @@ export default async function SubmitProductPage() {
             categories={categories}
             submit={submitProductAction}
             uploadImage={uploadProductImageAction}
+            loadCategoryAttributes={categoryAttributesAction}
           />
         </CardContent>
       </Card>

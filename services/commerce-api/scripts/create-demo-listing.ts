@@ -21,7 +21,13 @@ type Listing = {
   basePrice: number;
   /** In picker order; every combination becomes one variant. `code` is the
    * shared attribute (reused across products), `name` its label. */
-  options: { code: string; name: string; values: OptionValue[] }[];
+  options: {
+    code: string;
+    name: string;
+    values: OptionValue[];
+    /** Attached to the category as optional rather than required. */
+    optional?: boolean;
+  }[];
   /** Variants published with a price but no stock, to show sold-out states. */
   soldOut?: string[];
 };
@@ -197,7 +203,7 @@ const LISTINGS: Record<string, Listing> = {
 let token = '';
 
 async function api<T>(
-  method: 'GET' | 'POST' | 'PATCH',
+  method: 'GET' | 'POST' | 'PATCH' | 'PUT',
   path: string,
   body?: unknown,
 ): Promise<T> {
@@ -264,6 +270,67 @@ async function ensureAttribute(
   return ids;
 }
 
+type CategoryAttribute = {
+  attributeId: string;
+  code: string;
+  isRequired: boolean;
+  inheritedFrom: Id | null;
+};
+
+/**
+ * Attaches the listing's options to its category (required unless marked
+ * optional), so variants in it are held to them. Keeps whatever the category
+ * already has attached; one inherited from a parent is left to the parent.
+ * A backend without category attributes just gets a warning.
+ */
+async function attachToCategory(
+  categoryId: string,
+  listing: Listing,
+  valueIds: Map<string, Map<string, string>>,
+): Promise<void> {
+  let current: CategoryAttribute[];
+  try {
+    current = await api<CategoryAttribute[]>(
+      'GET',
+      `/admin/catalog/categories/${categoryId}/attributes`,
+    );
+  } catch (error) {
+    console.warn(
+      `  (category attributes not supported by this API, skipped: ${
+        error instanceof Error ? error.message : String(error)
+      })`,
+    );
+    return;
+  }
+
+  const own = current.filter((entry) => entry.inheritedFrom === null);
+  const known = new Set(current.map((entry) => entry.code));
+  const additions = listing.options.filter((option) => !known.has(option.code));
+  if (additions.length === 0) return;
+
+  const attributeIdByCode = new Map<string, string>();
+  for (const option of additions) {
+    const detail = rows<Attribute>(
+      await api('GET', '/admin/catalog/attributes'),
+    ).find((row) => row.code === option.code);
+    if (detail && valueIds.has(option.code))
+      attributeIdByCode.set(option.code, detail.id);
+  }
+
+  await api('PUT', `/admin/catalog/categories/${categoryId}/attributes`, {
+    attributes: [
+      ...own.map(({ attributeId, isRequired }) => ({ attributeId, isRequired })),
+      ...additions.map((option) => ({
+        attributeId: attributeIdByCode.get(option.code)!,
+        isRequired: !option.optional,
+      })),
+    ],
+  });
+  console.log(
+    `  attached ${additions.map((option) => option.name).join(', ')} to ${listing.category.name}`,
+  );
+}
+
 /** Every combination of one value per option, in picker order. */
 function combinations(options: Listing['options']): OptionValue[][] {
   return options.reduce<OptionValue[][]>(
@@ -320,6 +387,8 @@ async function main(): Promise<void> {
       ),
     );
   }
+
+  await attachToCategory(category.id, listing, valueIds);
 
   const product = await api<Id>('POST', '/admin/catalog/products', {
     ...listing.product,

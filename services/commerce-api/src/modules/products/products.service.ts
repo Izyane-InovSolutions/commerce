@@ -22,6 +22,7 @@ import {
   paginatedResult,
 } from '../../common/pagination/paginated-result';
 import { parseSort } from '../../common/pagination/sort.dto';
+import { CategoryAttributesService } from '../catalog/categories/category-attributes.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { MediaService } from '../media/media.service';
 import { PrismaService } from '../../database/prisma.service';
@@ -158,6 +159,7 @@ export class ProductsService {
     private readonly media: MediaService,
     private readonly inventory: InventoryService,
     private readonly sellers: SellersService,
+    private readonly categoryAttributes: CategoryAttributesService,
   ) {}
 
   async findPublished(
@@ -489,6 +491,11 @@ export class ProductsService {
 
     try {
       const variant = await this.prisma.$transaction(async (tx) => {
+        await this.assertVariantAttributes(
+          tx,
+          productId,
+          dto.attributeValueIds ?? [],
+        );
         const created = await tx.productVariant.create({
           data: { productId, skuCode: dto.skuCode, name: dto.name },
         });
@@ -523,7 +530,7 @@ export class ProductsService {
 
     try {
       await this.prisma.$transaction((tx) =>
-        this.writeVariant(tx, variantId, dto),
+        this.writeVariant(tx, productId, variantId, dto),
       );
 
       return this.findVariantOrThrow(variantId);
@@ -662,6 +669,11 @@ export class ProductsService {
 
     try {
       const variant = await this.prisma.$transaction(async (tx) => {
+        await this.assertVariantAttributes(
+          tx,
+          productId,
+          dto.attributeValueIds ?? [],
+        );
         const created = await tx.productVariant.create({
           data: { productId, skuCode: dto.skuCode, name: dto.name },
         });
@@ -773,7 +785,7 @@ export class ProductsService {
     try {
       await this.prisma.$transaction(async (tx) => {
         await this.claimForSellerEdit(tx, sellerId, productId);
-        await this.writeVariant(tx, variantId, dto);
+        await this.writeVariant(tx, productId, variantId, dto);
       });
     } catch (error) {
       throw this.mapWriteError(
@@ -973,11 +985,115 @@ export class ProductsService {
       );
   }
 
+  /**
+   * Holds a variant's attribute values to its product category's attributes
+   * (inherited ones included — see CategoryAttributesService.effective):
+   * only those attributes, one value each, every required one present, and no
+   * other variant of the product with the same combination.
+   *
+   * A product with no category, or whose category has no attributes
+   * anywhere up its tree, is unrestricted, as every product was before
+   * categories carried attributes.
+   */
+  private async assertVariantAttributes(
+    tx: Prisma.TransactionClient,
+    productId: string,
+    attributeValueIds: string[],
+    variantId?: string,
+  ): Promise<void> {
+    const product = await tx.product.findUnique({
+      where: { id: productId },
+      select: { category: { select: { id: true, name: true } } },
+    });
+    if (!product?.category) return;
+    const rules = await this.categoryAttributes.effective(
+      product.category.id,
+      tx,
+    );
+    if (rules.length === 0) return;
+
+    const ids = [...new Set(attributeValueIds)];
+    const values = await tx.attributeValue.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        value: true,
+        attributeId: true,
+        attribute: { select: { name: true } },
+      },
+    });
+    if (values.length !== ids.length) {
+      throw new BadRequestException('One of the attribute values does not exist');
+    }
+
+    const category = product.category.name;
+    const allowed = new Set(rules.map((rule) => rule.attributeId));
+    const perAttribute = new Map<string, number>();
+    for (const value of values) {
+      if (!allowed.has(value.attributeId)) {
+        throw new BadRequestException(
+          `${value.attribute.name} isn't an attribute of ${category}. Attach it to the category first, or choose another value.`,
+        );
+      }
+      const count = (perAttribute.get(value.attributeId) ?? 0) + 1;
+      if (count > 1) {
+        throw new BadRequestException(
+          `A variant can have only one ${value.attribute.name}`,
+        );
+      }
+      perAttribute.set(value.attributeId, count);
+    }
+
+    const missing = rules.filter(
+      (rule) => rule.isRequired && !perAttribute.has(rule.attributeId),
+    );
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `Variants in ${category} need ${missing.map((rule) => rule.name).join(', ')}`,
+      );
+    }
+
+    if (ids.length === 0) return;
+    const key = [...ids].sort().join(',');
+    const siblings = await tx.productVariant.findMany({
+      where: { productId, ...(variantId ? { id: { not: variantId } } : {}) },
+      select: {
+        skuCode: true,
+        attributeValues: { select: { attributeValueId: true } },
+      },
+    });
+    const duplicate = siblings.find(
+      (sibling) =>
+        sibling.attributeValues
+          .map((entry) => entry.attributeValueId)
+          .sort()
+          .join(',') === key,
+    );
+    if (duplicate) {
+      const label = values.map((value) => value.value).join(' / ');
+      throw new ConflictException(
+        `Variant ${duplicate.skuCode} already has ${label}`,
+      );
+    }
+  }
+
   private async writeVariant(
     tx: Prisma.TransactionClient,
+    productId: string,
     variantId: string,
     dto: UpdateVariantDto,
   ): Promise<void> {
+    // Leaving attributeValueIds out keeps the variant's values as they are,
+    // so a rename isn't blocked by rules added after the variant was made.
+    if (dto.attributeValueIds) {
+      await this.assertVariantAttributes(
+        tx,
+        productId,
+        dto.attributeValueIds,
+        variantId,
+      );
+    }
+
     await tx.productVariant.update({
       where: { id: variantId },
       data: { skuCode: dto.skuCode, name: dto.name },

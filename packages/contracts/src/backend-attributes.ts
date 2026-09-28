@@ -91,3 +91,27 @@ export const backendUpdateVariantSchema = z.object({
 export type BackendUpdateVariantInput = z.input<
   typeof backendUpdateVariantSchema
 >;
+
+/**
+ * An attribute as it applies to a category: attached there directly
+ * (`inheritedFrom` null) or inherited from an ancestor. Variants of products
+ * in the category may only use these attributes, one value each, and must
+ * carry every required one. A category with none anywhere up its tree leaves
+ * variants unrestricted.
+ */
+export const backendCategoryAttributeSchema = z.object({
+  attributeId: z.uuid(),
+  code: z.string(),
+  name: z.string(),
+  isRequired: z.boolean(),
+  inheritedFrom: z.object({ id: z.uuid(), name: z.string() }).nullable(),
+  values: z.array(z.object({ id: z.uuid(), value: z.string() })),
+});
+export type BackendCategoryAttribute = z.infer<
+  typeof backendCategoryAttributeSchema
+>;
+
+/** Replaces the category's own attributes, in picker order. */
+export type BackendSetCategoryAttributesInput = {
+  attributes: { attributeId: string; isRequired?: boolean }[];
+};

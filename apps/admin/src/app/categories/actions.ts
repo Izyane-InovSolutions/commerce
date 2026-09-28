@@ -5,12 +5,15 @@ import { revalidatePath } from 'next/cache';
 import {
   backendCreateCategory,
   backendDeleteCategory,
+  backendSetCategoryAttributes,
   backendUpdateCategory,
 } from '@commerce/api-client';
 
 import { apiClient } from '@/lib/api';
 import { toFormState, type FormState } from '@/lib/form';
 import { guardAction } from '@/lib/session';
+
+import { categoryAttributesInput } from './category-attributes-input';
 
 function revalidateTaxonomy(): void {
   revalidatePath('/categories');
@@ -86,4 +89,33 @@ export async function deleteCategoryAction(
 
   revalidateTaxonomy();
   return { status: 'idle', message: 'Category removed.' };
+}
+
+/**
+ * Saves the category's own attributes — the whole list, in the order the
+ * form shows them. Inherited ones are saved on the category they come from.
+ */
+export async function setCategoryAttributesAction(
+  categoryId: string,
+  _state: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
+  try {
+    await backendSetCategoryAttributes(
+      apiClient,
+      categoryId,
+      categoryAttributesInput(formData),
+    );
+  } catch (error) {
+    return toFormState(error);
+  }
+
+  revalidatePath(`/categories/${categoryId}`);
+  revalidatePath('/catalog', 'layout');
+  return { status: 'idle', message: 'Attributes saved.' };
 }

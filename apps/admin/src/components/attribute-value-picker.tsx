@@ -5,6 +5,8 @@ export type AttributeChoice = {
   id: string;
   name: string;
   values: { id: string; value: string }[];
+  /** From the product's category: a variant must carry a value for it. */
+  isRequired?: boolean;
 };
 
 /**
@@ -42,11 +44,20 @@ export function AttributeValuePicker({
 
         return (
           <div key={attribute.id} className="min-w-32 space-y-1.5">
-            <Label htmlFor={id}>{attribute.name}</Label>
+            <Label htmlFor={id}>
+              {attribute.name}
+              {attribute.isRequired ? (
+                <span className="text-muted-foreground font-normal">
+                  {' '}
+                  (required)
+                </span>
+              ) : null}
+            </Label>
             <SelectField
               id={id}
               name="attributeValueIds"
               className="w-full"
+              required={attribute.isRequired}
               placeholder="—"
               defaultValue={current?.id ?? ''}
               options={attribute.values.map((value) => ({

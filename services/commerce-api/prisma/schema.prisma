@@ -342,17 +342,18 @@ model MediaAsset {
 }
 
 model Category {
-  id          String     @id @default(uuid()) @db.Uuid
+  id          String              @id @default(uuid()) @db.Uuid
   name        String
-  slug        String     @unique
+  slug        String              @unique
   description String?
-  parentId    String?    @map("parent_id") @db.Uuid
-  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
-  children    Category[] @relation("CategoryHierarchy")
-  position    Int        @default(0)
+  parentId    String?             @map("parent_id") @db.Uuid
+  parent      Category?           @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Category[]          @relation("CategoryHierarchy")
+  position    Int                 @default(0)
   products    Product[]
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @updatedAt @map("updated_at")
+  attributes  CategoryAttribute[]
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
 
   @@index([parentId])
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "categories_name_trgm_idx")
@@ -373,14 +374,36 @@ model Brand {
 }
 
 model Attribute {
-  id        String           @id @default(uuid()) @db.Uuid
-  name      String
-  code      String           @unique
-  values    AttributeValue[]
-  createdAt DateTime         @default(now()) @map("created_at")
-  updatedAt DateTime         @updatedAt @map("updated_at")
+  id         String              @id @default(uuid()) @db.Uuid
+  name       String
+  code       String              @unique
+  values     AttributeValue[]
+  categories CategoryAttribute[]
+  createdAt  DateTime            @default(now()) @map("created_at")
+  updatedAt  DateTime            @updatedAt @map("updated_at")
 
   @@map("attributes")
+}
+
+/// An attribute a category's products are described by — e.g. Smartphones
+/// uses Color, Storage and Carrier. Subcategories inherit their ancestors'
+/// attributes; attaching the same attribute lower down overrides isRequired.
+/// A category with none (and no ancestor with any) leaves variants
+/// unrestricted.
+model CategoryAttribute {
+  categoryId  String    @map("category_id") @db.Uuid
+  category    Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  attributeId String    @map("attribute_id") @db.Uuid
+  attribute   Attribute @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  /// Every variant in the category must carry a value for this attribute.
+  isRequired  Boolean   @default(false) @map("is_required")
+  /// Picker order within the category.
+  position    Int       @default(0)
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@id([categoryId, attributeId])
+  @@index([attributeId])
+  @@map("category_attributes")
 }
 
 model AttributeValue {

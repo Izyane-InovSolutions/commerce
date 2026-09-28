@@ -8,6 +8,7 @@ import {
 import { ProductStatus, ReviewVisibility, SellerStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import type { CategoryAttributesService } from '../catalog/categories/category-attributes.service';
 import type { InventoryService } from '../inventory/inventory.service';
 import type { SellersService } from '../sellers/sellers.service';
 import { ProductsService } from './products.service';
@@ -35,6 +36,7 @@ function buildPrisma(): {
   };
   productVariant: {
     findUnique: jest.Mock;
+    findMany: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
     updateMany: jest.Mock;
@@ -55,6 +57,7 @@ function buildPrisma(): {
   productRatingSummary: { findMany: jest.Mock };
   productReview: { findMany: jest.Mock; count: jest.Mock };
   orderItem: { count: jest.Mock };
+  attributeValue: { findMany: jest.Mock };
   inventoryMovement: { count: jest.Mock };
   $transaction: jest.Mock;
   $queryRaw: jest.Mock;
@@ -79,6 +82,7 @@ function buildPrisma(): {
     },
     productVariant: {
       findUnique: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
       create: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
@@ -100,6 +104,7 @@ function buildPrisma(): {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     orderItem: { count: jest.fn().mockResolvedValue(0) },
+    attributeValue: { findMany: jest.fn().mockResolvedValue([]) },
     inventoryMovement: { count: jest.fn().mockResolvedValue(0) },
     $transaction: jest.fn(),
     $queryRaw: jest.fn().mockResolvedValue([]),
@@ -115,12 +120,14 @@ describe('ProductsService', () => {
   let prisma: ReturnType<typeof buildPrisma>;
   let inventory: ReturnType<typeof buildInventory>;
   let sellers: { requireApproved: jest.Mock; mine: jest.Mock };
+  let categoryAttributes: { effective: jest.Mock };
   let service: ProductsService;
 
   beforeEach(() => {
     prisma = buildPrisma();
     inventory = buildInventory();
     sellers = { requireApproved: jest.fn(), mine: jest.fn() };
+    categoryAttributes = { effective: jest.fn().mockResolvedValue([]) };
     service = new ProductsService(
       prisma as unknown as PrismaService,
       new MediaService(
@@ -130,6 +137,7 @@ describe('ProductsService', () => {
       ),
       inventory as unknown as InventoryService,
       sellers as unknown as SellersService,
+      categoryAttributes as unknown as CategoryAttributesService,
     );
   });
 
@@ -829,6 +837,141 @@ describe('ProductsService', () => {
       await expect(service.removeVariant('p1', 'v1')).rejects.toBeInstanceOf(
         ConflictException,
       );
+    });
+  });
+
+  describe('category attribute rules on variants', () => {
+    const rule = (
+      attributeId: string,
+      name: string,
+      isRequired: boolean,
+    ): Record<string, unknown> => ({
+      attributeId,
+      code: name.toLowerCase(),
+      name,
+      isRequired,
+      inheritedFrom: null,
+      values: [],
+    });
+    const value = (
+      id: string,
+      attributeId: string,
+      name: string,
+    ): Record<string, unknown> => ({
+      id,
+      value: id,
+      attributeId,
+      attribute: { name },
+    });
+
+    beforeEach(() => {
+      // findByIdAdmin, then the rule lookup inside the transaction.
+      prisma.product.findUnique.mockResolvedValue({
+        id: 'p1',
+        media: [],
+        category: { id: 'phones', name: 'Smartphones' },
+      });
+      categoryAttributes.effective.mockResolvedValue([
+        rule('color', 'Color', true),
+        rule('storage', 'Storage', true),
+        rule('carrier', 'Carrier', false),
+      ]);
+      prisma.productVariant.create.mockResolvedValue({ id: 'v1' });
+      prisma.productVariant.findUnique.mockResolvedValue({
+        id: 'v1',
+        attributeValues: [],
+        offers: [],
+      });
+    });
+
+    it('accepts one value per attribute with every required one present', async () => {
+      prisma.attributeValue.findMany.mockResolvedValue([
+        value('black', 'color', 'Color'),
+        value('256', 'storage', 'Storage'),
+      ]);
+
+      await service.addVariant('p1', {
+        skuCode: 'P-BLK-256',
+        attributeValueIds: ['black', '256'],
+      });
+
+      expect(prisma.productVariant.create).toHaveBeenCalled();
+    });
+
+    it('refuses a variant missing a required attribute', async () => {
+      prisma.attributeValue.findMany.mockResolvedValue([
+        value('black', 'color', 'Color'),
+      ]);
+
+      await expect(
+        service.addVariant('p1', {
+          skuCode: 'P-BLK',
+          attributeValueIds: ['black'],
+        }),
+      ).rejects.toThrow('Variants in Smartphones need Storage');
+      expect(prisma.productVariant.create).not.toHaveBeenCalled();
+    });
+
+    it("refuses an attribute the category doesn't use", async () => {
+      prisma.attributeValue.findMany.mockResolvedValue([
+        value('black', 'color', 'Color'),
+        value('256', 'storage', 'Storage'),
+        value('xl', 'size', 'Size'),
+      ]);
+
+      await expect(
+        service.addVariant('p1', {
+          skuCode: 'P-BLK-256-XL',
+          attributeValueIds: ['black', '256', 'xl'],
+        }),
+      ).rejects.toThrow("Size isn't an attribute of Smartphones");
+    });
+
+    it('refuses two values of the same attribute', async () => {
+      prisma.attributeValue.findMany.mockResolvedValue([
+        value('black', 'color', 'Color'),
+        value('silver', 'color', 'Color'),
+        value('256', 'storage', 'Storage'),
+      ]);
+
+      await expect(
+        service.addVariant('p1', {
+          skuCode: 'P-X',
+          attributeValueIds: ['black', 'silver', '256'],
+        }),
+      ).rejects.toThrow('A variant can have only one Color');
+    });
+
+    it('refuses a combination another variant already has', async () => {
+      prisma.attributeValue.findMany.mockResolvedValue([
+        value('black', 'color', 'Color'),
+        value('256', 'storage', 'Storage'),
+      ]);
+      prisma.productVariant.findMany.mockResolvedValue([
+        {
+          skuCode: 'P-BLK-256',
+          attributeValues: [
+            { attributeValueId: '256' },
+            { attributeValueId: 'black' },
+          ],
+        },
+      ]);
+
+      await expect(
+        service.addVariant('p1', {
+          skuCode: 'P-BLK-256-2',
+          attributeValueIds: ['black', '256'],
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('leaves a product without category rules unrestricted', async () => {
+      categoryAttributes.effective.mockResolvedValue([]);
+
+      await service.addVariant('p1', { skuCode: 'P-ANY' });
+
+      expect(prisma.attributeValue.findMany).not.toHaveBeenCalled();
+      expect(prisma.productVariant.create).toHaveBeenCalled();
     });
   });
 

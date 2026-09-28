@@ -3,7 +3,9 @@ import type {
   BackendAttributeValue,
   BackendAttributeValueInput,
   BackendAttributeWithValues,
+  BackendCategoryAttribute,
   BackendCreateAttributeInput,
+  BackendSetCategoryAttributesInput,
   BackendUpdateAttributeInput,
 } from '@commerce/contracts';
 
@@ -82,5 +84,38 @@ export function backendDeleteAttributeValue(
 ): Promise<null> {
   return client.delete(
     `/admin/catalog/attributes/${attributeId}/values/${valueId}`,
+  );
+}
+
+/** The category's attributes after inheritance, own and inherited. */
+export function backendGetCategoryAttributes(
+  client: ApiClient,
+  categoryId: string,
+): Promise<BackendCategoryAttribute[]> {
+  return client.get(`/admin/catalog/categories/${categoryId}/attributes`, {
+    cache: 'no-store',
+  });
+}
+
+/** Replaces the category's own attributes; returns the effective list. */
+export function backendSetCategoryAttributes(
+  client: ApiClient,
+  categoryId: string,
+  input: BackendSetCategoryAttributesInput,
+): Promise<BackendCategoryAttribute[]> {
+  return client.put(`/admin/catalog/categories/${categoryId}/attributes`, {
+    body: input,
+  });
+}
+
+/** Public: a category's attributes (inherited included) with their values,
+ * for any form that builds variants in that category. */
+export function backendListPublicCategoryAttributes(
+  client: ApiClient,
+  slug: string,
+): Promise<BackendCategoryAttribute[]> {
+  return client.get(
+    `/catalog/categories/${encodeURIComponent(slug)}/attributes`,
+    { cache: 'no-store' },
   );
 }

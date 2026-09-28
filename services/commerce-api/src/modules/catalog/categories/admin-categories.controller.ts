@@ -9,18 +9,27 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
 } from '@nestjs/common';
 import { Role, type Category } from '@prisma/client';
 
 import { Roles } from '../../../common/auth/roles.decorator';
 import { CategoriesService } from './categories.service';
+import {
+  CategoryAttributesService,
+  EffectiveCategoryAttribute,
+} from './category-attributes.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
+import { SetCategoryAttributesDto } from './dto/set-category-attributes.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 
 @Roles(Role.STAFF, Role.ADMIN)
 @Controller('admin/catalog/categories')
 export class AdminCategoriesController {
-  constructor(private readonly categoriesService: CategoriesService) {}
+  constructor(
+    private readonly categoriesService: CategoriesService,
+    private readonly categoryAttributes: CategoryAttributesService,
+  ) {}
 
   @Get()
   findAll(): Promise<Category[]> {
@@ -43,6 +52,23 @@ export class AdminCategoriesController {
     @Body() dto: UpdateCategoryDto,
   ): Promise<Category> {
     return this.categoriesService.update(id, dto);
+  }
+
+  /** Own and inherited attributes, each with `inheritedFrom` (null = own). */
+  @Get(':id/attributes')
+  findAttributes(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<EffectiveCategoryAttribute[]> {
+    return this.categoryAttributes.effective(id);
+  }
+
+  /** Replaces this category's own attributes; returns the effective list. */
+  @Put(':id/attributes')
+  setAttributes(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SetCategoryAttributesDto,
+  ): Promise<EffectiveCategoryAttribute[]> {
+    return this.categoryAttributes.setOwn(id, dto);
   }
 
   @Delete(':id')

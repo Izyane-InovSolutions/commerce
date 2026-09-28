@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import {
   ApiError,
   backendGetProduct,
+  backendGetCategoryAttributes,
   backendListAttributes,
   backendListBrands,
   backendListCategories,
@@ -123,15 +125,35 @@ export default async function ProductPage({
   // Attributes only feed the variant pickers, so failing to read them costs
   // the pickers rather than the page. Null (not empty) tells the edit form to
   // leave a variant's values untouched instead of clearing them.
+  //
+  // A category with attributes attached (its own or inherited) decides which
+  // pickers show, in its order, with required ones marked — the API holds
+  // variants to exactly that. Otherwise every catalog attribute is offered.
   let attributes: AttributeChoice[] | null;
+  let attributesFrom: string | null = null;
   try {
-    attributes = (await backendListAttributes(apiClient)).map((attribute) => ({
-      id: attribute.id,
-      name: attribute.name,
-      values: [...attribute.values].sort((left, right) =>
-        left.value.localeCompare(right.value),
-      ),
-    }));
+    const fromCategory = product.category
+      ? await backendGetCategoryAttributes(apiClient, product.category.id)
+      : [];
+    if (fromCategory.length > 0) {
+      attributesFrom = product.category?.name ?? 'its category';
+      attributes = fromCategory.map((attribute) => ({
+        id: attribute.attributeId,
+        name: attribute.name,
+        isRequired: attribute.isRequired,
+        values: attribute.values,
+      }));
+    } else {
+      attributes = (await backendListAttributes(apiClient)).map(
+        (attribute) => ({
+          id: attribute.id,
+          name: attribute.name,
+          values: [...attribute.values].sort((left, right) =>
+            left.value.localeCompare(right.value),
+          ),
+        }),
+      );
+    }
   } catch {
     attributes = null;
   }
@@ -195,6 +217,26 @@ export default async function ProductPage({
           <CardDescription>
             Each variant carries a SKU. An offer holds the price, and a
             published offer is what makes the variant buyable.
+            {attributesFrom ? (
+              <>
+                {' '}
+                Options come from {attributesFrom}&apos;s attributes
+                {product.category ? (
+                  <>
+                    {' '}
+                    (
+                    <Link
+                      href={`/categories/${product.category.id}`}
+                      className="underline underline-offset-4"
+                    >
+                      manage
+                    </Link>
+                    )
+                  </>
+                ) : null}
+                .
+              </>
+            ) : null}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
