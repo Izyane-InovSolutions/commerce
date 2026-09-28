@@ -186,6 +186,17 @@ export function backendDeleteProduct(
   return client.delete(`/admin/catalog/products/${id}`);
 }
 
+/** Puts the product on the storefront's featured shelf, or takes it off. */
+export function backendSetProductFeatured(
+  client: ApiClient,
+  id: string,
+  featured: boolean,
+): Promise<BackendAdminProduct> {
+  return client.patch(`/admin/catalog/products/${id}/featured`, {
+    body: { featured },
+  });
+}
+
 export function backendAddVariant(
   client: ApiClient,
   productId: string,

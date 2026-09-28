@@ -223,11 +223,34 @@ function OfferRow({
             className="uppercase"
           />
         </div>
+        <div className="w-40 space-y-1.5">
+          <Label htmlFor={`saleuntil-${offer.id}`}>Sale until</Label>
+          <Input
+            id={`saleuntil-${offer.id}`}
+            name="saleUntil"
+            type="date"
+            aria-describedby={`saleuntil-hint-${offer.id}`}
+          />
+        </div>
         <SubmitButton variant="secondary" pendingLabel="Saving…">
           Add price
         </SubmitButton>
         <FormError state={priceState} />
         <FieldError messages={priceState.fieldErrors?.amount} />
+        <FieldError messages={priceState.fieldErrors?.saleUntil} />
+        {priceState.status === 'idle' && priceState.message ? (
+          <span className="text-muted-foreground text-xs" role="status">
+            {priceState.message}
+          </span>
+        ) : null}
+        <p
+          id={`saleuntil-hint-${offer.id}`}
+          className="text-muted-foreground w-full text-xs"
+        >
+          Leave “Sale until” blank to change the price. Set a date to run a
+          sale: a lower price shows in Hot deals with the current price as
+          “was”, and the current price comes back after that day.
+        </p>
       </form>
 
       <form action={shippingAction} className="flex flex-wrap items-end gap-2">

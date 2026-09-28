@@ -19,6 +19,7 @@ import {
 import { ApiErrorNotice } from '@/components/api-error-notice';
 import type { AttributeChoice } from '@/components/attribute-value-picker';
 import { DeleteControl } from '@/components/delete-control';
+import { FulfillmentActionButton } from '@/components/fulfillment-action-button';
 import { OfferControls } from '@/components/offer-controls';
 import { PageHeader } from '@/components/page-header';
 import { ProductForm } from '@/components/product-form';
@@ -46,6 +47,7 @@ import {
   deleteProductAction,
   deleteVariantAction,
   setOfferShippingAction,
+  setFeaturedAction,
   setOfferStatusAction,
   setStatusAction,
   updateProductAction,
@@ -173,7 +175,7 @@ export default async function ProductPage({
             Publishing the product is the first of the three gates.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <StatusControl
             current={product.status}
             label="product"
@@ -183,6 +185,23 @@ export default async function ProductPage({
               id: product.id,
             })}
           />
+          <div className="flex flex-wrap items-center gap-3 border-t pt-4">
+            <p className="text-sm">
+              {product.featuredAt
+                ? 'Featured on the storefront.'
+                : 'Not featured on the storefront.'}
+            </p>
+            <FulfillmentActionButton
+              action={setFeaturedAction.bind(
+                null,
+                product.id,
+                !product.featuredAt,
+              )}
+              label={product.featuredAt ? 'Remove from featured' : 'Feature it'}
+              pendingLabel="Saving…"
+              variant="outline"
+            />
+          </div>
         </CardContent>
       </Card>
 

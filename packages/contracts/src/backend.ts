@@ -331,6 +331,9 @@ export const backendRatedProductSchema = backendProductSchema.extend(
 export type BackendRatedProduct = z.infer<typeof backendRatedProductSchema>;
 
 export const backendAdminProductSchema = backendProductSchema.extend({
+  /** When an admin featured it on the storefront; null when not featured.
+   * Optional because older APIs don't send it. */
+  featuredAt: z.iso.datetime().nullable().optional(),
   /** The admin read carries the asset itself, including ones still uploading. */
   media: z.array(backendProductMediaSchema).default([]),
   variants: z.array(backendAdminVariantSchema).default([]),
@@ -470,6 +473,11 @@ export type BackendCreateVariantInput = z.input<
 export const backendCreatePriceSchema = z.object({
   amount: z.int().min(0),
   currency: z.string().length(3),
+  /** ISO; defaults to now on the API. */
+  startsAt: z.iso.datetime({ offset: true }).optional(),
+  /** ISO. A price with an end date below the regular one is a sale: it wins
+   * until then, and the storefront shows the regular price as "was". */
+  endsAt: z.iso.datetime({ offset: true }).optional(),
 });
 export type BackendCreatePriceInput = z.input<typeof backendCreatePriceSchema>;
 

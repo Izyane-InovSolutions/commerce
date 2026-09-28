@@ -15,6 +15,7 @@ import {
   backendRejectProductSubmission,
   backendSetOfferShipping,
   backendSetOfferStatus,
+  backendSetProductFeatured,
   backendSetProductStatus,
   backendSetVariantStatus,
   backendUpdateProduct,
@@ -27,6 +28,7 @@ import {
 
 import { apiClient } from '@/lib/api';
 import { toFormState, type FormState } from '@/lib/form';
+import { saleEndsAt } from '@/lib/sale-date';
 import { guardAction } from '@/lib/session';
 
 import { variantCreateInput, variantUpdateInput } from './variant-input';
@@ -364,19 +366,54 @@ export async function addPriceAction(
     };
   }
 
+  const saleUntil = saleEndsAt(String(formData.get('saleUntil') ?? ''));
+  if (saleUntil === 'invalid') {
+    return {
+      status: 'error',
+      fieldErrors: { saleUntil: ['Choose a date after today.'] },
+    };
+  }
+
   try {
     await backendAddPrice(apiClient, offerId, {
       amount: Math.round(Number(raw) * 100),
       currency: String(
         formData.get('currency') ?? defaultBackendCurrency,
       ).toUpperCase(),
+      endsAt: saleUntil ?? undefined,
     });
   } catch (error) {
     return toFormState(error);
   }
 
   revalidateCatalog(productId);
-  return { status: 'idle', message: 'Price updated.' };
+  return {
+    status: 'idle',
+    message: saleUntil ? 'Sale price added.' : 'Price updated.',
+  };
+}
+
+/** Features the product on the storefront, or takes it off the shelf. */
+export async function setFeaturedAction(
+  productId: string,
+  featured: boolean,
+): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
+  try {
+    await backendSetProductFeatured(apiClient, productId, featured);
+  } catch (error) {
+    return toFormState(error);
+  }
+
+  revalidateCatalog(productId);
+  return {
+    status: 'idle',
+    message: featured ? 'Featured on the storefront.' : 'No longer featured.',
+  };
 }
 
 /**
