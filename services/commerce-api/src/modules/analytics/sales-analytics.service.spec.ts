@@ -30,6 +30,7 @@ describe('SalesAnalyticsService', () => {
           grossAmount: 3001n,
         },
       ])
+      .mockResolvedValueOnce([{ orderCount: 1n, grossAmount: 1000n }])
       .mockResolvedValueOnce([
         {
           productId: 'p1',
@@ -65,6 +66,54 @@ describe('SalesAnalyticsService', () => {
       from: '2026-09-01T08:00:00.000Z',
       to: '2026-09-03T12:00:00.000Z',
     });
+  });
+
+  it('compares with the previous window and breaks sales down by category and store', async () => {
+    prisma.$queryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ orderCount: 4n, grossAmount: 8000n }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { categoryId: 'c1', categoryName: 'Phones', unitsSold: 3n, grossAmount: 6000n },
+        { categoryId: null, categoryName: null, unitsSold: 1n, grossAmount: 500n },
+      ])
+      .mockResolvedValueOnce([
+        { sellerId: null, sellerName: null, storefrontSlug: null, orderCount: 2n, grossAmount: 4000n },
+        { sellerId: 's1', sellerName: 'Acme', storefrontSlug: 'acme', orderCount: 1n, grossAmount: 2500n },
+      ]);
+
+    const result = await service.getSales(
+      query({ from: '2026-09-10T00:00:00.000Z', to: '2026-09-20T00:00:00.000Z' }),
+    );
+
+    expect(result.previous).toEqual({
+      orderCount: 4,
+      grossAmount: 8000,
+      averageOrderAmount: 2000,
+    });
+    expect(result.byCategory.map((row) => row.categoryName)).toEqual([
+      'Phones',
+      'Uncategorised',
+    ]);
+    expect(result.topSellers).toEqual([
+      { sellerId: null, sellerName: 'iZyane', storefrontSlug: null, orderCount: 2, grossAmount: 4000 },
+      { sellerId: 's1', sellerName: 'Acme', storefrontSlug: 'acme', orderCount: 1, grossAmount: 2500 },
+    ]);
+  });
+
+  it("scopes a seller's report to their own order lines and leaves stores out", async () => {
+    const result = await service.getSales(
+      query({ from: '2026-09-10T00:00:00.000Z', to: '2026-09-20T00:00:00.000Z' }),
+      { sellerId: 'seller-1' },
+    );
+
+    // Series, previous, products and categories — no per-store query.
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(4);
+    // The seller id rides in a nested Prisma.sql fragment in every query.
+    for (const call of prisma.$queryRaw.mock.calls) {
+      expect(JSON.stringify(call)).toContain('seller-1');
+    }
+    expect(result.topSellers).toBeUndefined();
   });
 
   it('only counts paid statuses in the requested currency', async () => {

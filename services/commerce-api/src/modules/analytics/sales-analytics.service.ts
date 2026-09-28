@@ -8,14 +8,21 @@ import {
 } from './dto/sales-analytics-query.dto';
 import {
   SalesAnalyticsDto,
+  SalesCategoryShare,
   SalesSeriesPoint,
   SalesTopProduct,
+  SalesTopSeller,
+  SalesTotals,
 } from './sales-analytics.types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RANGE_MS = 30 * DAY_MS;
 const MAX_RANGE_MS = 366 * DAY_MS;
 const TOP_PRODUCT_LIMIT = 10;
+const CATEGORY_LIMIT = 8;
+const TOP_SELLER_LIMIT = 5;
+/** What the storefront calls the platform's own offers. */
+export const FIRST_PARTY_NAME = 'iZyane';
 
 /**
  * Orders that collected money. A refund doesn't un-sell an order, so
@@ -29,6 +36,35 @@ export const PAID_ORDER_STATUSES: OrderStatus[] = [
 ];
 
 type SeriesRow = { periodStart: Date; orderCount: bigint; grossAmount: bigint };
+type TotalsRow = { orderCount: bigint; grossAmount: bigint };
+type CategoryRow = {
+  categoryId: string | null;
+  categoryName: string | null;
+  unitsSold: bigint;
+  grossAmount: bigint;
+};
+type SellerRow = {
+  sellerId: string | null;
+  sellerName: string | null;
+  storefrontSlug: string | null;
+  orderCount: bigint;
+  grossAmount: bigint;
+};
+
+/** Narrows a report to one seller. A platform report is over whole orders
+ * (items plus shipping); a seller's is over their own order lines, since an
+ * order can span several sellers and its total isn't theirs. */
+export type SalesScope = { sellerId: string };
+
+function toTotals(orderCount: number, grossAmount: number): SalesTotals {
+  return {
+    orderCount,
+    grossAmount,
+    averageOrderAmount:
+      orderCount > 0 ? Math.round(grossAmount / orderCount) : 0,
+  };
+}
+
 type TopProductRow = {
   productId: string;
   productName: string;
@@ -77,27 +113,70 @@ export class SalesAnalyticsService {
    * creation time is the "sale time" here — the same approximation
    * OperationsMetricsService makes, so both dashboards agree on a range.
    */
-  async getSales(query: SalesAnalyticsQueryDto): Promise<SalesAnalyticsDto> {
+  async getSales(
+    query: SalesAnalyticsQueryDto,
+    scope?: SalesScope,
+  ): Promise<SalesAnalyticsDto> {
     const interval = query.interval ?? 'day';
     const currency = query.currency;
     const { from, to } = this.resolveRange(query.from, query.to);
+    const previousFrom = new Date(
+      from.getTime() - (to.getTime() - from.getTime()),
+    );
 
-    const where = Prisma.sql`
+    const paidIn = (
+      start: Date,
+      end: Date,
+      endInclusive: boolean,
+    ): Prisma.Sql => Prisma.sql`
       o.status::text IN (${Prisma.join(PAID_ORDER_STATUSES)})
       AND o.currency = ${currency}
-      AND o.created_at >= ${utcTimestamp(from)}
-      AND o.created_at <= ${utcTimestamp(to)}`;
+      AND o.created_at >= ${utcTimestamp(start)}
+      AND o.created_at ${endInclusive ? Prisma.sql`<=` : Prisma.sql`<`} ${utcTimestamp(end)}`;
+    const where = paidIn(from, to, true);
+    const previousWhere = paidIn(previousFrom, from, false);
+    const lines = scope
+      ? Prisma.sql`AND f.seller_id = ${scope.sellerId}::uuid`
+      : Prisma.empty;
 
-    const [seriesRows, topRows] = await Promise.all([
-      this.prisma.$queryRaw<SeriesRow[]>`
+    const seriesQuery = scope
+      ? this.prisma.$queryRaw<SeriesRow[]>`
+        SELECT date_trunc(${interval}, o.created_at) AS "periodStart",
+               COUNT(DISTINCT o.id)::bigint AS "orderCount",
+               COALESCE(SUM(oi.line_total), 0)::bigint AS "grossAmount"
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        JOIN offers f ON f.id = oi.offer_id
+        WHERE ${where} ${lines}
+        GROUP BY 1
+        ORDER BY 1`
+      : this.prisma.$queryRaw<SeriesRow[]>`
         SELECT date_trunc(${interval}, o.created_at) AS "periodStart",
                COUNT(*)::bigint AS "orderCount",
                COALESCE(SUM(o.total), 0)::bigint AS "grossAmount"
         FROM orders o
         WHERE ${where}
         GROUP BY 1
-        ORDER BY 1`,
-      this.prisma.$queryRaw<TopProductRow[]>`
+        ORDER BY 1`;
+    const previousQuery = scope
+      ? this.prisma.$queryRaw<TotalsRow[]>`
+        SELECT COUNT(DISTINCT o.id)::bigint AS "orderCount",
+               COALESCE(SUM(oi.line_total), 0)::bigint AS "grossAmount"
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        JOIN offers f ON f.id = oi.offer_id
+        WHERE ${previousWhere} ${lines}`
+      : this.prisma.$queryRaw<TotalsRow[]>`
+        SELECT COUNT(*)::bigint AS "orderCount",
+               COALESCE(SUM(o.total), 0)::bigint AS "grossAmount"
+        FROM orders o
+        WHERE ${previousWhere}`;
+
+    const [seriesRows, previousRows, topRows, categoryRows, sellerRows] =
+      await Promise.all([
+        seriesQuery,
+        previousQuery,
+        this.prisma.$queryRaw<TopProductRow[]>`
         SELECT p.id AS "productId",
                p.name AS "productName",
                SUM(oi.quantity)::bigint AS "unitsSold",
@@ -107,18 +186,45 @@ export class SalesAnalyticsService {
         JOIN offers f ON f.id = oi.offer_id
         JOIN product_variants v ON v.id = f.variant_id
         JOIN products p ON p.id = v.product_id
-        WHERE ${where}
+        WHERE ${where} ${lines}
         GROUP BY p.id, p.name
         ORDER BY "unitsSold" DESC, "grossAmount" DESC, p.id
         LIMIT ${TOP_PRODUCT_LIMIT}`,
-    ]);
+        this.prisma.$queryRaw<CategoryRow[]>`
+        SELECT c.id AS "categoryId",
+               c.name AS "categoryName",
+               SUM(oi.quantity)::bigint AS "unitsSold",
+               SUM(oi.line_total)::bigint AS "grossAmount"
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        JOIN offers f ON f.id = oi.offer_id
+        JOIN product_variants v ON v.id = f.variant_id
+        JOIN products p ON p.id = v.product_id
+        LEFT JOIN categories c ON c.id = p.category_id
+        WHERE ${where} ${lines}
+        GROUP BY c.id, c.name
+        ORDER BY "grossAmount" DESC, c.name
+        LIMIT ${CATEGORY_LIMIT}`,
+        scope
+          ? Promise.resolve([] as SellerRow[])
+          : this.prisma.$queryRaw<SellerRow[]>`
+        SELECT f.seller_id AS "sellerId",
+               s.display_name AS "sellerName",
+               s.storefront_slug AS "storefrontSlug",
+               COUNT(DISTINCT o.id)::bigint AS "orderCount",
+               SUM(oi.line_total)::bigint AS "grossAmount"
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        JOIN offers f ON f.id = oi.offer_id
+        LEFT JOIN sellers s ON s.id = f.seller_id
+        WHERE ${where}
+        GROUP BY f.seller_id, s.display_name, s.storefront_slug
+        ORDER BY "grossAmount" DESC
+        LIMIT ${TOP_SELLER_LIMIT}`,
+      ]);
 
     const series = this.zeroFill(seriesRows, from, to, interval);
-    const orderCount = series.reduce((sum, point) => sum + point.orderCount, 0);
-    const grossAmount = series.reduce(
-      (sum, point) => sum + point.grossAmount,
-      0,
-    );
+    const previous = previousRows[0];
 
     return {
       currency,
@@ -126,12 +232,14 @@ export class SalesAnalyticsService {
       from: from.toISOString(),
       to: to.toISOString(),
       series,
-      totals: {
-        orderCount,
-        grossAmount,
-        averageOrderAmount:
-          orderCount > 0 ? Math.round(grossAmount / orderCount) : 0,
-      },
+      totals: toTotals(
+        series.reduce((sum, point) => sum + point.orderCount, 0),
+        series.reduce((sum, point) => sum + point.grossAmount, 0),
+      ),
+      previous: toTotals(
+        Number(previous?.orderCount ?? 0),
+        Number(previous?.grossAmount ?? 0),
+      ),
       topProducts: topRows.map(
         (row): SalesTopProduct => ({
           productId: row.productId,
@@ -140,6 +248,30 @@ export class SalesAnalyticsService {
           grossAmount: Number(row.grossAmount),
         }),
       ),
+      byCategory: categoryRows.map(
+        (row): SalesCategoryShare => ({
+          categoryId: row.categoryId,
+          categoryName: row.categoryName ?? 'Uncategorised',
+          unitsSold: Number(row.unitsSold),
+          grossAmount: Number(row.grossAmount),
+        }),
+      ),
+      ...(scope
+        ? {}
+        : {
+            topSellers: sellerRows.map(
+              (row): SalesTopSeller => ({
+                sellerId: row.sellerId,
+                sellerName:
+                  row.sellerId === null
+                    ? FIRST_PARTY_NAME
+                    : (row.sellerName ?? 'Unnamed store'),
+                storefrontSlug: row.storefrontSlug,
+                orderCount: Number(row.orderCount),
+                grossAmount: Number(row.grossAmount),
+              }),
+            ),
+          }),
     };
   }
 

@@ -152,6 +152,216 @@
       },
       "description": "Required role: STAFF or ADMIN."
     },
+    "SalesAnalyticsController_getAttention": {
+      "operationId": "SalesAnalyticsController_getAttention",
+      "tags": [
+        "admin/analytics"
+      ],
+      "parameters": [],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/AdminAttention"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "Required role: STAFF or ADMIN."
+    },
+    "SellerAnalyticsController_getSales": {
+      "operationId": "SellerAnalyticsController_getSales",
+      "tags": [
+        "sellers/me/analytics"
+      ],
+      "parameters": [
+        {
+          "name": "from",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        {
+          "name": "to",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        {
+          "name": "interval",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month"
+            ],
+            "nullable": true,
+            "default": "day"
+          }
+        },
+        {
+          "name": "currency",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "ZMW"
+            ],
+            "default": "ZMW"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/SalesAnalyticsDto"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      }
+    },
+    "SellerAnalyticsController_getAttention": {
+      "operationId": "SellerAnalyticsController_getAttention",
+      "tags": [
+        "sellers/me/analytics"
+      ],
+      "parameters": [],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/SellerAttention"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      }
+    },
     "AuditEventsController_list": {
       "operationId": "AuditEventsController_list",
       "tags": [
@@ -19128,6 +19338,59 @@
         }
       }
     },
+    "StorefrontsController_list": {
+      "operationId": "StorefrontsController_list",
+      "tags": [
+        "StorefrontsController"
+      ],
+      "parameters": [],
+      "security": [],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data",
+                  "meta"
+                ],
+                "properties": {
+                  "data": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/PublicStorefrontListing"
+                    }
+                  },
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "requestId"
+                    ],
+                    "properties": {
+                      "requestId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      }
+    },
     "StorefrontsController_find": {
       "operationId": "StorefrontsController_find",
       "tags": [
@@ -21315,12 +21578,27 @@
           }
         },
         "totals": {
-          "$ref": "#/components/schemas/__type"
+          "$ref": "#/components/schemas/SalesTotals"
+        },
+        "previous": {
+          "$ref": "#/components/schemas/SalesTotals"
         },
         "topProducts": {
           "type": "array",
           "items": {
             "$ref": "#/components/schemas/SalesTopProduct"
+          }
+        },
+        "byCategory": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/SalesCategoryShare"
+          }
+        },
+        "topSellers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/SalesTopSeller"
           }
         }
       },
@@ -21331,7 +21609,9 @@
         "to",
         "series",
         "totals",
-        "topProducts"
+        "previous",
+        "topProducts",
+        "byCategory"
       ]
     },
     "SalesSeriesPoint": {
@@ -21353,7 +21633,7 @@
         "grossAmount"
       ]
     },
-    "__type": {
+    "SalesTotals": {
       "type": "object",
       "properties": {
         "orderCount": {
@@ -21393,6 +21673,203 @@
         "productName",
         "unitsSold",
         "grossAmount"
+      ]
+    },
+    "SalesCategoryShare": {
+      "type": "object",
+      "properties": {
+        "categoryId": {
+          "type": "string",
+          "nullable": true
+        },
+        "categoryName": {
+          "type": "string"
+        },
+        "unitsSold": {
+          "type": "number"
+        },
+        "grossAmount": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "categoryId",
+        "categoryName",
+        "unitsSold",
+        "grossAmount"
+      ]
+    },
+    "SalesTopSeller": {
+      "type": "object",
+      "properties": {
+        "sellerId": {
+          "type": "string",
+          "nullable": true
+        },
+        "sellerName": {
+          "type": "string"
+        },
+        "storefrontSlug": {
+          "type": "string",
+          "nullable": true
+        },
+        "orderCount": {
+          "type": "number"
+        },
+        "grossAmount": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "sellerId",
+        "sellerName",
+        "storefrontSlug",
+        "orderCount",
+        "grossAmount"
+      ]
+    },
+    "AdminAttention": {
+      "type": "object",
+      "properties": {
+        "pendingSubmissions": {
+          "type": "number"
+        },
+        "pendingSellerApplications": {
+          "type": "number"
+        },
+        "openReturns": {
+          "type": "number"
+        },
+        "pendingPayoutRequests": {
+          "type": "number"
+        },
+        "openReviewReports": {
+          "type": "number"
+        },
+        "ordersToFulfil": {
+          "type": "number"
+        },
+        "fulfilmentOnHold": {
+          "type": "number"
+        },
+        "lowStock": {
+          "type": "number"
+        },
+        "outOfStock": {
+          "type": "number"
+        },
+        "lowStockItems": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/LowStockItem"
+          }
+        }
+      },
+      "required": [
+        "pendingSubmissions",
+        "pendingSellerApplications",
+        "openReturns",
+        "pendingPayoutRequests",
+        "openReviewReports",
+        "ordersToFulfil",
+        "fulfilmentOnHold",
+        "lowStock",
+        "outOfStock",
+        "lowStockItems"
+      ]
+    },
+    "LowStockItem": {
+      "type": "object",
+      "properties": {
+        "inventoryRecordId": {
+          "type": "string"
+        },
+        "productId": {
+          "type": "string"
+        },
+        "productName": {
+          "type": "string"
+        },
+        "skuCode": {
+          "type": "string"
+        },
+        "warehouseName": {
+          "type": "string",
+          "nullable": true
+        },
+        "available": {
+          "type": "number"
+        },
+        "reorderPoint": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "inventoryRecordId",
+        "productId",
+        "productName",
+        "skuCode",
+        "warehouseName",
+        "available",
+        "reorderPoint"
+      ]
+    },
+    "SellerAttention": {
+      "type": "object",
+      "properties": {
+        "ordersToFulfil": {
+          "type": "number"
+        },
+        "openReturns": {
+          "type": "number"
+        },
+        "pendingSubmissions": {
+          "type": "number"
+        },
+        "rejectedSubmissions": {
+          "type": "number"
+        },
+        "lowStock": {
+          "type": "number"
+        },
+        "outOfStock": {
+          "type": "number"
+        },
+        "lowStockItems": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/LowStockItem"
+          }
+        },
+        "rating": {
+          "$ref": "#/components/schemas/__type"
+        }
+      },
+      "required": [
+        "ordersToFulfil",
+        "openReturns",
+        "pendingSubmissions",
+        "rejectedSubmissions",
+        "lowStock",
+        "outOfStock",
+        "lowStockItems",
+        "rating"
+      ]
+    },
+    "__type": {
+      "type": "object",
+      "properties": {
+        "average": {
+          "type": "number",
+          "nullable": true
+        },
+        "count": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "average",
+        "count"
       ]
     },
     "InputListAuditEventsDto": {
@@ -33202,6 +33679,45 @@
         "documentIds"
       ],
       "additionalProperties": false
+    },
+    "PublicStorefrontListing": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "storefrontSlug": {
+          "type": "string",
+          "nullable": true
+        },
+        "displayName": {
+          "type": "string",
+          "nullable": true
+        },
+        "description": {
+          "type": "string",
+          "nullable": true
+        },
+        "averageRating": {
+          "type": "number",
+          "nullable": true
+        },
+        "ratingCount": {
+          "type": "number"
+        },
+        "listingCount": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "storefrontSlug",
+        "displayName",
+        "description",
+        "averageRating",
+        "ratingCount",
+        "listingCount"
+      ]
     },
     "PublicStorefrontDetail": {
       "type": "object",
