@@ -136,6 +136,21 @@ export type Storefront = {
   ratingHistogram: RatingHistogram;
 };
 
+/** One store in the public directory, `GET /storefronts`. */
+export type StorefrontListing = {
+  id: string;
+  storefrontSlug: string | null;
+  displayName: string | null;
+  description: string | null;
+  averageRating: number | null;
+  ratingCount: number;
+  /** Published offers on the storefront right now. */
+  listingCount: number;
+};
+
+/** What the storefront calls the platform's own offers. */
+export const FIRST_PARTY_STORE_NAME = 'iZyane';
+
 /**
  * One of a seller's own listings, as `GET /storefronts/:slug/offers`
  * returns it — an offer, not a full `Product`: the same underlying product

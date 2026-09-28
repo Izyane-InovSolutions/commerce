@@ -13,11 +13,13 @@ import {
   Package,
   RotateCcw,
   Sparkles,
+  Star,
   Store,
   TrendingUp,
   X,
 } from 'lucide-react';
 
+import type { StorefrontListing } from '@/lib/catalog-types';
 import type { BrandGroup, CategoryBranch } from '@/lib/menu-data';
 import { cn } from '@/lib/utils';
 
@@ -64,24 +66,47 @@ const panelLink =
 export function MegaMenu({
   categories,
   brands,
+  stores = [],
 }: {
   categories: CategoryBranch[];
   brands: BrandGroup[];
+  /** Marketplace stores with a public page, for shopping by store. */
+  stores?: StorefrontListing[];
 }) {
+  const shown = storesToShow(stores);
   return (
     <>
-      <DesktopMenu categories={categories} brands={brands} />
-      <MobileMenu categories={categories} brands={brands} />
+      <DesktopMenu categories={categories} brands={brands} stores={shown} />
+      <MobileMenu categories={categories} brands={brands} stores={shown} />
     </>
   );
+}
+
+/** Stores with a page to go to, busiest first. */
+function storesToShow(stores: StorefrontListing[]): StorefrontListing[] {
+  return stores
+    .filter((store) => store.storefrontSlug)
+    .sort(
+      (left, right) =>
+        right.listingCount - left.listingCount ||
+        (left.displayName ?? '').localeCompare(right.displayName ?? ''),
+    );
+}
+
+const STORE_PANEL_LIMIT = 12;
+
+function storeName(store: StorefrontListing): string {
+  return store.displayName ?? 'Marketplace store';
 }
 
 function DesktopMenu({
   categories,
   brands,
+  stores,
 }: {
   categories: CategoryBranch[];
   brands: BrandGroup[];
+  stores: StorefrontListing[];
 }) {
   return (
     <NavigationMenu.Root
@@ -117,6 +142,22 @@ function DesktopMenu({
             </NavigationMenu.Trigger>
             <NavigationMenu.Content>
               <BrandsPanel brands={brands} />
+            </NavigationMenu.Content>
+          </NavigationMenu.Item>
+        ) : null}
+
+        {stores.length > 0 ? (
+          <NavigationMenu.Item>
+            <NavigationMenu.Trigger className={cn(barItem, 'group')}>
+              <Store className="size-4" aria-hidden="true" />
+              Stores
+              <ChevronDown
+                className="size-3.5 transition-transform group-data-[state=open]:rotate-180"
+                aria-hidden="true"
+              />
+            </NavigationMenu.Trigger>
+            <NavigationMenu.Content>
+              <StoresPanel stores={stores} />
             </NavigationMenu.Content>
           </NavigationMenu.Item>
         ) : null}
@@ -298,12 +339,58 @@ function BrandsPanel({ brands }: { brands: BrandGroup[] }) {
   );
 }
 
+function StoresPanel({ stores }: { stores: StorefrontListing[] }) {
+  return (
+    <PanelFrame>
+      <div className="space-y-4">
+        <div className="flex items-baseline justify-between gap-4">
+          <p className="text-base font-semibold">Shop by store</p>
+          <NavigationMenu.Link asChild>
+            <Link
+              href="/stores"
+              className="text-sm font-medium text-blue-700 hover:underline dark:text-blue-300"
+            >
+              See all {stores.length} stores
+            </Link>
+          </NavigationMenu.Link>
+        </div>
+        <ul className="grid grid-cols-2 gap-1 lg:grid-cols-3">
+          {stores.slice(0, STORE_PANEL_LIMIT).map((store) => (
+            <li key={store.id}>
+              <NavigationMenu.Link asChild>
+                <Link
+                  href={`/sellers/${store.storefrontSlug}`}
+                  className={cn(panelLink, 'block')}
+                >
+                  <span className="block font-medium">{storeName(store)}</span>
+                  <span className="text-muted-foreground flex items-center gap-1 text-xs">
+                    {store.ratingCount > 0 && store.averageRating ? (
+                      <>
+                        <Star className="size-3" aria-hidden="true" />
+                        {store.averageRating.toFixed(1)} ·{' '}
+                      </>
+                    ) : null}
+                    {store.listingCount}{' '}
+                    {store.listingCount === 1 ? 'product' : 'products'}
+                  </span>
+                </Link>
+              </NavigationMenu.Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </PanelFrame>
+  );
+}
+
 function MobileMenu({
   categories,
   brands,
+  stores,
 }: {
   categories: CategoryBranch[];
   brands: BrandGroup[];
+  stores: StorefrontListing[];
 }) {
   const [open, setOpen] = useState(false);
 
@@ -416,6 +503,40 @@ function MobileMenu({
                     </li>
                   )),
                 )}
+              </ul>
+            </details>
+          ) : null}
+
+          {stores.length > 0 ? (
+            <details className="group">
+              <summary
+                className={cn(
+                  panelLink,
+                  'flex cursor-pointer list-none items-center justify-between font-medium',
+                )}
+              >
+                Stores
+                <ChevronDown
+                  className="size-4 transition-transform group-open:rotate-180"
+                  aria-hidden="true"
+                />
+              </summary>
+              <ul className="mb-2 ml-3 border-l pl-2">
+                {stores.slice(0, STORE_PANEL_LIMIT).map((store) => (
+                  <li key={store.id}>
+                    <Link
+                      href={`/sellers/${store.storefrontSlug}`}
+                      className={panelLink}
+                    >
+                      {storeName(store)}
+                    </Link>
+                  </li>
+                ))}
+                <li>
+                  <Link href="/stores" className={cn(panelLink, 'font-medium')}>
+                    All stores
+                  </Link>
+                </li>
               </ul>
             </details>
           ) : null}

@@ -10,6 +10,7 @@ import { ProductGallery } from '@/components/product-gallery';
 import { Stars } from '@/components/rating-breakdown';
 import { RecordProductView } from '@/components/record-product-view';
 import { ReviewsSection } from '@/components/reviews-section';
+import { StoreCard } from '@/components/store-card';
 import { VariantPicker } from '@/components/variant-picker';
 import { addToCartAction } from '@/app/cart/actions';
 import { addToWishlistAction } from '@/app/wishlist/actions';
@@ -18,6 +19,7 @@ import {
   listProductReviews,
   listProducts,
   listVariantOffers,
+  getStorefront,
 } from '@/lib/catalog';
 import {
   buildOtherOffers,
@@ -108,6 +110,11 @@ export default async function ProductDetailPage({
   const offer = selection?.offer ?? null;
   const price = offer?.currentPrice ?? null;
   const sale = offer ? getOfferSale(offer) : null;
+  // The store's rating for the card; a store page that can't be read just
+  // leaves the card without it.
+  const storefront = offer?.seller?.storefrontSlug
+    ? await getStorefront(offer.seller.storefrontSlug).catch(() => null)
+    : null;
   const shippingCost = offer?.shippingCost ?? null;
   const inStock = offer?.inStock ?? true;
   const reviewParams = parseReviewParams(search, REVIEW_PREFIX);
@@ -182,21 +189,9 @@ export default async function ProductDetailPage({
                 {product.ratingCount === 1 ? 'review' : 'reviews'})
               </a>
             ) : null}
-            {offer?.seller ? (
-              offer.seller.storefrontSlug ? (
-                <Link
-                  href={`/sellers/${offer.seller.storefrontSlug}`}
-                  className="text-muted-foreground block text-sm hover:underline"
-                >
-                  Sold by {offer.seller.displayName ?? 'a marketplace seller'}
-                </Link>
-              ) : (
-                <p className="text-muted-foreground text-sm">
-                  Sold by {offer.seller.displayName ?? 'a marketplace seller'}
-                </p>
-              )
-            ) : null}
           </div>
+
+          <StoreCard offer={offer} storefront={storefront} />
 
           <div className="space-y-1">
             <div className="flex items-center gap-2">

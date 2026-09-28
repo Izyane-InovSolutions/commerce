@@ -11,7 +11,7 @@ import { signOutAction } from '@/app/account/actions';
 import { unreadBadgeLabel } from '@/lib/notification-link';
 import { countUnreadNotifications } from '@/lib/notifications';
 import { getCurrentUser } from '@/lib/session';
-import { listBrands, listCategories } from '@/lib/catalog';
+import { listBrands, listCategories, listStorefronts } from '@/lib/catalog';
 import { buildCategoryTree, groupBrandsByLetter } from '@/lib/menu-data';
 import { pageFrame } from '@/lib/page-frame';
 const linkClasses =
@@ -25,9 +25,10 @@ export async function SiteHeader() {
   const unread = user ? unreadBadgeLabel(await countUnreadNotifications()) : null;
   // The shop bar is navigation, not content: if the catalog can't be read it
   // shows just its fixed links rather than taking the header down.
-  const [categories, brands] = await Promise.all([
+  const [categories, brands, stores] = await Promise.all([
     listCategories().catch(() => []),
     listBrands().catch(() => []),
+    listStorefronts().catch(() => []),
   ]);
 
   return (
@@ -147,6 +148,7 @@ export async function SiteHeader() {
           <MegaMenu
             categories={buildCategoryTree(categories)}
             brands={groupBrandsByLetter(brands)}
+            stores={stores}
           />
         </div>
       </div>

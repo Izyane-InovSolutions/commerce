@@ -15,6 +15,7 @@ const FOOTER_LINKS = [
   { href: '/returns', label: 'Returns' },
   { href: '/best-sellers', label: 'Best sellers' },
   { href: '/new-arrivals', label: 'New arrivals' },
+  { href: '/stores', label: 'Stores' },
   // The account page's "Become a seller" button hands the session off to the
   // seller portal (`/launch` would send a plain customer back home).
   { href: '/account', label: 'Sell on iZyane' },

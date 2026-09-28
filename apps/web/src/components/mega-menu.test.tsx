@@ -89,6 +89,56 @@ describe('MegaMenu', () => {
     expect(screen.getByText('S')).toBeInTheDocument();
   });
 
+  it('offers shop-by-store, busiest store first, with the directory link', () => {
+    render(
+      <MegaMenu
+        categories={categories}
+        brands={brands}
+        stores={[
+          {
+            id: 's1',
+            storefrontSlug: 'quiet',
+            displayName: 'Quiet Shop',
+            description: null,
+            averageRating: null,
+            ratingCount: 0,
+            listingCount: 1,
+          },
+          {
+            id: 's2',
+            storefrontSlug: 'marys-salon',
+            displayName: "Mary's Salon",
+            description: null,
+            averageRating: 4.5,
+            ratingCount: 8,
+            listingCount: 12,
+          },
+          {
+            id: 's3',
+            storefrontSlug: null,
+            displayName: 'No page yet',
+            description: null,
+            averageRating: null,
+            ratingCount: 0,
+            listingCount: 0,
+          },
+        ]}
+      />,
+    );
+    open(screen.getByRole('button', { name: 'Stores' }));
+
+    const links = screen
+      .getAllByRole('link')
+      .filter((link) => link.getAttribute('href')?.startsWith('/sellers/'));
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      '/sellers/marys-salon',
+      '/sellers/quiet',
+    ]);
+    expect(
+      screen.getByRole('link', { name: 'See all 2 stores' }),
+    ).toHaveAttribute('href', '/stores');
+  });
+
   it('hides a panel it has nothing for', () => {
     render(<MegaMenu categories={[]} brands={[]} />);
     expect(
@@ -96,6 +146,9 @@ describe('MegaMenu', () => {
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Brands' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Stores' }),
     ).not.toBeInTheDocument();
   });
 });

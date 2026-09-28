@@ -12,6 +12,7 @@ import type {
   ReviewSort,
   SellerRating,
   Storefront,
+  StorefrontListing,
   StorefrontOfferPage,
   SuccessEnvelope,
 } from './catalog-types';
@@ -279,6 +280,25 @@ export async function listStorefrontRatings(
     next: { revalidate: 60 },
   });
   return response.data;
+}
+
+/**
+ * Every approved store with a public page, A–Z. Empty while the API doesn't
+ * serve the directory yet, so the Stores menu and page just hide.
+ */
+export async function listStorefronts(): Promise<StorefrontListing[]> {
+  try {
+    const response = await apiClient.get<SuccessEnvelope<StorefrontListing[]>>(
+      '/storefronts',
+      { next: { revalidate: 300 } },
+    );
+    return response.data;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return [];
+    }
+    throw error;
+  }
 }
 
 export async function listBrands(): Promise<Brand[]> {
