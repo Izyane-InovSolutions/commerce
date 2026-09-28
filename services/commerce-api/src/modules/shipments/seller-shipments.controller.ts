@@ -12,6 +12,7 @@ import { isUUID } from 'class-validator';
 
 import type { AuthenticatedUser } from '../../common/auth/authenticated-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
+import { RequireVerifiedEmail } from '../../common/auth/require-verified-email.decorator';
 import { SellerTrackingEventDto } from './dto/seller-tracking-event.dto';
 import { ShipmentsService } from './shipments.service';
 
@@ -27,6 +28,7 @@ function requireIdempotencyKey(key: string | undefined): string {
  * SellersService.lockApproved plus the cross-tenant 404 ownership check,
  * mirroring SellerOrdersController/SellerFulfillmentsController. */
 @Controller('sellers/me/shipments')
+@RequireVerifiedEmail()
 export class SellerShipmentsController {
   constructor(private readonly shipmentsService: ShipmentsService) {}
 

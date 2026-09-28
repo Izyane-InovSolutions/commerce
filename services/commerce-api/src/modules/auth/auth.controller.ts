@@ -26,6 +26,7 @@ import {
 import { AuthService, RequestContext } from './auth.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ConfirmPasswordResetDto } from './dto/confirm-password-reset.dto';
+import { ConfirmEmailVerificationDto } from './dto/confirm-email-verification.dto';
 import { ExchangeHandoffTokenDto } from './dto/exchange-handoff-token.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -146,6 +147,35 @@ export class AuthController {
     return this.authService.confirmPasswordReset(
       dto.token,
       dto.newPassword,
+      this.requestContext(ip, userAgent),
+    );
+  }
+
+  @Throttle(AUTH_BRUTE_FORCE_THROTTLE)
+  @Post('email-verification/resend')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  resendEmailVerification(
+    @CurrentUser() user: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
+  ): Promise<void> {
+    return this.authService.resendEmailVerification(
+      user.id,
+      this.requestContext(ip, userAgent),
+    );
+  }
+
+  @Public()
+  @Throttle(AUTH_BRUTE_FORCE_THROTTLE)
+  @Post('email-verification/confirm')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  confirmEmailVerification(
+    @Body() dto: ConfirmEmailVerificationDto,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
+  ): Promise<void> {
+    return this.authService.confirmEmailVerification(
+      dto.token,
       this.requestContext(ip, userAgent),
     );
   }

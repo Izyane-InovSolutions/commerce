@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { BASE_PATH } from '@/lib/base-path';
+import { hasValidMutationOrigin } from '@/lib/request-origin';
 import {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
@@ -13,13 +14,18 @@ import { refreshSession } from '@/lib/session-refresh';
  * Forwards the request, adding the bearer token to `/api/*` calls that are
  * rewritten to the Commerce API (see `next.config.ts`) and carry none.
  */
+function isApiRequest(request: NextRequest): boolean {
+  const { pathname } = request.nextUrl;
+  return pathname.startsWith('/api') || pathname.startsWith(`${BASE_PATH}/api`);
+}
+
 function forward(
   request: NextRequest,
   token: string | undefined,
 ): NextResponse {
   if (
     token &&
-    request.nextUrl.pathname.startsWith('/api') &&
+    isApiRequest(request) &&
     !request.headers.has('authorization')
   ) {
     request.headers.set('authorization', `Bearer ${token}`);
@@ -41,6 +47,23 @@ function forward(
  * project root when the app uses a `src` directory.
  */
 export async function proxy(request: NextRequest): Promise<NextResponse> {
+  // This proxy turns an HttpOnly session cookie into a Bearer header, so a
+  // browser mutation must come from this exact site before it does; SameSite
+  // stays a second layer rather than the only CSRF control.
+  if (
+    isApiRequest(request) &&
+    !hasValidMutationOrigin(
+      request.method,
+      request.headers.get('origin'),
+      request.nextUrl.origin,
+    )
+  ) {
+    return NextResponse.json(
+      { error: { code: 'INVALID_ORIGIN', message: 'Invalid request origin' } },
+      { status: 403 },
+    );
+  }
+
   const access = request.cookies.get(ACCESS_COOKIE)?.value;
   const refresh = request.cookies.get(REFRESH_COOKIE)?.value;
 

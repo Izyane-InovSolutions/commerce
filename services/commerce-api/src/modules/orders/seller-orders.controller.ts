@@ -2,6 +2,7 @@ import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 
 import type { AuthenticatedUser } from '../../common/auth/authenticated-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
+import { RequireVerifiedEmail } from '../../common/auth/require-verified-email.decorator';
 import { ListSellerOrdersDto } from './dto/list-seller-orders.dto';
 import { SellerOrdersService } from './seller-orders.service';
 import {
@@ -11,6 +12,7 @@ import {
 } from './seller-orders.types';
 
 @Controller('sellers/me/orders')
+@RequireVerifiedEmail()
 export class SellerOrdersController {
   constructor(private readonly sellerOrdersService: SellerOrdersService) {}
 

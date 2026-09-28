@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
+import { RequireVerifiedEmail } from '../../common/auth/require-verified-email.decorator';
 import type { AuthenticatedUser } from '../../common/auth/authenticated-user';
 import { SellerApplicationDto } from './dto/seller-application.dto';
 import { SellersService } from './sellers.service';
@@ -13,6 +14,7 @@ export class SellersController {
   constructor(private readonly sellers: SellersService) {}
 
   @Post('applications')
+  @RequireVerifiedEmail()
   apply(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: SellerApplicationDto,
@@ -26,6 +28,7 @@ export class SellersController {
   }
 
   @Post('me/resubmit')
+  @RequireVerifiedEmail()
   resubmit(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: SellerApplicationDto,

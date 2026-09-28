@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import type { AuthenticatedUser } from '../../common/auth/authenticated-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
+import { RequireVerifiedEmail } from '../../common/auth/require-verified-email.decorator';
 import { PaginatedResult } from '../../common/pagination/paginated-result';
 import { SellersService } from './sellers.service';
 import { SellerReviewFilterDto } from './dto/seller-review-filter.dto';
@@ -18,6 +19,7 @@ import {
 @ApiBearerAuth()
 @ApiTags('Seller reviews')
 @Controller('sellers/me')
+@RequireVerifiedEmail()
 export class SellerReviewsController {
   constructor(
     private readonly sellersService: SellersService,

@@ -127,6 +127,9 @@ describe('Seller fulfillment HTTP API (#37, integration)', () => {
       data: {
         email: `fulfillment-http-seller-${suffix}@example.test`,
         passwordHash: 'x',
+        // Email verification now gates seller actions; these flows
+        // assume a verified account.
+        emailVerifiedAt: new Date(),
         role: 'SELLER',
       },
     });
@@ -134,6 +137,9 @@ describe('Seller fulfillment HTTP API (#37, integration)', () => {
       data: {
         email: `fulfillment-http-buyer-${suffix}@example.test`,
         passwordHash: 'x',
+        // Email verification now gates seller actions; these flows
+        // assume a verified account.
+        emailVerifiedAt: new Date(),
       },
     });
     userIds.push(owner.id, buyer.id);

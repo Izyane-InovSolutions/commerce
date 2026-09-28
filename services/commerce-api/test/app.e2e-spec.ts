@@ -101,7 +101,7 @@ describe('Commerce API (e2e)', () => {
         return operation ? [operation] : [];
       }),
     );
-    expect(operations).toHaveLength(292);
+    expect(operations).toHaveLength(294);
     for (const operation of operations) {
       expect(operation.security).toBeDefined();
       expect(operation.responses.default).toBeDefined();
@@ -190,6 +190,8 @@ describe('Commerce API (e2e)', () => {
       'refreshToken',
       'tokenType',
       'expiresIn',
+      'refreshExpiresIn',
+      'refreshExpiresAt',
       'user',
     ]);
     expect(schemas.PublicUser?.properties).not.toHaveProperty('passwordHash');

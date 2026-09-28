@@ -37,7 +37,7 @@ sealed class PaymentDetails {
 
   /// Same rule as the API's validator. The server stays authoritative; this
   /// only saves a round trip for an obvious typo.
-  static final phonePattern = RegExp(r'^(?:0|\+?260)9\d{8}$');
+  static final phonePattern = RegExp(r'^(?:0|\+?260)[579]\d{8}$');
 
   static String normalizePhone(String raw) =>
       raw.replaceAll(RegExp(r'[\s-]'), '');

@@ -38,7 +38,9 @@ export class PaymentCardDto {
 export class PaymentDetailsDto {
   @IsIn(['MOBILE_MONEY', 'CARD']) paymentMethod!: 'MOBILE_MONEY' | 'CARD';
   @ValidateIf((dto: PaymentDetailsDto) => dto.paymentMethod === 'MOBILE_MONEY')
-  @Matches(/^(?:0|\+?260)9\d{8}$/)
+  // Zambian mobile ranges start 09x, 07x or 05x (Airtel numbers in the 057
+  // range have been charged successfully through the gateway).
+  @Matches(/^(?:0|\+?260)[579]\d{8}$/)
   phoneNumber?: string;
   @IsOptional() @IsIn(['AIRTEL', 'MTN']) provider?: 'AIRTEL' | 'MTN';
   @ValidateIf((dto: PaymentDetailsDto) => dto.paymentMethod === 'CARD')

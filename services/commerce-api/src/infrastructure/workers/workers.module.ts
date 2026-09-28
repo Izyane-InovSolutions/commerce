@@ -11,6 +11,8 @@ import { NotificationsModule } from '../../modules/notifications/notifications.m
 import { NotificationsOutboxSubscriber } from '../../modules/notifications/notifications-outbox.subscriber';
 import { PaymentsModule } from '../../modules/payments/payments.module';
 import { FulfillmentCancellationRefundHandler } from '../../modules/payments/jobs/fulfillment-cancellation-refund.handler';
+import { EmailModule } from '../email/email.module';
+import { EmailSendHandler } from '../email/email-send.handler';
 import { JobsModule } from '../jobs/jobs.module';
 import { JobWorkerService } from '../jobs/job-worker.service';
 import { OutboxDispatcherService } from '../jobs/outbox-dispatcher.service';
@@ -20,7 +22,15 @@ import { OutboxDispatcherService } from '../jobs/outbox-dispatcher.service';
 // keeping JobsModule (infra) and the domain modules mutually unaware of each
 // other — mirrors how AppModule composes feature modules.
 @Module({
-  imports: [JobsModule, InventoryModule, CartModule, FulfillmentModule, PaymentsModule, NotificationsModule],
+  imports: [
+    JobsModule,
+    EmailModule,
+    InventoryModule,
+    CartModule,
+    FulfillmentModule,
+    PaymentsModule,
+    NotificationsModule,
+  ],
 })
 export class WorkersModule implements OnModuleInit {
   constructor(
@@ -32,6 +42,7 @@ export class WorkersModule implements OnModuleInit {
     private readonly fulfillmentCancellationRefundHandler: FulfillmentCancellationRefundHandler,
     private readonly outboxDispatcherService: OutboxDispatcherService,
     private readonly notificationsOutboxSubscriber: NotificationsOutboxSubscriber,
+    private readonly emailSendHandler: EmailSendHandler,
   ) {}
 
   onModuleInit(): void {
@@ -47,5 +58,6 @@ export class WorkersModule implements OnModuleInit {
     this.outboxDispatcherService.registerSubscriber(
       this.notificationsOutboxSubscriber,
     );
+    this.jobWorkerService.registerHandler(this.emailSendHandler);
   }
 }

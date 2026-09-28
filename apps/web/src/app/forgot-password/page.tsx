@@ -25,7 +25,7 @@ export default function ForgotPasswordPage() {
           <CardTitle>Forgot your password?</CardTitle>
           <CardDescription>
             Enter the email you sign in with and we’ll send you a link to
-            choose a new password.
+            choose a new password. The link works once, for one hour.
           </CardDescription>
         </CardHeader>
         <CardContent>

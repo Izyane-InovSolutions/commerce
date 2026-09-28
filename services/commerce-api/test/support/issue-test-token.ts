@@ -4,7 +4,8 @@ import type { Role } from '@prisma/client';
 import type { FakePrismaService } from './fake-prisma.service';
 
 /**
- * Mints an access token backed by a real, active Session row.
+ * Mints an access token backed by a real, active Session row and an
+ * active, verified user.
  *
  * JwtAuthGuard checks the session named by the token's `sid` on every
  * request (so a revoked or expired session stops authenticating before its
@@ -18,6 +19,8 @@ export async function issueTestToken(
   userId: string,
   role: Role,
 ): Promise<string> {
+  // The guard loads the session's user, so there has to be one.
+  prisma.seedUser(userId, role);
   const session = await prisma.session.create({
     data: {
       userId,

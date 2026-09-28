@@ -23,8 +23,7 @@ services:
     expose:
       - '5432'
     healthcheck:
-      test:
-        ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
       interval: 5s
       timeout: 5s
       retries: 12
@@ -139,6 +138,15 @@ services:
     command: tunnel --no-autoupdate --url http://caddy:80
     depends_on:
       - caddy
+
+  # Local email inbox. Run `docker compose --profile mailpit up -d mailpit`,
+  # then use SMTP_HOST=localhost and SMTP_PORT=1025 in the API's local env.
+  mailpit:
+    image: axllent/mailpit:latest
+    profiles: ['mailpit']
+    ports:
+      - '1025:1025'
+      - '8025:8025'
 
 volumes:
   pgdata:

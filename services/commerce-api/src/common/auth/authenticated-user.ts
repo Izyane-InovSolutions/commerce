@@ -5,6 +5,8 @@ export type AuthenticatedUser = {
   id: string;
   role: Role;
   sessionId: string;
+  emailVerified: boolean;
+  verificationGraceUntil: Date | null;
 };
 
 export type RequestWithUser = Request & { user?: AuthenticatedUser };

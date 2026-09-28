@@ -1,7 +1,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { randomUUID } from 'node:crypto';
 
 import { ApiError } from '@commerce/api-client';
 
@@ -249,6 +251,23 @@ export async function confirmPasswordResetAction(
   redirect('/account?reset=done');
 }
 
+
+export async function resendEmailVerificationAction(
+  _state: FormState,
+): Promise<FormState> {
+  void _state;
+  try {
+    await apiClient.post('/auth/email-verification/resend');
+  } catch (error) {
+    return toFormState(error);
+  }
+
+  revalidatePath('/account');
+  return {
+    status: 'idle',
+    message: 'Verification email sent. Check your inbox.',
+  };
+}
 export async function addAddressAction(
   _state: FormState,
   formData: FormData,
@@ -314,8 +333,21 @@ async function redirectToSellerApp(next: string): Promise<never> {
   const response = await apiClient.post<SuccessEnvelope<{ code: string }>>(
     '/auth/handoff',
   );
+  // One-time state, checked by the seller app's handoff route against this
+  // cookie, so a handoff link can't be replayed into someone else's browser.
+  const state = randomUUID();
+  (await cookies()).set('commerce_seller_handoff_state', state, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: 120,
+  });
+  // appUrl keeps the seller app's /seller base path; new URL('/auth/…', base)
+  // would drop it.
   const url = appUrl(env.sellerAppUrl, '/auth/handoff', {
     code: response.data.code,
+    state,
     next,
   });
   redirect(url.toString());

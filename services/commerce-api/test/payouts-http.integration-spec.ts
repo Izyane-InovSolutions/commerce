@@ -52,6 +52,9 @@ describe('Seller payout HTTP API (#36, integration)', () => {
       data: {
         email: `http-payout-seller-${suffix}@example.test`,
         passwordHash: 'x',
+        // Email verification now gates seller actions; these flows
+        // assume a verified account.
+        emailVerifiedAt: new Date(),
         role: 'SELLER',
       },
     });
@@ -59,6 +62,9 @@ describe('Seller payout HTTP API (#36, integration)', () => {
       data: {
         email: `http-payout-admin-${suffix}@example.test`,
         passwordHash: 'x',
+        // Email verification now gates seller actions; these flows
+        // assume a verified account.
+        emailVerifiedAt: new Date(),
         role: 'ADMIN',
       },
     });
