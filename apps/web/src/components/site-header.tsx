@@ -1,6 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { Bell, ShoppingCart, User } from 'lucide-react';
+import { Bell, ShoppingCart, User, Package, Heart } from 'lucide-react';
 
 import izyaneLogo from '@/assets/izyane-black.svg';
 import { AccountMenu } from '@/components/account-menu';
@@ -10,6 +10,9 @@ import { signOutAction } from '@/app/account/actions';
 import { unreadBadgeLabel } from '@/lib/notification-link';
 import { countUnreadNotifications } from '@/lib/notifications';
 import { getCurrentUser } from '@/lib/session';
+const linkClasses =
+  'block rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-950 dark:hover:text-blue-300';
+
 
 export async function SiteHeader() {
   const user = await getCurrentUser();
@@ -19,7 +22,7 @@ export async function SiteHeader() {
 
   return (
     <header className="bg-background sticky top-0 z-40 border-b">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-4 py-3">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-4 py-3">
         <Link
           href="/"
           aria-label="iZyane Marketplace"
@@ -45,6 +48,47 @@ export async function SiteHeader() {
         </form>
 
         <nav className="ml-auto flex items-center gap-1">
+          <ul>
+        <Button
+            variant="ghost"
+            size="sm"
+            asChild
+            className="hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-950 dark:hover:text-blue-300"
+          >
+          <Link
+            href="/account?tab=wishlist"
+            className={`${linkClasses} flex items-center gap-2 font-medium`}
+          >
+            <Heart className="size-4" aria-hidden="true" />
+            My Wishlist
+          </Link>
+        </Button>
+        <Button
+            variant="ghost"
+            size="sm"
+            asChild
+            className="hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-950 dark:hover:text-blue-300"
+          >
+          <Link
+            href="/account?tab=orders"
+            className={`${linkClasses} flex items-center gap-2 font-medium`}
+          >
+            <Package className="size-4" aria-hidden="true" />
+            My Orders
+          </Link>
+        </Button>
+      </ul>
+          <Button
+            variant="ghost"
+            size="sm"
+            asChild
+            className="hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-950 dark:hover:text-blue-300"
+          >
+            <Link href="/cart">
+              <ShoppingCart data-icon="inline-start" />
+              Cart
+            </Link>
+          </Button>
           {user ? (
             <Button
               variant="ghost"
@@ -85,17 +129,7 @@ export async function SiteHeader() {
               </Link>
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            asChild
-            className="hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-950 dark:hover:text-blue-300"
-          >
-            <Link href="/cart">
-              <ShoppingCart data-icon="inline-start" />
-              Cart
-            </Link>
-          </Button>
+          
         </nav>
       </div>
     </header>

@@ -4,9 +4,16 @@ import {
 } from '@/components/product-category-section';
 import { SideNav } from '@/components/side-nav';
 import { StorefrontCatalog } from '@/components/storefront-catalog';
+import { TrendingHero } from '@/components/trending-hero';
 import { parseCatalogParams } from '@/lib/catalog-query';
 import { listCategories, listProducts } from '@/lib/catalog';
-import type { Category, Product } from '@/lib/catalog-types';
+import {
+  isTrendingProduct,
+  type Category,
+  type Product,
+} from '@/lib/catalog-types';
+
+const HERO_PRODUCT_LIMIT = 6;
 
 const HOMEPAGE_CATEGORIES = [
   { slug: 'electronics', title: 'Electronics' },
@@ -58,41 +65,50 @@ export default async function HomePage() {
     sections = [];
   }
 
+  const trendingProducts = allProducts
+    .filter((product) => isTrendingProduct(product))
+    .slice(0, HERO_PRODUCT_LIMIT);
+
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-10 px-4 py-12 sm:flex-row">
-      <SideNav categories={categories} />
+    <div className="mx-auto max-w-8xl px-4">
+      <TrendingHero products={trendingProducts} />
+    <div className="mx-auto max-w-7xl space-y-10 px-4 py-12">
+      
 
-      <div className="min-w-0 flex-1 space-y-12">
-        
+      <div className="flex flex-col gap-10 sm:flex-row">
+        <SideNav categories={categories} />
 
-        {/* The first page of the catalog, with category, brand and sort controls */}
-        <StorefrontCatalog
-          products={allProducts}
-          total={total}
+        <div className="min-w-0 flex-1 space-y-12">
+          {/* The first page of the catalog, with category, brand and sort controls */}
+          <StorefrontCatalog
+            products={allProducts}
+            total={total}
           pageSize={24}
           params={parseCatalogParams({})}
           categories={categories}
-          title="All Products"
-          description="Browse products by category, brand, name, or date added."
-        />
+            title="All Products"
+            description="Browse products by category, brand, name, or date added."
+          />
 
-        {/* Featured Category Spotlights */}
-        {sections.length > 0 ? (
-          <div className="space-y-10 border-t pt-10">
-            <div className="space-y-1">
-              <h2 className="text-xl font-semibold tracking-tight">
-                Featured Collections
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Hand-picked collections organized by category.
-              </p>
+          {/* Featured Category Spotlights */}
+          {sections.length > 0 ? (
+            <div className="space-y-10 border-t pt-10">
+              <div className="space-y-1">
+                <h2 className="text-xl font-semibold tracking-tight">
+                  Featured Collections
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Hand-picked collections organized by category.
+                </p>
+              </div>
+              {sections.map((section) => (
+                <ProductCategorySection key={section.slug} category={section} />
+              ))}
             </div>
-            {sections.map((section) => (
-              <ProductCategorySection key={section.slug} category={section} />
-            ))}
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
+    </div>
     </div>
   );
 }

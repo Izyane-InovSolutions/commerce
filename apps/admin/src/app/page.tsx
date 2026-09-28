@@ -13,6 +13,7 @@ import { currentPrices, defaultBackendCurrency } from '@commerce/contracts';
 
 import { ApiErrorNotice } from '@/components/api-error-notice';
 import { ApiStatusCard } from '@/components/api-status-card';
+import { CategorySalesPieChart } from '@/components/category-sales-pie-chart';
 import { PageHeader } from '@/components/page-header';
 import { SalesAreaChart } from '@/components/sales-area-chart';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ import {
   type SalesReportFilters,
 } from '@/lib/analytics';
 import { apiClient } from '@/lib/api';
+import { sampleCategorySalesShares } from '@/lib/sample-category-sales';
 import { explainMissingRoute } from '@/lib/api-route-errors';
 import { addDays, todayIsoDate } from '@/lib/date-range';
 import { navigation, navigationFor } from '@/lib/navigation';
@@ -128,6 +130,23 @@ async function CatalogSummary() {
       ))}
     </div>
   );
+}
+
+/**
+ * Best-selling categories, by real category names — see
+ * `sampleCategorySalesShares` for why the shares themselves are sample data.
+ */
+async function CategorySales() {
+  let shares;
+
+  try {
+    const categories = await backendListCategories(apiClient);
+    shares = sampleCategorySalesShares(categories);
+  } catch {
+    return null;
+  }
+
+  return <CategorySalesPieChart shares={shares} />;
 }
 
 /** The last 90 days of sales, by day, from the analytics report. */
@@ -251,6 +270,9 @@ export default async function OverviewPage({ searchParams }: PageProps<'/'>) {
 
       <Suspense fallback={null}>
         <ApiStatusCard />
+      </Suspense>
+      <Suspense fallback={null}>
+        <CategorySales />
       </Suspense>
     </div>
   );

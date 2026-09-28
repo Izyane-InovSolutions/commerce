@@ -9,9 +9,7 @@ import type { Category } from '@/lib/catalog-types';
 // "Deals" (offers carry no compare-at price, so that page is always empty);
 // both old URLs still resolve.
 const quickLinks = [
-  { label: 'All Products', href: '/products' },
-  { label: 'New Arrivals', href: '/new-arrivals' },
-  { label: 'Best Sellers', href: '/best-sellers' },
+  { label: 'Deals', href: '/deals' },
 ] as const;
 
 const linkClasses =
@@ -27,10 +25,6 @@ export function SideNav({ categories = [] }: { categories?: Category[] }) {
       className="w-full space-y-4 sm:sticky sm:top-14 sm:h-[calc(100vh-3.5rem)] sm:w-56 sm:shrink-0 sm:self-start sm:overflow-y-auto"
     >
       <div className="space-y-1">
-        <div className="flex items-center gap-2 px-2 py-1.5 text-sm font-medium">
-          <Menu className="size-4" aria-hidden="true" />
-          Categories
-        </div>
         <ul>
           {quickLinks.map((link) => (
             <li key={link.href}>
