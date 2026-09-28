@@ -36,12 +36,17 @@ export function PayoutResolveForm({
 
       <ol className="text-muted-foreground list-decimal space-y-1 pl-5 text-sm">
         <li>
-          Send <span className="text-foreground font-medium">{amountLabel}</span>{' '}
-          to {destinationLabel} from the platform&apos;s own bank or
-          mobile-money account.
+          Send{' '}
+          <span className="text-foreground font-medium">{amountLabel}</span> to{' '}
+          {destinationLabel} from the platform&apos;s own bank or mobile-money
+          account.
         </li>
-        <li>Enter the reference the bank or network gave you, and mark it paid.</li>
-        <li>If the transfer could not be made, mark it failed with the reason.</li>
+        <li>
+          Enter the reference the bank or network gave you, and mark it paid.
+        </li>
+        <li>
+          If the transfer could not be made, mark it failed with the reason.
+        </li>
       </ol>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -52,7 +57,9 @@ export function PayoutResolveForm({
             name="providerReference"
             maxLength={200}
             placeholder="Required to mark paid"
-            aria-invalid={state.fieldErrors?.providerReference ? true : undefined}
+            aria-invalid={
+              state.fieldErrors?.providerReference ? true : undefined
+            }
           />
           <FieldError messages={state.fieldErrors?.providerReference} />
         </div>

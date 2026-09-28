@@ -9,11 +9,11 @@ import {
   ApiError,
   backendGetAdminOrder,
   backendGetReturn,
-  backendListProducts,
   backendListWarehouses,
 } from '@commerce/api-client';
 import type {
   BackendAdminOrderDetail,
+  BackendAdminOrderItem,
   BackendWarehouse,
 } from '@commerce/contracts';
 
@@ -42,11 +42,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { apiClient } from '@/lib/api';
-import {
-  buildCatalogIndex,
-  describeVariant,
-  type CatalogIndex,
-} from '@/lib/catalog-labels';
 import { formatMinor } from '@/lib/money';
 import {
   acceptedSellerOrderIds,
@@ -93,6 +88,29 @@ function words(code: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+/**
+ * "Product — Variant" and its SKU, from the names the admin order read joins
+ * onto each line; a short id when the order could not be read.
+ */
+function describeOrderItem(
+  orderItem: BackendAdminOrderItem | undefined,
+  orderItemId: string,
+): { title: string; detail: string } {
+  if (!orderItem?.product) {
+    return {
+      title: `Order item ${orderItemId.slice(0, 8)}`,
+      detail: orderItem ? `Offer ${orderItem.offerId.slice(0, 8)}` : '',
+    };
+  }
+  const variantName = orderItem.variant?.name;
+  return {
+    title: variantName
+      ? `${orderItem.product.name} — ${variantName}`
+      : orderItem.product.name,
+    detail: orderItem.variant?.skuCode ?? orderItem.sellerSku ?? '',
+  };
+}
+
 /** The `to` status a STATUS_CHANGED event carries, when it carries one. */
 function eventTarget(data: unknown): string | null {
   if (data && typeof data === 'object' && 'to' in data) {
@@ -124,39 +142,36 @@ export default async function ReturnPage({
     );
   }
 
-  // A return item names only its order item, which in turn names only an
-  // offer — so the product names come from the order and the catalog. Each
-  // read is forgiving: failing one costs the labels (or the warehouse
-  // picker), never the return itself.
-  const [orderResult, productsResult, warehousesResult] =
-    await Promise.allSettled([
-      backendGetAdminOrder(apiClient, request.orderId),
-      backendListProducts(apiClient),
-      backendListWarehouses(apiClient),
-    ]);
+  // A return item names only its order item, so the product names — and
+  // the customer — come from the order, which the admin read joins them
+  // onto. Both reads are forgiving: failing one costs the labels (or the
+  // warehouse picker), never the return itself.
+  const [orderResult, warehousesResult] = await Promise.allSettled([
+    backendGetAdminOrder(apiClient, request.orderId),
+    backendListWarehouses(apiClient),
+  ]);
   const order: BackendAdminOrderDetail | null =
     orderResult.status === 'fulfilled' ? orderResult.value : null;
-  const catalog: CatalogIndex = buildCatalogIndex(
-    productsResult.status === 'fulfilled' ? productsResult.value : [],
-  );
   const warehouses: BackendWarehouse[] =
     warehousesResult.status === 'fulfilled' ? warehousesResult.value : [];
 
-  const orderItems = new Map((order?.items ?? []).map((item) => [item.id, item]));
+  const orderItems = new Map(
+    (order?.items ?? []).map((item) => [item.id, item]),
+  );
   const warehouseNames = new Map(
     warehouses.map((warehouse) => [warehouse.id, warehouse.name]),
   );
-  const labelFor = (orderItemId: string) => {
-    const orderItem = orderItems.get(orderItemId);
-    return describeVariant(
-      orderItem ? catalog.byOffer.get(orderItem.offerId) : undefined,
-      orderItem?.offerId ?? orderItemId,
-      orderItem ? 'Offer' : 'Order item',
-    );
-  };
   const itemLabel = new Map(
-    request.items.map((item) => [item.id, labelFor(item.orderItemId)]),
+    request.items.map((item) => [
+      item.id,
+      describeOrderItem(orderItems.get(item.orderItemId), item.orderItemId),
+    ]),
   );
+  const customer = order?.customer;
+  const customerName = customer
+    ? [customer.firstName, customer.lastName].filter(Boolean).join(' ') ||
+      customer.email
+    : null;
 
   const progress = returnItemProgress(request);
   const steps = new Set(returnSteps(request.status));
@@ -171,7 +186,10 @@ export default async function ReturnPage({
     new Map((order?.items ?? []).map((item) => [item.id, item.sellerOrderId])),
   );
   const sellerOrders = new Map(
-    (order?.sellerOrders ?? []).map((sellerOrder) => [sellerOrder.id, sellerOrder]),
+    (order?.sellerOrders ?? []).map((sellerOrder) => [
+      sellerOrder.id,
+      sellerOrder,
+    ]),
   );
 
   const receiveItems = request.items
@@ -231,7 +249,18 @@ export default async function ReturnPage({
             </div>
             <div>
               <dt className="text-muted-foreground text-xs">Customer</dt>
-              <dd className="font-mono">{request.userId.slice(0, 8)}</dd>
+              {customer && customerName ? (
+                <dd>
+                  {customerName}
+                  {customerName !== customer.email ? (
+                    <span className="text-muted-foreground block text-xs">
+                      {customer.email}
+                    </span>
+                  ) : null}
+                </dd>
+              ) : (
+                <dd className="font-mono">{request.userId.slice(0, 8)}</dd>
+              )}
             </div>
             <div>
               <dt className="text-muted-foreground text-xs">
@@ -446,7 +475,8 @@ export default async function ReturnPage({
                 currency={currency}
                 ready={readyToFinalize(progress)}
                 sellerOrders={sellerOrderIds.map((sellerOrderId) => {
-                  const shipping = sellerOrders.get(sellerOrderId)?.shippingAmount;
+                  const shipping =
+                    sellerOrders.get(sellerOrderId)?.shippingAmount;
                   return {
                     id: sellerOrderId,
                     label: `Seller order ${sellerOrderId.slice(0, 8)}`,
@@ -464,8 +494,7 @@ export default async function ReturnPage({
               />
             ) : (
               <p className="text-muted-foreground text-sm">
-                An administrator finalizes the inspection and raises the
-                refund.
+                An administrator finalizes the inspection and raises the refund.
               </p>
             )}
           </CardContent>
@@ -477,11 +506,11 @@ export default async function ReturnPage({
           <CardHeader>
             <CardTitle>Refund cases</CardTitle>
             <CardDescription>
-              One per seller order. The payment gateway does not support
-              refunds yet, so every case currently ends Failed — retrying
-              sends it to the gateway again and will fail the same way until
-              refunds are supported there. Any refund owed has to be settled
-              with the customer by other means in the meantime.
+              One per seller order. The payment gateway does not support refunds
+              yet, so every case currently ends Failed — retrying sends it to
+              the gateway again and will fail the same way until refunds are
+              supported there. Any refund owed has to be settled with the
+              customer by other means in the meantime.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -515,7 +544,10 @@ export default async function ReturnPage({
                         {refundCase.reason}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {formatMinor(refundCase.shippingAmount, refundCase.currency)}
+                        {formatMinor(
+                          refundCase.shippingAmount,
+                          refundCase.currency,
+                        )}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {formatMinor(refundCase.amount, refundCase.currency)}
@@ -562,14 +594,18 @@ export default async function ReturnPage({
                 <ul className="text-muted-foreground space-y-0.5">
                   {receipt.lines.map((line) => (
                     <li key={line.id}>
-                      {line.quantity} × {itemLabel.get(line.returnItemId)?.title}
+                      {line.quantity} ×{' '}
+                      {itemLabel.get(line.returnItemId)?.title}
                     </li>
                   ))}
                 </ul>
               </div>
             ))}
             {inspections.map((inspection) => (
-              <div key={inspection.id} className="space-y-1 border-b pb-3 text-sm">
+              <div
+                key={inspection.id}
+                className="space-y-1 border-b pb-3 text-sm"
+              >
                 <p className="font-medium">
                   Inspection · {formatDate(inspection.createdAt)}
                   {inspection.isFinal ? ' · final' : ''}

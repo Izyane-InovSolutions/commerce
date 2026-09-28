@@ -45,11 +45,15 @@ export function ReturnReviewForm({
             }
             options={warehouses}
             className="w-full"
-            aria-invalid={approveState.fieldErrors?.warehouseId ? true : undefined}
+            aria-invalid={
+              approveState.fieldErrors?.warehouseId ? true : undefined
+            }
           />
           <FieldError messages={approveState.fieldErrors?.warehouseId} />
         </div>
-        <SubmitButton pendingLabel="Approving…">Approve and issue RMA</SubmitButton>
+        <SubmitButton pendingLabel="Approving…">
+          Approve and issue RMA
+        </SubmitButton>
         <FieldError messages={approveState.fieldErrors?.version} />
         <FormError state={approveState} />
       </form>

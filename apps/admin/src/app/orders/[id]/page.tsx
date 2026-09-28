@@ -22,6 +22,7 @@ import { ApiErrorNotice } from '@/components/api-error-notice';
 import { FulfillmentActionButton } from '@/components/fulfillment-action-button';
 import {
   CancelLinesForm,
+  CancelShipmentForm,
   RaiseExceptionForm,
   ResolveExceptionForm,
   type FulfillmentLineChoice,
@@ -61,6 +62,7 @@ import {
   completePackingAction,
   completePickingAction,
   dispatchAction,
+  cancelShipmentAction,
   markShipmentDeliveredAction,
   shipItAction,
   startPackingAction,
@@ -72,6 +74,9 @@ import {
   createFulfillmentExceptionAction,
   resolveFulfillmentExceptionAction,
 } from '../operation-actions';
+
+/** The shipments service only cancels one that hasn't been dispatched. */
+const CANCELLABLE_SHIPMENT_STATUSES = new Set(['PENDING_BOOKING', 'BOOKED']);
 
 /** Mirrors `isTerminalShipmentStatus` in the shipments service — a shipment
  * in one of these has nothing left for a manual override to do. */
@@ -594,6 +599,19 @@ export default async function AdminOrderPage({
                               label="Mark as delivered"
                               pendingLabel="Saving…"
                               variant="outline"
+                            />
+                          ) : null}
+                          {CANCELLABLE_SHIPMENT_STATUSES.has(
+                            shipment.status,
+                          ) ? (
+                            <CancelShipmentForm
+                              idPrefix={shipment.id}
+                              shipmentNumber={shipment.shipmentNumber}
+                              action={cancelShipmentAction.bind(
+                                null,
+                                order.id,
+                                shipment.id,
+                              )}
                             />
                           ) : null}
                         </li>

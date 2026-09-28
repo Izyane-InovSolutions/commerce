@@ -171,7 +171,8 @@ export async function verifyPayoutAccountAction(
   revalidatePayouts();
   return {
     status: 'idle',
-    message: decision === 'VERIFIED' ? 'Account verified.' : 'Account rejected.',
+    message:
+      decision === 'VERIFIED' ? 'Account verified.' : 'Account rejected.',
   };
 }
 

@@ -22,7 +22,12 @@ import { toMinor } from './money';
  * backstop rather than the way an admin finds out a button did nothing.
  */
 
-export type ReturnStep = 'approve' | 'reject' | 'receive' | 'inspect' | 'finalize';
+export type ReturnStep =
+  | 'approve'
+  | 'reject'
+  | 'receive'
+  | 'inspect'
+  | 'finalize';
 
 /** Mirrors the status guards on each `ReturnsService` write. */
 export function returnSteps(status: BackendReturnStatus): ReturnStep[] {
@@ -61,11 +66,13 @@ export const RETURN_STATUS_HELP: Record<BackendReturnStatus, string> = {
   PARTIALLY_REFUNDED:
     'Some seller orders were refunded and some were not — see the refund cases below.',
   REFUNDED: 'Every refund case succeeded.',
-  REFUND_FAILED:
-    'The gateway refused the refund. See the refund cases below.',
+  REFUND_FAILED: 'The gateway refused the refund. See the refund cases below.',
 };
 
-export const RETURN_DISPOSITION_LABELS: Record<BackendReturnDisposition, string> = {
+export const RETURN_DISPOSITION_LABELS: Record<
+  BackendReturnDisposition,
+  string
+> = {
   RESTOCK: 'Restock (back into available stock)',
   QUARANTINE: 'Quarantine',
   DAMAGED: 'Damaged',
@@ -78,7 +85,9 @@ export const RETURN_DISPOSITION_LABELS: Record<BackendReturnDisposition, string>
  * the rows the admin read really carries. These narrow to that shape once,
  * here, rather than casting at every use.
  */
-export function readReceipts(request: BackendReturnRequest): BackendReturnReceipt[] {
+export function readReceipts(
+  request: BackendReturnRequest,
+): BackendReturnReceipt[] {
   return request.receipts as BackendReturnReceipt[];
 }
 
@@ -89,11 +98,20 @@ export function readInspections(
 }
 
 /** Oldest first, as the API writes them. */
-export function readEvents(request: BackendReturnRequest): BackendReturnEvent[] {
+export function readEvents(
+  request: BackendReturnRequest,
+): BackendReturnEvent[] {
   return [...(request.events as BackendReturnEvent[])].sort((left, right) =>
     left.createdAt.localeCompare(right.createdAt),
   );
 }
+
+/** Statuses in which more units may still be received. */
+const STILL_RECEIVING: ReadonlySet<BackendReturnRequest['status']> = new Set([
+  'REQUESTED',
+  'APPROVED',
+  'RECEIVING',
+]);
 
 /** Where one return item stands across every receipt and inspection so far. */
 export type ReturnItemProgress = {
@@ -101,7 +119,7 @@ export type ReturnItemProgress = {
   received: number;
   accepted: number;
   rejected: number;
-  /** Still expected at the warehouse. Zero once a closing receipt is posted. */
+  /** Still expected at the warehouse. Zero once receiving is over. */
   toReceive: number;
   /** Received but not yet accepted or rejected. */
   toInspect: number;
@@ -116,7 +134,12 @@ export function returnItemProgress(
   request: BackendReturnRequest,
 ): Map<string, ReturnItemProgress> {
   const receipts = readReceipts(request);
-  const closed = receipts.some((receipt) => receipt.isClosing);
+  // Receiving ends on a closing receipt, or — since the API now moves a
+  // return on by itself once every unit has arrived — whenever the return is
+  // past the receiving stage at all.
+  const closed =
+    receipts.some((receipt) => receipt.isClosing) ||
+    !STILL_RECEIVING.has(request.status);
   const received = new Map<string, number>();
   for (const receipt of receipts) {
     for (const line of receipt.lines) {
@@ -160,10 +183,10 @@ export function returnItemProgress(
 }
 
 /**
- * Whether these receipt lines bring in everything still expected. The API
- * only moves a return on to RECEIVED on a *closing* receipt, and once
- * nothing is left to receive no later receipt could carry a line — so a
- * receipt that completes the return has to be the closing one.
+ * Whether these receipt lines bring in everything still expected. Such a
+ * receipt is sent as the closing one: the API also moves a complete return on
+ * without the flag, but saying so explicitly keeps the receipt history clear
+ * about which delivery ended receiving.
  */
 export function receiptCompletesReturn(
   progress: ReadonlyMap<string, ReturnItemProgress>,
@@ -245,7 +268,9 @@ export function parseReceiptLines(
   if (lines.length === 0) {
     return {
       ok: false,
-      fieldErrors: { lines: ['Enter how many units arrived for at least one item.'] },
+      fieldErrors: {
+        lines: ['Enter how many units arrived for at least one item.'],
+      },
     };
   }
   return { ok: true, lines };
@@ -282,10 +307,14 @@ export function parseInspectionLines(
     const reason = (field(`reason.${returnItemId}`) ?? '').trim();
 
     if (accepted === null) {
-      fieldErrors[`accept.${returnItemId}`] = ['Enter a whole number of units.'];
+      fieldErrors[`accept.${returnItemId}`] = [
+        'Enter a whole number of units.',
+      ];
     }
     if (rejected === null) {
-      fieldErrors[`reject.${returnItemId}`] = ['Enter a whole number of units.'];
+      fieldErrors[`reject.${returnItemId}`] = [
+        'Enter a whole number of units.',
+      ];
     }
     if (accepted === null || rejected === null) continue;
     if (accepted === 0 && rejected === 0) continue;
@@ -296,7 +325,9 @@ export function parseInspectionLines(
       ];
     }
     if (rejected > 0 && reason === '') {
-      fieldErrors[`reason.${returnItemId}`] = ['Say why the units were rejected.'];
+      fieldErrors[`reason.${returnItemId}`] = [
+        'Say why the units were rejected.',
+      ];
     }
 
     lines.push({

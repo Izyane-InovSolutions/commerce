@@ -168,6 +168,16 @@ describe('returnItemProgress', () => {
     expect(progress.get('a')?.toReceive).toBe(0);
     expect(progress.get('b')?.toReceive).toBe(0);
   });
+
+  it('expects nothing more once the API has moved the return past receiving', () => {
+    const progress = returnItemProgress(
+      request({
+        status: 'RECEIVED',
+        receipts: [receipt([{ returnItemId: 'a', quantity: 1 }])],
+      }),
+    );
+    expect(progress.get('b')?.toReceive).toBe(0);
+  });
 });
 
 describe('receiptCompletesReturn', () => {

@@ -41,7 +41,11 @@ const REASON_PROMPTS: Partial<Record<PurchaseOrderAction, string>> = {
     'Stops waiting for the rest: everything still outstanding is cancelled, and what has arrived stays.',
 };
 
-const VERSION_ONLY = new Set<PurchaseOrderAction>(['submit', 'approve', 'place']);
+const VERSION_ONLY = new Set<PurchaseOrderAction>([
+  'submit',
+  'approve',
+  'place',
+]);
 
 /** At most one of these is ever allowed at once. */
 const FORWARD = new Set<PurchaseOrderAction>([
@@ -183,9 +187,7 @@ export function PurchaseOrderActions({
   const available = actions.filter((entry) => !entry.blockedReason);
   const blocked = actions.filter((entry) => entry.blockedReason);
   // The step that moves the order forward gets the primary button.
-  const primary = available.find((entry) =>
-    FORWARD.has(entry.action),
-  )?.action;
+  const primary = available.find((entry) => FORWARD.has(entry.action))?.action;
 
   return (
     <div className="space-y-4">

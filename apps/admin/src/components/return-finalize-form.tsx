@@ -78,8 +78,8 @@ export function ReturnFinalizeForm({
 
       {!ready ? (
         <p className="text-muted-foreground text-sm">
-          Every received unit has to be accepted or rejected before this can
-          be finalized.
+          Every received unit has to be accepted or rejected before this can be
+          finalized.
         </p>
       ) : null}
 

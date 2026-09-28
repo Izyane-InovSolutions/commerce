@@ -231,7 +231,9 @@ export function SupplierForm({
       </Card>
 
       <div className="flex items-center gap-2">
-        <SubmitButton>{supplier ? 'Save changes' : 'Create supplier'}</SubmitButton>
+        <SubmitButton>
+          {supplier ? 'Save changes' : 'Create supplier'}
+        </SubmitButton>
         <Button variant="ghost" asChild>
           <Link href="/procurement/suppliers">Cancel</Link>
         </Button>

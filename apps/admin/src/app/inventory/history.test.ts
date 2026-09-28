@@ -122,8 +122,6 @@ describe('movementEffect', () => {
     expect(movementEffect('ADJUSTMENT', 2)).toBe('On hand +2');
     expect(movementEffect('RESERVATION', 2)).toBe('Reserved +2');
     expect(movementEffect('RELEASE', 2)).toBe('Reserved −2');
-    expect(movementEffect('COMMITMENT', 2)).toBe(
-      'On hand −2, reserved −2',
-    );
+    expect(movementEffect('COMMITMENT', 2)).toBe('On hand −2, reserved −2');
   });
 });

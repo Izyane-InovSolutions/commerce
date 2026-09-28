@@ -343,3 +343,57 @@ export function CancelLinesForm({
     </Disclosure>
   );
 }
+
+/**
+ * Cancels a shipment that hasn't left yet (`PENDING_BOOKING` or `BOOKED`).
+ * Its packed units go back to the fulfillment order, ready for another
+ * shipment, so this is the way out of a wrong booking rather than an order
+ * cancellation.
+ */
+export function CancelShipmentForm({
+  idPrefix,
+  shipmentNumber,
+  action,
+}: {
+  idPrefix: string;
+  shipmentNumber: string;
+  action: FormAction;
+}) {
+  const [state, formAction] = useActionState(action, idleFormState);
+
+  return (
+    <Disclosure label="Cancel shipment">
+      {(close) => (
+        <form action={formAction} className="space-y-3">
+          <p className="text-sm">
+            Cancel {shipmentNumber}? Its packed units return to this fulfillment
+            order for a new shipment.
+          </p>
+          <div className="space-y-1.5">
+            <Label htmlFor={`${idPrefix}-cancel-reason`}>Reason</Label>
+            <Textarea
+              id={`${idPrefix}-cancel-reason`}
+              name="reason"
+              rows={2}
+              required
+              maxLength={1000}
+              placeholder="Why this shipment isn't going."
+              aria-invalid={state.fieldErrors?.reason ? true : undefined}
+            />
+            <FieldError messages={state.fieldErrors?.reason} />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <SubmitButton variant="secondary" pendingLabel="Cancelling…">
+              Cancel shipment
+            </SubmitButton>
+            <Button type="button" variant="ghost" size="sm" onClick={close}>
+              Keep it
+            </Button>
+          </div>
+          <FormError state={state} />
+          <SuccessMessage state={state} />
+        </form>
+      )}
+    </Disclosure>
+  );
+}

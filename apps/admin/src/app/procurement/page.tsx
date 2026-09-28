@@ -201,9 +201,7 @@ export default async function PurchaseOrdersPage({
       {orders.items.length === 0 ? (
         <EmptyState
           title={
-            isFiltered
-              ? 'No purchase orders match'
-              : 'No purchase orders yet'
+            isFiltered ? 'No purchase orders match' : 'No purchase orders yet'
           }
           description={
             isFiltered

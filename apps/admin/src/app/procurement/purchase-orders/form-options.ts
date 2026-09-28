@@ -42,7 +42,10 @@ export async function loadPurchaseOrderFormOptions(keep?: {
   variants: SelectOption[];
 }> {
   const [supplierPage, warehouses, products] = await Promise.all([
-    backendListSuppliers(apiClient, { status: 'ACTIVE', limit: SUPPLIER_LIMIT }),
+    backendListSuppliers(apiClient, {
+      status: 'ACTIVE',
+      limit: SUPPLIER_LIMIT,
+    }),
     backendListWarehouses(apiClient),
     backendListProducts(apiClient),
   ]);

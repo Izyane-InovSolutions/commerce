@@ -147,7 +147,11 @@ export function parsePurchaseOrderLines(
     }
 
     const unitCostAmount = toMinor(fields.unitCost ?? '');
-    if (!fields.unitCost || Number.isNaN(unitCostAmount) || unitCostAmount < 0) {
+    if (
+      !fields.unitCost ||
+      Number.isNaN(unitCostAmount) ||
+      unitCostAmount < 0
+    ) {
       addFieldError(
         fieldErrors,
         field('unitCost'),
@@ -263,7 +267,9 @@ export function parseReceiptLines(
     if (invalid) continue;
 
     const deliveredQuantity =
-      counts.acceptedQuantity + counts.rejectedQuantity + counts.damagedQuantity;
+      counts.acceptedQuantity +
+      counts.rejectedQuantity +
+      counts.damagedQuantity;
     if (deliveredQuantity === 0) continue;
 
     const outstanding = outstandingQuantity(poLine);
@@ -391,7 +397,9 @@ export function purchaseOrderActions(
 }
 
 /** Whether edits, receipts, and approvals are all over for this PO. */
-export function isClosedPurchaseOrder(status: BackendPurchaseOrderStatus): boolean {
+export function isClosedPurchaseOrder(
+  status: BackendPurchaseOrderStatus,
+): boolean {
   return ACTIONS_BY_STATUS[status].length === 0;
 }
 
@@ -418,11 +426,16 @@ export function parsePurchaseOrderHeader(formData: FormData): {
   const text = (name: string) => String(formData.get(name) ?? '').trim();
 
   const supplierId = text('supplierId');
-  if (!supplierId) addFieldError(fieldErrors, 'supplierId', 'Choose a supplier.');
+  if (!supplierId)
+    addFieldError(fieldErrors, 'supplierId', 'Choose a supplier.');
 
   const warehouseId = text('warehouseId');
   if (!warehouseId) {
-    addFieldError(fieldErrors, 'warehouseId', 'Choose a warehouse to deliver to.');
+    addFieldError(
+      fieldErrors,
+      'warehouseId',
+      'Choose a warehouse to deliver to.',
+    );
   }
 
   const currency = text('currency').toUpperCase();
@@ -433,11 +446,18 @@ export function parsePurchaseOrderHeader(formData: FormData): {
   const shipping = text('shipping');
   const shippingAmount = shipping === '' ? 0 : toMinor(shipping);
   if (Number.isNaN(shippingAmount) || shippingAmount < 0) {
-    addFieldError(fieldErrors, 'shipping', 'Enter a shipping cost of zero or more.');
+    addFieldError(
+      fieldErrors,
+      'shipping',
+      'Enter a shipping cost of zero or more.',
+    );
   }
 
   const expectedDeliveryDate = optionalText(text('expectedDeliveryDate'));
-  if (expectedDeliveryDate !== undefined && !isCalendarDate(expectedDeliveryDate)) {
+  if (
+    expectedDeliveryDate !== undefined &&
+    !isCalendarDate(expectedDeliveryDate)
+  ) {
     addFieldError(
       fieldErrors,
       'expectedDeliveryDate',
@@ -462,7 +482,11 @@ export function parsePurchaseOrderHeader(formData: FormData): {
 function isCalendarDate(value: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return false;
-  const [year, month, day] = match.slice(1).map(Number) as [number, number, number];
+  const [year, month, day] = match.slice(1).map(Number) as [
+    number,
+    number,
+    number,
+  ];
   const date = new Date(Date.UTC(year, month - 1, day));
   return (
     date.getUTCFullYear() === year &&
@@ -476,7 +500,10 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type SupplierTerms = Pick<
   BackendCreateSupplierInput,
-  'paymentTermsDays' | 'leadTimeDays' | 'minimumOrderAmount' | 'minimumOrderCurrency'
+  | 'paymentTermsDays'
+  | 'leadTimeDays'
+  | 'minimumOrderAmount'
+  | 'minimumOrderCurrency'
 >;
 
 /** Terms and the minimum order, shared by create and edit. */
@@ -544,7 +571,8 @@ export function supplierCreateInput(formData: FormData): {
   }
 
   const legalName = text('legalName');
-  if (!legalName) addFieldError(fieldErrors, 'legalName', 'Enter the legal name.');
+  if (!legalName)
+    addFieldError(fieldErrors, 'legalName', 'Enter the legal name.');
 
   const defaultCurrency = text('defaultCurrency').toUpperCase();
   if (!/^[A-Z]{3}$/.test(defaultCurrency)) {
@@ -588,7 +616,8 @@ export function supplierUpdateInput(
   const text = (name: string) => String(formData.get(name) ?? '').trim();
 
   const legalName = text('legalName');
-  if (!legalName) addFieldError(fieldErrors, 'legalName', 'Enter the legal name.');
+  if (!legalName)
+    addFieldError(fieldErrors, 'legalName', 'Enter the legal name.');
 
   const contactEmail = optionalText(text('contactEmail'));
   checkEmail(contactEmail, fieldErrors);
@@ -648,6 +677,9 @@ export function variantOptions(
   const kept = new Set(keep);
   return [...directory.entries()]
     .filter(([id, entry]) => !entry.archived || kept.has(id))
-    .map(([id, entry]) => ({ value: id, label: `${entry.product} — ${entry.sku}` }))
+    .map(([id, entry]) => ({
+      value: id,
+      label: `${entry.product} — ${entry.sku}`,
+    }))
     .sort((left, right) => left.label.localeCompare(right.label));
 }

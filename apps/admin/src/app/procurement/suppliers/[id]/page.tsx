@@ -176,8 +176,8 @@ export default async function SupplierPage({
               <CardHeader>
                 <CardTitle>Inactive</CardTitle>
                 <CardDescription>
-                  New purchase orders can&apos;t name this supplier. The API
-                  has no way to reactivate one.
+                  New purchase orders can&apos;t name this supplier. The API has
+                  no way to reactivate one.
                 </CardDescription>
               </CardHeader>
             </Card>

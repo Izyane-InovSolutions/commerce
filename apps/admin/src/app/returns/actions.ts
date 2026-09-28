@@ -247,7 +247,8 @@ export async function finalizeInspectionAction(
       message =
         'Inspection finalized, but the gateway refused the refund. See the refund cases below.';
     } else if (request.status === 'CLOSED_NO_REFUND') {
-      message = 'Inspection finalized. Nothing was accepted, so nothing is refunded.';
+      message =
+        'Inspection finalized. Nothing was accepted, so nothing is refunded.';
     }
     // A request already past INSPECTING comes back unchanged rather than
     // re-finalized; the re-render shows where it actually stands.

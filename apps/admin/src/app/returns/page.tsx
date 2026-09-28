@@ -191,7 +191,9 @@ export default async function ReturnsPage({
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {value
-                        .map((total) => formatMinor(total.amount, total.currency))
+                        .map((total) =>
+                          formatMinor(total.amount, total.currency),
+                        )
                         .join(' · ') || '—'}
                     </TableCell>
                   </TableRow>

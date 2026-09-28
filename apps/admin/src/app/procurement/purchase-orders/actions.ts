@@ -141,7 +141,10 @@ export async function createPurchaseOrderAction(
  * deactivated would block every other edit to the draft.
  */
 export async function updatePurchaseOrderAction(
-  po: Pick<BackendPurchaseOrder, 'id' | 'version' | 'supplierId' | 'warehouseId'>,
+  po: Pick<
+    BackendPurchaseOrder,
+    'id' | 'version' | 'supplierId' | 'warehouseId'
+  >,
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
@@ -215,7 +218,9 @@ export async function transitionPurchaseOrderAction(
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const transition = String(formData.get('transition') ?? '') as PurchaseOrderAction;
+  const transition = String(
+    formData.get('transition') ?? '',
+  ) as PurchaseOrderAction;
   const versionOnly = VERSION_TRANSITIONS[transition];
   const withReason = REASON_TRANSITIONS[transition];
   if (!versionOnly && !withReason) {
@@ -329,7 +334,9 @@ export async function createGoodsReceiptAction(
     };
   }
 
-  const deliveryNote = String(formData.get('supplierDeliveryNoteRef') ?? '').trim();
+  const deliveryNote = String(
+    formData.get('supplierDeliveryNoteRef') ?? '',
+  ).trim();
 
   try {
     await backendCreateGoodsReceipt(

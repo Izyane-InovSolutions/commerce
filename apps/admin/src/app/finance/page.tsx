@@ -102,6 +102,26 @@ export default async function FinancePage({
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Payout requests</CardTitle>
+          <CardDescription>
+            Sellers can also ask to be paid. Verify their payout accounts,
+            approve requests, run a batch, then make each transfer and
+            reconcile it — the payout rail is manual, so nothing is sent for
+            you.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link
+            href="/finance/payouts"
+            className="text-sm font-medium hover:underline"
+          >
+            Go to payout requests →
+          </Link>
+        </CardContent>
+      </Card>
+
       {payouts.items.length === 0 ? (
         <EmptyState
           title="No payouts recorded"

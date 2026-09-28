@@ -183,8 +183,8 @@ export default async function InventoryRecordPage({
         <CardHeader>
           <CardTitle>Stock</CardTitle>
           <CardDescription>
-            The record is flagged for reorder once available stock falls to
-            the reorder point. Zero means no flag.
+            The record is flagged for reorder once available stock falls to the
+            reorder point. Zero means no flag.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-end justify-between gap-6">

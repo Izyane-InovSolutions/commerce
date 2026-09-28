@@ -164,7 +164,8 @@ export function PurchaseOrderForm({
     warehouseId: purchaseOrder?.warehouseId ?? '',
     currency: purchaseOrder?.currency ?? currencies[0] ?? '',
     shipping: purchaseOrder ? majorUnits(purchaseOrder.shippingAmount) : '',
-    expectedDeliveryDate: purchaseOrder?.expectedDeliveryDate?.slice(0, 10) ?? '',
+    expectedDeliveryDate:
+      purchaseOrder?.expectedDeliveryDate?.slice(0, 10) ?? '',
     notes: purchaseOrder?.notes ?? '',
   }));
   const [rows, setRows] = useState<Row[]>(() => initialRows(purchaseOrder));
@@ -251,8 +252,8 @@ export function PurchaseOrderForm({
         <CardHeader>
           <CardTitle>Order</CardTitle>
           <CardDescription>
-            Who it is from and where it is delivered. Only active suppliers
-            and warehouses can be chosen.
+            Who it is from and where it is delivered. Only active suppliers and
+            warehouses can be chosen.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -373,9 +374,7 @@ export function PurchaseOrderForm({
               >
                 <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
                   <div className="space-y-1.5">
-                    <Label htmlFor={`line-${row.key}-variantId`}>
-                      Variant
-                    </Label>
+                    <Label htmlFor={`line-${row.key}-variantId`}>Variant</Label>
                     <SelectField
                       {...inputProps(row, 'variantId')}
                       className="w-full"
@@ -424,9 +423,7 @@ export function PurchaseOrderForm({
                     <FieldError messages={lineError(row.key, 'unitCost')} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor={`line-${row.key}-discount`}>
-                      Discount
-                    </Label>
+                    <Label htmlFor={`line-${row.key}-discount`}>Discount</Label>
                     <Input
                       {...inputProps(row, 'discount')}
                       inputMode="decimal"

@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import {
   backendAddTrackingEvent,
   backendBookShipment,
+  backendCancelShipment,
   backendCompletePacking,
   backendCompletePicking,
   backendCreateShipment,
@@ -270,4 +271,30 @@ export async function markShipmentDeliveredAction(
   }
   revalidateOrder(orderId);
   return { status: 'idle', message: 'Marked as delivered.' };
+}
+
+/** Undoes a booking that hasn't dispatched; the API frees its packed units. */
+export async function cancelShipmentAction(
+  orderId: string,
+  shipmentId: string,
+  _state: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
+  const reason = String(formData.get('reason') ?? '').trim();
+  if (reason === '') {
+    return { status: 'error', fieldErrors: { reason: ['Say why.'] } };
+  }
+
+  try {
+    await backendCancelShipment(apiClient, shipmentId, { reason });
+  } catch (error) {
+    return toFormState(error);
+  }
+  revalidateOrder(orderId);
+  return { status: 'idle', message: 'Shipment cancelled.' };
 }

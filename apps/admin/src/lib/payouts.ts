@@ -39,8 +39,7 @@ export const PAYOUT_STATUS_HELP: Record<BackendSellerPayoutStatus, string> = {
     'The seller asked to be paid. The amount is held off their available balance until this is approved or rejected.',
   APPROVED:
     'Approved and waiting for the next batch. Nothing has been sent yet.',
-  PROCESSING:
-    'Claimed by a batch and being handed to the payout provider.',
+  PROCESSING: 'Claimed by a batch and being handed to the payout provider.',
   RECONCILIATION_REQUIRED:
     'The manual provider never sends money. Make the transfer yourself, then resolve this with the bank or mobile-money reference — or mark it failed to return the amount to the seller.',
   SUCCEEDED: 'Resolved as paid. The seller’s ledger has been debited.',
@@ -73,7 +72,10 @@ export function describePayoutEventAction(action: string): string {
  * with today's rail a batch always ends "with errors". The help says what
  * that actually means rather than suggesting something broke.
  */
-export const PAYOUT_BATCH_STATUS_HELP: Record<BackendPayoutBatchStatus, string> = {
+export const PAYOUT_BATCH_STATUS_HELP: Record<
+  BackendPayoutBatchStatus,
+  string
+> = {
   OPEN: 'Claimed but not yet submitted.',
   PROCESSING: 'Its requests are being handed to the payout provider.',
   COMPLETED: 'Every request in it was resolved by the provider.',
