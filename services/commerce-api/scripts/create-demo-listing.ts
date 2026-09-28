@@ -1,20 +1,3 @@
-/*
- * Creates a fully-optioned demo listing through the admin API: one product in
- * every combination of its options (e.g. Color × Storage × Carrier), each
- * variant with its attribute values, a published offer, a ZMW price and stock.
- * Meant as a worked example of how a multi-option product is modelled.
- *
- * It goes through the HTTP API (not Prisma) so every write is validated the
- * same way the admin portal's would be. Attributes, values, the category and
- * the brand are reused when they already exist; the product itself is not —
- * a second run stops at the slug conflict instead of duplicating anything.
- *
- *   LISTING=iphone-18-pro-max \
- *   API_URL=http://localhost:3005/api/v1 \
- *   ADMIN_EMAIL=admin@example.test ADMIN_PASSWORD=... \
- *   npx ts-node --transpile-only scripts/create-demo-listing.ts
- */
-
 const API_URL = (process.env.API_URL ?? 'http://localhost:3005/api/v1').replace(
   /\/+$/,
   '',
@@ -52,50 +35,12 @@ const CARRIERS: OptionValue[] = [
 ];
 
 const LISTINGS: Record<string, Listing> = {
-  // Colours and capacities as announced by Apple (September 2026).
-  'iphone-18-pro-max': {
-    product: {
-      name: 'iPhone 18 Pro Max',
-      slug: 'iphone-18-pro-max',
-      description:
-        'Guide listing: every colour, storage and carrier combination is its own variant with its own SKU, price and stock. Storage and carrier change the price; colour does not. Two combinations are deliberately out of stock.',
-    },
-    category: { name: 'Smartphones', slug: 'smartphones' },
-    brand: { name: 'Apple', slug: 'apple' },
-    skuPrefix: 'IP18PM',
-    basePrice: 32_999_00, // K 32,999.00
-    options: [
-      {
-        code: 'color',
-        name: 'Color',
-        values: [
-          { value: 'Black', sku: 'BLK', surcharge: 0 },
-          { value: 'Silver', sku: 'SLV', surcharge: 0 },
-          { value: 'Burgundy', sku: 'BRG', surcharge: 0 },
-          { value: 'Glacier', sku: 'GLC', surcharge: 0 },
-        ],
-      },
-      {
-        code: 'storage',
-        name: 'Storage',
-        values: [
-          { value: '256GB', sku: '256', surcharge: 0 },
-          { value: '512GB', sku: '512', surcharge: 5_000_00 },
-          { value: '1TB', sku: '1TB', surcharge: 11_000_00 },
-          { value: '2TB', sku: '2TB', surcharge: 20_000_00 },
-        ],
-      },
-      { code: 'carrier', name: 'Carrier', values: CARRIERS },
-    ],
-    soldOut: ['IP18PM-BRG-2TB-UNL', 'IP18PM-GLC-1TB-VZW'],
-  },
-  // The first demo, kept so the script documents what it created.
   'iphone-18-pro': {
     product: {
       name: 'iPhone 18 Pro',
       slug: 'iphone-18-pro',
       description:
-        'Demo listing with every colour, storage and carrier combination as its own variant, priced and stocked individually.',
+        'Demo listing with colour, storage and carrier combinations. Each combination is created as its own variant with its own SKU, price and stock.',
     },
     category: { name: 'Smartphones', slug: 'smartphones' },
     brand: { name: 'Apple', slug: 'apple' },
@@ -115,21 +60,137 @@ const LISTINGS: Record<string, Listing> = {
         code: 'storage',
         name: 'Storage',
         values: [
-          { value: '128GB', sku: '128', surcharge: 0 },
-          { value: '256GB', sku: '256', surcharge: 3_000_00 },
-          { value: '512GB', sku: '512', surcharge: 7_000_00 },
+          { value: '256GB', sku: '256', surcharge: 0 },
+          { value: '512GB', sku: '512', surcharge: 3_000_00 },
+          { value: '1TB', sku: '1TB', surcharge: 7_000_00 },
         ],
       },
       {
         code: 'carrier',
         name: 'Carrier',
-        values: [
-          { value: 'Unlocked', sku: 'UNL', surcharge: 0 },
-          { value: 'Sprint', sku: 'SPR', surcharge: -1_500_00 },
-          { value: 'Verizon', sku: 'VZW', surcharge: -1_500_00 },
-        ],
+        values: CARRIERS,
       },
     ],
+    soldOut: ['IP18P-BLU-1TB-UNL', 'IP18P-SLV-512-VZW'],
+  },
+
+  'pixel-11-pro': {
+    product: {
+      name: 'Google Pixel 11 Pro',
+      slug: 'google-pixel-11-pro',
+      description:
+        'Demo Google Pixel 11 Pro listing with colour, storage and carrier combinations, individually priced and stocked.',
+    },
+    category: { name: 'Smartphones', slug: 'smartphones' },
+    brand: { name: 'Google', slug: 'google' },
+    skuPrefix: 'PX11P',
+    basePrice: 21_999_00,
+    options: [
+      {
+        code: 'color',
+        name: 'Color',
+        values: [
+          { value: 'Obsidian', sku: 'OBS', surcharge: 0 },
+          { value: 'Porcelain', sku: 'POR', surcharge: 0 },
+          { value: 'Hazel', sku: 'HAZ', surcharge: 0 },
+        ],
+      },
+      {
+        code: 'storage',
+        name: 'Storage',
+        values: [
+          { value: '256GB', sku: '256', surcharge: 0 },
+          { value: '512GB', sku: '512', surcharge: 3_500_00 },
+          { value: '1TB', sku: '1TB', surcharge: 8_000_00 },
+        ],
+      },
+      {
+        code: 'carrier',
+        name: 'Carrier',
+        values: CARRIERS,
+      },
+    ],
+    soldOut: ['PX11P-HAZ-1TB-UNL', 'PX11P-POR-512-VZW'],
+  },
+
+  'pixel-11-pro-xl': {
+    product: {
+      name: 'Google Pixel 11 Pro XL',
+      slug: 'google-pixel-11-pro-xl',
+      description:
+        'Demo Google Pixel 11 Pro XL listing with colour, storage and carrier combinations, individually priced and stocked.',
+    },
+    category: { name: 'Smartphones', slug: 'smartphones' },
+    brand: { name: 'Google', slug: 'google' },
+    skuPrefix: 'PX11PXL',
+    basePrice: 23_999_00,
+    options: [
+      {
+        code: 'color',
+        name: 'Color',
+        values: [
+          { value: 'Obsidian', sku: 'OBS', surcharge: 0 },
+          { value: 'Porcelain', sku: 'POR', surcharge: 0 },
+          { value: 'Hazel', sku: 'HAZ', surcharge: 0 },
+        ],
+      },
+      {
+        code: 'storage',
+        name: 'Storage',
+        values: [
+          { value: '256GB', sku: '256', surcharge: 0 },
+          { value: '512GB', sku: '512', surcharge: 3_500_00 },
+          { value: '1TB', sku: '1TB', surcharge: 8_000_00 },
+        ],
+      },
+      {
+        code: 'carrier',
+        name: 'Carrier',
+        values: CARRIERS,
+      },
+    ],
+    soldOut: ['PX11PXL-HAZ-1TB-UNL', 'PX11PXL-OBS-512-ATT'],
+  },
+
+  'galaxy-s26-ultra': {
+    product: {
+      name: 'Samsung Galaxy S26 Ultra',
+      slug: 'samsung-galaxy-s26-ultra',
+      description:
+        'Demo Samsung Galaxy S26 Ultra listing with colour, storage and carrier combinations, individually priced and stocked.',
+    },
+    category: { name: 'Smartphones', slug: 'smartphones' },
+    brand: { name: 'Samsung', slug: 'samsung' },
+    skuPrefix: 'GS26U',
+    basePrice: 22_999_00,
+    options: [
+      {
+        code: 'color',
+        name: 'Color',
+        values: [
+          { value: 'Titanium Black', sku: 'BLK', surcharge: 0 },
+          { value: 'Titanium Silver', sku: 'SLV', surcharge: 0 },
+          { value: 'Titanium Blue', sku: 'BLU', surcharge: 0 },
+          { value: 'Titanium Gray', sku: 'GRY', surcharge: 0 },
+        ],
+      },
+      {
+        code: 'storage',
+        name: 'Storage',
+        values: [
+          { value: '256GB', sku: '256', surcharge: 0 },
+          { value: '512GB', sku: '512', surcharge: 3_500_00 },
+          { value: '1TB', sku: '1TB', surcharge: 8_000_00 },
+          { value: '2TB', sku: '2TB', surcharge: 13_000_00 },
+        ],
+      },
+      {
+        code: 'carrier',
+        name: 'Carrier',
+        values: CARRIERS,
+      },
+    ],
+    soldOut: ['GS26U-BLU-2TB-UNL', 'GS26U-GRY-1TB-TMO'],
   },
 };
 
@@ -213,7 +274,7 @@ function combinations(options: Listing['options']): OptionValue[][] {
 }
 
 async function main(): Promise<void> {
-  const key = process.env.LISTING ?? 'iphone-18-pro-max';
+  const key = process.env.LISTING ?? 'iphone-18-pro';
   const listing = LISTINGS[key];
   if (!listing) {
     throw new Error(
