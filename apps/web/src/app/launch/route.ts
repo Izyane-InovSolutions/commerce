@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { randomUUID } from 'node:crypto';
 
 import { apiClient } from '@/lib/api';
 import type { Role, SuccessEnvelope } from '@/lib/auth-types';
@@ -61,10 +62,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       { cache: 'no-store' },
     );
 
+    const state = randomUUID();
     const handoff = new URL(`${destination}/auth/handoff`, request.url);
     handoff.searchParams.set('code', minted.data.code);
+    handoff.searchParams.set('state', state);
     handoff.searchParams.set('next', next);
-    return NextResponse.redirect(handoff);
+    const response = NextResponse.redirect(handoff);
+    const portal = destination === '/admin' ? 'admin' : 'seller';
+    response.cookies.set(`commerce_${portal}_handoff_state`, state, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: 120,
+    });
+    response.headers.set('Referrer-Policy', 'no-referrer');
+    return response;
   } catch {
     // The portal's own sign-in page is a fine fallback.
     return NextResponse.redirect(new URL(destination, request.url));

@@ -5,6 +5,7 @@ import { Bell, RotateCcw } from 'lucide-react';
 import { AccountSettings } from '@/components/account-settings';
 import { AccountTabs, type AccountTabValue } from '@/components/account-tabs';
 import { AddressesSection } from '@/components/addresses-section';
+import { EmailVerificationNotice } from '@/components/email-verification-notice';
 import { ApiErrorNotice } from '@/components/api-error-notice';
 import { AuthPanel } from '@/components/auth-panel';
 import { OrderStatusPoller } from '@/components/order-status-poller';
@@ -28,6 +29,7 @@ import {
   changePasswordAction,
   deleteAddressAction,
   goToSellerDashboardAction,
+  resendEmailVerificationAction,
   setDefaultAddressAction,
   signInAction,
   signUpAction,
@@ -132,6 +134,12 @@ export default async function AccountPage({
 
   return (
     <div className="space-y-6">
+      {!user.emailVerified ? (
+        <EmailVerificationNotice
+          email={user.email}
+          resend={resendEmailVerificationAction}
+        />
+      ) : null}
       <SellerAccountCard
         seller={seller}
         becomeSeller={becomeSellerAction}

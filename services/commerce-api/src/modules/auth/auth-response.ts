@@ -4,6 +4,7 @@ export type PublicUser = {
   id: string;
   email: string;
   role: Role;
+  emailVerified: boolean;
 };
 
 export type AuthTokensResponse = {
@@ -11,6 +12,8 @@ export type AuthTokensResponse = {
   refreshToken: string;
   tokenType: 'Bearer';
   expiresIn: number;
+  refreshExpiresIn: number;
+  refreshExpiresAt: string;
   user: PublicUser;
 };
 

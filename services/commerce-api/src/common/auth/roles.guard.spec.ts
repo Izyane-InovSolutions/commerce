@@ -32,7 +32,13 @@ describe('RolesGuard', () => {
   it('allows the request when the user has one of the required roles', () => {
     reflector.getAllAndOverride.mockReturnValue([Role.ADMIN, Role.STAFF]);
     const context = createContext({
-      user: { id: 'u1', role: Role.STAFF, sessionId: 's1' },
+      user: {
+        id: 'u1',
+        role: Role.STAFF,
+        sessionId: 's1',
+        emailVerified: false,
+        verificationGraceUntil: null,
+      },
     });
 
     expect(guard.canActivate(context)).toBe(true);
@@ -41,7 +47,13 @@ describe('RolesGuard', () => {
   it('rejects the request when the user lacks a required role', () => {
     reflector.getAllAndOverride.mockReturnValue([Role.ADMIN]);
     const context = createContext({
-      user: { id: 'u1', role: Role.CUSTOMER, sessionId: 's1' },
+      user: {
+        id: 'u1',
+        role: Role.CUSTOMER,
+        sessionId: 's1',
+        emailVerified: false,
+        verificationGraceUntil: null,
+      },
     });
 
     expect(() => guard.canActivate(context)).toThrow(ForbiddenException);

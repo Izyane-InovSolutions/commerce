@@ -54,6 +54,13 @@ export class JobWorkerService {
         `Job ${job.id} (${job.type}) failed: ${error instanceof Error ? error.message : String(error)}`,
       );
       await this.backgroundJobsService.fail(job.id, job.lockToken!, error);
+      if (job.attempts >= job.maxAttempts && handler?.onDeadLetter) {
+        try {
+          await handler.onDeadLetter(job.payload);
+        } catch {
+          this.logger.error(`Dead-letter cleanup failed for job ${job.id}`);
+        }
+      }
     }
   }
 }

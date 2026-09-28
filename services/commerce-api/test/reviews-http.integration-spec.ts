@@ -127,12 +127,18 @@ describe('Reviews HTTP API (#38, integration)', () => {
         data: {
           email: `review-buyer-${suffix}@example.test`,
           passwordHash: 'x',
+          // Email verification now gates seller actions; these flows
+          // assume a verified account.
+          emailVerifiedAt: new Date(),
         },
       }),
       prisma.user.create({
         data: {
           email: `review-seller-${suffix}@example.test`,
           passwordHash: 'x',
+          // Email verification now gates seller actions; these flows
+          // assume a verified account.
+          emailVerifiedAt: new Date(),
           role: 'SELLER',
         },
       }),
@@ -140,6 +146,9 @@ describe('Reviews HTTP API (#38, integration)', () => {
         data: {
           email: `review-admin-${suffix}@example.test`,
           passwordHash: 'x',
+          // Email verification now gates seller actions; these flows
+          // assume a verified account.
+          emailVerifiedAt: new Date(),
           role: 'ADMIN',
         },
       }),

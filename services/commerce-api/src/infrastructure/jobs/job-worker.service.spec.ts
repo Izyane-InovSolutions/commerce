@@ -10,6 +10,8 @@ function buildJob(
     type: 'some.type',
     payload: {},
     lockToken: 'lock-1',
+    attempts: 1,
+    maxAttempts: 5,
     ...overrides,
   };
 }
@@ -70,6 +72,28 @@ describe('JobWorkerService', () => {
       error,
     );
     expect(backgroundJobsService.complete).not.toHaveBeenCalled();
+  });
+
+  it('runs handler cleanup after the final failed attempt', async () => {
+    const error = new Error('boom');
+    const onDeadLetter = jest.fn().mockResolvedValue(undefined);
+    service.registerHandler({
+      type: 'some.type',
+      handle: jest.fn().mockRejectedValue(error),
+      onDeadLetter,
+    });
+    backgroundJobsService.claimNext
+      .mockResolvedValueOnce(buildJob({ attempts: 5, maxAttempts: 5 }))
+      .mockResolvedValueOnce(null);
+
+    await service.poll();
+
+    expect(backgroundJobsService.fail).toHaveBeenCalledWith(
+      'job-1',
+      'lock-1',
+      error,
+    );
+    expect(onDeadLetter).toHaveBeenCalledWith({});
   });
 
   it('fails the job when no handler is registered for its type', async () => {

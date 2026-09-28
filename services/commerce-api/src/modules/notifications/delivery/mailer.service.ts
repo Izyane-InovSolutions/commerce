@@ -38,7 +38,12 @@ export class MailerService {
   readonly kind: MailTransportKind;
 
   constructor(config: ConfigService) {
-    this.from = config.get<string>('MAIL_FROM') || DEFAULT_MAIL_FROM;
+    // EMAIL_FROM is the platform setting the auth email worker also uses;
+    // MAIL_FROM is kept for deployments configured before the two merged.
+    this.from =
+      config.get<string>('EMAIL_FROM') ||
+      config.get<string>('MAIL_FROM') ||
+      DEFAULT_MAIL_FROM;
     const smtp = smtpOptions(config);
     if (smtp) {
       this.transporter = createTransport(smtp);

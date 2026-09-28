@@ -11,6 +11,7 @@ export type PublicUser = {
   id: string;
   email: string;
   role: Role;
+  emailVerified: boolean;
 };
 
 export type AuthTokens = {

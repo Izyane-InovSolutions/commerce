@@ -10,6 +10,8 @@ type FakeUser = {
   phone: string | null;
   role: Role;
   isActive: boolean;
+  emailVerifiedAt: Date | null;
+  verificationGraceUntil: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -20,6 +22,15 @@ type FakeSession = {
   refreshTokenHash: string;
   expiresAt: Date;
   revokedAt: Date | null;
+  revokedReason: string | null;
+  familyId: string;
+  familyCreatedAt: Date;
+  ipAddress: string | null;
+  userAgent: string | null;
+  lastUsedAt: Date;
+  replacedBySessionId: string | null;
+  recoveryData: string | null;
+  recoveryExpiresAt: Date | null;
   createdAt: Date;
 };
 
@@ -32,17 +43,60 @@ type FakePasswordResetToken = {
   createdAt: Date;
 };
 
+type FakeEmailVerificationToken = {
+  id: string;
+  userId: string;
+  targetEmail: string;
+  tokenHash: string;
+  expiresAt: Date;
+  usedAt: Date | null;
+  createdAt: Date;
+};
+
 /**
  * A minimal in-memory stand-in for PrismaClient covering only the operations
  * AuthService uses, so auth e2e flows can run without a real database.
  */
 export class FakePrismaService {
   private readonly users = new Map<string, FakeUser>();
+
+  /**
+   * An active, email-verified user with this id and role, unless one exists.
+   * JwtAuthGuard now reads the session's user on every request (role,
+   * activity and verification come from that row, not the token), so a
+   * test token needs a real user behind it — see issueTestToken.
+   */
+  seedUser(id: string, role: Role): FakeUser {
+    const existing = this.users.get(id);
+    if (existing) return existing;
+    const now = new Date();
+    const user: FakeUser = {
+      id,
+      email: `${id}@test.local`,
+      passwordHash: 'not-a-real-hash',
+      firstName: null,
+      lastName: null,
+      phone: null,
+      role,
+      isActive: true,
+      emailVerifiedAt: now,
+      verificationGraceUntil: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.users.set(id, user);
+    return user;
+  }
   private readonly sessions = new Map<string, FakeSession>();
   private readonly passwordResetTokens = new Map<
     string,
     FakePasswordResetToken
   >();
+  private readonly emailVerificationTokens = new Map<
+    string,
+    FakeEmailVerificationToken
+  >();
+  private readonly emailDeliveries = new Map<string, Record<string, unknown>>();
 
   $connect(): Promise<void> {
     return Promise.resolve();
@@ -174,6 +228,8 @@ export class FakePrismaService {
         phone: null,
         role: Role.CUSTOMER,
         isActive: true,
+        emailVerifiedAt: null,
+        verificationGraceUntil: null,
         createdAt: now,
         updatedAt: now,
       };
@@ -196,38 +252,84 @@ export class FakePrismaService {
       Object.assign(user, data, { updatedAt: new Date() });
       return Promise.resolve(user);
     },
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: { id?: string; email?: string };
+      data: Partial<FakeUser>;
+    }): Promise<{ count: number }> => {
+      let count = 0;
+      for (const user of this.users.values()) {
+        if (where.id && user.id !== where.id) continue;
+        if (where.email && user.email !== where.email) continue;
+        Object.assign(user, data, { updatedAt: new Date() });
+        count += 1;
+      }
+      return Promise.resolve({ count });
+    },
   };
 
   session = {
     create: ({
       data,
     }: {
-      data: { userId: string; refreshTokenHash: string; expiresAt: Date };
+      data: {
+        userId: string;
+        refreshTokenHash: string;
+        expiresAt: Date;
+        familyId?: string;
+        familyCreatedAt?: Date;
+        ipAddress?: string;
+        userAgent?: string;
+      };
     }): Promise<FakeSession> => {
+      const now = new Date();
       const session: FakeSession = {
         id: randomUUID(),
         userId: data.userId,
         refreshTokenHash: data.refreshTokenHash,
         expiresAt: data.expiresAt,
         revokedAt: null,
-        createdAt: new Date(),
+        revokedReason: null,
+        familyId: data.familyId ?? randomUUID(),
+        familyCreatedAt: data.familyCreatedAt ?? now,
+        ipAddress: data.ipAddress ?? null,
+        userAgent: data.userAgent ?? null,
+        lastUsedAt: now,
+        replacedBySessionId: null,
+        recoveryData: null,
+        recoveryExpiresAt: null,
+        createdAt: now,
       };
       this.sessions.set(session.id, session);
       return Promise.resolve(session);
     },
     findUnique: ({
       where,
+      include,
     }: {
       where: { id?: string; refreshTokenHash?: string };
-    }): Promise<FakeSession | null> => {
+      include?: { user?: boolean };
+    }): Promise<(FakeSession & { user?: FakeUser }) | null> => {
+      const withUser = (
+        session: FakeSession | undefined,
+      ): (FakeSession & { user?: FakeUser }) | null => {
+        if (!session) return null;
+        return include?.user
+          ? { ...session, user: this.users.get(session.userId)! }
+          : session;
+      };
       if (where.id) {
-        return Promise.resolve(this.sessions.get(where.id) ?? null);
+        return Promise.resolve(withUser(this.sessions.get(where.id)));
       }
 
       return Promise.resolve(
-        [...this.sessions.values()].find(
-          (session) => session.refreshTokenHash === where.refreshTokenHash,
-        ) ?? null,
+        withUser(
+          [...this.sessions.values()].find(
+            (session) => session.refreshTokenHash === where.refreshTokenHash,
+          ),
+        ),
       );
     },
     update: ({
@@ -250,17 +352,31 @@ export class FakePrismaService {
       where,
       data,
     }: {
-      where: { userId: string; revokedAt: null; id?: { not: string } };
+      where: {
+        id?: string;
+        userId?: string;
+        revokedAt?: null;
+        expiresAt?: { gt: Date };
+        familyId?: { not: string };
+      };
       data: Partial<FakeSession>;
     }): Promise<{ count: number }> => {
       let count = 0;
 
       for (const session of this.sessions.values()) {
-        if (session.userId !== where.userId || session.revokedAt !== null) {
+        if (where.id && session.id !== where.id) {
           continue;
         }
-
-        if (where.id && session.id === where.id.not) {
+        if (where.userId && session.userId !== where.userId) {
+          continue;
+        }
+        if (where.revokedAt === null && session.revokedAt !== null) {
+          continue;
+        }
+        if (where.expiresAt?.gt && session.expiresAt <= where.expiresAt.gt) {
+          continue;
+        }
+        if (where.familyId && session.familyId === where.familyId.not) {
           continue;
         }
 
@@ -343,6 +459,104 @@ export class FakePrismaService {
 
       Object.assign(record, data);
       return Promise.resolve(record);
+    },
+  };
+
+  emailVerificationToken = {
+    create: ({
+      data,
+    }: {
+      data: Omit<FakeEmailVerificationToken, 'id' | 'usedAt' | 'createdAt'>;
+    }): Promise<FakeEmailVerificationToken> => {
+      const row: FakeEmailVerificationToken = {
+        id: randomUUID(),
+        usedAt: null,
+        createdAt: new Date(),
+        ...data,
+      };
+      this.emailVerificationTokens.set(row.id, row);
+      return Promise.resolve(row);
+    },
+    findUnique: ({
+      where,
+    }: {
+      where: { id?: string; tokenHash?: string };
+    }): Promise<FakeEmailVerificationToken | null> => {
+      if (where.id) {
+        return Promise.resolve(
+          this.emailVerificationTokens.get(where.id) ?? null,
+        );
+      }
+      return Promise.resolve(
+        [...this.emailVerificationTokens.values()].find(
+          (row) => row.tokenHash === where.tokenHash,
+        ) ?? null,
+      );
+    },
+    findFirst: ({
+      where,
+    }: {
+      where: {
+        userId: string;
+        targetEmail: string;
+        createdAt: { gt: Date };
+      };
+    }): Promise<FakeEmailVerificationToken | null> =>
+      Promise.resolve(
+        [...this.emailVerificationTokens.values()].find(
+          (row) =>
+            row.userId === where.userId &&
+            row.targetEmail === where.targetEmail &&
+            row.createdAt > where.createdAt.gt,
+        ) ?? null,
+      ),
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: {
+        id?: string;
+        userId?: string;
+        targetEmail?: string;
+        usedAt?: null;
+        expiresAt?: { gt: Date };
+      };
+      data: { usedAt: Date };
+    }): Promise<{ count: number }> => {
+      let count = 0;
+      for (const row of this.emailVerificationTokens.values()) {
+        if (where.id && row.id !== where.id) continue;
+        if (where.userId && row.userId !== where.userId) continue;
+        if (where.targetEmail && row.targetEmail !== where.targetEmail)
+          continue;
+        if (where.usedAt === null && row.usedAt !== null) continue;
+        if (where.expiresAt && row.expiresAt <= where.expiresAt.gt) continue;
+        row.usedAt = data.usedAt;
+        count += 1;
+      }
+      return Promise.resolve({ count });
+    },
+  };
+
+  emailDelivery = {
+    create: ({
+      data,
+    }: {
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const now = new Date();
+      const row = {
+        status: 'PENDING',
+        id: randomUUID(),
+        sentAt: null,
+        failedAt: null,
+        lastErrorCode: null,
+        createdAt: now,
+        updatedAt: now,
+        ...data,
+      };
+      this.emailDeliveries.set(row.id as string, row);
+      return Promise.resolve(row);
     },
   };
 
