@@ -33,8 +33,11 @@ export class UsersService {
     });
   }
 
-  findById(id: string): Promise<User | null> {
-    return this.prisma.user.findUnique({ where: { id } });
+  findById(
+    id: string,
+    tx: Prisma.TransactionClient = this.prisma,
+  ): Promise<User | null> {
+    return tx.user.findUnique({ where: { id } });
   }
 
   create(email: string, passwordHash: string): Promise<User> {

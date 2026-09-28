@@ -140,38 +140,49 @@ enum ProductSubmissionStatus {
 }
 
 model User {
-  id                     String                @id @default(uuid()) @db.Uuid
-  email                  String                @unique
-  passwordHash           String                @map("password_hash")
-  firstName              String?               @map("first_name")
-  lastName               String?               @map("last_name")
-  phone                  String?
-  role                   Role                  @default(CUSTOMER)
-  isActive               Boolean               @default(true) @map("is_active")
-  createdAt              DateTime              @default(now()) @map("created_at")
-  updatedAt              DateTime              @updatedAt @map("updated_at")
-  sessions               Session[]
-  passwordResetTokens    PasswordResetToken[]
-  handoffTokens          HandoffToken[]
-  mediaAssets            MediaAsset[]
-  addresses              Address[]
-  cart                   Cart?
-  wishlistItems          WishlistItem[]
-  savedSellers           SavedSeller[]
-  orders                 Order[]
-  seller                 Seller?
-  returnRequests         ReturnRequest[]       @relation("ReturnRequestCustomer")
-  assignedReturns        ReturnRequest[]       @relation("ReturnAssignedStaff")
-  postedReturnReceipts   ReturnReceipt[]
-  returnInspections      ReturnInspection[]
-  returnEvents           ReturnEvent[]
-  recordedPayouts        Payout[]
-  verifiedPayoutAccounts SellerPayoutAccount[] @relation("PayoutAccountVerifier")
-  reviewedPayoutRequests SellerPayoutRequest[] @relation("PayoutRequestReviewer")
-  resolvedPayoutRequests SellerPayoutRequest[] @relation("PayoutRequestResolver")
-  productReviews         ProductReview[]
-  sellerRatings          SellerRating[]
-  reviewReports          ReviewReport[]
+  id                      String                   @id @default(uuid()) @db.Uuid
+  email                   String                   @unique
+  passwordHash            String                   @map("password_hash")
+  firstName               String?                  @map("first_name")
+  lastName                String?                  @map("last_name")
+  phone                   String?
+  role                    Role                     @default(CUSTOMER)
+  isActive                Boolean                  @default(true) @map("is_active")
+  // NULL means never verified. Set once, on successful verification; there is
+  // no unverify path. Backfilled NULL for every pre-existing user — their
+  // verification state is genuinely unknown, not "verified before this
+  // column existed".
+  emailVerifiedAt         DateTime?                @map("email_verified_at")
+  // Lets an existing (pre-hardening) seller keep transacting for 30 days
+  // after this feature ships before verification is enforced on them. Unset
+  // for new users, who are held to the normal unverified-seller restrictions
+  // from day one.
+  verificationGraceUntil  DateTime?                @map("verification_grace_until")
+  createdAt               DateTime                 @default(now()) @map("created_at")
+  updatedAt               DateTime                 @updatedAt @map("updated_at")
+  sessions                Session[]
+  passwordResetTokens     PasswordResetToken[]
+  handoffTokens           HandoffToken[]
+  emailVerificationTokens EmailVerificationToken[]
+  mediaAssets             MediaAsset[]
+  addresses               Address[]
+  cart                    Cart?
+  wishlistItems           WishlistItem[]
+  savedSellers            SavedSeller[]
+  orders                  Order[]
+  seller                  Seller?
+  returnRequests          ReturnRequest[]          @relation("ReturnRequestCustomer")
+  assignedReturns         ReturnRequest[]          @relation("ReturnAssignedStaff")
+  postedReturnReceipts    ReturnReceipt[]
+  returnInspections       ReturnInspection[]
+  returnEvents            ReturnEvent[]
+  recordedPayouts         Payout[]
+  verifiedPayoutAccounts  SellerPayoutAccount[]    @relation("PayoutAccountVerifier")
+  reviewedPayoutRequests  SellerPayoutRequest[]    @relation("PayoutRequestReviewer")
+  resolvedPayoutRequests  SellerPayoutRequest[]    @relation("PayoutRequestResolver")
+  productReviews          ProductReview[]
+  sellerRatings           SellerRating[]
+  reviewReports           ReviewReport[]
 
   @@map("users")
 }
@@ -202,17 +213,43 @@ model Address {
 
 // A row is a login session backed by a refresh token. Refresh rotates it
 // (the old row is revoked, a new row is created); a revoked token being
-// presented again indicates theft and revokes every session for the user.
+// presented again indicates theft and revokes every session for the user
+// (see AuthService.refresh) — UNLESS revokedReason shows the revocation came
+// from logout/password-change/explicit session management, in which case
+// presenting the old token is just stale, not theft.
+//
+// familyId ties every session descended from one login together: it is
+// carried forward, unchanged, across every rotation, and familyCreatedAt
+// (also carried forward) anchors the 30-day absolute family lifetime that
+// rotation can never extend. Each pre-existing session was backfilled as its
+// own single-session family (familyId = id, familyCreatedAt = createdAt).
+//
+// replacedBySessionId/recoveryData/recoveryExpiresAt exist only on a
+// just-rotated (revokedReason = "rotated") row, and only for
+// recoveryExpiresAt's short window: they let a client that retries a refresh
+// call (e.g. after a dropped response) recover the same replacement
+// credentials instead of tripping reuse detection. recoveryData is the
+// encrypted, serialized replacement token pair (see field-encryption.util.ts).
 model Session {
-  id               String    @id @default(uuid()) @db.Uuid
-  userId           String    @map("user_id") @db.Uuid
-  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  refreshTokenHash String    @unique @map("refresh_token_hash")
-  expiresAt        DateTime  @map("expires_at")
-  revokedAt        DateTime? @map("revoked_at")
-  createdAt        DateTime  @default(now()) @map("created_at")
+  id                  String    @id @default(uuid()) @db.Uuid
+  userId              String    @map("user_id") @db.Uuid
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash    String    @unique @map("refresh_token_hash")
+  expiresAt           DateTime  @map("expires_at")
+  revokedAt           DateTime? @map("revoked_at")
+  revokedReason       String?   @map("revoked_reason")
+  familyId            String    @default(uuid()) @map("family_id") @db.Uuid
+  familyCreatedAt     DateTime  @default(now()) @map("family_created_at")
+  ipAddress           String?   @map("ip_address")
+  userAgent           String?   @map("user_agent")
+  lastUsedAt          DateTime  @default(now()) @map("last_used_at")
+  replacedBySessionId String?   @map("replaced_by_session_id") @db.Uuid
+  recoveryData        String?   @map("recovery_data")
+  recoveryExpiresAt   DateTime? @map("recovery_expires_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
 
   @@index([userId])
+  @@index([familyId])
   @@map("sessions")
 }
 
@@ -227,6 +264,54 @@ model PasswordResetToken {
 
   @@index([userId])
   @@map("password_reset_tokens")
+}
+
+// Same opaque-token/hash/single-use shape as PasswordResetToken, minted when
+// a user (re-)confirms an email address. targetEmail is stored normalized
+// (UsersService.normalizeEmail) so a future change-of-email flow can diff it
+// against User.email without re-deriving normalization rules.
+model EmailVerificationToken {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetEmail String    @map("target_email")
+  tokenHash   String    @unique @map("token_hash")
+  expiresAt   DateTime  @map("expires_at")
+  usedAt      DateTime? @map("used_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+enum EmailDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+// Outbound email log, queued by auth mutations (e.g. a password-change
+// notice) and drained by a later mailer. No FK to User, mirroring
+// AuditEvent's actorUserId design below — delivery history must survive the
+// recipient's account being deleted. Template variables are encrypted at
+// rest (field-encryption.util.ts) since they can carry tokens/PII; recipient
+// itself is a plain denormalized email string, not treated as sensitive.
+model EmailDelivery {
+  id              String              @id @default(uuid()) @db.Uuid
+  template        String
+  recipient       String
+  encryptedVars   String?             @map("encrypted_vars")
+  encryptionKeyId String              @map("encryption_key_id")
+  status          EmailDeliveryStatus @default(PENDING)
+  expiresAt       DateTime            @map("expires_at")
+  sentAt          DateTime?           @map("sent_at")
+  failedAt        DateTime?           @map("failed_at")
+  lastErrorCode   String?             @map("last_error_code")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("email_deliveries")
 }
 
 // A short-lived, single-use code that lets a user already signed in on one

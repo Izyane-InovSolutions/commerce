@@ -54,22 +54,38 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Invalid or expired access token');
     }
 
+    if (!payload.sub || !payload.sid) {
+      throw new UnauthorizedException('Invalid or expired access token');
+    }
+
     // The JWT alone only proves it was signed within its own TTL; it says
-    // nothing about a logout or revocation that happened since. Checking the
-    // session it names is what makes revocation take effect immediately
-    // instead of waiting out the token's remaining lifetime.
+    // nothing about a logout, revocation, deactivation, or role change that
+    // happened since. Loading the session and its owning user on every
+    // request is what makes those take effect immediately instead of
+    // waiting out the token's remaining lifetime — role/verification status
+    // below come from this fresh read, not from the (possibly stale) JWT
+    // claims.
     const session = await this.prisma.session.findUnique({
       where: { id: payload.sid },
+      include: { user: true },
     });
 
-    if (!session || session.revokedAt || session.expiresAt < new Date()) {
+    if (
+      !session ||
+      session.revokedAt ||
+      session.expiresAt < new Date() ||
+      session.userId !== payload.sub ||
+      !session.user ||
+      !session.user.isActive
+    ) {
       throw new UnauthorizedException('Session has been revoked or expired');
     }
 
     request.user = {
-      id: payload.sub,
-      role: payload.role,
-      sessionId: payload.sid,
+      id: session.user.id,
+      role: session.user.role,
+      sessionId: session.id,
+      emailVerified: session.user.emailVerifiedAt !== null,
     };
     return true;
   }

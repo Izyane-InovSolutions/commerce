@@ -19,8 +19,15 @@ function createContext(request: Partial<RequestWithUser>): ExecutionContext {
 
 const activeSession = {
   id: 'session-1',
+  userId: 'user-1',
   revokedAt: null,
   expiresAt: new Date(Date.now() + 60_000),
+  user: {
+    id: 'user-1',
+    role: Role.CUSTOMER,
+    isActive: true,
+    emailVerifiedAt: null,
+  },
 };
 
 describe('JwtAuthGuard', () => {
@@ -89,12 +96,98 @@ describe('JwtAuthGuard', () => {
     await expect(guard.canActivate(context)).resolves.toBe(true);
     expect(prisma.session.findUnique).toHaveBeenCalledWith({
       where: { id: 'session-1' },
+      include: { user: true },
     });
     expect(request.user).toEqual({
       id: 'user-1',
       role: Role.CUSTOMER,
       sessionId: 'session-1',
+      emailVerified: false,
     });
+  });
+
+  it('attaches emailVerified: true once the user has a verification timestamp', async () => {
+    jwtService.verifyAsync.mockResolvedValue({
+      sub: 'user-1',
+      role: Role.CUSTOMER,
+      sid: 'session-1',
+    });
+    prisma.session.findUnique.mockResolvedValue({
+      ...activeSession,
+      user: { ...activeSession.user, emailVerifiedAt: new Date() },
+    });
+    const request = {
+      header: () => 'Bearer good-token',
+    } as unknown as RequestWithUser;
+    const context = createContext(request);
+
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(request.user?.emailVerified).toBe(true);
+  });
+
+  it('populates the role from the freshly-loaded user, not a stale JWT claim', async () => {
+    jwtService.verifyAsync.mockResolvedValue({
+      sub: 'user-1',
+      role: Role.CUSTOMER,
+      sid: 'session-1',
+    });
+    prisma.session.findUnique.mockResolvedValue({
+      ...activeSession,
+      user: { ...activeSession.user, role: Role.SELLER },
+    });
+    const request = {
+      header: () => 'Bearer good-token',
+    } as unknown as RequestWithUser;
+    const context = createContext(request);
+
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(request.user?.role).toBe(Role.SELLER);
+  });
+
+  it('rejects when the session and JWT disagree on the owning user', async () => {
+    jwtService.verifyAsync.mockResolvedValue({
+      sub: 'someone-else',
+      role: Role.CUSTOMER,
+      sid: 'session-1',
+    });
+    const context = createContext({
+      header: () => 'Bearer good-token',
+    } as unknown as RequestWithUser);
+
+    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+  });
+
+  it('rejects a token missing sub or sid claims', async () => {
+    jwtService.verifyAsync.mockResolvedValue({ role: Role.CUSTOMER });
+    const context = createContext({
+      header: () => 'Bearer good-token',
+    } as unknown as RequestWithUser);
+
+    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    expect(prisma.session.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('rejects a token whose user has been deactivated', async () => {
+    jwtService.verifyAsync.mockResolvedValue({
+      sub: 'user-1',
+      role: Role.CUSTOMER,
+      sid: 'session-1',
+    });
+    prisma.session.findUnique.mockResolvedValue({
+      ...activeSession,
+      user: { ...activeSession.user, isActive: false },
+    });
+    const context = createContext({
+      header: () => 'Bearer good-token',
+    } as unknown as RequestWithUser);
+
+    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
   });
 
   it('rejects a token whose session has been revoked', async () => {
@@ -181,6 +274,7 @@ describe('JwtAuthGuard', () => {
         id: 'user-1',
         role: Role.CUSTOMER,
         sessionId: 'session-1',
+        emailVerified: false,
       });
     });
 

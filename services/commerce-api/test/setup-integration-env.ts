@@ -27,4 +27,17 @@ process.env.SHADOW_DATABASE_URL =
 process.env.JWT_SECRET ??= 'integration-test-only-jwt-secret-1234567890';
 process.env.MEDIA_SIGNING_SECRET ??=
   'integration-test-only-media-secret-1234567890';
+process.env.REFRESH_RECOVERY_ENCRYPTION_ACTIVE_KEY_ID ??= 'v1';
+process.env.REFRESH_RECOVERY_ENCRYPTION_KEYS ??=
+  '{"v1":"aW50ZWdyYXRpb24tcmVjb3Zlcnkta2V5LTAwMDAwMDE="}';
+process.env.EMAIL_DELIVERY_ENCRYPTION_ACTIVE_KEY_ID ??= 'v1';
+process.env.EMAIL_DELIVERY_ENCRYPTION_KEYS ??=
+  '{"v1":"aW50ZWdyYXRpb24tZW1haWwta2V5LTAwMDAwMDAwMDE="}';
+process.env.SMTP_HOST ??= 'localhost';
+process.env.SMTP_PORT ??= '1025';
+process.env.SMTP_SECURE ??= 'false';
+process.env.SMTP_USER ??= '';
+process.env.SMTP_PASS ??= '';
+process.env.EMAIL_FROM ??= 'Commerce <no-reply@commerce.test>';
+process.env.CUSTOMER_WEB_URL ??= 'http://localhost:3001';
 process.env.PAYMENTS_PROVIDER = 'pending';

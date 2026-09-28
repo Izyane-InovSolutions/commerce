@@ -1,7 +1,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { randomUUID } from 'node:crypto';
 
 import { apiClient } from '@/lib/api';
 import { safeNext } from '@/lib/safe-next';
@@ -174,11 +176,19 @@ export async function setDefaultAddressAction(
  * without a second password prompt. `next` is a path within that app.
  */
 async function redirectToSellerApp(next: string): Promise<never> {
-  const response = await apiClient.post<SuccessEnvelope<{ code: string }>>(
-    '/auth/handoff',
-  );
+  const response =
+    await apiClient.post<SuccessEnvelope<{ code: string }>>('/auth/handoff');
+  const state = randomUUID();
+  (await cookies()).set('commerce_seller_handoff_state', state, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: 120,
+  });
   const url = new URL('/auth/handoff', env.sellerAppUrl);
   url.searchParams.set('code', response.data.code);
+  url.searchParams.set('state', state);
   url.searchParams.set('next', next);
   redirect(url.toString());
 }

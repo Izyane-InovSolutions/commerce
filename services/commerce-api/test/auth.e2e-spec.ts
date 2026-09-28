@@ -107,7 +107,7 @@ describe('Auth (e2e)', () => {
       .expect(401);
   });
 
-  it('revokes a still-valid access token immediately when refresh-token reuse is detected', async () => {
+  it('returns the same replacement when a rotated token is retried inside the recovery window', async () => {
     const registerResponse = await request(server())
       .post('/api/v1/auth/register')
       .send({ email: 'reuse-victim@example.com', password: 'password123' })
@@ -120,25 +120,29 @@ describe('Auth (e2e)', () => {
       .expect(200);
     const rotated = (refreshResponse.body as TokensBody).data;
 
-    // The original refresh token was rotated away — presenting it again looks
-    // like theft, so every session for this user (including the one just
-    // issued above) is revoked, not just the stolen token's own session.
-    await request(server())
+    // A response can be lost after the server commits rotation. Retrying the
+    // original token during the short recovery window must return the exact
+    // replacement rather than creating another session or treating a normal
+    // network retry as theft.
+    const recoveryResponse = await request(server())
       .post('/api/v1/auth/refresh')
       .send({ refreshToken })
-      .expect(401);
+      .expect(200);
+    const recovered = (recoveryResponse.body as TokensBody).data;
+    expect(recovered.accessToken).toBe(rotated.accessToken);
+    expect(recovered.refreshToken).toBe(rotated.refreshToken);
 
-    // That revocation takes effect immediately: the rotated access token
-    // stops authenticating without waiting out its own 15-minute expiry.
+    // Recovery leaves the one replacement session active.
     await request(server())
       .get('/api/v1/auth/me')
       .set('Authorization', `Bearer ${rotated.accessToken}`)
-      .expect(401);
+      .expect(200);
 
+    // The recovered replacement can itself rotate normally.
     await request(server())
       .post('/api/v1/auth/refresh')
       .send({ refreshToken: rotated.refreshToken })
-      .expect(401);
+      .expect(200);
   });
 
   it('rejects login with the wrong password', async () => {

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { BASE_PATH } from '@/lib/base-path';
+import { hasValidMutationOrigin } from '@/lib/request-origin';
 
 const ACCESS_COOKIE = 'commerce_admin_access';
 const REFRESH_COOKIE = 'commerce_admin_refresh';
@@ -23,10 +24,32 @@ type RefreshedSession = {
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   const access = request.cookies.get(ACCESS_COOKIE)?.value;
   const refresh = request.cookies.get(REFRESH_COOKIE)?.value;
+  const isApiRequest =
+    request.nextUrl.pathname.startsWith('/api') ||
+    request.nextUrl.pathname.startsWith(`${BASE_PATH}/api`);
+
+  // This proxy turns an HttpOnly session cookie into a Bearer header. Require
+  // browser mutations to originate from this exact site before doing so;
+  // SameSite remains a second layer rather than the only CSRF control.
+  if (isApiRequest) {
+    if (
+      !hasValidMutationOrigin(
+        request.method,
+        request.headers.get('origin'),
+        request.nextUrl.origin,
+      )
+    ) {
+      return NextResponse.json(
+        {
+          error: { code: 'INVALID_ORIGIN', message: 'Invalid request origin' },
+        },
+        { status: 403 },
+      );
+    }
+  }
 
   // Forwards Bearer token from session cookie for proxied /api calls if not already supplied
   const createNextResponse = (accessToken?: string): NextResponse => {
-    const isApiRequest = request.nextUrl.pathname.startsWith('/api');
     const token = accessToken ?? access;
     if (isApiRequest && token && !request.headers.has('authorization')) {
       const requestHeaders = new Headers(request.headers);

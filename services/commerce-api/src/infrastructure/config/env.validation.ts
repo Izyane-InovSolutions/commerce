@@ -39,6 +39,60 @@ class EnvironmentVariables {
   @MinLength(32)
   JWT_SECRET!: string;
 
+  @IsString()
+  @IsNotEmpty()
+  REFRESH_RECOVERY_ENCRYPTION_ACTIVE_KEY_ID!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  REFRESH_RECOVERY_ENCRYPTION_KEYS!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  EMAIL_DELIVERY_ENCRYPTION_ACTIVE_KEY_ID!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  EMAIL_DELIVERY_ENCRYPTION_KEYS!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  SMTP_HOST!: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(65535)
+  SMTP_PORT = 1025;
+
+  @IsIn(['true', 'false'])
+  SMTP_SECURE = 'false';
+
+  @IsString()
+  SMTP_USER = '';
+
+  @IsString()
+  SMTP_PASS = '';
+
+  @IsString()
+  @IsNotEmpty()
+  EMAIL_FROM!: string;
+
+  @IsUrl({ protocols: ['http', 'https'], require_tld: false })
+  CUSTOMER_WEB_URL!: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1000)
+  @Max(60000)
+  SMTP_CONNECTION_TIMEOUT_MS = 10_000;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1000)
+  @Max(120000)
+  SMTP_SEND_TIMEOUT_MS = 30_000;
+
   @Type(() => Number)
   @IsInt()
   @Min(60)
@@ -212,5 +266,56 @@ export function validate(
     throw new Error(`Environment validation failed: ${errors.toString()}`);
   }
 
+  validateEncryptionKeyring(
+    'REFRESH_RECOVERY',
+    validatedConfig.REFRESH_RECOVERY_ENCRYPTION_ACTIVE_KEY_ID,
+    validatedConfig.REFRESH_RECOVERY_ENCRYPTION_KEYS,
+  );
+  validateEncryptionKeyring(
+    'EMAIL_DELIVERY',
+    validatedConfig.EMAIL_DELIVERY_ENCRYPTION_ACTIVE_KEY_ID,
+    validatedConfig.EMAIL_DELIVERY_ENCRYPTION_KEYS,
+  );
+  if (
+    Boolean(validatedConfig.SMTP_USER) !== Boolean(validatedConfig.SMTP_PASS)
+  ) {
+    throw new Error(
+      'SMTP_USER and SMTP_PASS must either both be set or both be empty',
+    );
+  }
+
   return validatedConfig;
+}
+
+function validateEncryptionKeyring(
+  purpose: string,
+  activeKeyId: string,
+  serializedKeys: string,
+): void {
+  let keys: Record<string, unknown>;
+  try {
+    keys = JSON.parse(serializedKeys) as Record<string, unknown>;
+  } catch {
+    throw new Error(`${purpose}_ENCRYPTION_KEYS must be a JSON object`);
+  }
+  const activeKey = keys[activeKeyId];
+  if (
+    activeKeyId.includes(':') ||
+    typeof activeKey !== 'string' ||
+    Buffer.from(activeKey, 'base64').length !== 32
+  ) {
+    throw new Error(
+      `${purpose}_ENCRYPTION_KEYS must contain the active 32-byte base64 key`,
+    );
+  }
+  for (const [keyId, rawKey] of Object.entries(keys)) {
+    if (
+      !keyId ||
+      keyId.includes(':') ||
+      typeof rawKey !== 'string' ||
+      Buffer.from(rawKey, 'base64').length !== 32
+    ) {
+      throw new Error(`${purpose}_ENCRYPTION_KEYS contains an invalid key`);
+    }
+  }
 }
