@@ -88,6 +88,7 @@ model Seller {
   savedBy            SavedSeller[]
 
   @@index([status, createdAt])
+  @@index([displayName(ops: raw("gin_trgm_ops"))], type: Gin, map: "sellers_display_name_trgm_idx")
   @@map("sellers")
 }
 
@@ -172,6 +173,7 @@ model User {
   productReviews         ProductReview[]
   sellerRatings          SellerRating[]
   reviewReports          ReviewReport[]
+  notifications          Notification[]
 
   @@map("users")
 }
@@ -334,6 +336,8 @@ model MediaAsset {
   verificationLocked   Boolean               @default(false) @map("verification_locked")
 
   @@index([ownerUserId, status])
+  // MediaOrphanCleanupService sweeps by status and age.
+  @@index([status, createdAt])
   @@map("media_assets")
 }
 
@@ -351,6 +355,7 @@ model Category {
   updatedAt   DateTime   @updatedAt @map("updated_at")
 
   @@index([parentId])
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "categories_name_trgm_idx")
   @@map("categories")
 }
 
@@ -363,6 +368,7 @@ model Brand {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "brands_name_trgm_idx")
   @@map("brands")
 }
 
@@ -424,6 +430,10 @@ model Product {
   @@index([categoryId])
   @@index([status])
   @@index([createdBySellerId, submissionStatus])
+  // Trigram indexes for catalog search's ILIKE '%term%'; see migration
+  // 20260928153000_product_search_trigram_indexes.
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "products_name_trgm_idx")
+  @@index([description(ops: raw("gin_trgm_ops"))], type: Gin, map: "products_description_trgm_idx")
   @@map("products")
 }
 
@@ -445,6 +455,7 @@ model ProductVariant {
   ProductReview      ProductReview[]
 
   @@index([productId])
+  @@index([skuCode(ops: raw("gin_trgm_ops"))], type: Gin, map: "product_variants_sku_code_trgm_idx")
   @@map("product_variants")
 }
 
@@ -914,6 +925,8 @@ model Payment {
   createdAt         DateTime           @default(now()) @map("created_at")
   updatedAt         DateTime           @updatedAt @map("updated_at")
 
+  // PaymentReconciliationScheduler sweeps unresolved payments by age.
+  @@index([status, createdAt])
   @@map("payments")
 }
 
@@ -2421,4 +2434,62 @@ model FxRate {
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   @@map("fx_rates")
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  // No recipient for the channel (e.g. no phone number on the account).
+  SKIPPED
+}
+
+// A notification is the in-app record a user reads in their inbox; any
+// email/SMS copy of it is tracked per channel in NotificationDelivery.
+// Created by outbox subscribers, which run at least once per event —
+// dedupeKey is what makes a replayed event insert nothing new.
+model Notification {
+  id         String                 @id @default(uuid()) @db.Uuid
+  userId     String                 @map("user_id") @db.Uuid
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       String                 @db.VarChar(100)
+  title      String                 @db.VarChar(200)
+  body       String                 @db.Text
+  link       String?                @db.VarChar(500)
+  readAt     DateTime?              @map("read_at")
+  dedupeKey  String                 @unique @map("dedupe_key") @db.VarChar(255)
+  createdAt  DateTime               @default(now()) @map("created_at")
+  deliveries NotificationDelivery[]
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+// recipient is snapshotted when a send is attempted (not when the
+// notification is created), so a changed email/phone is honoured and the
+// record shows where the message actually went.
+model NotificationDelivery {
+  id                String                     @id @default(uuid()) @db.Uuid
+  notificationId    String                     @map("notification_id") @db.Uuid
+  notification      Notification               @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  channel           NotificationChannel
+  status            NotificationDeliveryStatus @default(PENDING)
+  provider          String?                    @db.VarChar(50)
+  recipient         String?                    @db.VarChar(320)
+  attempts          Int                        @default(0)
+  lastError         String?                    @map("last_error") @db.Text
+  providerMessageId String?                    @map("provider_message_id") @db.VarChar(255)
+  sentAt            DateTime?                  @map("sent_at")
+  createdAt         DateTime                   @default(now()) @map("created_at")
+  updatedAt         DateTime                   @updatedAt @map("updated_at")
+
+  @@unique([notificationId, channel])
+  @@index([status, createdAt])
+  @@map("notification_deliveries")
 }

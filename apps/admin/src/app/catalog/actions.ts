@@ -9,6 +9,7 @@ import {
   backendApproveProductSubmission,
   backendCreateOffer,
   backendCreateProduct,
+  backendDeleteOffer,
   backendDeleteProduct,
   backendDeleteVariant,
   backendRejectProductSubmission,
@@ -17,6 +18,7 @@ import {
   backendSetProductStatus,
   backendSetVariantStatus,
   backendUpdateProduct,
+  backendUpdateVariant,
 } from '@commerce/api-client';
 import {
   backendProductStatusSchema,
@@ -25,6 +27,9 @@ import {
 
 import { apiClient } from '@/lib/api';
 import { toFormState, type FormState } from '@/lib/form';
+import { guardAction } from '@/lib/session';
+
+import { variantCreateInput, variantUpdateInput } from './variant-input';
 
 /** The API rejects an empty string where it expects a UUID, so blanks go out. */
 function optionalId(value: FormDataEntryValue | null): string | undefined {
@@ -61,6 +66,11 @@ export async function createProductAction(
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   let productId: string;
 
   try {
@@ -82,6 +92,11 @@ export async function updateProductAction(
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   try {
     await backendUpdateProduct(apiClient, productId, productInput(formData));
   } catch (error) {
@@ -98,6 +113,11 @@ export async function setOfferStatusAction(
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   const status = backendProductStatusSchema.safeParse(formData.get('status'));
   if (!status.success) {
     return { status: 'error', message: 'Choose a status.' };
@@ -132,6 +152,11 @@ export async function setStatusAction(
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   const status = backendProductStatusSchema.safeParse(formData.get('status'));
   if (!status.success) {
     return { status: 'error', message: 'Choose a status.' };
@@ -164,6 +189,11 @@ export async function setStatusAction(
 export async function deleteProductAction(
   productId: string,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   try {
     await backendDeleteProduct(apiClient, productId);
   } catch (error) {
@@ -178,6 +208,11 @@ export async function deleteVariantAction(
   productId: string,
   variantId: string,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   try {
     await backendDeleteVariant(apiClient, productId, variantId);
   } catch (error) {
@@ -193,19 +228,72 @@ export async function addVariantAction(
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const name = String(formData.get('name') ?? '').trim();
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
 
   try {
-    await backendAddVariant(apiClient, productId, {
-      skuCode: String(formData.get('skuCode') ?? '').trim(),
-      name: name === '' ? undefined : name,
-    });
+    await backendAddVariant(apiClient, productId, variantCreateInput(formData));
   } catch (error) {
     return toFormState(error);
   }
 
   revalidateCatalog(productId);
   return { status: 'idle', message: 'Variant added.' };
+}
+
+/** Renames a variant, changes its SKU, or re-picks its attribute values. */
+export async function updateVariantAction(
+  productId: string,
+  variantId: string,
+  _state: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
+  const input = variantUpdateInput(formData);
+  if (input.skuCode === '') {
+    return {
+      status: 'error',
+      fieldErrors: { skuCode: ['SKU code is required.'] },
+    };
+  }
+
+  try {
+    await backendUpdateVariant(apiClient, productId, variantId, input);
+  } catch (error) {
+    return toFormState(error);
+  }
+
+  revalidateCatalog(productId);
+  return { status: 'idle', message: 'Variant saved.' };
+}
+
+/**
+ * Deletes a platform offer. A seller's offer is refused by the API, which
+ * points to suspending the seller instead; the refusal is shown in place.
+ */
+export async function deleteOfferAction(
+  productId: string,
+  offerId: string,
+): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
+  try {
+    await backendDeleteOffer(apiClient, offerId);
+  } catch (error) {
+    return toFormState(error);
+  }
+
+  revalidateCatalog(productId);
+  return { status: 'idle', message: 'Offer deleted.' };
 }
 
 /**
@@ -221,6 +309,11 @@ export async function createOfferAction(
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   const raw = String(formData.get('amount') ?? '').trim();
   if (!/^\d+(\.\d{1,2})?$/.test(raw)) {
     return {
@@ -257,6 +350,11 @@ export async function addPriceAction(
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   const offerId = String(formData.get('offerId') ?? '');
   const raw = String(formData.get('amount') ?? '').trim();
   if (!/^\d+(\.\d{1,2})?$/.test(raw)) {
@@ -293,6 +391,11 @@ export async function setOfferShippingAction(
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   const offerId = String(formData.get('offerId') ?? '');
   const raw = String(formData.get('shippingAmount') ?? '').trim();
 
@@ -354,6 +457,11 @@ export async function reviewSubmissionAction(
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   const decision = String(formData.get('decision') ?? '');
   if (!isSubmissionDecision(decision)) {
     return { status: 'error', message: 'Choose a decision.' };

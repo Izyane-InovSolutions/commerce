@@ -69,6 +69,15 @@ export type PublicOffer = {
   seller: { slug: string; displayName: string | null } | null;
   isFirstParty: boolean;
   condition: 'NEW' | 'USED' | 'REFURBISHED';
+  /** The platform product the offer lists against — where a first-party
+   * line gets its name, and every line its link and thumbnail. `image.url`
+   * is signed and relative to the API origin, like `ProductMedia.url`. */
+  product?: {
+    id: string;
+    name: string;
+    slug: string;
+    image: { url: string; mimeType: string } | null;
+  };
   currentPrice: { amount: number; currency: string } | null;
   currencies: string[];
   checkoutSupported: boolean;
@@ -96,6 +105,9 @@ export type FulfillmentSummary =
 export type OrderItem = {
   id: string;
   offerId: string;
+  /** The seller group the line was checked out under — what a seller
+   * rating is left against. */
+  sellerOrderId?: string | null;
   quantity: number;
   unitAmount: number;
   currency: string;
@@ -133,6 +145,21 @@ export type Order = {
   fulfillmentSummary?: FulfillmentSummary;
   /** When packing finished — null until it has. */
   packedAt?: string | null;
+  /** The delivery address as it stood at checkout, not as the address book
+   * reads now. */
+  shippingAddress?: AddressSnapshot | null;
+  /** One group per seller (null `sellerId` is the platform's own). */
+  sellerOrders?: SellerOrderSummary[];
+};
+
+/** `Address` without its address-book identity — what an order keeps. */
+export type AddressSnapshot = Omit<Address, 'id' | 'isDefault'>;
+
+export type SellerOrderSummary = {
+  id: string;
+  sellerId: string | null;
+  status: OrderStatus;
+  items: OrderItem[];
 };
 
 /**
@@ -189,7 +216,12 @@ export type Address = {
 
 export type CheckoutResult = {
   order: Order;
-  payment: { id: string; status: string; redirectUrl?: string };
+  /**
+   * `redirectUrl` is set when the gateway needs the shopper on its own page
+   * first — a 3-D Secure challenge, say. It is outside input: see
+   * `safePaymentRedirect` before sending anyone there.
+   */
+  payment: { id: string; status: PaymentStatus; redirectUrl?: string | null };
 };
 
 /**

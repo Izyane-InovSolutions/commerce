@@ -24,7 +24,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { apiClient } from '@/lib/api';
-import { formatMinor } from '@/lib/money';
+import { formatMinor, totalsByCurrency } from '@/lib/money';
 import { readParam } from '@/lib/search-params';
 import { requireAdmin } from '@/lib/session';
 
@@ -37,7 +37,7 @@ const SELLER_LOOKUP_LIMIT = 100;
 export default async function FinancePage({
   searchParams,
 }: PageProps<'/finance'>) {
-  await requireAdmin();
+  await requireAdmin(true);
   const params = await searchParams;
 
   const requested = Number(readParam(params, 'page') ?? '1');
@@ -74,8 +74,9 @@ export default async function FinancePage({
     sellers.map((seller) => [seller.id, seller.businessName]),
   );
   const totalPages = Math.max(1, Math.ceil(payouts.total / payouts.limit));
-  const pageTotal = payouts.items.reduce((sum, row) => sum + row.amount, 0);
-  const currency = payouts.items[0]?.currency;
+  // One total per currency: a page can mix them, and adding minor units
+  // across currencies would label the sum with whichever row came first.
+  const pageTotals = totalsByCurrency(payouts.items);
 
   return (
     <div className="space-y-6">
@@ -153,9 +154,12 @@ export default async function FinancePage({
             </Table>
           </div>
 
-          {currency ? (
+          {pageTotals.length > 0 ? (
             <p className="text-muted-foreground text-sm">
-              {formatMinor(pageTotal, currency)} on this page.
+              {pageTotals
+                .map((total) => formatMinor(total.amount, total.currency))
+                .join(' · ')}{' '}
+              on this page.
             </p>
           ) : null}
         </>

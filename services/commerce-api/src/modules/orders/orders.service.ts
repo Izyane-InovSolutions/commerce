@@ -42,6 +42,12 @@ import {
   type ShippingLine,
   type ShippingQuoteGroup,
 } from '../shipping/shipping.service';
+import {
+  ADMIN_ORDER_CUSTOMER_SELECT,
+  ADMIN_ORDER_ITEM_OFFER_SELECT,
+  type AdminOrderDetail,
+  toAdminOrderDetail,
+} from './admin-order-detail';
 
 export type ShippingGroupWithItems = ShippingGroup & { items: OrderItem[] };
 export type SellerOrderWithItems = SellerOrder & {
@@ -755,10 +761,35 @@ export class OrdersService {
     return withSummary[0] ?? order;
   }
 
-  /** Admin read — no ownership check, no fulfillmentSummary (staff use the
-   * dedicated fulfillment endpoints for warehouse/staff detail instead). */
-  async findAny(orderId: string): Promise<OrderWithItems> {
-    return this.findByIdOrThrow(orderId);
+  /**
+   * Admin read — no ownership check, no fulfillmentSummary (staff use the
+   * dedicated fulfillment endpoints for warehouse/staff detail instead).
+   *
+   * Unlike the customer reads it joins each item's product/variant names and
+   * the customer's contact detail in the same query, so the admin order page
+   * can name its lines and its buyer without a lookup per line.
+   */
+  async findAny(orderId: string): Promise<AdminOrderDetail> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        items: { include: { offer: ADMIN_ORDER_ITEM_OFFER_SELECT } },
+        sellerOrders: {
+          include: {
+            items: true,
+            shippingGroups: { include: { items: true } },
+          },
+        },
+        payment: CUSTOMER_PAYMENT_SELECT,
+        user: ADMIN_ORDER_CUSTOMER_SELECT,
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    return toAdminOrderDetail(order);
   }
 
   async listAll(

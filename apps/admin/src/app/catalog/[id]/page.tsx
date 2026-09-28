@@ -4,13 +4,18 @@ import { notFound } from 'next/navigation';
 import {
   ApiError,
   backendGetProduct,
+  backendListAttributes,
   backendListBrands,
   backendListCategories,
 } from '@commerce/api-client';
-
-import { currentPrices } from '@commerce/contracts';
+import {
+  currentPrices,
+  type BackendAdminOffer,
+  type BackendPrice,
+} from '@commerce/contracts';
 
 import { ApiErrorNotice } from '@/components/api-error-notice';
+import type { AttributeChoice } from '@/components/attribute-value-picker';
 import { DeleteControl } from '@/components/delete-control';
 import { OfferControls } from '@/components/offer-controls';
 import { PageHeader } from '@/components/page-header';
@@ -19,6 +24,7 @@ import { ProductImages } from '@/components/product-images';
 import { StatusBadge } from '@/components/status-badge';
 import { StatusControl } from '@/components/status-control';
 import { VariantAddForm } from '@/components/variant-add-form';
+import { VariantEditForm } from '@/components/variant-edit-form';
 import {
   Card,
   CardContent,
@@ -27,18 +33,21 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { apiClient } from '@/lib/api';
+import { formatMinor } from '@/lib/money';
 import { requireAdmin } from '@/lib/session';
 
 import {
   addPriceAction,
   addVariantAction,
   createOfferAction,
+  deleteOfferAction,
   deleteProductAction,
   deleteVariantAction,
   setOfferShippingAction,
   setOfferStatusAction,
   setStatusAction,
   updateProductAction,
+  updateVariantAction,
 } from '../actions';
 import {
   removeProductImageAction,
@@ -57,11 +66,36 @@ export async function generateMetadata({
   }
 }
 
-function formatMinor(amount: number, currency: string): string {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency,
-  }).format(amount / 100);
+function formatDay(value: string): string {
+  return new Date(value).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+/** "From 3 Sep 2026", or "3 Sep 2026 – 30 Sep 2026" once it has an end. */
+function priceWindow(price: BackendPrice): string {
+  return price.endsAt === null
+    ? `From ${formatDay(price.startsAt)}`
+    : `${formatDay(price.startsAt)} – ${formatDay(price.endsAt)}`;
+}
+
+/** Every price the offer has carried, newest first, marking those in force. */
+function priceHistory(offer: BackendAdminOffer) {
+  const inForce = new Set(currentPrices(offer.prices).map((price) => price.id));
+
+  return [...offer.prices]
+    .sort(
+      (left, right) =>
+        new Date(right.startsAt).getTime() - new Date(left.startsAt).getTime(),
+    )
+    .map((price) => ({
+      id: price.id,
+      price: formatMinor(price.amount, price.currency),
+      window: priceWindow(price),
+      current: inForce.has(price.id),
+    }));
 }
 
 export default async function ProductPage({
@@ -84,6 +118,22 @@ export default async function ProductPage({
       notFound();
     }
     return <ApiErrorNotice error={error} />;
+  }
+
+  // Attributes only feed the variant pickers, so failing to read them costs
+  // the pickers rather than the page. Null (not empty) tells the edit form to
+  // leave a variant's values untouched instead of clearing them.
+  let attributes: AttributeChoice[] | null;
+  try {
+    attributes = (await backendListAttributes(apiClient)).map((attribute) => ({
+      id: attribute.id,
+      name: attribute.name,
+      values: [...attribute.values].sort((left, right) =>
+        left.value.localeCompare(right.value),
+      ),
+    }));
+  } catch {
+    attributes = null;
   }
 
   return (
@@ -157,12 +207,23 @@ export default async function ProductPage({
               <div key={variant.id} className="space-y-3 rounded-lg border p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
+                    {/* `||`, not `??`: a cleared name is stored empty. */}
                     <p className="font-medium">
-                      {variant.name ?? variant.skuCode}
+                      {variant.name || variant.skuCode}
                     </p>
                     <p className="text-muted-foreground font-mono text-xs">
                       {variant.skuCode}
                     </p>
+                    {variant.attributeValues.length > 0 ? (
+                      <p className="text-muted-foreground text-xs">
+                        {variant.attributeValues
+                          .map(
+                            (entry) =>
+                              `${entry.attributeValue.attribute.name}: ${entry.attributeValue.value}`,
+                          )
+                          .join(' · ')}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="flex flex-wrap items-start gap-3">
                     <StatusControl
@@ -185,6 +246,23 @@ export default async function ProductPage({
                     />
                   </div>
                 </div>
+
+                <VariantEditForm
+                  variant={{
+                    id: variant.id,
+                    skuCode: variant.skuCode,
+                    name: variant.name,
+                    attributeValueIds: variant.attributeValues.map(
+                      (entry) => entry.attributeValueId,
+                    ),
+                  }}
+                  attributes={attributes}
+                  action={updateVariantAction.bind(
+                    null,
+                    product.id,
+                    variant.id,
+                  )}
+                />
 
                 <OfferControls
                   productId={product.id}
@@ -212,6 +290,12 @@ export default async function ProductPage({
                             offer.shippingCurrency,
                           )
                         : null,
+                    sellerOwned: offer.sellerId !== null,
+                    history: priceHistory(offer),
+                    remove:
+                      offer.sellerId === null
+                        ? deleteOfferAction.bind(null, product.id, offer.id)
+                        : undefined,
                   }))}
                   createOffer={createOfferAction.bind(
                     null,
@@ -229,7 +313,10 @@ export default async function ProductPage({
             ))
           )}
 
-          <VariantAddForm action={addVariantAction.bind(null, product.id)} />
+          <VariantAddForm
+            action={addVariantAction.bind(null, product.id)}
+            attributes={attributes ?? undefined}
+          />
         </CardContent>
       </Card>
 

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { backendRatingSummarySchema } from './reviews.ts';
+import { backendVariantAttributeValueSchema } from './backend-attributes.ts';
 
 /**
  * The Commerce API as it actually exists today (Phase 0–2).
@@ -203,6 +204,8 @@ export type BackendVariant = z.infer<typeof backendVariantSchema>;
 
 export const backendAdminVariantSchema = backendVariantSchema.extend({
   offers: z.array(backendAdminOfferSchema).default([]),
+  /** Each value nested with its attribute, e.g. Colour → Oak. */
+  attributeValues: z.array(backendVariantAttributeValueSchema).default([]),
 });
 export type BackendAdminVariant = z.infer<typeof backendAdminVariantSchema>;
 
@@ -458,6 +461,7 @@ export type BackendCreateProductInput = z.input<
 export const backendCreateVariantSchema = z.object({
   skuCode: z.string().trim().min(1, 'SKU code is required.'),
   name: z.string().trim().optional(),
+  attributeValueIds: z.array(z.uuid()).optional(),
 });
 export type BackendCreateVariantInput = z.input<
   typeof backendCreateVariantSchema

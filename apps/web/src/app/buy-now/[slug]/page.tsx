@@ -6,12 +6,9 @@ import { ApiErrorNotice } from '@/components/api-error-notice';
 import { BackButton } from '@/components/back-button';
 import { BuyNowContent } from '@/components/buy-now-content';
 import { Button } from '@/components/ui/button';
+import { resolveBuyNowSelection } from '@/lib/buy-now';
 import { getProductBySlug } from '@/lib/catalog';
-import {
-  getDisplayPrice,
-  getPrimaryImage,
-  getPrimaryOffer,
-} from '@/lib/catalog-types';
+import { getPrimaryImage } from '@/lib/catalog-types';
 import { listAddresses } from '@/lib/orders';
 import { getCurrentUser } from '@/lib/session';
 
@@ -43,8 +40,13 @@ export default async function BuyNowPage({
   searchParams,
 }: BuyNowPageProps) {
   const { slug } = await params;
-  const { quantity: quantityParam } = await searchParams;
+  const { quantity: quantityParam, variant: variantParam } =
+    await searchParams;
   const quantity = parseQuantity(quantityParam);
+  const variantId =
+    typeof variantParam === 'string' && variantParam !== ''
+      ? variantParam
+      : undefined;
   const product = await getProductBySlug(slug);
 
   if (!product) {
@@ -68,22 +70,30 @@ export default async function BuyNowPage({
     );
   }
 
-  const offer = getPrimaryOffer(product);
-  const price = getDisplayPrice(product);
+  // The variant the product page had selected, so what is bought is what
+  // the shopper was looking at — not always the product's lead offer.
+  const selection = resolveBuyNowSelection(product, variantId);
+  const productHref = variantId
+    ? `/products/${product.slug}?variant=${encodeURIComponent(variantId)}`
+    : `/products/${product.slug}`;
 
-  if (!offer || !price) {
+  if (!selection || !selection.offer.inStock) {
     return (
       <div className="mx-auto max-w-4xl space-y-4 px-4 py-12">
         <h1 className="text-2xl font-semibold tracking-tight">Buy now</h1>
         <p className="text-muted-foreground text-sm text-pretty">
-          {product.name} is not currently available to buy.
+          {selection
+            ? `${selection.name} is out of stock.`
+            : `${product.name} is not currently available to buy.`}
         </p>
         <Button asChild size="sm">
-          <Link href={`/products/${product.slug}`}>Back to product</Link>
+          <Link href={productHref}>Back to product</Link>
         </Button>
       </div>
     );
   }
+
+  const { offer, price } = selection;
 
   let addresses;
 
@@ -109,7 +119,7 @@ export default async function BuyNowPage({
 
       <div className="mt-8">
         <BuyNowContent
-          name={product.name}
+          name={selection.name}
           imageUrl={getPrimaryImage(product)?.url ?? null}
           quantity={quantity}
           unitAmount={price.amount}

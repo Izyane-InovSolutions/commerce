@@ -76,6 +76,27 @@ describe('ProductDetailActions quantity', () => {
   });
 });
 
+describe('ProductDetailActions buy now', () => {
+  it('buys the selected variant', () => {
+    render(
+      <ProductDetailActions
+        name="Widget"
+        slug="widget"
+        available={true}
+        inStock={true}
+        variantId="variant-red"
+        addToCart={vi.fn().mockResolvedValue(idleFormState)}
+        addToWishlist={vi.fn().mockResolvedValue(idleFormState)}
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: 'Buy it now' })).toHaveAttribute(
+      'href',
+      '/buy-now/widget?quantity=1&variant=variant-red',
+    );
+  });
+});
+
 describe('ProductDetailActions availability', () => {
   it('shows an out-of-stock message and disables buying, without touching add-to-cart', () => {
     render(

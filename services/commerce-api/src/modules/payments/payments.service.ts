@@ -6,6 +6,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import {
+  OrderStatus,
   PaymentStatus,
   RefundCaseSource,
   type Payment,
@@ -14,6 +15,7 @@ import {
 } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { OutboxService } from '../../infrastructure/jobs/outbox.service';
 import { OrderWithItems, OrdersService } from '../orders/orders.service';
 import type { PaymentDetailsDto } from './dto/payment-details.dto';
 import { PaymentOutcomeUnknownException } from './gateway-errors';
@@ -39,8 +41,12 @@ const PROVIDER_STATUS_TO_PAYMENT_STATUS: Record<
   CANCELLED: PaymentStatus.CANCELLED,
 };
 
+/** Emitted when a payment outcome (failure, cancellation, expiry) is what
+ * cancelled its order. Payload: { paymentId, orderId, userId, status, reason }. */
+export const PAYMENT_FAILED_TOPIC = 'payment.failed';
+
 /** States a payment can still move out of, and so is worth reconciling. */
-const PENDING_STATUSES = [
+export const PENDING_STATUSES = [
   PaymentStatus.PENDING,
   PaymentStatus.REQUIRES_ACTION,
   PaymentStatus.PROCESSING,
@@ -82,6 +88,7 @@ export class PaymentsService {
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
     private readonly ordersService: OrdersService,
     private readonly refundCasesService: RefundCasesService,
+    private readonly outboxService: OutboxService,
   ) {}
 
   async initializeForOrder(
@@ -287,6 +294,28 @@ export class PaymentsService {
     return this.prisma.payment.findUniqueOrThrow({ where: { id: payment.id } });
   }
 
+  /**
+   * Resolves a payment the gateway never settled as CANCELLED, cancelling
+   * its order and releasing the stock exactly as a gateway-reported
+   * cancellation would. Callers are responsible for having first made sure
+   * the charge can no longer succeed (see GatewayPaymentsService.expire).
+   *
+   * The event id is per payment, so expiring twice is a no-op.
+   */
+  async expire(payment: Payment, reason: string): Promise<Payment> {
+    if (!this.isReconcilable(payment)) return payment;
+
+    await this.applyEvent({
+      id: `expiry:${payment.id}`,
+      providerReference: payment.providerReference!,
+      type: 'payment.expired',
+      status: 'CANCELLED',
+      payload: { failureCode: 'EXPIRED', failureMessage: reason },
+    });
+
+    return this.prisma.payment.findUniqueOrThrow({ where: { id: payment.id } });
+  }
+
   private isReconcilable(payment: Payment): boolean {
     return (
       payment.provider === this.provider.name &&
@@ -333,8 +362,32 @@ export class PaymentsService {
         else if (
           status === PaymentStatus.FAILED ||
           status === PaymentStatus.CANCELLED
-        )
+        ) {
+          const order = await tx.order.findUniqueOrThrow({
+            where: { id: payment.orderId },
+            select: { status: true, userId: true },
+          });
           await this.ordersService.cancel(payment.orderId, tx);
+          // Only when this outcome is what cancelled the order: one the
+          // customer or staff already cancelled has its own order.cancelled
+          // event, and a second notice for it would be noise.
+          if (order.status === OrderStatus.PENDING_PAYMENT)
+            await this.outboxService.record(
+              {
+                topic: PAYMENT_FAILED_TOPIC,
+                aggregateType: 'Payment',
+                aggregateId: payment.id,
+                payload: {
+                  paymentId: payment.id,
+                  orderId: payment.orderId,
+                  userId: order.userId,
+                  status,
+                  reason: failureReason(event, status),
+                },
+              },
+              tx,
+            );
+        }
         await tx.payment.update({
           where: { id: payment.id },
           data: { status, failureReason: failureReason(event, status) },

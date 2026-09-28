@@ -22,7 +22,8 @@ export type AccountTabValue =
   | 'wishlist'
   | 'saved-sellers'
   | 'orders'
-  | 'addresses';
+  | 'addresses'
+  | 'settings';
 
 export function AccountTabs({
   recentlyViewed,
@@ -30,6 +31,7 @@ export function AccountTabs({
   savedSellers,
   orders,
   addresses,
+  settings,
   defaultTab = 'recently-viewed',
 }: {
   recentlyViewed: ReactNode;
@@ -37,6 +39,9 @@ export function AccountTabs({
   savedSellers: ReactNode;
   orders: ReactNode;
   addresses: ReactNode;
+  /** Profile and password — optional so a panel can be rendered without
+   * one, as the tests here do. */
+  settings?: ReactNode;
   /** Which tab opens first — set from `?tab=` when linked in from elsewhere. */
   defaultTab?: AccountTabValue;
 }) {
@@ -48,12 +53,14 @@ export function AccountTabs({
         <TabsTrigger value="saved-sellers">Saved sellers</TabsTrigger>
         <TabsTrigger value="orders">Orders</TabsTrigger>
         <TabsTrigger value="addresses">My addresses</TabsTrigger>
+        {settings ? <TabsTrigger value="settings">Settings</TabsTrigger> : null}
       </TabsList>
       <TabsContent value="recently-viewed">{recentlyViewed}</TabsContent>
       <TabsContent value="wishlist">{wishlist}</TabsContent>
       <TabsContent value="saved-sellers">{savedSellers}</TabsContent>
       <TabsContent value="orders">{orders}</TabsContent>
       <TabsContent value="addresses">{addresses}</TabsContent>
+      {settings ? <TabsContent value="settings">{settings}</TabsContent> : null}
     </Tabs>
   );
 }

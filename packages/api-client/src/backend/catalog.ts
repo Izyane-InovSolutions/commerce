@@ -8,12 +8,14 @@ import type {
   BackendCreateVariantInput,
   BackendAdminOffer,
   BackendAdminProduct,
+  BackendAdminVariant,
   BackendPage,
   BackendProductSubmission,
   BackendRatedProduct,
   BackendProductStatus,
   BackendReviewProductSubmissionInput,
   BackendUpdateOfferShippingInput,
+  BackendUpdateVariantInput,
   BackendVariant,
 } from '@commerce/contracts';
 
@@ -23,8 +25,8 @@ import type { ApiClient, QueryValue } from '../client.ts';
  * Catalog endpoints.
  *
  * The admin listings are the authoritative ones — they include drafts. The
- * public reads are here too because the admin product read is currently
- * unusable whenever a product has media attached.
+ * public reads are here too, for callers that can't reach the admin routes
+ * or only want what a shopper would see.
  */
 
 export function backendListCategories(
@@ -129,7 +131,7 @@ export function backendGetProduct(
   return client.get(`/admin/catalog/products/${id}`, { cache: 'no-store' });
 }
 
-/** Public listing: published products only, and immune to the media defect. */
+/** Public listing: published products only. */
 export function backendListPublicProducts(
   client: ApiClient,
   query: BackendProductQuery = {},
@@ -206,6 +208,22 @@ export function backendSetVariantStatus(
   );
 }
 
+/**
+ * Edits a variant's SKU, name, or attribute values. `attributeValueIds`
+ * replaces the whole set when sent; leave it out to keep the current values.
+ */
+export function backendUpdateVariant(
+  client: ApiClient,
+  productId: string,
+  variantId: string,
+  input: BackendUpdateVariantInput,
+): Promise<BackendAdminVariant> {
+  return client.patch(
+    `/admin/catalog/products/${productId}/variants/${variantId}`,
+    { body: input },
+  );
+}
+
 /** Same 409 rule as {@link backendDeleteProduct}, for one variant. */
 export function backendDeleteVariant(
   client: ApiClient,
@@ -243,6 +261,25 @@ export function backendSetOfferStatus(
   return client.patch(`/admin/catalog/offers/${offerId}/status`, {
     body: { status },
   });
+}
+
+/** One offer with its whole price history, newest first. */
+export function backendGetOffer(
+  client: ApiClient,
+  offerId: string,
+): Promise<BackendAdminOffer> {
+  return client.get(`/admin/catalog/offers/${offerId}`, { cache: 'no-store' });
+}
+
+/**
+ * Deletes a platform offer. A seller's offer is refused — it belongs to the
+ * seller's own workflow.
+ */
+export function backendDeleteOffer(
+  client: ApiClient,
+  offerId: string,
+): Promise<null> {
+  return client.delete(`/admin/catalog/offers/${offerId}`);
 }
 
 export function backendSetOfferShipping(

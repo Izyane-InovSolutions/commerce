@@ -936,4 +936,60 @@ describe('OrdersService', () => {
       );
     });
   });
+
+  describe('findAny', () => {
+    it('throws not found for an unknown order', async () => {
+      prisma.order.findUnique.mockResolvedValue(null);
+
+      await expect(service.findAny('order-1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it('joins product names and the customer in the one query', async () => {
+      prisma.order.findUnique.mockResolvedValue({
+        id: 'order-1',
+        userId: 'user-1',
+        user: { id: 'user-1', email: 'buyer@example.com' },
+        sellerOrders: [],
+        items: [
+          {
+            id: 'item-1',
+            offerId: 'offer-1',
+            offer: {
+              sellerSku: null,
+              listingTitle: null,
+              variant: {
+                id: 'variant-1',
+                skuCode: 'SKU-1',
+                name: null,
+                product: { id: 'product-1', name: 'Kettle', slug: 'kettle' },
+              },
+            },
+          },
+        ],
+      });
+
+      const order = await service.findAny('order-1');
+
+      expect(prisma.order.findUnique).toHaveBeenCalledTimes(1);
+      expect(prisma.order.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'order-1' },
+          include: expect.objectContaining({
+            items: { include: { offer: expect.any(Object) } },
+            user: expect.any(Object),
+          }),
+        }),
+      );
+      expect(order.customer).toEqual({
+        id: 'user-1',
+        email: 'buyer@example.com',
+      });
+      expect(order.items[0]).toMatchObject({
+        product: { name: 'Kettle' },
+        variant: { skuCode: 'SKU-1' },
+      });
+    });
+  });
 });

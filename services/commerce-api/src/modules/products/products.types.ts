@@ -145,3 +145,9 @@ export type PublicProductReview = {
   product: { id: string; name: string; slug: string };
   seller: { id: string; displayName: string | null } | null;
 };
+
+/** `GET /catalog/best-sellers` — items are exactly the product listing's
+ * shape, ranked by units sold rather than paginated. */
+export type BestSellersResult = {
+  items: PublicProduct[];
+};

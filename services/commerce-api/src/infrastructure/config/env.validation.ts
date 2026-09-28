@@ -73,6 +73,48 @@ class EnvironmentVariables {
   @Min(60)
   MEDIA_PUBLIC_URL_TTL_SECONDS = 86_400;
 
+  // Where uploaded media bytes live; see StorageModule. The S3_* settings
+  // below are only demanded when the driver is s3, so local development
+  // needs none of them.
+  @IsIn(['local', 's3'])
+  MEDIA_STORAGE_DRIVER = 'local';
+
+  @ValidateIf((env: EnvironmentVariables) => env.MEDIA_STORAGE_DRIVER === 's3')
+  @IsString()
+  @IsNotEmpty()
+  S3_BUCKET?: string;
+
+  // R2 accepts "auto"; AWS needs the bucket's real region.
+  @ValidateIf((env: EnvironmentVariables) => env.MEDIA_STORAGE_DRIVER === 's3')
+  @IsString()
+  @IsNotEmpty()
+  S3_REGION?: string;
+
+  // Only for S3-compatible stores (R2, MinIO); unset means AWS itself. An
+  // empty value (as .env.example ships it) counts as unset.
+  @ValidateIf((env: EnvironmentVariables) => Boolean(env.S3_ENDPOINT))
+  @IsUrl({
+    protocols: ['http', 'https'],
+    require_protocol: true,
+    require_tld: false,
+  })
+  S3_ENDPOINT?: string;
+
+  @ValidateIf((env: EnvironmentVariables) => env.MEDIA_STORAGE_DRIVER === 's3')
+  @IsString()
+  @IsNotEmpty()
+  S3_ACCESS_KEY_ID?: string;
+
+  @ValidateIf((env: EnvironmentVariables) => env.MEDIA_STORAGE_DRIVER === 's3')
+  @IsString()
+  @IsNotEmpty()
+  S3_SECRET_ACCESS_KEY?: string;
+
+  // Kept as the literal string rather than a boolean: implicit conversion
+  // would turn the string "false" into true.
+  @IsIn(['true', 'false'])
+  S3_FORCE_PATH_STYLE = 'false';
+
   @IsIn(['pending', 'unified'])
   PAYMENTS_PROVIDER = 'pending';
 

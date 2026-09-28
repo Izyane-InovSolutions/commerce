@@ -9,27 +9,35 @@ export type ProductSection = {
   slug: string;
   title: string;
   products: Product[];
+  /** Where "View more" goes; the category's own listing by default. */
+  href?: string;
 };
 
 const INITIAL_VISIBLE_COUNT = 4;
 
-/** One background gradient per featured category — a one-off visual accent,
- * not something the catalog itself carries, so it's keyed by slug here
- * rather than plumbed through the product data. */
-const SECTION_GRADIENTS: Partial<Record<string, string>> = {
-  electronics: 'bg-linear-to-br from-slate-700 via-blue-600 to-cyan-500',
-  'home-and-living': 'bg-linear-to-br from-cyan-500 via-teal-500 to-emerald-600',
-  'outdoor-and-apparel': 'bg-linear-to-br from-orange-600 via-amber-600 to-yellow-500',
-};
+/** Background gradients for featured sections — a purely visual accent,
+ * not something the catalog itself carries. Sections are picked from live
+ * data, so they're assigned by position rather than keyed by slug. */
+const SECTION_GRADIENTS = [
+  'bg-linear-to-br from-slate-700 via-blue-600 to-cyan-500',
+  'bg-linear-to-br from-cyan-500 via-teal-500 to-emerald-600',
+  'bg-linear-to-br from-orange-600 via-amber-600 to-yellow-500',
+] as const;
 
 export function ProductCategorySection({
   category,
+  accent,
 }: {
   category: ProductSection;
+  /** Which gradient to draw behind the section, by position; none if unset. */
+  accent?: number;
 }) {
   const hasMore = category.products.length > INITIAL_VISIBLE_COUNT;
   const visibleProducts = category.products.slice(0, INITIAL_VISIBLE_COUNT);
-  const gradientClassName = SECTION_GRADIENTS[category.slug];
+  const gradientClassName =
+    accent === undefined
+      ? undefined
+      : SECTION_GRADIENTS[accent % SECTION_GRADIENTS.length];
 
   return (
     <section
@@ -58,7 +66,12 @@ export function ProductCategorySection({
           size="sm"
           className="border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300 dark:hover:bg-blue-900"
         >
-          <Link href={`/products?category=${encodeURIComponent(category.slug)}`}>
+          <Link
+            href={
+              category.href ??
+              `/products?category=${encodeURIComponent(category.slug)}`
+            }
+          >
             View more
           </Link>
         </Button>

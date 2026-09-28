@@ -7,12 +7,13 @@ import {
 import {
   MediaStatus,
   OfferStockSource,
+  OrderStatus,
+  Prisma,
   ProductRatingSummary,
   ProductStatus,
   ProductSubmissionStatus,
   ReviewVisibility,
   SellerStatus,
-  type Prisma,
   type ProductVariant,
 } from '@prisma/client';
 
@@ -38,6 +39,7 @@ import { ReviewListQueryDto } from '../reviews/dto/review-list-query.dto';
 import { SellersService } from '../sellers/sellers.service';
 import { PUBLIC_STOREFRONT_SELECT } from '../sellers/storefronts.service';
 import { AttachMediaDto } from './dto/attach-media.dto';
+import { BestSellersQueryDto } from './dto/best-sellers-query.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
@@ -46,7 +48,10 @@ import { UpdateProductMediaDto } from './dto/update-product-media.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
 import { UpdateStatusDto } from '../../common/catalog/dto/update-status.dto';
+import { SellerUpdateProductDto } from './dto/seller-update-product.dto';
+import { searchTerms } from './product-search';
 import {
+  BestSellersResult,
   ProductRowWithRelations,
   ProductWithRelations,
   PublicProduct,
@@ -98,6 +103,40 @@ const PUBLICLY_ELIGIBLE_OFFER: Prisma.OfferWhereInput = {
   ],
 };
 
+/** What every public catalog read loads: only published variants, and only
+ * the published, publicly eligible offers on them. */
+const PUBLIC_PRODUCT_INCLUDE = {
+  brand: true,
+  category: true,
+  media: PRODUCT_MEDIA_INCLUDE,
+  variants: {
+    where: { status: ProductStatus.PUBLISHED },
+    include: {
+      attributeValues: {
+        include: { attributeValue: { include: { attribute: true } } },
+      },
+      offers: {
+        where: { status: ProductStatus.PUBLISHED, ...PUBLICLY_ELIGIBLE_OFFER },
+        include: {
+          prices: true,
+          seller: { select: PUBLIC_STOREFRONT_SELECT },
+        },
+      },
+    },
+  },
+} satisfies Prisma.ProductInclude;
+
+/** Orders that collected money — a later refund doesn't un-sell them. */
+const PAID_ORDER_STATUSES: OrderStatus[] = [
+  OrderStatus.PAID,
+  OrderStatus.PARTIALLY_REFUNDED,
+  OrderStatus.REFUNDED,
+];
+
+/** How many ranked candidates are checked for public eligibility per query
+ * while filling a best-seller list. */
+const BEST_SELLER_BATCH = 100;
+
 const PRODUCT_DETAIL_INCLUDE = {
   brand: true,
   category: true,
@@ -133,26 +172,7 @@ export class ProductsService {
         orderBy,
         skip: (query.page - 1) * query.limit,
         take: query.limit,
-        include: {
-          brand: true,
-          category: true,
-          media: PRODUCT_MEDIA_INCLUDE,
-          variants: {
-            where: { status: ProductStatus.PUBLISHED },
-            include: {
-              attributeValues: {
-                include: { attributeValue: { include: { attribute: true } } },
-              },
-              offers: {
-                where: { status: ProductStatus.PUBLISHED, ...PUBLICLY_ELIGIBLE_OFFER },
-                include: {
-                  prices: true,
-                  seller: { select: PUBLIC_STOREFRONT_SELECT },
-                },
-              },
-            },
-          },
-        },
+        include: PUBLIC_PRODUCT_INCLUDE,
       }),
       this.prisma.product.count({ where }),
     ]);
@@ -183,26 +203,7 @@ export class ProductsService {
   ): Promise<PublicProduct> {
     const product = await this.prisma.product.findFirst({
       where: { slug, status: ProductStatus.PUBLISHED },
-      include: {
-        brand: true,
-        category: true,
-        media: PRODUCT_MEDIA_INCLUDE,
-        variants: {
-          where: { status: ProductStatus.PUBLISHED },
-          include: {
-            attributeValues: {
-              include: { attributeValue: { include: { attribute: true } } },
-            },
-            offers: {
-              where: { status: ProductStatus.PUBLISHED, ...PUBLICLY_ELIGIBLE_OFFER },
-              include: {
-                prices: true,
-                seller: { select: PUBLIC_STOREFRONT_SELECT },
-              },
-            },
-          },
-        },
-      },
+      include: PUBLIC_PRODUCT_INCLUDE,
     });
 
     if (!product) {
@@ -220,6 +221,94 @@ export class ProductsService {
       stock,
       ratingSummaries.get(product.id),
     );
+  }
+
+  /**
+   * Published products ranked by units sold on paid orders created in the
+   * last `days` days, in exactly the product listing's item shape.
+   *
+   * Ranking is done in SQL over every product sold in the window; public
+   * eligibility (a published variant carrying a published offer a shopper
+   * can actually buy from) is then checked in rank order, a batch at a
+   * time, until `limit` products qualify — so an ineligible top seller
+   * never leaves the list short.
+   */
+  async findBestSellers(query: BestSellersQueryDto): Promise<BestSellersResult> {
+    const since = new Date(Date.now() - query.days * 24 * 60 * 60 * 1000);
+    const ranked = await this.prisma.$queryRaw<{ productId: string }[]>`
+      SELECT v.product_id AS "productId"
+      FROM order_items oi
+      JOIN orders o ON o.id = oi.order_id
+      JOIN offers f ON f.id = oi.offer_id
+      JOIN product_variants v ON v.id = f.variant_id
+      JOIN products p ON p.id = v.product_id
+      WHERE o.status::text IN (${Prisma.join(PAID_ORDER_STATUSES)})
+        AND o.created_at >= (${since.toISOString()}::timestamptz AT TIME ZONE 'UTC')
+        AND p.status::text = ${ProductStatus.PUBLISHED}
+      GROUP BY v.product_id
+      ORDER BY SUM(oi.quantity) DESC, v.product_id
+    `;
+
+    const eligibleIds: string[] = [];
+    for (
+      let offset = 0;
+      offset < ranked.length && eligibleIds.length < query.limit;
+      offset += BEST_SELLER_BATCH
+    ) {
+      const batch = ranked
+        .slice(offset, offset + BEST_SELLER_BATCH)
+        .map((row) => row.productId);
+      const eligible = await this.prisma.product.findMany({
+        where: {
+          id: { in: batch },
+          status: ProductStatus.PUBLISHED,
+          variants: {
+            some: {
+              status: ProductStatus.PUBLISHED,
+              offers: {
+                some: {
+                  status: ProductStatus.PUBLISHED,
+                  ...PUBLICLY_ELIGIBLE_OFFER,
+                },
+              },
+            },
+          },
+        },
+        select: { id: true },
+      });
+      const eligibleSet = new Set(eligible.map((product) => product.id));
+      for (const id of batch) {
+        if (eligibleSet.has(id) && eligibleIds.length < query.limit)
+          eligibleIds.push(id);
+      }
+    }
+
+    if (eligibleIds.length === 0) return { items: [] };
+
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: eligibleIds } },
+      include: PUBLIC_PRODUCT_INCLUDE,
+    });
+    const rank = new Map(eligibleIds.map((id, index) => [id, index]));
+    products.sort(
+      (left, right) => (rank.get(left.id) ?? 0) - (rank.get(right.id) ?? 0),
+    );
+
+    const [stock, ratingSummaries] = await Promise.all([
+      this.loadStock(products),
+      this.loadRatingSummaries(products),
+    ]);
+
+    return {
+      items: products.map((product) =>
+        this.toPublicProduct(
+          product,
+          query.currency,
+          stock,
+          ratingSummaries.get(product.id),
+        ),
+      ),
+    };
   }
 
   /**
@@ -433,26 +522,9 @@ export class ProductsService {
     await this.findProductVariant(productId, variantId);
 
     try {
-      await this.prisma.$transaction(async (tx) => {
-        await tx.productVariant.update({
-          where: { id: variantId },
-          data: { skuCode: dto.skuCode, name: dto.name },
-        });
-
-        if (dto.attributeValueIds) {
-          await tx.productVariantAttributeValue.deleteMany({
-            where: { variantId },
-          });
-          if (dto.attributeValueIds.length) {
-            await tx.productVariantAttributeValue.createMany({
-              data: dto.attributeValueIds.map((attributeValueId) => ({
-                variantId,
-                attributeValueId,
-              })),
-            });
-          }
-        }
-      });
+      await this.prisma.$transaction((tx) =>
+        this.writeVariant(tx, variantId, dto),
+      );
 
       return this.findVariantOrThrow(variantId);
     } catch (error) {
@@ -652,6 +724,102 @@ export class ProductsService {
     }
   }
 
+  /**
+   * Seller edits follow the submission lifecycle:
+   *
+   * - PENDING: edited in place; still waiting on review.
+   * - REJECTED: edited and automatically resubmitted — back to PENDING with
+   *   the previous decision cleared, so the fix lands in the review queue.
+   * - APPROVED: refused (409). The product is live and shared — other
+   *   sellers may list offers against it — so a seller edit would bypass
+   *   review on a public page; the platform team changes it instead.
+   *
+   * The status check and the resubmission are one conditional write inside
+   * the edit's own transaction, so an admin decision racing the edit either
+   * lands first (and the edit is refused) or sees the edited product.
+   */
+  async updateSellerProduct(
+    userId: string,
+    productId: string,
+    dto: SellerUpdateProductDto,
+  ): Promise<ProductWithRelations> {
+    const sellerId = await this.requireOwnedProduct(userId, productId);
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await this.claimForSellerEdit(tx, sellerId, productId);
+        await tx.product.update({ where: { id: productId }, data: dto });
+      });
+    } catch (error) {
+      throw this.mapWriteError(
+        error,
+        'A product with this slug already exists',
+      );
+    }
+
+    return this.findOwnSubmission(userId, productId);
+  }
+
+  /** Same lifecycle rules as {@link updateSellerProduct}. */
+  async updateSellerVariant(
+    userId: string,
+    productId: string,
+    variantId: string,
+    dto: UpdateVariantDto,
+  ): Promise<VariantWithRelations> {
+    const sellerId = await this.requireOwnedProduct(userId, productId);
+    await this.findProductVariant(productId, variantId);
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await this.claimForSellerEdit(tx, sellerId, productId);
+        await this.writeVariant(tx, variantId, dto);
+      });
+    } catch (error) {
+      throw this.mapWriteError(
+        error,
+        'A variant with this SKU code already exists',
+      );
+    }
+
+    return this.findVariantOrThrow(variantId);
+  }
+
+  /**
+   * Deletes the seller's own unapproved submission, behind the same
+   * order/stock-history guard as the admin delete. An approved product is
+   * refused for the reason {@link updateSellerProduct} gives.
+   */
+  async removeSellerProduct(userId: string, productId: string): Promise<void> {
+    const sellerId = await this.requireOwnedProduct(userId, productId);
+    await this.deleteUnlessUsed(
+      { productId },
+      'This product',
+      async (tx) => {
+        await this.claimForSellerEdit(tx, sellerId, productId);
+        await tx.product.delete({ where: { id: productId } });
+      },
+    );
+  }
+
+  /** Removing a variant is an edit: a rejected submission is resubmitted. */
+  async removeSellerVariant(
+    userId: string,
+    productId: string,
+    variantId: string,
+  ): Promise<void> {
+    const sellerId = await this.requireOwnedProduct(userId, productId);
+    await this.findProductVariant(productId, variantId);
+    await this.deleteUnlessUsed(
+      { id: variantId },
+      'This variant',
+      async (tx) => {
+        await this.claimForSellerEdit(tx, sellerId, productId);
+        await tx.productVariant.delete({ where: { id: variantId } });
+      },
+    );
+  }
+
   async listOwnSubmissions(userId: string): Promise<ProductWithRelations[]> {
     const seller = await this.sellers.mine(userId);
     const products = await this.prisma.product.findMany({
@@ -759,6 +927,77 @@ export class ProductsService {
       );
   }
 
+  /** An approved seller's own submission, or 404 — never a 403 that would
+   * confirm another seller's product exists. Returns the seller id. */
+  private async requireOwnedProduct(
+    userId: string,
+    productId: string,
+  ): Promise<string> {
+    const seller = await this.sellers.requireApproved(userId);
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: { createdBySellerId: true },
+    });
+    if (!product || product.createdBySellerId !== seller.id)
+      throw new NotFoundException('Product not found');
+    return seller.id;
+  }
+
+  /** The atomic half of the seller edit gate — see updateSellerProduct. */
+  private async claimForSellerEdit(
+    tx: Prisma.TransactionClient,
+    sellerId: string,
+    productId: string,
+  ): Promise<void> {
+    const claimed = await tx.product.updateMany({
+      where: {
+        id: productId,
+        createdBySellerId: sellerId,
+        submissionStatus: {
+          in: [
+            ProductSubmissionStatus.PENDING,
+            ProductSubmissionStatus.REJECTED,
+          ],
+        },
+      },
+      data: {
+        submissionStatus: ProductSubmissionStatus.PENDING,
+        reviewReason: null,
+        reviewedBy: null,
+        reviewedAt: null,
+      },
+    });
+    if (claimed.count !== 1)
+      throw new ConflictException(
+        'This product has been approved and is live in the catalog; contact the platform team to change it',
+      );
+  }
+
+  private async writeVariant(
+    tx: Prisma.TransactionClient,
+    variantId: string,
+    dto: UpdateVariantDto,
+  ): Promise<void> {
+    await tx.productVariant.update({
+      where: { id: variantId },
+      data: { skuCode: dto.skuCode, name: dto.name },
+    });
+
+    if (dto.attributeValueIds) {
+      await tx.productVariantAttributeValue.deleteMany({
+        where: { variantId },
+      });
+      if (dto.attributeValueIds.length) {
+        await tx.productVariantAttributeValue.createMany({
+          data: dto.attributeValueIds.map((attributeValueId) => ({
+            variantId,
+            attributeValueId,
+          })),
+        });
+      }
+    }
+  }
+
   /** Unlike the admin media-attach path, a seller may only attach a media
    * asset they themselves uploaded — never someone else's asset id. */
   private async requireOwnedMediaAsset(
@@ -827,35 +1066,12 @@ export class ProductsService {
   private buildPublicWhere(query: ProductQueryDto): Prisma.ProductWhereInput {
     const where: Prisma.ProductWhereInput = { status: ProductStatus.PUBLISHED };
 
-    if (query.q) {
-      where.OR = [
-        { name: { contains: query.q, mode: 'insensitive' } },
-        { description: { contains: query.q, mode: 'insensitive' } },
-        // Also finds a seller by their storefront name — a customer typing
-        // "Acme" should reach Acme's listings even when the product name
-        // itself doesn't contain that word. Only a seller a shopper could
-        // actually buy from counts, same eligibility as PUBLICLY_ELIGIBLE_OFFER.
-        {
-          variants: {
-            some: {
-              status: ProductStatus.PUBLISHED,
-              offers: {
-                some: {
-                  status: ProductStatus.PUBLISHED,
-                  seller: {
-                    is: {
-                      displayName: { contains: query.q, mode: 'insensitive' },
-                      status: SellerStatus.APPROVED,
-                      storefrontSlug: { not: null },
-                      ownerUser: { isActive: true },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      ];
+    // Every term has to match somewhere, but each may match a different
+    // field: "acme red" finds a red product sold by Acme even though no one
+    // field contains both words. Ordering is untouched — this only filters.
+    const terms = searchTerms(query.q);
+    if (terms.length) {
+      where.AND = terms.map((term) => this.searchTermWhere(term));
     }
 
     if (query.categorySlug) {
@@ -877,6 +1093,54 @@ export class ProductsService {
     }
 
     return where;
+  }
+
+  /**
+   * The fields one search term may match on. Each is an ILIKE '%term%'
+   * under the hood, backed by the pg_trgm GIN indexes from migration
+   * 20260928153000_product_search_trigram_indexes.
+   */
+  private searchTermWhere(term: string): Prisma.ProductWhereInput {
+    const matches = { contains: term, mode: 'insensitive' } as const;
+    return {
+      OR: [
+        { name: matches },
+        { description: matches },
+        { brand: { name: matches } },
+        { category: { name: matches } },
+        // A SKU only counts on a variant a shopper can see, so an unpublished
+        // variant's code doesn't surface its product.
+        {
+          variants: {
+            some: { status: ProductStatus.PUBLISHED, skuCode: matches },
+          },
+        },
+        // Also finds a seller by their storefront name — a customer typing
+        // "Acme" should reach Acme's listings even when the product name
+        // itself doesn't contain that word. Only a seller a shopper could
+        // actually buy from counts, same eligibility as PUBLICLY_ELIGIBLE_OFFER.
+        {
+          variants: {
+            some: {
+              status: ProductStatus.PUBLISHED,
+              offers: {
+                some: {
+                  status: ProductStatus.PUBLISHED,
+                  seller: {
+                    is: {
+                      displayName: matches,
+                      status: SellerStatus.APPROVED,
+                      storefrontSlug: { not: null },
+                      ownerUser: { isActive: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
+    };
   }
 
   private buildOrderBy(

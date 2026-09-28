@@ -1,144 +1,91 @@
-'use client';
+import Form from 'next/form';
+import Link from 'next/link';
+import { ArrowUpDown, Search, SlidersHorizontal, Tag, X } from 'lucide-react';
 
-import { useMemo, useState } from 'react';
-import {
-  Flame,
-  Sparkles,
-  SlidersHorizontal,
-  Search,
-  X,
-  ArrowUpDown,
-} from 'lucide-react';
-
+import { Pagination } from '@/components/pagination';
 import { ProductCard } from '@/components/product-card';
+import { SelectNavigation } from '@/components/select-navigation';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import type { Category, Product } from '@/lib/catalog-types';
-import { getDisplayPrice, isNewArrival, isTrendingProduct } from '@/lib/catalog-types';
+import type { Brand, Category, Product } from '@/lib/catalog-types';
+import {
+  CATALOG_SORTS,
+  DEFAULT_CATALOG_SORT,
+  catalogHref,
+  toggleAttribute,
+  type AttributeFacet,
+  type CatalogParams,
+} from '@/lib/catalog-query';
+import { cn } from '@/lib/utils';
 
 export type StorefrontCatalogProps = {
+  /** One page of results, already filtered and sorted by the API. */
   products: Product[];
+  total: number;
+  pageSize: number;
+  params: CatalogParams;
   categories: Category[];
-  initialCategory?: string;
-  initialFilter?: string;
-  initialSort?: string;
-  initialQuery?: string;
+  brands?: Brand[];
+  /** Offered only once a category is chosen — see `collectAttributeFacets`. */
+  facets?: AttributeFacet[];
+  /** Products currently among the best sellers, badged as such. */
+  bestSellerIds?: string[];
   title?: string;
   description?: string;
+  /** Where filter links point — the homepage shows page 1 of the catalog
+   * but sends every refinement to `/products`. */
+  basePath?: string;
 };
 
-type QuickFilter = 'all' | 'trending' | 'new-arrivals';
-type SortOption =
-  | 'trending'
-  | 'newest'
-  | 'price-asc'
-  | 'price-desc'
-  | 'name-asc';
+const pillClasses =
+  'inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium whitespace-nowrap transition-all';
+const pillSelected = 'bg-primary text-primary-foreground shadow-xs';
+const pillIdle =
+  'bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground';
 
+/**
+ * The browsable product catalog: category pills, brand and attribute
+ * filters, sort, search-within, and page links.
+ *
+ * All of it is URL state applied by `GET /catalog/products` — every control
+ * here is a link (or a GET form) to the same listing with one thing changed,
+ * so results are always a real page of the whole catalog rather than a
+ * client-side reshuffle of whatever happened to be loaded.
+ */
 export function StorefrontCatalog({
   products,
+  total,
+  pageSize,
+  params,
   categories,
-  initialCategory = 'all',
-  initialFilter = 'all',
-  initialSort = 'trending',
-  initialQuery = '',
+  brands = [],
+  facets = [],
+  bestSellerIds = [],
   title = 'Explore Products',
   description,
+  basePath = '/products',
 }: StorefrontCatalogProps) {
-  const [selectedCategory, setSelectedCategory] =
-    useState<string>(initialCategory);
-  const [quickFilter, setQuickFilter] = useState<QuickFilter>(
-    (initialFilter === 'trending' || initialFilter === 'new-arrivals'
-      ? initialFilter
-      : 'all') as QuickFilter,
+  const href = (changes: Partial<CatalogParams>) =>
+    catalogHref(params, changes, basePath);
+  const clearAll = catalogHref(
+    { attributes: [], sort: DEFAULT_CATALOG_SORT, page: 1 },
+    {},
+    basePath,
   );
-  const [sortOption, setSortOption] = useState<SortOption>(
-    (initialSort || 'trending') as SortOption,
+  const bestSellers = new Set(bestSellerIds);
+  const selectedBrand = brands.find((brand) => brand.slug === params.brand);
+  const selectedValues = new Map(
+    facets.flatMap((facet) =>
+      facet.values.map((value) => [value.id, `${facet.name}: ${value.value}`]),
+    ),
   );
-  const [searchQuery, setSearchQuery] = useState<string>(initialQuery);
-
-  // Category product counts
-  const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: products.length };
-    for (const p of products) {
-      if (p.category?.slug) {
-        counts[p.category.slug] = (counts[p.category.slug] ?? 0) + 1;
-      }
-    }
-    return counts;
-  }, [products]);
-
-  // Filter and sort products
-  const filteredProducts = useMemo(() => {
-    let list = [...products];
-
-    // 1. Category filter
-    if (selectedCategory !== 'all') {
-      list = list.filter((p) => p.category?.slug === selectedCategory);
-    }
-
-    // 2. Search query filter
-    const query = searchQuery.trim().toLowerCase();
-    if (query.length > 0) {
-      list = list.filter(
-        (p) =>
-          p.name.toLowerCase().includes(query) ||
-          (p.description?.toLowerCase().includes(query) ?? false) ||
-          (p.category?.name.toLowerCase().includes(query) ?? false),
-      );
-    }
-
-    // 3. Quick filter
-    if (quickFilter === 'trending') {
-      list = list.filter((p) => isTrendingProduct(p));
-    } else if (quickFilter === 'new-arrivals') {
-      list = list.filter((p, i) => isNewArrival(p, i, products.length));
-    }
-
-    // 4. Sort
-    list.sort((a, b) => {
-      if (sortOption === 'price-asc') {
-        const priceA = getDisplayPrice(a)?.amount ?? Infinity;
-        const priceB = getDisplayPrice(b)?.amount ?? Infinity;
-        return priceA - priceB;
-      }
-      if (sortOption === 'price-desc') {
-        const priceA = getDisplayPrice(a)?.amount ?? -Infinity;
-        const priceB = getDisplayPrice(b)?.amount ?? -Infinity;
-        return priceB - priceA;
-      }
-      if (sortOption === 'name-asc') {
-        return a.name.localeCompare(b.name);
-      }
-      if (sortOption === 'newest') {
-        // Reversed catalog index as newest
-        return 0;
-      }
-      // 'trending' sort: trending products first, then by name
-      const trendA = isTrendingProduct(a) ? 1 : 0;
-      const trendB = isTrendingProduct(b) ? 1 : 0;
-      if (trendA !== trendB) {
-        return trendB - trendA;
-      }
-      return a.name.localeCompare(b.name);
-    });
-
-    return list;
-  }, [products, selectedCategory, searchQuery, quickFilter, sortOption]);
-
   const hasActiveFilters =
-    selectedCategory !== 'all' ||
-    quickFilter !== 'all' ||
-    searchQuery.trim().length > 0 ||
-    sortOption !== 'trending';
-
-  const resetFilters = () => {
-    setSelectedCategory('all');
-    setQuickFilter('all');
-    setSearchQuery('');
-    setSortOption('trending');
-  };
+    params.category !== undefined ||
+    params.brand !== undefined ||
+    params.attributes.length > 0 ||
+    params.q !== undefined ||
+    params.sort !== DEFAULT_CATALOG_SORT;
 
   return (
     <div className="space-y-6">
@@ -148,8 +95,7 @@ export function StorefrontCatalog({
           <div className="flex items-center gap-2.5">
             <h2 className="text-2xl font-semibold tracking-tight">{title}</h2>
             <Badge variant="secondary" className="font-mono text-xs">
-              {filteredProducts.length}{' '}
-              {filteredProducts.length === 1 ? 'item' : 'items'}
+              {total} {total === 1 ? 'item' : 'items'}
             </Badge>
           </div>
           {description ? (
@@ -157,251 +103,265 @@ export function StorefrontCatalog({
           ) : null}
         </div>
 
-        {/* Search input */}
-        <div className="relative w-full sm:w-64">
+        {/* Search within — a GET form, so the other filters ride along as
+            hidden fields and the API does the matching. */}
+        <Form action={basePath} className="relative w-full sm:w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
-          <Input
-            type="search"
-            placeholder="Search within products..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 pr-8 h-9 text-sm"
-          />
-          {searchQuery ? (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              aria-label="Clear search"
-            >
-              <X className="size-3.5" />
-            </button>
+          {params.category ? (
+            <input type="hidden" name="category" value={params.category} />
           ) : null}
-        </div>
+          {params.brand ? (
+            <input type="hidden" name="brand" value={params.brand} />
+          ) : null}
+          {params.attributes.map((id) => (
+            <input key={id} type="hidden" name="attr" value={id} />
+          ))}
+          {params.sort !== DEFAULT_CATALOG_SORT ? (
+            <input type="hidden" name="sort" value={params.sort} />
+          ) : null}
+          <label htmlFor="catalog-search" className="sr-only">
+            Search within products
+          </label>
+          <Input
+            id="catalog-search"
+            type="search"
+            name="q"
+            placeholder="Search within products..."
+            defaultValue={params.q ?? ''}
+            className="pl-9 h-9 text-sm"
+          />
+        </Form>
       </div>
 
       {/* Category Pills Bar */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-        <button
-          type="button"
-          onClick={() => setSelectedCategory('all')}
-          className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${
-            selectedCategory === 'all'
-              ? 'bg-primary text-primary-foreground shadow-xs'
-              : 'bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground'
-          }`}
+      <nav
+        aria-label="Categories"
+        className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none"
+      >
+        <Link
+          href={href({ category: undefined, attributes: [] })}
+          aria-current={params.category === undefined ? 'true' : undefined}
+          className={cn(
+            pillClasses,
+            params.category === undefined ? pillSelected : pillIdle,
+          )}
         >
           All Categories
-          <span className="text-[10px] opacity-75">
-            ({categoryCounts.all ?? products.length})
-          </span>
-        </button>
-
-        {categories.map((cat) => {
-          const count = categoryCounts[cat.slug] ?? 0;
-          const isSelected = selectedCategory === cat.slug;
+        </Link>
+        {categories.map((category) => {
+          const isSelected = params.category === category.slug;
           return (
-            <button
-              key={cat.id}
-              type="button"
-              onClick={() => setSelectedCategory(cat.slug)}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${
-                isSelected
-                  ? 'bg-primary text-primary-foreground shadow-xs'
-                  : 'bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground'
-              }`}
+            <Link
+              key={category.id}
+              // Attribute values belong to the category they were picked
+              // from, so switching category drops them.
+              href={href({ category: category.slug, attributes: [] })}
+              aria-current={isSelected ? 'true' : undefined}
+              className={cn(pillClasses, isSelected ? pillSelected : pillIdle)}
             >
-              {cat.name}
-              <span className="text-[10px] opacity-75">({count})</span>
-            </button>
+              {category.name}
+            </Link>
           );
         })}
-      </div>
+      </nav>
 
       {/* Filter & Sort Controls Row */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card/60 p-3 shadow-xs">
-        {/* Quick Filter Buttons */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground mr-1 hidden sm:inline-flex items-center gap-1">
-            <SlidersHorizontal className="size-3.5" /> Filter:
-          </span>
-          <Button
-            type="button"
-            variant={quickFilter === 'all' ? 'secondary' : 'ghost'}
-            size="sm"
-            className="h-8 text-xs font-medium"
-            onClick={() => setQuickFilter('all')}
-          >
-            All
-          </Button>
-          <Button
-            type="button"
-            variant={quickFilter === 'trending' ? 'secondary' : 'ghost'}
-            size="sm"
-            className={`h-8 text-xs font-medium ${
-              quickFilter === 'trending'
-                ? 'text-amber-600 dark:text-amber-400 font-semibold'
-                : ''
-            }`}
-            onClick={() => setQuickFilter('trending')}
-          >
-            <Flame className="size-3.5 text-amber-500 mr-1" />
-            Trending
-          </Button>
-          <Button
-            type="button"
-            variant={quickFilter === 'new-arrivals' ? 'secondary' : 'ghost'}
-            size="sm"
-            className={`h-8 text-xs font-medium ${
-              quickFilter === 'new-arrivals'
-                ? 'text-blue-600 dark:text-blue-400 font-semibold'
-                : ''
-            }`}
-            onClick={() => setQuickFilter('new-arrivals')}
-          >
-            <Sparkles className="size-3.5 text-blue-500 mr-1" />
-            New Arrivals
-          </Button>
-        </div>
+        {brands.length > 0 ? (
+          <SelectNavigation
+            id="catalog-brand"
+            label={
+              <>
+                <Tag className="size-3.5" /> Brand:
+              </>
+            }
+            value={params.brand ?? ''}
+            options={[
+              { value: '', label: 'All brands', href: href({ brand: undefined }) },
+              ...brands.map((brand) => ({
+                value: brand.slug,
+                label: brand.name,
+                href: href({ brand: brand.slug }),
+              })),
+            ]}
+          />
+        ) : null}
 
-        {/* Sort Select */}
         <div className="flex items-center gap-2 ml-auto">
-          <label
-            htmlFor="catalog-sort"
-            className="text-xs font-medium text-muted-foreground flex items-center gap-1"
-          >
-            <ArrowUpDown className="size-3.5" /> Sort by:
-          </label>
-          <select
+          <SelectNavigation
             id="catalog-sort"
-            value={sortOption}
-            onChange={(e) => setSortOption(e.target.value as SortOption)}
-            className="h-8 rounded-lg border border-input bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-xs focus:border-ring focus:outline-hidden focus:ring-1 focus:ring-ring"
-          >
-            <option value="trending">🔥 Trending</option>
-            <option value="newest">✨ Newest Arrivals</option>
-            <option value="price-asc">Price: Low to High</option>
-            <option value="price-desc">Price: High to Low</option>
-            <option value="name-asc">Name: A to Z</option>
-          </select>
+            label={
+              <>
+                <ArrowUpDown className="size-3.5" /> Sort by:
+              </>
+            }
+            value={params.sort}
+            options={CATALOG_SORTS.map((sort) => ({
+              value: sort.value,
+              label: sort.label,
+              href: href({ sort: sort.value }),
+            }))}
+          />
 
           {hasActiveFilters ? (
             <Button
-              type="button"
               variant="outline"
               size="sm"
-              onClick={resetFilters}
+              asChild
               className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground"
             >
-              Reset
+              <Link href={clearAll}>Reset</Link>
             </Button>
           ) : null}
         </div>
       </div>
 
+      {/* Attribute facets — only for a chosen category */}
+      {facets.length > 0 ? (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+            <SlidersHorizontal className="size-3.5" /> Refine (matches any
+            selected option):
+          </p>
+          <div className="space-y-2">
+            {facets.map((facet) => (
+              <div
+                key={facet.attributeId}
+                className="flex flex-wrap items-center gap-1.5"
+              >
+                <span className="text-xs font-medium mr-1">{facet.name}</span>
+                {facet.values.map((value) => {
+                  const isSelected = params.attributes.includes(value.id);
+                  return (
+                    <Link
+                      key={value.id}
+                      href={href({
+                        attributes: toggleAttribute(params.attributes, value.id),
+                      })}
+                      aria-pressed={isSelected}
+                      className={cn(
+                        'rounded-full border px-2.5 py-1 text-xs transition-colors',
+                        isSelected
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'hover:border-foreground/40',
+                      )}
+                    >
+                      {value.value}
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {/* Active Filter Indicators */}
       {hasActiveFilters ? (
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span>Active filters:</span>
-          {selectedCategory !== 'all' ? (
-            <Badge
-              variant="outline"
-              className="gap-1 py-0.5 text-xs font-normal"
-            >
-              Category:{' '}
-              {categories.find((c) => c.slug === selectedCategory)?.name ??
-                selectedCategory}
-              <button
-                type="button"
-                onClick={() => setSelectedCategory('all')}
-                className="hover:text-foreground"
-                aria-label="Remove category filter"
-              >
-                <X className="size-3" />
-              </button>
-            </Badge>
+          {params.category ? (
+            <FilterChip
+              label={`Category: ${
+                categories.find((category) => category.slug === params.category)
+                  ?.name ?? params.category
+              }`}
+              removeHref={href({ category: undefined, attributes: [] })}
+              removeLabel="Remove category filter"
+            />
           ) : null}
-          {quickFilter !== 'all' ? (
-            <Badge
-              variant="outline"
-              className="gap-1 py-0.5 text-xs font-normal"
-            >
-              Filter:{' '}
-              {quickFilter === 'trending' ? '🔥 Trending' : '✨ New Arrivals'}
-              <button
-                type="button"
-                onClick={() => setQuickFilter('all')}
-                className="hover:text-foreground"
-                aria-label="Remove quick filter"
-              >
-                <X className="size-3" />
-              </button>
-            </Badge>
+          {params.brand ? (
+            <FilterChip
+              label={`Brand: ${selectedBrand?.name ?? params.brand}`}
+              removeHref={href({ brand: undefined })}
+              removeLabel="Remove brand filter"
+            />
           ) : null}
-          {searchQuery ? (
-            <Badge
-              variant="outline"
-              className="gap-1 py-0.5 text-xs font-normal"
-            >
-              Search: &ldquo;{searchQuery}&rdquo;
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="hover:text-foreground"
-                aria-label="Clear search"
-              >
-                <X className="size-3" />
-              </button>
-            </Badge>
+          {params.attributes.map((id) => (
+            <FilterChip
+              key={id}
+              label={selectedValues.get(id) ?? 'Option'}
+              removeHref={href({ attributes: toggleAttribute(params.attributes, id) })}
+              removeLabel="Remove option filter"
+            />
+          ))}
+          {params.q ? (
+            <FilterChip
+              label={`Search: “${params.q}”`}
+              removeHref={href({ q: undefined })}
+              removeLabel="Clear search"
+            />
           ) : null}
-          {sortOption !== 'trending' ? (
-            <Badge
-              variant="outline"
-              className="gap-1 py-0.5 text-xs font-normal"
-            >
-              Sorted: {sortOption}
+          {params.sort !== DEFAULT_CATALOG_SORT ? (
+            <Badge variant="outline" className="gap-1 py-0.5 text-xs font-normal">
+              Sorted:{' '}
+              {CATALOG_SORTS.find((sort) => sort.value === params.sort)?.label}
             </Badge>
           ) : null}
         </div>
       ) : null}
 
       {/* Products Grid */}
-      {filteredProducts.length > 0 ? (
+      {products.length > 0 ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-          {filteredProducts.map((product, index) => {
-            const isTrend = isTrendingProduct(product);
-            const isNew = isNewArrival(product, index, products.length);
-            const badge = isTrend
-              ? '🔥 Trending'
-              : isNew
-                ? '✨ New'
-                : undefined;
-
-            return (
-              <ProductCard key={product.id} product={product} badge={badge} />
-            );
-          })}
+          {products.map((product) => (
+            <ProductCard
+              key={product.id}
+              product={product}
+              badge={bestSellers.has(product.id) ? '🔥 Best seller' : undefined}
+            />
+          ))}
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed p-12 text-center">
           <p className="text-base font-semibold">
-            No products match your criteria
+            {params.page > 1 && total > 0
+              ? 'This page is past the end of the results'
+              : 'No products match your criteria'}
           </p>
           <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-            Try adjusting your category selection, search terms, or active
-            filters.
+            {params.page > 1 && total > 0
+              ? 'Go back to the first page of results.'
+              : 'Try adjusting your category selection, search terms, or active filters.'}
           </p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={resetFilters}
-            className="mt-4"
-          >
-            Clear all filters
+          <Button variant="outline" size="sm" asChild className="mt-4">
+            <Link href={params.page > 1 && total > 0 ? href({}) : clearAll}>
+              {params.page > 1 && total > 0 ? 'First page' : 'Clear all filters'}
+            </Link>
           </Button>
         </div>
       )}
+
+      <Pagination
+        label="Product pages"
+        page={params.page}
+        total={total}
+        limit={pageSize}
+        hrefForPage={(page) => href({ page })}
+      />
     </div>
+  );
+}
+
+function FilterChip({
+  label,
+  removeHref,
+  removeLabel,
+}: {
+  label: string;
+  removeHref: string;
+  removeLabel: string;
+}) {
+  return (
+    <Badge variant="outline" className="gap-1 py-0.5 text-xs font-normal">
+      {label}
+      <Link
+        href={removeHref}
+        className="hover:text-foreground"
+        aria-label={removeLabel}
+      >
+        <X className="size-3" />
+      </Link>
+    </Badge>
   );
 }

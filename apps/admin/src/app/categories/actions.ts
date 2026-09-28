@@ -10,6 +10,7 @@ import {
 
 import { apiClient } from '@/lib/api';
 import { toFormState, type FormState } from '@/lib/form';
+import { guardAction } from '@/lib/session';
 
 function revalidateTaxonomy(): void {
   revalidatePath('/categories');
@@ -26,6 +27,11 @@ export async function createCategoryAction(
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   try {
     await backendCreateCategory(apiClient, {
       name: String(formData.get('name') ?? '').trim(),
@@ -45,6 +51,11 @@ export async function updateCategoryAction(
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   try {
     await backendUpdateCategory(apiClient, categoryId, {
       name: String(formData.get('name') ?? '').trim(),
@@ -62,6 +73,11 @@ export async function updateCategoryAction(
 export async function deleteCategoryAction(
   categoryId: string,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   try {
     await backendDeleteCategory(apiClient, categoryId);
   } catch (error) {

@@ -29,6 +29,23 @@ export class BackgroundJobsService {
     });
   }
 
+  /**
+   * Payloads of the jobs of `type` still waiting to run or running — for a
+   * sweep that enqueues per-item jobs to skip items already queued.
+   */
+  async listOpenPayloads(type: string): Promise<Prisma.JsonValue[]> {
+    const jobs = await this.prisma.backgroundJob.findMany({
+      where: {
+        type,
+        status: {
+          in: [BackgroundJobStatus.PENDING, BackgroundJobStatus.RUNNING],
+        },
+      },
+      select: { payload: true },
+    });
+    return jobs.map((job) => job.payload);
+  }
+
   async claimNext(
     staleAfterMs = 5 * 60 * 1_000,
   ): Promise<BackgroundJob | null> {

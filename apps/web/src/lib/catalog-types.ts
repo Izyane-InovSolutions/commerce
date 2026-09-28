@@ -44,10 +44,21 @@ export type ProductOffer = {
   shippingCost: { amount: number; currency: string } | null;
 };
 
+/** One attribute value a variant carries, e.g. `Colour: Black`. */
+export type VariantAttribute = {
+  attributeId: string;
+  attributeName: string;
+  valueId: string;
+  value: string;
+};
+
 export type ProductVariant = {
   id: string;
   skuCode: string;
   name: string | null;
+  /** Optional only because existing fixtures predate it; the API always
+   * sends it (empty for a product with a single, unnamed variant). */
+  attributes?: VariantAttribute[];
   offers: ProductOffer[];
 };
 
@@ -67,6 +78,21 @@ export type ProductMedia = {
   url: string;
 };
 
+export type Brand = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+};
+
+/** How many published ratings sit at each star value. */
+export type RatingHistogram = Record<1 | 2 | 3 | 4 | 5, number>;
+
+/** The API's own fallback when a returnable product sets no window of its
+ * own (`DEFAULT_RETURN_WINDOW_DAYS` in its returns module), counted from
+ * delivery. */
+export const DEFAULT_RETURN_WINDOW_DAYS = 30;
+
 export type Product = {
   id: string;
   name: string;
@@ -75,6 +101,16 @@ export type Product = {
   category: Category | null;
   media: ProductMedia[];
   variants: ProductVariant[];
+  // The fields below are always sent by the API; they're optional only so
+  // the many fixtures that predate them still type-check.
+  brand?: Brand | null;
+  isReturnable?: boolean;
+  /** Null means the platform default applies (see the help page). */
+  returnWindowDays?: number | null;
+  /** Null when the product has never been reviewed. */
+  averageRating?: number | null;
+  ratingCount?: number;
+  ratingHistogram?: RatingHistogram;
 };
 
 export type SuccessEnvelope<T> = {
@@ -90,7 +126,7 @@ export type Storefront = {
   description: string | null;
   averageRating: number | null;
   ratingCount: number;
-  ratingHistogram: Record<1 | 2 | 3 | 4 | 5, number>;
+  ratingHistogram: RatingHistogram;
 };
 
 /**
@@ -102,7 +138,15 @@ export type Storefront = {
  */
 export type StorefrontOffer = {
   id: string;
+  variantId: string;
   listingTitle: string | null;
+  seller: {
+    id: string;
+    storefrontSlug: string | null;
+    displayName: string | null;
+    description: string | null;
+  } | null;
+  isFirstParty: boolean;
   condition: 'NEW' | 'USED' | 'REFURBISHED';
   product: {
     id: string;
@@ -115,7 +159,9 @@ export type StorefrontOffer = {
 };
 
 /** This endpoint pages flat (`{items, total, page, limit}`), not nested
- * under `data`/`meta` like the product list — see `ProductListPage`. */
+ * under `data`/`meta` like the product list — see `ProductListPage`.
+ * `GET /catalog/variants/:id/offers` pages its offers the same way, and in
+ * the same shape. */
 export type StorefrontOfferPage = {
   items: StorefrontOffer[];
   total: number;
@@ -123,10 +169,44 @@ export type StorefrontOfferPage = {
   limit: number;
 };
 
-export type ProductListPage = {
-  data: Product[];
+/** The nested `{ data, meta }` page the product list, product reviews and
+ * storefront ratings all return (inside the usual envelope). */
+export type NestedPage<T> = {
+  data: T[];
   meta: { page: number; limit: number; total: number };
 };
+
+export type ProductListPage = NestedPage<Product>;
+
+/** A published product review — `GET /catalog/products/:slug/reviews`. */
+export type ProductReview = {
+  id: string;
+  rating: number;
+  title: string | null;
+  body: string;
+  /** Already shortened by the API (e.g. "Jane D."), never a full name. */
+  reviewerLabel: string;
+  verifiedPurchase: true;
+  createdAt: string;
+  updatedAt: string;
+  seller: { id: string; displayName: string | null } | null;
+};
+
+/** A published seller rating — `GET /storefronts/:slug/ratings`. */
+export type SellerRating = {
+  id: string;
+  rating: number;
+  comment: string | null;
+  reviewerLabel: string;
+  verifiedPurchase: true;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** The sort vocabulary both review lists accept (see the API's
+ * `review-sort.ts`) — a fixed set, not the generic `field:dir` form. */
+export const REVIEW_SORTS = ['newest', 'oldest', 'highest', 'lowest'] as const;
+export type ReviewSort = (typeof REVIEW_SORTS)[number];
 
 /**
  * The product's display price — amount in minor units, with its currency —
@@ -167,47 +247,79 @@ export function isInStock(product: Product): boolean {
 }
 
 /**
- * Currencies this product is priced in but is not being shown in.
- *
- * Lets a listing say "sold in ZMW" rather than "currently unavailable" when
- * the only thing missing is a price in the currency being browsed.
- */
-export function getOtherCurrencies(
-  product: Product,
-  currency: string,
-): string[] {
-  const found = new Set<string>();
-
-  for (const variant of product.variants) {
-    for (const offer of variant.offers) {
-      for (const code of offer.currencies) {
-        if (code !== currency) {
-          found.add(code);
-        }
-      }
-    }
-  }
-
-  return [...found].sort();
-}
-
-/**
- * The offer a shopper actually buys when they add this product to the cart.
+ * The offer a listing leads with — and what "Buy it now" buys.
  *
  * The cart is keyed by offer, not by product, so adding anything to it means
- * choosing one — and with no variant picker yet that choice is the first
- * variant's first priced offer, the same one the displayed price comes from.
- * Null when nothing on the product is currently sellable.
+ * choosing one. Cards and the buy-now flow have no variant picker, so theirs
+ * is the first variant's first priced offer, the same one the displayed price
+ * comes from; the product page lets a shopper choose otherwise (see
+ * `selectVariant`). Null when nothing on the product is currently sellable.
  */
 export function getPrimaryOffer(product: Product): ProductOffer | null {
   for (const variant of product.variants) {
-    const offer = variant.offers.find((candidate) => candidate.currentPrice);
+    const offer = getVariantOffer(variant);
     if (offer) {
       return offer;
     }
   }
 
   return null;
+}
+
+/** A variant's lead offer: its first priced one, in the API's order — the
+ * same rule `getPrimaryOffer` applies across the whole product. */
+export function getVariantOffer(variant: ProductVariant): ProductOffer | null {
+  return variant.offers.find((candidate) => candidate.currentPrice) ?? null;
+}
+
+/**
+ * The variant the product page is showing, and the offer it would sell.
+ *
+ * `requestedId` comes from the URL, so it may be stale or made up: anything
+ * that doesn't match one of the product's variants falls back to whichever
+ * variant `getPrimaryOffer` would pick, so an unadorned product link shows
+ * the same price the card it came from did. Null only for a product with no
+ * variants at all.
+ */
+export function selectVariant(
+  product: Product,
+  requestedId: string | undefined,
+): { variant: ProductVariant; offer: ProductOffer | null } | null {
+  const requested = requestedId
+    ? product.variants.find((variant) => variant.id === requestedId)
+    : undefined;
+  const variant =
+    requested ??
+    product.variants.find((candidate) => getVariantOffer(candidate)) ??
+    product.variants[0];
+
+  return variant ? { variant, offer: getVariantOffer(variant) } : null;
+}
+
+/**
+ * What a shopper sees on a variant's picker button: its own name, else its
+ * attribute values ("Black / Large"), else its SKU — every variant has one,
+ * so two can never render as the same blank button.
+ */
+export function getVariantLabel(variant: ProductVariant): string {
+  if (variant.name) {
+    return variant.name;
+  }
+
+  const values = (variant.attributes ?? []).map((entry) => entry.value);
+  return values.length > 0 ? values.join(' / ') : variant.skuCode;
+}
+
+/**
+ * The media in display order — primary first, then by position — for the
+ * product page's gallery. `getPrimaryImage` is always the first entry.
+ */
+export function getOrderedMedia(product: Product): ProductMedia[] {
+  return [...product.media].sort(
+    (left, right) =>
+      Number(right.isPrimary) - Number(left.isPrimary) ||
+      left.position - right.position,
+  );
 }
 
 /**
@@ -227,34 +339,73 @@ export function getPrimaryImage(product: Product): ProductMedia | null {
 }
 
 /**
- * Stands in for real trending data (view/purchase counts), which the API
- * doesn't track yet — deterministic per product, so the same product reads
- * as trending everywhere it's shown, rather than flickering per render.
+ * One line of the product page's "Other sellers" list.
  *
- * A plain function, not a component, so it can be called equally from a
- * server component (the homepage) and a client one (`StorefrontCatalog`'s
- * filters) — it must not live in a `'use client'` file, or Next treats the
- * export itself as a client reference and refuses to call it on the server.
+ * Built from two reads that each know half of it: the variant-offers
+ * comparison (`StorefrontOffer`) knows each listing's condition and title,
+ * while the product itself knows stock and flat shipping per offer.
  */
-export function isTrendingProduct(product: Product): boolean {
-  if (product.variants.length > 1) return true;
-  const hash = product.id
-    .split('')
-    .reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  return hash % 2 === 0;
-}
+export type OtherOffer = {
+  id: string;
+  seller: ProductOffer['seller'];
+  isFirstParty: boolean;
+  /** Null when only the product's own offer list could be read. */
+  condition: StorefrontOffer['condition'] | null;
+  listingTitle: string | null;
+  price: { amount: number; currency: string };
+  shippingCost: { amount: number; currency: string } | null;
+  inStock: boolean;
+};
 
-/** Same idea as `isTrendingProduct`, standing in for a real "recently
- * added" signal beyond `createdAt` — kept alongside it for the same
- * server/client-callable reason. */
-export function isNewArrival(
-  product: Product,
-  index: number,
-  total: number,
-): boolean {
-  if (index >= total - 6) return true;
-  const hash = product.slug
-    .split('')
-    .reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  return hash % 3 === 0;
+/**
+ * Every other priced offer for the selected variant, cheapest first.
+ *
+ * `comparison` is null when `GET /catalog/variants/:id/offers` couldn't be
+ * read; the product's own offers for the variant stand in then, just without
+ * condition or listing title. The offer already in the buy box is left out —
+ * it's the one the main price and "Add to cart" already describe.
+ */
+export function buildOtherOffers(
+  variant: ProductVariant,
+  comparison: StorefrontOffer[] | null,
+  selectedOfferId: string | null,
+): OtherOffer[] {
+  const known = new Map(variant.offers.map((offer) => [offer.id, offer]));
+  const rows: OtherOffer[] = [];
+
+  if (comparison) {
+    for (const entry of comparison) {
+      if (entry.id === selectedOfferId || !entry.currentPrice) continue;
+      // Only what the product read also lists: that read is what knows
+      // stock, and an offer it doesn't carry can't be vouched for.
+      const offer = known.get(entry.id);
+      if (!offer) continue;
+      rows.push({
+        id: entry.id,
+        seller: entry.seller ?? offer.seller ?? null,
+        isFirstParty: entry.isFirstParty,
+        condition: entry.condition,
+        listingTitle: entry.listingTitle,
+        price: entry.currentPrice,
+        shippingCost: offer.shippingCost,
+        inStock: offer.inStock,
+      });
+    }
+  } else {
+    for (const offer of variant.offers) {
+      if (offer.id === selectedOfferId || !offer.currentPrice) continue;
+      rows.push({
+        id: offer.id,
+        seller: offer.seller ?? null,
+        isFirstParty: offer.isFirstParty ?? !offer.seller,
+        condition: null,
+        listingTitle: null,
+        price: offer.currentPrice,
+        shippingCost: offer.shippingCost,
+        inStock: offer.inStock,
+      });
+    }
+  }
+
+  return rows.sort((left, right) => left.price.amount - right.price.amount);
 }

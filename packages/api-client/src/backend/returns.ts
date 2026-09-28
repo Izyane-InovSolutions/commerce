@@ -1,4 +1,5 @@
 import type {
+  BackendAdminCreateReturnInput,
   BackendApproveReturnInput,
   BackendCreateReturnInput,
   BackendItemsPage,
@@ -48,6 +49,16 @@ export const backendListReturns = (
   client.get<BackendItemsPage<BackendReturnRequest>>('/admin/returns', {
     query,
     cache: 'no-store',
+  });
+/** Opens a return for a customer, against their order. UUID v4 key. */
+export const backendAdminCreateReturn = (
+  client: ApiClient,
+  input: BackendAdminCreateReturnInput,
+  key: string,
+) =>
+  client.post<BackendReturnRequest>('/admin/returns', {
+    body: input,
+    idempotencyKey: key,
   });
 export const backendGetReturn = (client: ApiClient, id: string) =>
   client.get<BackendReturnRequest>(`/admin/returns/${id}`, {

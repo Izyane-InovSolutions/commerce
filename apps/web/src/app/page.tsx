@@ -4,6 +4,7 @@ import {
 } from '@/components/product-category-section';
 import { SideNav } from '@/components/side-nav';
 import { StorefrontCatalog } from '@/components/storefront-catalog';
+import { parseCatalogParams } from '@/lib/catalog-query';
 import { listCategories, listProducts } from '@/lib/catalog';
 import type { Category, Product } from '@/lib/catalog-types';
 
@@ -35,6 +36,7 @@ async function getHomepageSections(): Promise<ProductSection[]> {
 }
 
 export default async function HomePage() {
+  let total = 0;
   let allProducts: Product[] = [];
   let categories: Category[] = [];
   let sections: ProductSection[] = [];
@@ -42,11 +44,12 @@ export default async function HomePage() {
   try {
     const [productsResult, categoriesResult, sectionsResult] =
       await Promise.all([
-        listProducts({ limit: 100 }),
+        listProducts({ limit: 24 }),
         listCategories(),
         getHomepageSections(),
       ]);
     allProducts = productsResult.products;
+    total = productsResult.total;
     categories = categoriesResult;
     sections = sectionsResult;
   } catch {
@@ -65,9 +68,12 @@ export default async function HomePage() {
         {/* Interactive Storefront Catalog with Categories & Trending Filters */}
         <StorefrontCatalog
           products={allProducts}
+          total={total}
+          pageSize={24}
+          params={parseCatalogParams({})}
           categories={categories}
           title="All Products"
-          description="Browse by category, filter by trending or new arrivals, and sort by price."
+          description="Browse products by category, brand, name, or date added."
         />
 
         {/* Featured Category Spotlights */}

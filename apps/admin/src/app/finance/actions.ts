@@ -6,6 +6,7 @@ import { backendRecordPayout } from '@commerce/api-client';
 
 import { apiClient } from '@/lib/api';
 import { toFormState, type FormState } from '@/lib/form';
+import { guardAction } from '@/lib/session';
 import { toMinor } from '@/lib/money';
 
 /**
@@ -22,6 +23,11 @@ export async function recordPayoutAction(
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const denied = await guardAction(true);
+  if (denied) {
+    return denied;
+  }
+
   const amount = toMinor(String(formData.get('amount') ?? ''));
   if (!Number.isFinite(amount) || amount < 1) {
     return {

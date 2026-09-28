@@ -20,6 +20,7 @@ import type { BackendFulfillmentOrder } from '@commerce/contracts';
 
 import { apiClient } from '@/lib/api';
 import { toFormState, type FormState } from '@/lib/form';
+import { guardAction } from '@/lib/session';
 
 /*
  * Actions that take an `idempotencyKey` get it bound by the order page, which
@@ -55,6 +56,11 @@ export async function startPickingAction(
   orderId: string,
   fulfillmentOrderId: string,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   try {
     const fo = await backendGetFulfillment(apiClient, fulfillmentOrderId);
     await backendStartPicking(apiClient, fulfillmentOrderId, {
@@ -77,6 +83,11 @@ export async function completePickingAction(
   fulfillmentOrderId: string,
   idempotencyKey: string,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   try {
     let fo = await backendGetFulfillment(apiClient, fulfillmentOrderId);
     const lines = fo.lines
@@ -110,6 +121,11 @@ export async function startPackingAction(
   orderId: string,
   fulfillmentOrderId: string,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   try {
     const fo = await backendGetFulfillment(apiClient, fulfillmentOrderId);
     await backendStartPacking(apiClient, fulfillmentOrderId, {
@@ -128,6 +144,11 @@ export async function completePackingAction(
   fulfillmentOrderId: string,
   idempotencyKey: string,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   try {
     let fo = await backendGetFulfillment(apiClient, fulfillmentOrderId);
     const lines = fo.lines
@@ -167,6 +188,11 @@ export async function shipItAction(
   fulfillmentOrderId: string,
   idempotencyKey: string,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   try {
     const fo = await backendGetFulfillment(apiClient, fulfillmentOrderId);
     const lines = fo.lines
@@ -202,6 +228,11 @@ export async function dispatchAction(
   shipmentId: string,
   idempotencyKey: string,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   try {
     await backendDispatchFulfillment(
       apiClient,
@@ -225,6 +256,11 @@ export async function markShipmentDeliveredAction(
   orderId: string,
   shipmentId: string,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   try {
     await backendAddTrackingEvent(apiClient, shipmentId, {
       normalizedStatus: 'DELIVERED',

@@ -12,12 +12,21 @@ import {
   backendListShipments,
 } from '@commerce/api-client';
 import type {
+  BackendAddressSnapshot,
+  BackendAdminOrderItem,
   BackendFulfillmentOrder,
   BackendShipment,
 } from '@commerce/contracts';
 
 import { ApiErrorNotice } from '@/components/api-error-notice';
 import { FulfillmentActionButton } from '@/components/fulfillment-action-button';
+import {
+  CancelLinesForm,
+  RaiseExceptionForm,
+  ResolveExceptionForm,
+  type FulfillmentLineChoice,
+} from '@/components/fulfillment-exception-controls';
+import { OrderCancelControl } from '@/components/order-cancel-control';
 import { PageHeader } from '@/components/page-header';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
@@ -39,6 +48,13 @@ import {
 import { apiClient } from '@/lib/api';
 import type { FormState } from '@/lib/form';
 import { formatMinor } from '@/lib/money';
+import {
+  canCancelOrder,
+  cancellableQuantity,
+  customerName,
+  describeOrderItem,
+  isFulfillmentClosed,
+} from '@/lib/order-operations';
 import { requireAdmin } from '@/lib/session';
 
 import {
@@ -50,6 +66,12 @@ import {
   startPackingAction,
   startPickingAction,
 } from '../actions';
+import {
+  cancelFulfillmentLinesAction,
+  cancelOrderAction,
+  createFulfillmentExceptionAction,
+  resolveFulfillmentExceptionAction,
+} from '../operation-actions';
 
 /** Mirrors `isTerminalShipmentStatus` in the shipments service — a shipment
  * in one of these has nothing left for a manual override to do. */
@@ -78,6 +100,26 @@ function formatDate(value: string): string {
   });
 }
 
+const EXCEPTION_TYPE_LABELS: Record<string, string> = {
+  SHORT_PICK: 'Short pick',
+  DAMAGED: 'Damaged',
+  MISSING: 'Missing',
+};
+
+/** The address as a list of display lines, skipping the blank parts. */
+function addressLines(address: BackendAddressSnapshot): string[] {
+  return [
+    address.recipientName,
+    address.line1,
+    address.line2,
+    [address.city, address.region, address.postalCode]
+      .filter(Boolean)
+      .join(', '),
+    address.country,
+    address.phone,
+  ].filter((part): part is string => Boolean(part));
+}
+
 /** Whichever booked shipment for this fulfillment order hasn't dispatched yet. */
 function bookedShipment(
   shipments: BackendShipment[],
@@ -102,7 +144,11 @@ function nextAction(
   fo: BackendFulfillmentOrder,
   orderId: string,
   shipments: BackendShipment[],
-): { label: string; pendingLabel: string; action: () => Promise<FormState> } | null {
+): {
+  label: string;
+  pendingLabel: string;
+  action: () => Promise<FormState>;
+} | null {
   switch (fo.status) {
     case 'READY_TO_PICK':
       return {
@@ -115,12 +161,7 @@ function nextAction(
       return {
         label: 'Complete picking',
         pendingLabel: 'Recording…',
-        action: completePickingAction.bind(
-          null,
-          orderId,
-          fo.id,
-          randomUUID(),
-        ),
+        action: completePickingAction.bind(null, orderId, fo.id, randomUUID()),
       };
     case 'PICKED':
       return {
@@ -133,12 +174,7 @@ function nextAction(
       return {
         label: 'Complete packing',
         pendingLabel: 'Recording…',
-        action: completePackingAction.bind(
-          null,
-          orderId,
-          fo.id,
-          randomUUID(),
-        ),
+        action: completePackingAction.bind(null, orderId, fo.id, randomUUID()),
       };
     case 'PACKED':
     case 'PARTIALLY_DISPATCHED': {
@@ -169,7 +205,10 @@ function nextAction(
 export default async function AdminOrderPage({
   params,
 }: PageProps<'/orders/[id]'>) {
-  await requireAdmin();
+  const user = await requireAdmin();
+  // Resolving exceptions and cancelling fulfillment lines are ADMIN-only at
+  // the API; staff see exceptions but not the controls that settle them.
+  const isAdminRole = user.role === 'ADMIN';
   const { id } = await params;
 
   let order;
@@ -201,7 +240,10 @@ export default async function AdminOrderPage({
     if (fulfillments.length > 0) {
       const shipmentLists = await Promise.all(
         fulfillments.map((fo) =>
-          backendListShipments(apiClient, { fulfillmentOrderId: fo.id, limit: 20 }),
+          backendListShipments(apiClient, {
+            fulfillmentOrderId: fo.id,
+            limit: 20,
+          }),
         ),
       );
       shipments = shipmentLists.flatMap((page) => page.items);
@@ -210,6 +252,15 @@ export default async function AdminOrderPage({
     fulfillments = [];
     shipments = [];
   }
+
+  const itemsById = new Map<string, BackendAdminOrderItem>(
+    order.items.map((item) => [item.id, item]),
+  );
+  const lineLabel = (orderItemId: string): string => {
+    const { title, detail } = describeOrderItem(itemsById.get(orderItemId));
+    return detail ? `${title} (${detail})` : title;
+  };
+  const address = order.shippingAddress ?? null;
 
   return (
     <div className="space-y-8">
@@ -225,15 +276,79 @@ export default async function AdminOrderPage({
       <PageHeader
         title={`Order ${order.id.slice(0, 8)}`}
         description={`Placed ${formatDate(order.createdAt)}.`}
-        action={<StatusBadge status={order.status.toLowerCase()} />}
+        action={
+          <div className="flex flex-wrap items-start gap-3">
+            <StatusBadge status={order.status.toLowerCase()} />
+            {canCancelOrder(order.status) ? (
+              <OrderCancelControl
+                action={cancelOrderAction.bind(null, order.id)}
+              />
+            ) : null}
+          </div>
+        }
       />
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Customer</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            {order.customer ? (
+              <>
+                <p className="font-medium">{customerName(order.customer)}</p>
+                <p>
+                  <a
+                    href={`mailto:${order.customer.email}`}
+                    className="underline-offset-4 hover:underline"
+                  >
+                    {order.customer.email}
+                  </a>
+                </p>
+                {order.customer.phone ? (
+                  <p className="text-muted-foreground">
+                    {order.customer.phone}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-muted-foreground font-mono text-xs">
+                User {order.userId.slice(0, 8)}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Ship to</CardTitle>
+            <CardDescription>
+              The address as it was at checkout — later address-book edits
+              don&apos;t change it.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {address ? (
+              <address className="space-y-0.5 text-sm not-italic">
+                {addressLines(address).map((line, index) => (
+                  <p key={index}>{line}</p>
+                ))}
+              </address>
+            ) : (
+              <p className="text-muted-foreground text-sm">
+                No shipping address on this order.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader>
           <CardTitle>Items</CardTitle>
           <CardDescription>
-            Every line names its offer, not a product — the catalog is where
-            that resolves.
+            Product names are the catalog&apos;s current ones; prices are what
+            the customer paid.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -241,25 +356,44 @@ export default async function AdminOrderPage({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Offer</TableHead>
+                  <TableHead>Product</TableHead>
                   <TableHead className="text-right">Quantity</TableHead>
                   <TableHead className="text-right">Line total</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {order.items.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-mono text-xs">
-                      {item.offerId.slice(0, 8)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {item.quantity}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatMinor(item.lineTotal, item.currency)}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {order.items.map((item) => {
+                  const { title, detail } = describeOrderItem(item);
+                  return (
+                    <TableRow key={item.id}>
+                      <TableCell>
+                        <p className="font-medium">
+                          {item.product ? (
+                            <Link
+                              href={`/catalog/${item.product.id}`}
+                              className="underline-offset-4 hover:underline"
+                            >
+                              {title}
+                            </Link>
+                          ) : (
+                            title
+                          )}
+                        </p>
+                        {detail ? (
+                          <p className="text-muted-foreground text-xs">
+                            {detail}
+                          </p>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {item.quantity}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatMinor(item.lineTotal, item.currency)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
@@ -283,7 +417,8 @@ export default async function AdminOrderPage({
 
           {order.payment ? (
             <p className="text-muted-foreground text-sm">
-              Payment: <StatusBadge status={order.payment.status.toLowerCase()} />
+              Payment:{' '}
+              <StatusBadge status={order.payment.status.toLowerCase()} />
               {order.payment.failureReason
                 ? ` — ${order.payment.failureReason}`
                 : null}
@@ -312,6 +447,23 @@ export default async function AdminOrderPage({
               const foShipments = shipments.filter(
                 (shipment) => shipment.fulfillmentOrderId === fo.id,
               );
+              const closed = isFulfillmentClosed(fo.status);
+              const lineChoices: FulfillmentLineChoice[] = fo.lines.map(
+                (line) => ({
+                  id: line.id,
+                  label: lineLabel(line.orderItemId),
+                  remaining: cancellableQuantity(line),
+                }),
+              );
+              const cancellableLines = lineChoices.filter(
+                (line) => line.remaining > 0,
+              );
+              const openExceptions = fo.exceptions.filter(
+                (exception) => exception.status === 'OPEN',
+              );
+              const resolvedExceptions = fo.exceptions.filter(
+                (exception) => exception.status !== 'OPEN',
+              );
               return (
                 <div
                   key={fo.id}
@@ -323,7 +475,11 @@ export default async function AdminOrderPage({
                         {fo.fulfillmentNumber}
                       </p>
                       <p className="text-muted-foreground text-xs">
-                        Warehouse {fo.warehouseId.slice(0, 8)}
+                        {/* Typed as always set, but a seller-fulfilled
+                            order has no platform warehouse. */}
+                        {fo.warehouseId
+                          ? `Warehouse ${fo.warehouseId.slice(0, 8)}`
+                          : 'Seller-fulfilled'}
                       </p>
                     </div>
                     <StatusBadge status={fo.status.toLowerCase()} />
@@ -335,21 +491,82 @@ export default async function AdminOrderPage({
                     </p>
                   ) : null}
 
+                  {openExceptions.length > 0 ? (
+                    <ul className="space-y-3">
+                      {openExceptions.map((exception) => (
+                        <li
+                          key={exception.id}
+                          className="border-destructive/40 bg-destructive/5 space-y-2 rounded-lg border p-3"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                            <span className="font-medium">
+                              {EXCEPTION_TYPE_LABELS[exception.type] ??
+                                exception.type}{' '}
+                              · {exception.quantity} ×{' '}
+                              {lineLabel(
+                                fo.lines.find(
+                                  (line) =>
+                                    line.id === exception.fulfillmentLineId,
+                                )?.orderItemId ?? '',
+                              )}
+                            </span>
+                            <StatusBadge status="exception" />
+                          </div>
+                          <p className="text-muted-foreground text-sm">
+                            {exception.reason}
+                          </p>
+                          {isAdminRole ? (
+                            <ResolveExceptionForm
+                              idPrefix={exception.id}
+                              quantity={exception.quantity}
+                              action={resolveFulfillmentExceptionAction.bind(
+                                null,
+                                order.id,
+                                fo.id,
+                                exception.id,
+                              )}
+                            />
+                          ) : (
+                            <p className="text-muted-foreground text-xs">
+                              An administrator needs to resolve this before the
+                              shipment can continue.
+                            </p>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+
                   <ul className="space-y-1 text-sm">
                     {fo.lines.map((line) => (
                       <li
                         key={line.id}
-                        className="text-muted-foreground flex justify-between gap-3"
+                        className="text-muted-foreground flex flex-wrap justify-between gap-x-3"
                       >
-                        <span>Variant {line.variantId.slice(0, 8)}</span>
+                        <span className="text-foreground">
+                          {lineLabel(line.orderItemId)}
+                        </span>
                         <span>
                           {line.allocatedQuantity} allocated ·{' '}
                           {line.pickedQuantity} picked · {line.packedQuantity}{' '}
                           packed · {line.dispatchedQuantity} dispatched
+                          {line.cancelledQuantity > 0
+                            ? ` · ${line.cancelledQuantity} cancelled`
+                            : ''}
                         </span>
                       </li>
                     ))}
                   </ul>
+
+                  {resolvedExceptions.length > 0 ? (
+                    <p className="text-muted-foreground text-xs">
+                      {resolvedExceptions.length} resolved{' '}
+                      {resolvedExceptions.length === 1
+                        ? 'exception'
+                        : 'exceptions'}{' '}
+                      — see the fulfillment history for detail.
+                    </p>
+                  ) : null}
 
                   {foShipments.length > 0 ? (
                     <ul className="space-y-2 text-sm">
@@ -391,6 +608,36 @@ export default async function AdminOrderPage({
                       pendingLabel={next.pendingLabel}
                       variant="secondary"
                     />
+                  ) : null}
+
+                  {!closed ? (
+                    <div className="flex flex-wrap items-start gap-2 border-t pt-3">
+                      <RaiseExceptionForm
+                        idPrefix={fo.id}
+                        lines={lineChoices}
+                        action={createFulfillmentExceptionAction.bind(
+                          null,
+                          order.id,
+                          fo.id,
+                        )}
+                      />
+                      {/* The API only cancels against a platform warehouse —
+                          seller-fulfilled stock is cancelled by the seller. */}
+                      {isAdminRole &&
+                      fo.warehouseId &&
+                      cancellableLines.length > 0 ? (
+                        <CancelLinesForm
+                          idPrefix={fo.id}
+                          lines={cancellableLines}
+                          action={cancelFulfillmentLinesAction.bind(
+                            null,
+                            order.id,
+                            fo.id,
+                            randomUUID(),
+                          )}
+                        />
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
               );
