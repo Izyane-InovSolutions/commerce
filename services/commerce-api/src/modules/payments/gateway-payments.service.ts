@@ -56,7 +56,15 @@ export class GatewayPaymentsService {
    * status the platform does not recognise still changes nothing.
    */
   async status(userId: string, id: string): Promise<PaymentSnapshot> {
-    const payment = await this.own(userId, id);
+    return this.refreshStatus(await this.own(userId, id));
+  }
+
+  /**
+   * The status route's gateway check and settlement, minus the ownership
+   * check — shared with PaymentReconciliationHandler so a payment nobody
+   * polls is settled by exactly the same path as one the customer does.
+   */
+  async refreshStatus(payment: Payment): Promise<PaymentSnapshot> {
     const gateway = await this.gateway.checkStatus(this.reference(payment));
     // Verify the recorded settlement before applying any business effects.
     await this.snapshot(payment, gateway);
@@ -87,6 +95,43 @@ export class GatewayPaymentsService {
       payment,
       await this.gateway.cancelPayment(this.reference(payment), reason),
     );
+  }
+
+  /**
+   * Gives up on a payment the gateway never settled, for
+   * PaymentReconciliationHandler once the attempt has expired or outlived
+   * PAYMENT_RECONCILIATION_MAX_AGE_SECONDS.
+   *
+   * The gateway is asked to cancel first, so the charge can't still go
+   * through after the order is cancelled here. If its answer shows the
+   * payment settled in the meantime, that outcome is applied instead. A
+   * gateway that can't cancel (unsupported, or no longer knows the payment)
+   * doesn't block the local expiry; any other failure is left to the job's
+   * retry, since the charge's state is then unknown.
+   */
+  async expire(payment: Payment, reason: string): Promise<Payment> {
+    const reference = this.reference(payment);
+    try {
+      const gateway = await this.gateway.cancelPayment(reference, reason);
+      if (toProviderStatus(gateway.status) === 'SUCCEEDED') {
+        await this.snapshot(payment, gateway);
+        return this.payments.applyProviderResult(payment, {
+          providerReference: gateway.paymentId,
+          status: 'SUCCEEDED',
+          gatewayStatus: gateway.status,
+          amount: Math.round(gateway.amount * 100),
+          currency: gateway.currency,
+          reference: gateway.reference,
+        });
+      }
+    } catch (error) {
+      if (
+        !(error instanceof NotImplementedException) &&
+        !(error instanceof NotFoundException)
+      )
+        throw error;
+    }
+    return this.payments.expire(payment, reason);
   }
 
   async list(

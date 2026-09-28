@@ -50,14 +50,6 @@ export default async function CatalogPage({
           description="Products, variants, offers, and prices."
         />
         <ApiErrorNotice error={error} />
-        <p className="text-muted-foreground max-w-2xl text-sm text-pretty">
-          The admin product listing fails with a server error whenever any
-          product has media attached — the response includes the media asset,
-          whose <code className="font-mono">byteSize</code> is a{' '}
-          <code className="font-mono">BigInt</code> that cannot be serialised to
-          JSON. The public catalog read is unaffected because it maps media to a
-          smaller shape.
-        </p>
       </div>
     );
   }
@@ -93,6 +85,9 @@ export default async function CatalogPage({
           <div className="flex items-center gap-2">
             <Button variant="outline" asChild>
               <Link href="/catalog/submissions">Seller submissions</Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/catalog/attributes">Attributes</Link>
             </Button>
             <Button asChild>
               <Link href="/catalog/new">

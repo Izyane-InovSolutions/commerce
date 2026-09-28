@@ -226,6 +226,19 @@ export function OrdersFilterList({ orders }: { orders: OrderCard[] }) {
                     <span>Total</span>
                     <span>{formatMinor(order.total, order.currency)}</span>
                   </div>
+
+                  <div className="flex justify-end">
+                    {/* Its own page, for everything the quick-look modal
+                        leaves out; the click mustn't also open the modal. */}
+                    <Link
+                      href={`/orders/${order.id}`}
+                      onClick={(event) => event.stopPropagation()}
+                      onKeyDown={(event) => event.stopPropagation()}
+                      className="text-sm font-medium underline-offset-4 hover:underline"
+                    >
+                      View order details
+                    </Link>
+                  </div>
                 </CardContent>
               </Card>
             </li>

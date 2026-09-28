@@ -3,24 +3,51 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { BackButton } from '@/components/back-button';
+import { OtherSellers } from '@/components/other-sellers';
 import { ProductCard } from '@/components/product-card';
-import { ProductImage } from '@/components/product-image';
 import { ProductDetailActions } from '@/components/product-detail-actions';
+import { ProductGallery } from '@/components/product-gallery';
+import { Stars } from '@/components/rating-breakdown';
 import { RecordProductView } from '@/components/record-product-view';
+import { ReviewsSection } from '@/components/reviews-section';
+import { StoreCard } from '@/components/store-card';
+import { VariantPicker } from '@/components/variant-picker';
 import { addToCartAction } from '@/app/cart/actions';
 import { addToWishlistAction } from '@/app/wishlist/actions';
-import { getProductBySlug, listProducts } from '@/lib/catalog';
 import {
-  getDisplayPrice,
-  getOtherCurrencies,
+  getProductBySlug,
+  listProductReviews,
+  listProducts,
+  listVariantOffers,
+  getStorefront,
+} from '@/lib/catalog';
+import {
+  buildOtherOffers,
+  describeLeadRivals,
+  DEFAULT_RETURN_WINDOW_DAYS,
+  getOrderedMedia,
   getPrimaryImage,
-  getPrimaryOffer,
-  getShippingCost,
+  selectVariant,
+  type Product,
+  type StorefrontOffer,
+  getOfferSale,
 } from '@/lib/catalog-types';
 import { formatMinor } from '@/lib/currency';
 import { readCurrency } from '@/lib/currency-cookie';
+import {
+  hrefWithSearch,
+  parseReviewParams,
+  reviewSearchEntries,
+  type ReviewParams,
+} from '@/lib/review-query';
 
 type ProductDetailPageProps = PageProps<'/products/[slug]'>;
+
+const REVIEW_PAGE_SIZE = 10;
+/** Enough to list every seller of a variant in one go; the comparison is a
+ * short list in practice, not something to page through. */
+const OFFER_COMPARISON_LIMIT = 50;
+const REVIEW_PREFIX = 'review';
 
 export async function generateMetadata({
   params,
@@ -31,79 +58,141 @@ export async function generateMetadata({
   return { title: product?.name ?? 'Product' };
 }
 
+/** The variant's full offer comparison, or null when it can't be read —
+ * the "Other sellers" list then falls back to the product's own offers. */
+async function readVariantOffers(
+  variantId: string,
+): Promise<StorefrontOffer[] | null> {
+  try {
+    const page = await listVariantOffers(variantId, {
+      limit: OFFER_COMPARISON_LIMIT,
+    });
+    return page.items;
+  } catch {
+    return null;
+  }
+}
+
+async function readRelatedProducts(product: Product): Promise<Product[]> {
+  if (!product.category) {
+    return [];
+  }
+
+  try {
+    const { products } = await listProducts({
+      categorySlug: product.category.slug,
+      limit: 5,
+    });
+    return products
+      .filter((candidate) => candidate.slug !== product.slug)
+      .slice(0, 4);
+  } catch {
+    // A nice-to-have under the product itself — not worth failing the page.
+    return [];
+  }
+}
+
 export default async function ProductDetailPage({
   params,
+  searchParams,
 }: ProductDetailPageProps) {
   const { slug } = await params;
+  const search = await searchParams;
   const product = await getProductBySlug(slug);
 
   if (!product) {
     notFound();
   }
 
-  const currency = await readCurrency();
-  const price = getDisplayPrice(product);
-  const offer = getPrimaryOffer(product);
-  const shippingCost = getShippingCost(product);
+  const requestedVariant =
+    typeof search.variant === 'string' ? search.variant : undefined;
+  const selection = selectVariant(product, requestedVariant);
+  const variant = selection?.variant ?? null;
+  const offer = selection?.offer ?? null;
+  const price = offer?.currentPrice ?? null;
+  const sale = offer ? getOfferSale(offer) : null;
+  // The store's rating for the card; a store page that can't be read just
+  // leaves the card without it.
+  const storefront = offer?.seller?.storefrontSlug
+    ? await getStorefront(offer.seller.storefrontSlug).catch(() => null)
+    : null;
+  const shippingCost = offer?.shippingCost ?? null;
   const inStock = offer?.inStock ?? true;
-  const elsewhere = getOtherCurrencies(product, currency);
-  const relatedProducts = product.category
-    ? (
-        await listProducts({
-          categorySlug: product.category.slug,
-          limit: 5,
-        })
-      ).products
-        .filter((candidate) => candidate.slug !== product.slug)
-        .slice(0, 4)
+  const reviewParams = parseReviewParams(search, REVIEW_PREFIX);
+
+  const [currency, comparison, relatedProducts, reviews] = await Promise.all([
+    readCurrency(),
+    variant ? readVariantOffers(variant.id) : Promise.resolve(null),
+    readRelatedProducts(product),
+    listProductReviews(product.slug, {
+      page: reviewParams.page,
+      limit: REVIEW_PAGE_SIZE,
+      sort: reviewParams.sort,
+      rating: reviewParams.rating,
+    }).then(
+      (page) =>
+        ({
+          ok: true,
+          reviews: page.data,
+          total: page.meta.total,
+        }) as const,
+      (error: unknown) => ({ ok: false, error }) as const,
+    ),
+  ]);
+
+  const otherOffers = variant
+    ? buildOtherOffers(variant, comparison, offer?.id ?? null)
     : [];
+  const primaryImage = getPrimaryImage(product);
+  // Review links keep the chosen variant, so paging reviews doesn't reset
+  // the buy box.
+  const reviewHref = (review: ReviewParams) =>
+    hrefWithSearch(`/products/${product.slug}`, {
+      variant: requestedVariant,
+      ...reviewSearchEntries(review, REVIEW_PREFIX),
+    });
 
   return (
-    <div className="mx-auto max-w-4xl space-y-12 px-4 py-12">
+    <div className="space-y-12">
       <RecordProductView
         id={product.id}
         slug={product.slug}
         name={product.name}
-        imageUrl={getPrimaryImage(product)?.url ?? null}
+        imageUrl={primaryImage?.url ?? null}
         priceAmount={price?.amount ?? null}
         priceCurrency={price?.currency ?? null}
+        categorySlug={product.category?.slug ?? null}
       />
       <BackButton />
 
       <div className="grid gap-8 sm:grid-cols-2">
-        <ProductImage
-          src={getPrimaryImage(product)?.url ?? null}
-          alt={product.name}
-          sizes="(min-width: 640px) 50vw, 100vw"
-          className="aspect-square rounded-2xl"
-          iconClassName="size-16"
-        />
+        <ProductGallery media={getOrderedMedia(product)} alt={product.name} />
 
         <div className="space-y-4">
           <div className="space-y-1">
-            {product.category ? (
+            {product.category || product.brand ? (
               <p className="text-sm text-muted-foreground">
-                {product.category.name}
+                {[product.brand?.name, product.category?.name]
+                  .filter(Boolean)
+                  .join(' · ')}
               </p>
             ) : null}
             <h1 className="text-2xl font-semibold tracking-tight text-balance">
               {product.name}
             </h1>
-            {offer?.seller ? (
-              offer.seller.storefrontSlug ? (
-                <Link
-                  href={`/sellers/${offer.seller.storefrontSlug}`}
-                  className="text-muted-foreground block text-sm hover:underline"
-                >
-                  Sold by {offer.seller.displayName ?? 'a marketplace seller'}
-                </Link>
-              ) : (
-                <p className="text-muted-foreground text-sm">
-                  Sold by {offer.seller.displayName ?? 'a marketplace seller'}
-                </p>
-              )
+            {product.averageRating != null && product.ratingCount ? (
+              <a
+                href="#reviews"
+                className="text-muted-foreground flex items-center gap-1.5 text-sm hover:underline"
+              >
+                <Stars rating={product.averageRating} />
+                {product.averageRating.toFixed(1)} ({product.ratingCount}{' '}
+                {product.ratingCount === 1 ? 'review' : 'reviews'})
+              </a>
             ) : null}
           </div>
+
+          <StoreCard offer={offer} storefront={storefront} />
 
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -111,13 +200,49 @@ export default async function ProductDetailPage({
                 {price !== null
                   ? formatMinor(price.amount, price.currency)
                   : `Not sold in ${currency}`}
+                {sale ? (
+                  <span className="text-muted-foreground ml-2 text-base font-normal line-through">
+                    <span className="sr-only">was </span>
+                    {formatMinor(sale.was.amount, sale.was.currency)}
+                  </span>
+                ) : null}
               </p>
+              {sale ? (
+                <span className="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-semibold text-white">
+                  Save {sale.percentOff}%
+                </span>
+              ) : offer?.priceLead ? (
+                <span className="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-semibold text-white">
+                  Best price
+                </span>
+              ) : null}
               {price !== null && !inStock ? (
                 <span className="inline-flex items-center rounded-full bg-destructive/90 px-2.5 py-0.5 text-xs font-medium text-white">
                   Out of stock
                 </span>
               ) : null}
             </div>
+            {!sale && offer?.priceLead && price ? (
+              <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                {formatMinor(
+                  offer.priceLead.nextLowestPrice.amount - price.amount,
+                  price.currency,
+                )}{' '}
+                {describeLeadRivals(offer.priceLead.sellerCount)} of this
+                option.
+              </p>
+            ) : null}
+            {sale?.endsAt ? (
+              <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                Sale price until{' '}
+                {new Intl.DateTimeFormat('en-GB', {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+                  timeZone: 'Africa/Lusaka',
+                }).format(new Date(sale.endsAt))}
+              </p>
+            ) : null}
             {price !== null && shippingCost !== null ? (
               <p className="text-muted-foreground text-sm">
                 {shippingCost.amount === 0
@@ -125,13 +250,25 @@ export default async function ProductDetailPage({
                   : `+ ${formatMinor(shippingCost.amount, shippingCost.currency)} shipping`}
               </p>
             ) : null}
-            {price === null && elsewhere.length > 0 ? (
-              <p className="text-muted-foreground text-sm text-pretty">
-                Priced in {elsewhere.join(' and ')} — switch currency in the
-                header to buy it.
+            {product.isReturnable !== undefined ? (
+              <p className="text-muted-foreground text-sm">
+                {product.isReturnable
+                  ? `Returnable within ${product.returnWindowDays ?? DEFAULT_RETURN_WINDOW_DAYS} days of delivery.`
+                  : 'This item can’t be returned.'}{' '}
+                <Link href="/help#returns" className="underline">
+                  Returns policy
+                </Link>
               </p>
             ) : null}
           </div>
+
+          {variant ? (
+            <VariantPicker
+              slug={product.slug}
+              variants={product.variants}
+              selectedId={variant.id}
+            />
+          ) : null}
 
           {product.description ? (
             <p className="text-muted-foreground text-pretty">
@@ -140,15 +277,47 @@ export default async function ProductDetailPage({
           ) : null}
 
           <ProductDetailActions
+            // Remounted per offer, so a quantity or "added" notice from one
+            // variant doesn't carry over to another.
+            key={offer?.id ?? 'unavailable'}
             name={product.name}
             slug={product.slug}
             available={offer !== null}
             inStock={inStock}
+            canBuyNow={offer !== null}
+            variantId={variant?.id}
             addToCart={addToCartAction.bind(null, offer?.id ?? '')}
             addToWishlist={addToWishlistAction.bind(null, offer?.id ?? '')}
           />
         </div>
       </div>
+
+      <OtherSellers offers={otherOffers} addToCart={addToCartAction} />
+
+      <ReviewsSection
+        id="reviews"
+        title="Customer reviews"
+        summary={{
+          averageRating: product.averageRating ?? null,
+          ratingCount: product.ratingCount ?? 0,
+          histogram: product.ratingHistogram ?? {
+            1: 0,
+            2: 0,
+            3: 0,
+            4: 0,
+            5: 0,
+          },
+        }}
+        params={reviewParams}
+        result={reviews}
+        pageSize={REVIEW_PAGE_SIZE}
+        hrefFor={reviewHref}
+        emptyMessage={
+          reviewParams.rating
+            ? `No ${reviewParams.rating}-star reviews.`
+            : 'No reviews yet.'
+        }
+      />
 
       {relatedProducts.length > 0 ? (
         <section className="space-y-4">

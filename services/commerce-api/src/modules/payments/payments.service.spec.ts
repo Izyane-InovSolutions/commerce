@@ -1,6 +1,7 @@
 import { PaymentStatus, RefundCaseSource } from '@prisma/client';
 import { OrdersService } from '../orders/orders.service';
 import { PrismaService } from '../../database/prisma.service';
+import type { OutboxService } from '../../infrastructure/jobs/outbox.service';
 import { PaymentsService } from './payments.service';
 import { RefundCasesService } from './refund-cases.service';
 import type { InitializePaymentInput } from './payment-provider';
@@ -13,6 +14,7 @@ function buildPrisma(): {
   >;
   paymentEvent: Record<'create' | 'findUnique', jest.Mock>;
   refund: Record<'findUnique' | 'findUniqueOrThrow' | 'findMany', jest.Mock>;
+  order: Record<'findUniqueOrThrow', jest.Mock>;
   $transaction: jest.Mock;
 } {
   const p = {
@@ -27,6 +29,11 @@ function buildPrisma(): {
       findUnique: jest.fn(),
       findUniqueOrThrow: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
+    },
+    order: {
+      findUniqueOrThrow: jest
+        .fn()
+        .mockResolvedValue({ status: 'PENDING_PAYMENT', userId: 'buyer-1' }),
     },
     $transaction: jest.fn(),
   };
@@ -55,8 +62,13 @@ describe('PaymentsService', () => {
     applyRefund: jest.Mock;
   };
   let refundCasesService: { createCase: jest.Mock; reconcile: jest.Mock };
+  let outboxService: { record: jest.Mock };
   let service: PaymentsService;
   const payment = {
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  idempotencyKey: "test-payment",
+  failureReason: null,
     id: 'payment-1',
     orderId: 'order-1',
     provider: 'fake-provider',
@@ -109,11 +121,13 @@ describe('PaymentsService', () => {
       createCase: jest.fn(),
       reconcile: jest.fn(),
     };
+    outboxService = { record: jest.fn() };
     service = new PaymentsService(
       prisma as unknown as PrismaService,
       provider,
       ordersService as unknown as OrdersService,
       refundCasesService as unknown as RefundCasesService,
+      outboxService as unknown as OutboxService,
     );
     prisma.payment.findUnique.mockResolvedValue(payment);
     prisma.payment.findUniqueOrThrow.mockResolvedValue(payment);
@@ -455,6 +469,52 @@ describe('PaymentsService', () => {
       });
     });
 
+    it('records payment.failed when the failure is what cancelled the order', async () => {
+      getPaymentCall.mockResolvedValue({
+        providerReference: 'pay_123',
+        status: 'FAILED',
+        gatewayStatus: 'FAILED',
+        failureCode: 'DECLINED',
+      });
+
+      await service.reconcile('payment-1');
+
+      expect(outboxService.record).toHaveBeenCalledWith(
+        {
+          topic: 'payment.failed',
+          aggregateType: 'Payment',
+          aggregateId: 'payment-1',
+          payload: {
+            paymentId: 'payment-1',
+            orderId: 'order-1',
+            userId: 'buyer-1',
+            status: PaymentStatus.FAILED,
+            reason: 'DECLINED',
+          },
+        },
+        expect.anything(),
+      );
+    });
+
+    // The customer/staff cancel route emits its own order.cancelled; its
+    // follow-up payment cancellation must not add a second notice.
+    it('records nothing when the order was already cancelled', async () => {
+      prisma.order.findUniqueOrThrow.mockResolvedValue({
+        status: 'CANCELLED',
+        userId: 'buyer-1',
+      });
+      getPaymentCall.mockResolvedValue({
+        providerReference: 'pay_123',
+        status: 'CANCELLED',
+        gatewayStatus: 'ORDER_CANCELLED',
+      });
+
+      await service.reconcile('payment-1');
+
+      expect(ordersService.cancel).toHaveBeenCalled();
+      expect(outboxService.record).not.toHaveBeenCalled();
+    });
+
     // An unrecognised status must never be read as an outcome: the gateway
     // documents no enum, so guessing would either release goods for nothing
     // or cancel an order that is about to be paid.
@@ -492,6 +552,49 @@ describe('PaymentsService', () => {
       await service.reconcile('payment-1');
 
       expect(getPaymentCall).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('expire', () => {
+    const unsettled = {
+      ...payment,
+      status: PaymentStatus.PENDING,
+      failureReason: null,
+    };
+
+    beforeEach(() => {
+      prisma.payment.findUnique.mockResolvedValue(unsettled);
+      prisma.payment.findUniqueOrThrow.mockResolvedValue(unsettled);
+      prisma.paymentEvent.findUnique.mockResolvedValue(null);
+    });
+
+    it('cancels the order through the same event path as a gateway cancellation', async () => {
+      await service.expire(unsettled, 'Payment attempt expired');
+
+      expect(ordersService.cancel).toHaveBeenCalledWith(
+        'order-1',
+        expect.anything(),
+      );
+      expect(prisma.payment.update).toHaveBeenCalledWith({
+        where: { id: 'payment-1' },
+        data: {
+          status: PaymentStatus.CANCELLED,
+          failureReason: 'EXPIRED: Payment attempt expired',
+        },
+      });
+      expect(prisma.paymentEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          providerEventId: 'expiry:payment-1',
+          type: 'payment.expired',
+        }) as unknown,
+      });
+    });
+
+    it('is a no-op for a payment that has already settled', async () => {
+      await service.expire(payment, 'Payment attempt expired');
+
+      expect(ordersService.cancel).not.toHaveBeenCalled();
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
   });
 });

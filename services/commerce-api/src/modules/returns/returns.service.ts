@@ -567,6 +567,14 @@ export class ReturnsService {
       dto.lines.map((line) => line.returnItemId),
       'return item',
     );
+    // An empty receipt only makes sense as a closing one: it is how staff
+    // close out a return whose earlier receipts already covered everything
+    // (or everything that is ever going to arrive).
+    if (dto.lines.length === 0 && !dto.isClosing) {
+      throw new BadRequestException(
+        'A receipt must have at least one line unless it is a closing receipt',
+      );
+    }
     const requestHash = this.hashRequest({
       returnRequestId: id,
       warehouseId: dto.warehouseId,
@@ -633,6 +641,11 @@ export class ReturnsService {
               `Receipt quantity for return item ${item.id} exceeds its requested quantity`,
             );
         }
+        if (dto.lines.length === 0 && receivedByItem.size === 0) {
+          throw new ConflictException(
+            'Nothing has been received against this return yet',
+          );
+        }
 
         const receipt = await tx.returnReceipt.create({
           data: {
@@ -664,8 +677,15 @@ export class ReturnsService {
           },
         });
 
-        if (dto.isClosing) {
-          const totalsAfterReceipt = await this.sumReceivedByItem(tx, id);
+        // A receipt that brings every item to its full requested quantity
+        // closes the return too: no later receipt could be posted against it
+        // (each would exceed the requested quantity), so waiting for an
+        // explicit isClosing would leave it stuck in RECEIVING.
+        const totalsAfterReceipt = await this.sumReceivedByItem(tx, id);
+        const fullyReceived = returnRequest.items.every(
+          (item) => (totalsAfterReceipt.get(item.id) ?? 0) >= item.quantity,
+        );
+        if (dto.isClosing || fullyReceived) {
           for (const item of returnRequest.items) {
             const unreceived =
               item.quantity - (totalsAfterReceipt.get(item.id) ?? 0);
@@ -741,6 +761,13 @@ export class ReturnsService {
     actorRole: Role,
     idempotencyKey: string,
   ): Promise<ReturnRequestWithDetail> {
+    // Finalizing raises the refund, so it is as ADMIN-only here as on the
+    // finalize-inspection route; staff post non-final inspections.
+    if (dto.isFinal && actorRole !== Role.ADMIN) {
+      throw new ForbiddenException(
+        'Only an administrator may finalize an inspection',
+      );
+    }
     this.assertUniqueIds(
       dto.lines.map((line) => line.returnItemId),
       'return item',

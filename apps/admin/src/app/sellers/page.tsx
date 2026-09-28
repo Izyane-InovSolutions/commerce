@@ -37,7 +37,7 @@ function isStatus(value: string): value is BackendSellerStatus {
 export default async function SellersPage({
   searchParams,
 }: PageProps<'/sellers'>) {
-  await requireAdmin();
+  await requireAdmin(true);
   const params = await searchParams;
 
   const requested = Number(readParam(params, 'page') ?? '1');

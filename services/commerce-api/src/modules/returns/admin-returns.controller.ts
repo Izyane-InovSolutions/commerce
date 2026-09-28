@@ -34,7 +34,9 @@ function requireIdempotencyKey(key: string | undefined): string {
 
 /** Staff/admin reads and receipt/inspection posting are allowed by default;
  * routes restricted to admin only (create-on-behalf-of, approve/reject,
- * finalize, refund-case retry) override with their own `@Roles`. */
+ * finalize, refund-case retry) override with their own `@Roles`. Finalizing
+ * through `isFinal` on an inspection is ADMIN-only too (ReturnsService
+ * rejects it from staff), since it is the same step as finalize-inspection. */
 @Roles(Role.STAFF, Role.ADMIN)
 @Controller('admin/returns')
 export class AdminReturnsController {

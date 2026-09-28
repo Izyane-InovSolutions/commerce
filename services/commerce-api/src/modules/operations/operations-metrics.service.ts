@@ -120,13 +120,13 @@ export class OperationsMetricsService {
     // Orders/gross-sales are never warehouse-filtered here: an Order can
     // span multiple warehouses via its fulfillment orders.
     const orderAgg = await this.prisma.order.aggregate({
-      where: { createdAt: range, status: { in: PAID_ORDER_STATUSES } },
+      where: { currency: "ZMW", createdAt: range, status: { in: PAID_ORDER_STATUSES } },
       _count: { _all: true },
       _sum: { total: true },
     });
 
     const refundCases = await this.prisma.refundCase.findMany({
-      where: { status: RefundCaseStatus.SUCCEEDED, createdAt: range },
+      where: { currency: "ZMW", status: RefundCaseStatus.SUCCEEDED, createdAt: range },
       select: {
         amount: true,
         shippingAmount: true,
@@ -295,6 +295,7 @@ export class OperationsMetricsService {
         }),
         this.prisma.refundCase.aggregate({
           where: {
+            currency: "ZMW",
             source: RefundCaseSource.RETURN,
             status: RefundCaseStatus.SUCCEEDED,
             createdAt: range,

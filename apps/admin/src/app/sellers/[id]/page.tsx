@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ExternalLink } from 'lucide-react';
 
 import {
   ApiError,
@@ -10,12 +10,14 @@ import {
   backendListSellerLedger,
 } from '@commerce/api-client';
 import type {
+  BackendItemsPage,
   BackendLedgerEntry,
   BackendSellerBalance,
 } from '@commerce/contracts';
 
 import { ApiErrorNotice } from '@/components/api-error-notice';
 import { PageHeader } from '@/components/page-header';
+import { Pagination } from '@/components/pagination';
 import { PayoutForm } from '@/components/payout-form';
 import { SellerReviewForm } from '@/components/seller-review-form';
 import { StatusBadge } from '@/components/status-badge';
@@ -36,13 +38,16 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { apiClient } from '@/lib/api';
+import { BASE_PATH } from '@/lib/base-path';
 import { formatMinor } from '@/lib/money';
+import { readParam } from '@/lib/search-params';
 import { requireAdmin } from '@/lib/session';
 
 import { recordPayoutAction } from '../../finance/actions';
 import { reviewSellerAction } from '../actions';
+import { documentProblemMessage } from './documents/signed-url';
 
-const LEDGER_PREVIEW = 10;
+const LEDGER_PAGE_SIZE = 20;
 
 export async function generateMetadata({
   params,
@@ -65,9 +70,18 @@ function formatDate(value: string): string {
 
 export default async function SellerPage({
   params,
+  searchParams,
 }: PageProps<'/sellers/[id]'>) {
-  await requireAdmin();
+  await requireAdmin(true);
   const { id } = await params;
+  const query = await searchParams;
+
+  // `page` pages the ledger — the only list here long enough to need it.
+  const requested = Number(readParam(query, 'page') ?? '1');
+  const ledgerPage =
+    Number.isInteger(requested) && requested > 0 ? requested : 1;
+  // Set by the document route when it could not produce a link.
+  const documentProblem = documentProblemMessage(readParam(query, 'document'));
 
   let seller;
   try {
@@ -89,17 +103,23 @@ export default async function SellerPage({
   // are separate from the seller itself so a financials failure leaves the
   // review decision — the reason this page exists — still usable.
   let balance: BackendSellerBalance | null = null;
-  let ledger: BackendLedgerEntry[] = [];
+  let ledger: BackendItemsPage<BackendLedgerEntry> | null = null;
   try {
     const [balanceResult, ledgerResult] = await Promise.all([
       backendGetSellerBalance(apiClient, id),
-      backendListSellerLedger(apiClient, id, { limit: LEDGER_PREVIEW }),
+      backendListSellerLedger(apiClient, id, {
+        page: ledgerPage,
+        limit: LEDGER_PAGE_SIZE,
+      }),
     ]);
     balance = balanceResult;
-    ledger = ledgerResult.items;
+    ledger = ledgerResult;
   } catch {
     balance = null;
   }
+  const ledgerTotalPages = ledger
+    ? Math.max(1, Math.ceil(ledger.total / ledger.limit))
+    : 1;
 
   const details: { label: string; value: string }[] = [
     { label: 'Registration number', value: seller.registrationNumber },
@@ -150,16 +170,41 @@ export default async function SellerPage({
               ))}
             </dl>
 
-            <div>
+            <div id="documents" className="space-y-1.5">
               <p className="text-muted-foreground text-xs">Documents</p>
+              {documentProblem ? (
+                <p
+                  role="alert"
+                  className="border-destructive/40 bg-destructive/10 text-destructive rounded-lg border px-3 py-2 text-sm"
+                >
+                  {documentProblem}
+                </p>
+              ) : null}
               {seller.documents.length === 0 ? (
                 <p>None uploaded.</p>
               ) : (
-                <p>
-                  {seller.documents.length} uploaded. Each is a private media
-                  asset — open one through the API&apos;s signed-URL endpoint
-                  rather than by id.
-                </p>
+                <ul className="space-y-1">
+                  {seller.documents.map((document, index) => (
+                    <li key={document.mediaAssetId}>
+                      {/* A plain anchor, not <Link>: the route answers with a
+                          redirect to a freshly signed URL, and prefetching it
+                          would sign (and audit) a view nobody made. */}
+                      <a
+                        href={`${BASE_PATH}/sellers/${seller.id}/documents/${document.mediaAssetId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 font-medium hover:underline"
+                      >
+                        Document {index + 1}
+                        <ExternalLink className="size-3.5" aria-hidden />
+                      </a>
+                      <span className="text-muted-foreground">
+                        {' '}
+                        — uploaded {formatDate(document.createdAt)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
 
@@ -215,7 +260,19 @@ export default async function SellerPage({
             </p>
           ) : (
             <>
-              {ledger.length === 0 ? (
+              {ledger !== null &&
+              ledger.items.length === 0 &&
+              ledger.total > 0 ? (
+                <p className="text-muted-foreground text-sm">
+                  This page is past the end of the ledger.{' '}
+                  <Link
+                    href={`/sellers/${seller.id}`}
+                    className="font-medium hover:underline"
+                  >
+                    Back to the latest entries
+                  </Link>
+                </p>
+              ) : ledger === null || ledger.items.length === 0 ? (
                 <p className="text-muted-foreground text-sm">
                   No ledger entries yet — nothing has been sold, refunded, or
                   paid out.
@@ -233,7 +290,7 @@ export default async function SellerPage({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {ledger.map((entry) => (
+                      {ledger.items.map((entry) => (
                         <TableRow key={entry.id}>
                           <TableCell className="text-muted-foreground">
                             {formatDate(entry.createdAt)}
@@ -259,6 +316,19 @@ export default async function SellerPage({
                   </Table>
                 </div>
               )}
+
+              {ledger ? (
+                <Pagination
+                  pathname={`/sellers/${seller.id}`}
+                  // A document problem is a one-off notice, not state to
+                  // carry from page to page.
+                  params={{ ...query, document: undefined }}
+                  page={ledger.page}
+                  pageSize={ledger.limit}
+                  total={ledger.total}
+                  totalPages={ledgerTotalPages}
+                />
+              ) : null}
 
               <div className="space-y-3 border-t pt-6">
                 <div>

@@ -1,3 +1,5 @@
+import { PaymentReconciliationHandler } from './jobs/payment-reconciliation.handler';
+import { PaymentReconciliationScheduler } from './jobs/payment-reconciliation.scheduler';
 import { UsersModule } from '../users/users.module';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -56,9 +58,12 @@ export function resolvePaymentProvider(
     { provide: FX_RATE_PROVIDER, useExisting: ExchangeRateApiProvider },
     FxRatesService,
     FxRatesRefreshScheduler,
+    PaymentReconciliationHandler,
+    PaymentReconciliationScheduler,
   ],
   exports: [
     PAYMENT_PROVIDER,
+    PaymentReconciliationHandler,
     PaymentsService,
     RefundCasesService,
     FulfillmentCancellationRefundHandler,

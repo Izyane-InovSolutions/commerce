@@ -10,6 +10,7 @@ import {
 
 import { apiClient } from '@/lib/api';
 import { toFormState, type FormState } from '@/lib/form';
+import { guardAction } from '@/lib/session';
 
 function revalidateTaxonomy(): void {
   revalidatePath('/brands');
@@ -20,6 +21,11 @@ export async function createBrandAction(
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   try {
     await backendCreateBrand(apiClient, {
       name: String(formData.get('name') ?? '').trim(),
@@ -38,6 +44,11 @@ export async function updateBrandAction(
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   try {
     await backendUpdateBrand(apiClient, brandId, {
       name: String(formData.get('name') ?? '').trim(),
@@ -52,6 +63,11 @@ export async function updateBrandAction(
 }
 
 export async function deleteBrandAction(brandId: string): Promise<FormState> {
+  const denied = await guardAction();
+  if (denied) {
+    return denied;
+  }
+
   try {
     await backendDeleteBrand(apiClient, brandId);
   } catch (error) {

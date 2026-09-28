@@ -2,7 +2,11 @@
 
 import { useActionState, useState, type ChangeEvent } from 'react';
 
-import type { BackendBrand, BackendCategory } from '@commerce/contracts';
+import type {
+  BackendBrand,
+  BackendCategory,
+  BackendCategoryAttribute,
+} from '@commerce/contracts';
 
 import { FieldError } from '@/components/field-error';
 import { FormError } from '@/components/form-error';
@@ -29,16 +33,29 @@ export function SubmitProductForm({
   categories,
   submit,
   uploadImage,
+  loadCategoryAttributes,
 }: {
   brands: BackendBrand[];
   categories: BackendCategory[];
   submit: (state: FormState, formData: FormData) => Promise<FormState>;
   uploadImage: (formData: FormData) => Promise<UploadImageResult>;
+  loadCategoryAttributes: (slug: string) => Promise<BackendCategoryAttribute[]>;
 }) {
   const [state, formAction] = useActionState(submit, idleFormState);
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [attributes, setAttributes] = useState<BackendCategoryAttribute[]>([]);
+
+  async function handleCategory(
+    event: ChangeEvent<HTMLSelectElement>,
+  ): Promise<void> {
+    const category = categories.find(
+      (entry) => entry.id === event.target.value,
+    );
+    setAttributes([]);
+    if (category) setAttributes(await loadCategoryAttributes(category.slug));
+  }
 
   async function handleFile(event: ChangeEvent<HTMLInputElement>): Promise<void> {
     const file = event.target.files?.[0];
@@ -119,6 +136,7 @@ export function SubmitProductForm({
           <SelectField
             id="submit-category"
             name="categoryId"
+            onChange={handleCategory}
             placeholder="No category"
             options={categories.map((category) => ({
               value: category.id,
@@ -172,6 +190,32 @@ export function SubmitProductForm({
             <Label htmlFor="submit-variant-name">Variant name</Label>
             <Input id="submit-variant-name" name="variantName" placeholder="Optional" />
           </div>
+          {attributes
+            .filter((attribute) => attribute.values.length > 0)
+            .map((attribute) => (
+              <div key={attribute.attributeId} className="space-y-1.5">
+                <Label htmlFor={`submit-attr-${attribute.attributeId}`}>
+                  {attribute.name}
+                  {attribute.isRequired ? null : (
+                    <span className="text-muted-foreground font-normal">
+                      {' '}
+                      (optional)
+                    </span>
+                  )}
+                </Label>
+                <SelectField
+                  id={`submit-attr-${attribute.attributeId}`}
+                  name="attributeValueIds"
+                  required={attribute.isRequired}
+                  placeholder="Choose…"
+                  options={attribute.values.map((value) => ({
+                    value: value.id,
+                    label: value.value,
+                  }))}
+                  className="w-full"
+                />
+              </div>
+            ))}
         </div>
       </div>
 

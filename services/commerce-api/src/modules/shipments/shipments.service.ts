@@ -644,6 +644,24 @@ export class ShipmentsService {
           version: { increment: 1 },
         },
       });
+      // Written in the same transaction as the status change, so the
+      // customer's "delivered" notice fires exactly when (and only if) the
+      // projection lands — whichever source (carrier, admin, seller) got it there.
+      if (newStatus === ShipmentStatus.DELIVERED) {
+        await this.outboxService.record(
+          {
+            topic: 'shipment.delivered',
+            aggregateType: 'Shipment',
+            aggregateId: shipmentId,
+            payload: {
+              shipmentId,
+              orderId: shipment.orderId,
+              deliveredAt: input.occurredAt.toISOString(),
+            },
+          },
+          tx,
+        );
+      }
     }
 
     return event;

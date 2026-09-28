@@ -174,4 +174,32 @@ describe('Returns integrity (integration, real Postgres)', () => {
       }),
     ).rejects.toMatchObject({ code: 'P2002' });
   });
+
+  it('moves to RECEIVED once receipts cover every requested unit, without isClosing', async () => {
+    // One of the two units was received above; this receipt brings it to 2.
+    const received = await service.postReceipt(
+      returnRequestId,
+      { warehouseId, lines: [{ returnItemId, quantity: 1 }] },
+      userId,
+      Role.ADMIN,
+      randomUUID(),
+    );
+    expect(received.status).toBe(ReturnStatus.RECEIVED);
+    // Nothing was left unreceived, so nothing was released.
+    expect(
+      await prisma.returnItemAllocation.count({
+        where: { returnItemId, releasedQuantity: { gt: 0 } },
+      }),
+    ).toBe(0);
+    // Receiving is over: even an empty closing receipt is refused now.
+    await expect(
+      service.postReceipt(
+        returnRequestId,
+        { warehouseId, lines: [], isClosing: true },
+        userId,
+        Role.ADMIN,
+        randomUUID(),
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
 });

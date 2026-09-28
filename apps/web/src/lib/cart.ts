@@ -1,8 +1,6 @@
 import { ApiError } from '@commerce/api-client';
 
 import { apiClient } from './api';
-import { listProducts } from './catalog';
-import { getPrimaryImage } from './catalog-types';
 import type { SuccessEnvelope } from './catalog-types';
 import { readCurrency } from './currency-cookie';
 import type { AddItemResponse, CartView, PublicOffer } from './commerce-types';
@@ -97,17 +95,22 @@ export async function removeCartItem(itemId: string): Promise<CartView> {
   return response.data;
 }
 
+/** How folding a guest cart into an account went — `none` when there was
+ * no guest cart to fold. */
+export type CartMergeOutcome = 'merged' | 'none' | 'failed';
+
 /**
  * Folds a guest cart into the signed-in visitor's own, after they sign in.
  *
  * Merging is the one cart call that requires a real account, so a failure
  * here is not worth failing a sign-in over: the guest cart is left alone and
- * the visitor still lands signed in.
+ * the visitor still lands signed in. The outcome is returned rather than
+ * swallowed so the caller can tell them, and offer to try again.
  */
-export async function mergeGuestCart(): Promise<void> {
+export async function mergeGuestCart(): Promise<CartMergeOutcome> {
   const token = await readGuestToken();
   if (!token) {
-    return;
+    return 'none';
   }
 
   try {
@@ -115,8 +118,11 @@ export async function mergeGuestCart(): Promise<void> {
       query: await currencyQuery(),
       headers: { [GUEST_TOKEN_HEADER]: token },
     });
+    return 'merged';
   } catch {
-    // Nothing to do: the visitor keeps whatever their own cart already held.
+    // The visitor keeps whatever their own cart already held; the guest
+    // cart is still there to retry with.
+    return 'failed';
   }
 }
 
@@ -130,16 +136,16 @@ export type OfferLabel = {
   name: string;
   slug: string | null;
   imageUrl: string | null;
+  /** The storefront behind the offer; null for the platform's own. */
+  sellerName?: string | null;
 };
 
-const UNKNOWN_OFFER: OfferLabel = {
+export const UNKNOWN_OFFER: OfferLabel = {
   name: 'Item no longer listed',
   slug: null,
   imageUrl: null,
+  sellerName: null,
 };
-
-/** One page of the catalog is enough to name what a cart usually holds. */
-const CATALOG_INDEX_LIMIT = 100;
 
 async function readPublicOffer(
   offerId: string,
@@ -160,18 +166,35 @@ async function readPublicOffer(
 }
 
 /**
+ * The label for one resolved offer.
+ *
+ * A seller's own `listingTitle` wins, since it is what they sell the item
+ * as; otherwise the platform product's name, which the by-id offer lookup
+ * carries alongside the offer. An offer the API no longer serves publicly
+ * (unpublished, or its seller suspended) comes back null and is labelled as
+ * such rather than guessed at.
+ */
+export function labelFromOffer(offer: PublicOffer | null): OfferLabel {
+  if (!offer) {
+    return UNKNOWN_OFFER;
+  }
+
+  return {
+    name: offer.listingTitle ?? offer.product?.name ?? 'Catalog item',
+    slug: offer.product?.slug ?? null,
+    imageUrl: offer.product?.image?.url ?? null,
+    sellerName: offer.seller?.displayName ?? null,
+  };
+}
+
+/**
  * Names cart, wishlist, and order lines.
  *
- * Every one of them carries an offer id and nothing else, and the offer only
- * carries `listingTitle` — which a seller sets and the platform's own offers
- * leave null. So for a first-party offer the name has to come from the
- * catalog, indexed by variant, since the API exposes no way to go from an
- * offer or variant back to its product directly.
- *
- * That index is one page deep: a line pointing at a product beyond the first
- * hundred falls back to a generic label rather than costing a second round of
- * requests. Widening it means paging the catalog, or an endpoint that returns
- * a product for a variant.
+ * Every one of them carries an offer id and nothing else, so each distinct
+ * offer is looked up once — which is also what names a first-party line,
+ * whose offer has no `listingTitle` of its own: the lookup returns the
+ * product it lists against. One request per distinct offer, all in parallel,
+ * and cached briefly, since a cart is only ever a handful of them.
  */
 export async function labelOffers(
   offerIds: string[],
@@ -186,50 +209,10 @@ export async function labelOffers(
     unique.map((offerId) => readPublicOffer(offerId, currency)),
   );
 
-  // Worth the read whenever a line resolved at all: it is where both the
-  // first-party names and every thumbnail come from.
-  const byVariant = offers.some((offer) => offer !== null)
-    ? await indexCatalogByVariant()
-    : new Map<string, OfferLabel>();
-
   return new Map(
-    unique.map((offerId, index) => {
-      const offer = offers[index];
-      if (!offer) {
-        return [offerId, UNKNOWN_OFFER];
-      }
-
-      const fromCatalog = byVariant.get(offer.variantId);
-      return [
-        offerId,
-        {
-          name: offer.listingTitle ?? fromCatalog?.name ?? 'Catalog item',
-          slug: fromCatalog?.slug ?? null,
-          imageUrl: fromCatalog?.imageUrl ?? null,
-        },
-      ];
-    }),
+    unique.map((offerId, index) => [
+      offerId,
+      labelFromOffer(offers[index] ?? null),
+    ]),
   );
-}
-
-async function indexCatalogByVariant(): Promise<Map<string, OfferLabel>> {
-  const index = new Map<string, OfferLabel>();
-
-  try {
-    const { products } = await listProducts({ limit: CATALOG_INDEX_LIMIT });
-    for (const product of products) {
-      const image = getPrimaryImage(product);
-      for (const variant of product.variants) {
-        index.set(variant.id, {
-          name: product.name,
-          slug: product.slug,
-          imageUrl: image?.url ?? null,
-        });
-      }
-    }
-  } catch {
-    // Names are a convenience; a failure here costs labels, not the page.
-  }
-
-  return index;
 }

@@ -1,3 +1,5 @@
+import { ApiError } from '@commerce/api-client';
+
 import { apiClient } from './api';
 import type { SuccessEnvelope } from './catalog-types';
 import type {
@@ -17,6 +19,46 @@ export async function listOrders(): Promise<Order[]> {
   return response.data;
 }
 
+/** One of the caller's own orders; 404s (from the API) for anyone else's. */
+export async function getOrder(orderId: string): Promise<Order> {
+  const response = await apiClient.get<SuccessEnvelope<Order>>(
+    `/orders/${encodeURIComponent(orderId)}`,
+    { cache: 'no-store' },
+  );
+  return response.data;
+}
+
+/**
+ * Cancels an order that has not been paid for yet. The API refuses (409,
+ * with a message worth showing) once payment has gone through — from then on
+ * it is a return, not a cancellation.
+ */
+export async function cancelOrder(orderId: string): Promise<Order> {
+  const response = await apiClient.post<SuccessEnvelope<Order>>(
+    `/orders/${encodeURIComponent(orderId)}/cancel`,
+  );
+  return response.data;
+}
+
+/**
+ * Asks the gateway to stop a payment that is still waiting — a mobile money
+ * prompt the shopper no longer means to approve, say — then reconciles it,
+ * since the cancel call only reports the gateway's answer and does not apply
+ * it to the order by itself.
+ */
+export async function cancelPayment(paymentId: string): Promise<void> {
+  await apiClient.post(`/payments/${paymentId}/cancel`, {
+    // The API requires a reason (3–500 characters) for its audit trail.
+    body: { reason: 'Cancelled by the customer from the storefront' },
+  });
+
+  try {
+    await apiClient.post(`/payments/${paymentId}/status`);
+  } catch {
+    // Best-effort, like every reconcile here: the next page view retries.
+  }
+}
+
 /**
  * The shipping timeline for one order — every shipment raised against it,
  * each with its own tracking events from booking through to delivery.
@@ -26,7 +68,7 @@ export async function getOrderShipments(
   orderId: string,
 ): Promise<OrderShipment[]> {
   const response = await apiClient.get<SuccessEnvelope<OrderShipment[]>>(
-    `/orders/${orderId}/shipments`,
+    `/orders/${encodeURIComponent(orderId)}/shipments`,
     { cache: 'no-store' },
   );
   return response.data;
@@ -226,4 +268,34 @@ export async function checkoutOffer(
     },
   );
   return response.data;
+}
+
+/**
+ * One order for a page about it, reconciled with the gateway first when its
+ * payment is still pending — the same "ask on the customer's behalf" the
+ * orders list does, so a detail or confirmation page polled by
+ * `OrderStatusPoller` moves on as soon as the gateway has.
+ *
+ * Null when it is not the caller's (the API's 404), or the id is not even a
+ * UUID (its 400) — both are "no such order" to the person looking.
+ */
+export async function loadOwnOrder(orderId: string): Promise<Order | null> {
+  let order: Order;
+  try {
+    order = await getOrder(orderId);
+  } catch (error) {
+    if (
+      error instanceof ApiError &&
+      (error.status === 404 || error.status === 400)
+    ) {
+      return null;
+    }
+    throw error;
+  }
+
+  if (await reconcileOrderPayments([order])) {
+    order = await getOrder(orderId);
+  }
+
+  return order;
 }

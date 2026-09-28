@@ -3,6 +3,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 
 import { BackgroundJobsService } from './background-jobs.service';
 import { JobWorkerService } from './job-worker.service';
+import { OutboxDispatcherService } from './outbox-dispatcher.service';
 import { OutboxService } from './outbox.service';
 
 @Global()
@@ -14,7 +15,17 @@ import { OutboxService } from './outbox.service';
       timeouts: process.env.SCHEDULED_WORKERS_ENABLED !== 'false',
     }),
   ],
-  providers: [BackgroundJobsService, OutboxService, JobWorkerService],
-  exports: [BackgroundJobsService, OutboxService, JobWorkerService],
+  providers: [
+    BackgroundJobsService,
+    OutboxService,
+    JobWorkerService,
+    OutboxDispatcherService,
+  ],
+  exports: [
+    BackgroundJobsService,
+    OutboxService,
+    JobWorkerService,
+    OutboxDispatcherService,
+  ],
 })
 export class JobsModule {}

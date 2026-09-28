@@ -12,7 +12,7 @@ Statuses: implemented (verification pending), verified (record exact evidence), 
 | Server prices, immutable order snapshots, atomic stock, verified payment | checkout, inventory, orders, payments modules                 | Implemented; financial integration/hardening deferred                   |
 | Auth, ownership, audit, PII, idempotency                                 | common/auth; auth/audit modules; infrastructure/logging       | Implemented; endpoint-by-endpoint negative-path audit pending           |
 | Background jobs and outbox                                               | infrastructure/jobs                                           | Implemented; crash/replay tests and operational evidence pending        |
-| Email/SMS/push/in-app notifications                                      | No delivery module yet                                        | Deferred; password-reset delivery explicitly deferred                   |
+| Email/SMS/push/in-app notifications                                      | modules/notifications (outbox subscribers, in-app feed, log/SMTP email, log SMS) | Implemented (verification pending); SMS/push vendors not wired; password-reset delivery explicitly deferred |
 | Search and rebuildable projections                                       | products module; reviews aggregate script                     | Partial; advanced indexing/rebuild verification pending                 |
 | Logging, metrics, tracing, errors, health                                | infrastructure/logging; infrastructure/metrics; health        | Partial; tracing/error reporting and deployment verification pending    |
 | Environments, CI/CD, secrets, backup/restore, storage                    | docs/backend-development.md; infrastructure/storage           | Release operations and restore evidence pending; do not assume deployed |
@@ -130,7 +130,7 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 Source: https://github.com/Izyane-InovSolutions/commerce/issues/13
 
-Implementation evidence: `services/commerce-api/src/infrastructure`.
+Implementation evidence: `services/commerce-api/src/infrastructure`. Note: the implementation is PostgreSQL-backed (a `CacheEntry` table for caching and a Postgres job queue), not Redis; the Redis-specific rows below describe the issue as written and cannot be verified against this code.
 
 Test evidence: co-located unit tests and services/commerce-api/test; criterion-level verification pending.
 
@@ -803,7 +803,7 @@ Test evidence: none yet; add unit, PostgreSQL and HTTP acceptance tests with imp
 
 Source: https://github.com/Izyane-InovSolutions/commerce/issues/50
 
-Implementation evidence: not implemented; future milestone.
+Implementation evidence: `services/commerce-api/src/modules/shipments` has the provider interface, registry, webhook ingestion route and tracking poller; the only registered provider is `ManualCarrierProvider`, so no real courier/3PL is integrated yet.
 
 Test evidence: none yet; add unit, PostgreSQL and HTTP acceptance tests with implementation.
 

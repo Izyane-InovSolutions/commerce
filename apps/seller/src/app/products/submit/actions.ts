@@ -5,11 +5,16 @@ import { redirect } from 'next/navigation';
 import {
   backendAddSellerProductVariant,
   backendAttachSellerProductMedia,
+  backendListPublicCategoryAttributes,
   backendReserveUpload,
   backendSubmitProduct,
   backendUploadMediaContent,
 } from '@commerce/api-client';
-import { backendMediaTypes, type BackendMediaType } from '@commerce/contracts';
+import {
+  backendMediaTypes,
+  type BackendCategoryAttribute,
+  type BackendMediaType,
+} from '@commerce/contracts';
 
 import { apiClient } from '@/lib/api';
 import { toFormState, type FormState } from '@/lib/form';
@@ -115,6 +120,14 @@ export async function submitProductAction(
     formData.get('returnWindowDays') ?? '',
   ).trim();
   const variantName = String(formData.get('variantName') ?? '').trim();
+  const attributeValueIds = [
+    ...new Set(
+      formData
+        .getAll('attributeValueIds')
+        .map((value) => String(value).trim())
+        .filter((value) => value !== ''),
+    ),
+  ];
 
   let productId: string;
 
@@ -135,6 +148,9 @@ export async function submitProductAction(
     await backendAddSellerProductVariant(apiClient, productId, {
       skuCode,
       name: variantName || undefined,
+      attributeValueIds: attributeValueIds.length
+        ? attributeValueIds
+        : undefined,
     });
 
     for (const [index, mediaAssetId] of mediaAssetIds.entries()) {
@@ -149,4 +165,22 @@ export async function submitProductAction(
   }
 
   redirect(`/products/submissions/${productId}`);
+}
+
+/**
+ * The attributes the chosen category describes its products by (inherited
+ * ones included), for the opening variant's pickers. The API holds the
+ * variant to them — every required one, one value each — so the form asks
+ * for them up front. An unknown category or an older API just means no
+ * pickers.
+ */
+export async function categoryAttributesAction(
+  slug: string,
+): Promise<BackendCategoryAttribute[]> {
+  if (slug === '') return [];
+  try {
+    return await backendListPublicCategoryAttributes(apiClient, slug);
+  } catch {
+    return [];
+  }
 }

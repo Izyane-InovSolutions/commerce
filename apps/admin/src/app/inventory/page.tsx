@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 
 import {
   backendListInventory,
@@ -13,6 +14,8 @@ import { PageHeader } from '@/components/page-header';
 import { ReceiveStockForm } from '@/components/receive-stock-form';
 import { StockMoveForm } from '@/components/stock-move-form';
 import { WarehouseForm } from '@/components/warehouse-form';
+import { WarehouseRowForm } from '@/components/warehouse-row-form';
+import { Badge } from '@/components/ui/badge';
 import {
   Card,
   CardContent,
@@ -33,9 +36,12 @@ import { requireAdmin } from '@/lib/session';
 
 import {
   createWarehouseAction,
+  deleteWarehouseAction,
   moveStockAction,
   receiveStockAction,
+  updateWarehouseAction,
 } from './actions';
+import { isBelowReorderPoint } from './history';
 
 export const metadata: Metadata = { title: 'Inventory' };
 
@@ -91,10 +97,15 @@ export default async function InventoryPage() {
     label: `${named.product} — ${named.sku}`,
   }));
 
-  const warehouseOptions = warehouses.map((warehouse) => ({
-    value: warehouse.id,
-    label: `${warehouse.name} (${warehouse.code})`,
-  }));
+  // The API does not stop stock going into an inactive warehouse, so the
+  // portal does: deactivating is how a warehouse is retired, and a retired one
+  // should not be offered as somewhere to receive into.
+  const warehouseOptions = warehouses
+    .filter((warehouse) => warehouse.isActive)
+    .map((warehouse) => ({
+      value: warehouse.id,
+      label: `${warehouse.name} (${warehouse.code})`,
+    }));
 
   return (
     <div className="space-y-8">
@@ -113,17 +124,28 @@ export default async function InventoryPage() {
           <CardDescription>
             {warehouses.length === 0
               ? 'Stock is held per warehouse, so nothing can be received until one exists.'
-              : warehouses
-                  .map((warehouse) => `${warehouse.name} (${warehouse.code})`)
-                  .join(', ')}
+              : 'Deactivate a warehouse to stop receiving into it. Only one that has never held stock can be deleted.'}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
+          {warehouses.length > 0 ? (
+            <div className="divide-y">
+              {warehouses.map((warehouse) => (
+                <div key={warehouse.id} className="py-3">
+                  <WarehouseRowForm
+                    warehouse={warehouse}
+                    save={updateWarehouseAction.bind(null, warehouse.id)}
+                    remove={deleteWarehouseAction.bind(null, warehouse.id)}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : null}
           <WarehouseForm action={createWarehouseAction} />
         </CardContent>
       </Card>
 
-      {warehouses.length > 0 && variantOptions.length > 0 ? (
+      {warehouseOptions.length > 0 && variantOptions.length > 0 ? (
         <Card>
           <CardHeader>
             <CardTitle>Receive stock</CardTitle>
@@ -161,6 +183,7 @@ export default async function InventoryPage() {
                 <TableHead className="text-right">On hand</TableHead>
                 <TableHead className="text-right">Reserved</TableHead>
                 <TableHead className="text-right">Available</TableHead>
+                <TableHead className="text-right">Reorder at</TableHead>
                 <TableHead className="text-right">Move stock</TableHead>
               </TableRow>
             </TableHeader>
@@ -177,6 +200,12 @@ export default async function InventoryPage() {
                       <p className="text-muted-foreground font-mono text-xs">
                         {named?.sku ?? record.variantId}
                       </p>
+                      <Link
+                        href={`/inventory/${record.id}`}
+                        className="text-xs font-medium hover:underline"
+                      >
+                        History →
+                      </Link>
                     </TableCell>
                     <TableCell>
                       {warehouseNames.get(record.warehouseId) ?? '—'}
@@ -189,6 +218,14 @@ export default async function InventoryPage() {
                     </TableCell>
                     <TableCell className="text-right font-medium tabular-nums">
                       {record.available}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {record.reorderPoint > 0 ? record.reorderPoint : '—'}
+                      {isBelowReorderPoint(record) ? (
+                        <div>
+                          <Badge variant="destructive">Reorder</Badge>
+                        </div>
+                      ) : null}
                     </TableCell>
                     <TableCell>
                       <StockMoveForm

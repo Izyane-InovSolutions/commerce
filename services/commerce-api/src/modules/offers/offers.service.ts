@@ -3,16 +3,29 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Offer, Price } from '@prisma/client';
+import type { Offer, Prisma, Price } from '@prisma/client';
+
+import {
+  DEFAULT_PAGE,
+  DEFAULT_PAGE_SIZE,
+} from '../../common/pagination/pagination-query.dto';
 
 import { ProductReferencesService } from '../products/product-references.service';
 import { PrismaService } from '../../database/prisma.service';
 import { UpdateStatusDto } from '../../common/catalog/dto/update-status.dto';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { CreatePriceDto } from './dto/create-price.dto';
+import { ListAdminOffersDto } from './dto/list-admin-offers.dto';
 import { UpdateOfferShippingDto } from './dto/update-offer-shipping.dto';
 
 export type OfferWithPrices = Offer & { prices: Price[] };
+
+export type AdminOfferPage = {
+  items: OfferWithPrices[];
+  total: number;
+  page: number;
+  limit: number;
+};
 
 @Injectable()
 export class OffersService {
@@ -20,6 +33,32 @@ export class OffersService {
     private readonly prisma: PrismaService,
     private readonly products: ProductReferencesService,
   ) {}
+
+  /** Every offer — first-party and marketplace — newest first, in the same
+   * shape as the single-offer admin read. */
+  async listAdmin(query: ListAdminOffersDto): Promise<AdminOfferPage> {
+    const page = query.page ?? DEFAULT_PAGE;
+    const limit = query.limit ?? DEFAULT_PAGE_SIZE;
+    const where: Prisma.OfferWhereInput = {
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.sellerId ? { sellerId: query.sellerId } : {}),
+      ...(query.variantId ? { variantId: query.variantId } : {}),
+      ...(query.productId ? { variant: { productId: query.productId } } : {}),
+    };
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.offer.findMany({
+        where,
+        include: { prices: { orderBy: { startsAt: 'desc' } } },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.offer.count({ where }),
+    ]);
+
+    return { items, total, page, limit };
+  }
 
   async findByIdAdmin(id: string): Promise<OfferWithPrices> {
     const offer = await this.prisma.offer.findUnique({

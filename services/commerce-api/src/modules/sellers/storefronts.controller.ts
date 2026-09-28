@@ -9,6 +9,7 @@ import { StorefrontsService } from './storefronts.service';
 import type {
   PublicSellerRating,
   PublicStorefrontDetail,
+  PublicStorefrontListing,
 } from './storefronts.service';
 import { UpdateStorefrontDto } from './dto/update-storefront.dto';
 
@@ -16,6 +17,13 @@ import { UpdateStorefrontDto } from './dto/update-storefront.dto';
 @Controller()
 export class StorefrontsController {
   constructor(private readonly storefronts: StorefrontsService) {}
+
+  /** The store directory: approved stores with a public page, A–Z. */
+  @Public()
+  @Get('storefronts')
+  list(): Promise<PublicStorefrontListing[]> {
+    return this.storefronts.listPublic();
+  }
 
   @Public()
   @Get('storefronts/:slug')

@@ -19,6 +19,7 @@ import { AttachMediaDto } from './dto/attach-media.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { ReviewProductSubmissionDto } from './dto/review-product-submission.dto';
+import { SetFeaturedDto } from './dto/set-featured.dto';
 import { UpdateProductMediaDto } from './dto/update-product-media.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
@@ -70,6 +71,15 @@ export class AdminProductsController {
     @Body() dto: UpdateStatusDto,
   ): Promise<ProductWithRelations> {
     return this.productsService.updateStatus(id, dto);
+  }
+
+  /** Puts the product on the storefront's featured shelf, or takes it off. */
+  @Patch(':id/featured')
+  setFeatured(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SetFeaturedDto,
+  ): Promise<ProductWithRelations> {
+    return this.productsService.setFeatured(id, dto.featured);
   }
 
   @Delete(':id')

@@ -19,13 +19,15 @@ type AuthPanelProps = {
   signIn: (state: FormState, formData: FormData) => Promise<FormState>;
   signUp: (state: FormState, formData: FormData) => Promise<FormState>;
   next: string;
+  /** Shown above the form — e.g. once a password reset has gone through. */
+  notice?: string;
 };
 
 /**
  * The signed-out account page: one card that switches between sign-in and
  * sign-up, rather than showing both forms at once.
  */
-export function AuthPanel({ signIn, signUp, next }: AuthPanelProps) {
+export function AuthPanel({ signIn, signUp, next, notice }: AuthPanelProps) {
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
   const isSignIn = mode === 'sign-in';
 
@@ -39,7 +41,15 @@ export function AuthPanel({ signIn, signUp, next }: AuthPanelProps) {
             : 'Create an account and get started.'}
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        {notice ? (
+          <p
+            role="status"
+            className="rounded-lg border border-dashed px-3 py-2 text-sm"
+          >
+            {notice}
+          </p>
+        ) : null}
         {isSignIn ? (
           <SignInForm action={signIn} next={next} />
         ) : (

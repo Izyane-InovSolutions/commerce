@@ -546,6 +546,12 @@ export class FakePrismaService {
     },
   };
 
+  // No e2e flow attaches attributes to a category, so every category reads
+  // as unrestricted; the rules themselves are covered by unit specs.
+  categoryAttribute = {
+    findMany: (): Promise<Record<string, unknown>[]> => Promise.resolve([]),
+  };
+
   attribute = {
     findMany: (): Promise<Record<string, unknown>[]> =>
       Promise.resolve(

@@ -6,7 +6,7 @@ import { requireAdmin } from '@/lib/session';
 export const metadata: Metadata = { title: 'Promotions' };
 
 export default async function PromotionsPage() {
-  await requireAdmin();
+  await requireAdmin(true);
 
   return (
     <AwaitingBackend

@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import type { AuthenticatedUser } from '../../common/auth/authenticated-user';
@@ -6,6 +17,8 @@ import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { AttachMediaDto } from './dto/attach-media.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { CreateVariantDto } from './dto/create-variant.dto';
+import { SellerUpdateProductDto } from './dto/seller-update-product.dto';
+import { UpdateVariantDto } from './dto/update-variant.dto';
 import { ProductsService } from './products.service';
 import { ProductWithRelations, VariantWithRelations } from './products.types';
 
@@ -18,6 +31,10 @@ import { ProductWithRelations, VariantWithRelations } from './products.types';
  * inside ProductsService via SellersService.requireApproved plus the
  * cross-tenant 404 ownership check, mirroring SellerOffersController and
  * SellerFulfillmentsController.
+ *
+ * Edits and deletes follow the submission lifecycle (see
+ * ProductsService.updateSellerProduct): a pending submission is edited in
+ * place, a rejected one is edited and resubmitted, an approved one is 409.
  */
 @ApiTags('Seller products')
 @ApiBearerAuth()
@@ -64,5 +81,48 @@ export class SellerProductsController {
     @Body() dto: AttachMediaDto,
   ): Promise<ProductWithRelations> {
     return this.productsService.attachSellerMedia(user.id, id, dto);
+  }
+
+  @Patch(':id')
+  update(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SellerUpdateProductDto,
+  ): Promise<ProductWithRelations> {
+    return this.productsService.updateSellerProduct(user.id, id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<void> {
+    return this.productsService.removeSellerProduct(user.id, id);
+  }
+
+  @Patch(':id/variants/:variantId')
+  updateVariant(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('variantId', ParseUUIDPipe) variantId: string,
+    @Body() dto: UpdateVariantDto,
+  ): Promise<VariantWithRelations> {
+    return this.productsService.updateSellerVariant(
+      user.id,
+      id,
+      variantId,
+      dto,
+    );
+  }
+
+  @Delete(':id/variants/:variantId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  removeVariant(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('variantId', ParseUUIDPipe) variantId: string,
+  ): Promise<void> {
+    return this.productsService.removeSellerVariant(user.id, id, variantId);
   }
 }

@@ -1,5 +1,5 @@
 const DEFAULT_API_BASE_URL = 'http://localhost:3005/api/v1';
-const DEFAULT_SELLER_APP_URL = 'http://localhost:3003';
+const DEFAULT_SELLER_APP_URL = 'http://localhost:3003/seller';
 
 /**
  * Public runtime configuration.
@@ -12,8 +12,9 @@ export const env = {
   apiBaseUrl: (
     process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL
   ).replace(/\/+$/, ''),
-  /** Where the seller portal (apps/seller) is served — the "Seller
-   * dashboard" button hands the signed-in session off there. */
+  /** Where the seller portal (apps/seller) is served, *including* its
+   * `/seller` base path — the "Seller dashboard" button hands the signed-in
+   * session off there. Join paths onto it with `appUrl`. */
   sellerAppUrl: (
     process.env.NEXT_PUBLIC_SELLER_APP_URL ?? DEFAULT_SELLER_APP_URL
   ).replace(/\/+$/, ''),

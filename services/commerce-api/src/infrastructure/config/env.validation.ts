@@ -73,6 +73,48 @@ class EnvironmentVariables {
   @Min(60)
   MEDIA_PUBLIC_URL_TTL_SECONDS = 86_400;
 
+  // Where uploaded media bytes live; see StorageModule. The S3_* settings
+  // below are only demanded when the driver is s3, so local development
+  // needs none of them.
+  @IsIn(['local', 's3'])
+  MEDIA_STORAGE_DRIVER = 'local';
+
+  @ValidateIf((env: EnvironmentVariables) => env.MEDIA_STORAGE_DRIVER === 's3')
+  @IsString()
+  @IsNotEmpty()
+  S3_BUCKET?: string;
+
+  // R2 accepts "auto"; AWS needs the bucket's real region.
+  @ValidateIf((env: EnvironmentVariables) => env.MEDIA_STORAGE_DRIVER === 's3')
+  @IsString()
+  @IsNotEmpty()
+  S3_REGION?: string;
+
+  // Only for S3-compatible stores (R2, MinIO); unset means AWS itself. An
+  // empty value (as .env.example ships it) counts as unset.
+  @ValidateIf((env: EnvironmentVariables) => Boolean(env.S3_ENDPOINT))
+  @IsUrl({
+    protocols: ['http', 'https'],
+    require_protocol: true,
+    require_tld: false,
+  })
+  S3_ENDPOINT?: string;
+
+  @ValidateIf((env: EnvironmentVariables) => env.MEDIA_STORAGE_DRIVER === 's3')
+  @IsString()
+  @IsNotEmpty()
+  S3_ACCESS_KEY_ID?: string;
+
+  @ValidateIf((env: EnvironmentVariables) => env.MEDIA_STORAGE_DRIVER === 's3')
+  @IsString()
+  @IsNotEmpty()
+  S3_SECRET_ACCESS_KEY?: string;
+
+  // Kept as the literal string rather than a boolean: implicit conversion
+  // would turn the string "false" into true.
+  @IsIn(['true', 'false'])
+  S3_FORCE_PATH_STYLE = 'false';
+
   @IsIn(['pending', 'unified'])
   PAYMENTS_PROVIDER = 'pending';
 
@@ -195,6 +237,60 @@ class EnvironmentVariables {
   @IsInt()
   @Min(60)
   SHIPPING_QUOTE_TTL_SECONDS = 3_600;
+
+  // Where links in emails point: the storefront (password reset, customer
+  // notifications) and the seller app (seller notifications). See
+  // absoluteAppUrl.
+  @IsUrl({
+    protocols: ['http', 'https'],
+    require_protocol: true,
+    require_tld: false,
+  })
+  WEB_APP_URL = 'http://localhost:3001';
+
+  @IsUrl({
+    protocols: ['http', 'https'],
+    require_protocol: true,
+    require_tld: false,
+  })
+  SELLER_APP_URL = 'http://localhost:3003/seller';
+
+  // Outgoing email (see MailerService). SMTP_URL, e.g.
+  // smtps://user:pass@smtp.example.com, wins over the SMTP_HOST group. With
+  // neither set, mail is written to the log outside production and not sent
+  // at all in production. Optional so a deployment without mail still boots;
+  // empty counts as unset, as .env.example leaves them.
+  @IsOptional()
+  @IsString()
+  SMTP_URL?: string;
+
+  @IsOptional()
+  @IsString()
+  SMTP_HOST?: string;
+
+  // Empty (read as 0) means the default: 465 when SMTP_SECURE=true, else 587.
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(65535)
+  SMTP_PORT?: number;
+
+  // true = TLS from the first byte (port 465); false = STARTTLS if offered.
+  @IsIn(['true', 'false'])
+  SMTP_SECURE = 'false';
+
+  @IsOptional()
+  @IsString()
+  SMTP_USER?: string;
+
+  @IsOptional()
+  @IsString()
+  SMTP_PASS?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  MAIL_FROM = 'Commerce <no-reply@localhost>';
 }
 
 export function validate(

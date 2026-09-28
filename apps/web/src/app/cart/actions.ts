@@ -2,8 +2,15 @@
 
 import { revalidatePath } from 'next/cache';
 
-import { addToCart, removeCartItem, updateCartItem } from '@/lib/cart';
+import {
+  addToCart,
+  mergeGuestCart,
+  removeCartItem,
+  updateCartItem,
+} from '@/lib/cart';
+import { clearCartMergeFailed } from '@/lib/cart-merge-notice';
 import { toFormState, type FormState } from '@/lib/form';
+import { clearGuestToken } from '@/lib/guest-cookie';
 
 function revalidateCart(): void {
   revalidatePath('/cart');
@@ -67,4 +74,34 @@ export async function removeCartItemAction(itemId: string): Promise<FormState> {
 
   revalidateCart();
   return { status: 'idle', message: 'Removed.' };
+}
+
+/**
+ * Tries again to fold the guest cart into the signed-in account, after the
+ * attempt made at sign-in failed. On success the guest token goes, same as
+ * it would have then; on failure both it and the notice stay, so the shopper
+ * can try once more or dismiss it.
+ */
+export async function retryCartMergeAction(): Promise<FormState> {
+  const outcome = await mergeGuestCart();
+
+  if (outcome === 'failed') {
+    return {
+      status: 'error',
+      message: 'Still could not bring those items over. Try again later.',
+    };
+  }
+
+  await clearGuestToken();
+  await clearCartMergeFailed();
+  revalidateCart();
+  return { status: 'idle', message: 'Items added to your cart.' };
+}
+
+/** Gives up on the guest cart: the notice and the token behind it both go. */
+export async function dismissCartMergeNoticeAction(): Promise<void> {
+  await clearGuestToken();
+  await clearCartMergeFailed();
+  revalidateCart();
+  revalidatePath('/account');
 }
