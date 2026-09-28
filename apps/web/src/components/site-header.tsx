@@ -4,12 +4,15 @@ import { Bell, ShoppingCart, User, Package, Heart } from 'lucide-react';
 
 import izyaneLogo from '@/assets/izyane-black.svg';
 import { AccountMenu } from '@/components/account-menu';
+import { MegaMenu } from '@/components/mega-menu';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { signOutAction } from '@/app/account/actions';
 import { unreadBadgeLabel } from '@/lib/notification-link';
 import { countUnreadNotifications } from '@/lib/notifications';
 import { getCurrentUser } from '@/lib/session';
+import { listBrands, listCategories } from '@/lib/catalog';
+import { buildCategoryTree, groupBrandsByLetter } from '@/lib/menu-data';
 import { pageFrame } from '@/lib/page-frame';
 const linkClasses =
   'block rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-950 dark:hover:text-blue-300';
@@ -20,6 +23,12 @@ export async function SiteHeader() {
   // Zero whenever it can't be told (signed out, API without notifications)
   // — `countUnreadNotifications` never throws, so the header never breaks.
   const unread = user ? unreadBadgeLabel(await countUnreadNotifications()) : null;
+  // The shop bar is navigation, not content: if the catalog can't be read it
+  // shows just its fixed links rather than taking the header down.
+  const [categories, brands] = await Promise.all([
+    listCategories().catch(() => []),
+    listBrands().catch(() => []),
+  ]);
 
   return (
     <header className="bg-background sticky top-0 z-40 border-b">
@@ -132,6 +141,14 @@ export async function SiteHeader() {
           )}
           
         </nav>
+      </div>
+      <div className="border-t">
+        <div className={pageFrame}>
+          <MegaMenu
+            categories={buildCategoryTree(categories)}
+            brands={groupBrandsByLetter(brands)}
+          />
+        </div>
       </div>
     </header>
   );

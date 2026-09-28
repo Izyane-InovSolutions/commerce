@@ -4,6 +4,7 @@ import { ProductImage } from '@/components/product-image';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   getDisplayPrice,
+  getDisplaySale,
   getPrimaryImage,
   getPrimaryOffer,
   getShippingCost,
@@ -20,7 +21,10 @@ export function ProductCard({
   badge?: string;
 }) {
   const price = getDisplayPrice(product);
+  const sale = getDisplaySale(product);
   const shippingCost = getShippingCost(product);
+  // A caller's own badge (a shelf's "New", say) wins over the saving.
+  const label = badge ?? (sale ? `Save ${sale.percentOff}%` : undefined);
   const outOfStock = price !== null && !isInStock(product);
   // Null for the platform's own products — only a marketplace offer names a
   // seller at all.
@@ -41,9 +45,15 @@ export function ProductCard({
               <span className="absolute top-2.5 left-2.5 inline-flex items-center rounded-full bg-destructive/90 px-2.5 py-0.5 text-xs font-medium text-white shadow-sm backdrop-blur-xs">
                 Out of stock
               </span>
-            ) : badge ? (
-              <span className="absolute top-2.5 left-2.5 inline-flex items-center rounded-full bg-background/90 px-2.5 py-0.5 text-xs font-medium text-foreground shadow-sm backdrop-blur-xs">
-                {badge}
+            ) : label ? (
+              <span
+                className={
+                  sale && !badge
+                    ? 'absolute top-2.5 left-2.5 inline-flex items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-semibold text-white shadow-sm'
+                    : 'absolute top-2.5 left-2.5 inline-flex items-center rounded-full bg-background/90 px-2.5 py-0.5 text-xs font-medium text-foreground shadow-sm backdrop-blur-xs'
+                }
+              >
+                {label}
               </span>
             ) : null}
           </div>
@@ -76,6 +86,12 @@ export function ProductCard({
               {price !== null
                 ? formatMinor(price.amount, price.currency)
                 : 'Not sold in this currency'}
+              {sale ? (
+                <span className="text-muted-foreground ml-1.5 text-xs font-normal line-through">
+                  <span className="sr-only">was </span>
+                  {formatMinor(sale.was.amount, sale.was.currency)}
+                </span>
+              ) : null}
             </p>
           </Link>
           {price !== null && shippingCost !== null ? (

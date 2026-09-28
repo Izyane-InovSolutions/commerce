@@ -25,6 +25,8 @@ export type ProductListQuery = {
   q?: string;
   /** `field:asc|desc`; the API only sorts on `name` and `createdAt`. */
   sort?: string;
+  /** Only admin-featured products, most recently featured first. */
+  featured?: boolean;
   page?: number;
   limit?: number;
 };
@@ -67,6 +69,7 @@ export async function listProducts(
         brandSlug: query.brandSlug,
         q: query.q,
         sort: query.sort,
+        featured: query.featured ? 'true' : undefined,
         page: query.page,
         limit: query.limit,
         currency: await readCurrency(),
@@ -107,6 +110,46 @@ export async function listBestSellers(
     return response.data.items;
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
+      return [];
+    }
+    throw error;
+  }
+}
+
+/**
+ * Products on sale now — `GET /catalog/deals`, biggest saving first. Empty
+ * while the API doesn't serve the route yet, so the deals shelf just hides.
+ */
+export async function listDeals(limit = 12): Promise<Product[]> {
+  try {
+    const response = await apiClient.get<SuccessEnvelope<{ items: Product[] }>>(
+      '/catalog/deals',
+      {
+        query: { limit, currency: await readCurrency() },
+        next: { revalidate: 120 },
+      },
+    );
+    return response.data.items;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return [];
+    }
+    throw error;
+  }
+}
+
+/**
+ * Admin-featured products. An API older than the `featured` filter rejects
+ * the unknown parameter (400), which reads as "nothing featured" too.
+ */
+export async function listFeatured(limit = 10): Promise<Product[]> {
+  try {
+    return (await listProducts({ featured: true, limit })).products;
+  } catch (error) {
+    if (
+      error instanceof ApiError &&
+      (error.status === 400 || error.status === 404)
+    ) {
       return [];
     }
     throw error;

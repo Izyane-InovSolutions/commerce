@@ -29,7 +29,14 @@ const ROTATE_MS = 6000;
  * browse by hand. Renders nothing when there's nothing trending, so the
  * page doesn't open on an empty banner.
  */
-export function TrendingHero({ products }: { products: Product[] }) {
+export function TrendingHero({
+  products,
+  label = 'Trending now',
+}: {
+  products: Product[];
+  /** What the slides are — "Trending now" only when they really are. */
+  label?: string;
+}) {
   // Lazy state initializer, same reasoning as promo-carousel-card.tsx.
   const [autoplayPlugin] = useState(() =>
     Autoplay({
@@ -60,7 +67,7 @@ export function TrendingHero({ products }: { products: Product[] }) {
   const hasMany = products.length > 1;
 
   return (
-    <section aria-label="Trending products" className="relative">
+    <section aria-label={label} className="relative">
       <Carousel
         setApi={setApi}
         opts={{ loop: hasMany }}
@@ -76,7 +83,7 @@ export function TrendingHero({ products }: { products: Product[] }) {
                   <div className="justify-self-center space-y-6 text-white items-center gap-6">
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold backdrop-blur-sm">
                       <Flame className="size-3.5" aria-hidden="true" />
-                      Trending now
+                      {label}
                     </span>
                     <h2 className="text-3xl font-bold tracking-tight drop-shadow-sm sm:text-4xl lg:text-5xl">
                       {product.name}

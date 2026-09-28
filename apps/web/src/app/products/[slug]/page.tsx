@@ -27,6 +27,7 @@ import {
   selectVariant,
   type Product,
   type StorefrontOffer,
+  getOfferSale,
 } from '@/lib/catalog-types';
 import { formatMinor } from '@/lib/currency';
 import { readCurrency } from '@/lib/currency-cookie';
@@ -106,6 +107,7 @@ export default async function ProductDetailPage({
   const variant = selection?.variant ?? null;
   const offer = selection?.offer ?? null;
   const price = offer?.currentPrice ?? null;
+  const sale = offer ? getOfferSale(offer) : null;
   const shippingCost = offer?.shippingCost ?? null;
   const inStock = offer?.inStock ?? true;
   const reviewParams = parseReviewParams(search, REVIEW_PREFIX);
@@ -151,6 +153,7 @@ export default async function ProductDetailPage({
         imageUrl={primaryImage?.url ?? null}
         priceAmount={price?.amount ?? null}
         priceCurrency={price?.currency ?? null}
+        categorySlug={product.category?.slug ?? null}
       />
       <BackButton />
 
@@ -201,13 +204,35 @@ export default async function ProductDetailPage({
                 {price !== null
                   ? formatMinor(price.amount, price.currency)
                   : `Not sold in ${currency}`}
+                {sale ? (
+                  <span className="text-muted-foreground ml-2 text-base font-normal line-through">
+                    <span className="sr-only">was </span>
+                    {formatMinor(sale.was.amount, sale.was.currency)}
+                  </span>
+                ) : null}
               </p>
+              {sale ? (
+                <span className="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-semibold text-white">
+                  Save {sale.percentOff}%
+                </span>
+              ) : null}
               {price !== null && !inStock ? (
                 <span className="inline-flex items-center rounded-full bg-destructive/90 px-2.5 py-0.5 text-xs font-medium text-white">
                   Out of stock
                 </span>
               ) : null}
             </div>
+            {sale?.endsAt ? (
+              <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                Sale price until{' '}
+                {new Intl.DateTimeFormat('en-GB', {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+                  timeZone: 'Africa/Lusaka',
+                }).format(new Date(sale.endsAt))}
+              </p>
+            ) : null}
             {price !== null && shippingCost !== null ? (
               <p className="text-muted-foreground text-sm">
                 {shippingCost.amount === 0

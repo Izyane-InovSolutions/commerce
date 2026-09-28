@@ -34,6 +34,11 @@ export type ProductOffer = {
    * price at all; `currencies` says which ones it does have.
    */
   currentPrice: { amount: number; currency: string } | null;
+  /** On sale: the regular price the current, time-limited price undercuts.
+   * Optional (and absent from older APIs); null when not on sale. */
+  compareAtPrice?: { amount: number; currency: string } | null;
+  /** When the sale price ends (ISO). */
+  saleEndsAt?: string | null;
   currencies: string[];
   /** False once available stock (on-hand minus reserved) has run out. */
   inStock: boolean;
@@ -110,6 +115,8 @@ export type Product = {
   /** Null when the product has never been reviewed. */
   averageRating?: number | null;
   ratingCount?: number;
+  /** Chosen by an admin for the featured shelf (absent from older APIs). */
+  isFeatured?: boolean;
   ratingHistogram?: RatingHistogram;
 };
 
@@ -408,4 +415,48 @@ export function buildOtherOffers(
   }
 
   return rows.sort((left, right) => left.price.amount - right.price.amount);
+}
+
+/** A price drop on one offer, as the storefront shows it. */
+export type Sale = {
+  offer: ProductOffer;
+  price: { amount: number; currency: string };
+  was: { amount: number; currency: string };
+  /** Whole percent, rounded down so it never overstates the saving. */
+  percentOff: number;
+  endsAt: string | null;
+};
+
+/** The offer's sale, if its current price undercuts a regular one. */
+export function getOfferSale(offer: ProductOffer): Sale | null {
+  const price = offer.currentPrice;
+  const was = offer.compareAtPrice ?? null;
+  if (!price || !was || was.currency !== price.currency) return null;
+  if (was.amount <= price.amount) return null;
+  return {
+    offer,
+    price,
+    was,
+    percentOff: Math.floor((1 - price.amount / was.amount) * 100),
+    endsAt: offer.saleEndsAt ?? null,
+  };
+}
+
+/** The sale on the offer a card shows (see getPrimaryOffer). */
+export function getDisplaySale(product: Product): Sale | null {
+  const offer = getPrimaryOffer(product);
+  return offer ? getOfferSale(offer) : null;
+}
+
+/** The product's biggest in-stock saving across every variant, for deal
+ * shelves — the discounted variant needn't be the one a card leads with. */
+export function getBestSale(product: Product): Sale | null {
+  let best: Sale | null = null;
+  for (const variant of product.variants) {
+    for (const offer of variant.offers) {
+      const sale = offer.inStock ? getOfferSale(offer) : null;
+      if (sale && (!best || sale.percentOff > best.percentOff)) best = sale;
+    }
+  }
+  return best;
 }
