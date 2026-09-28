@@ -519,6 +519,7 @@ export class FakePrismaService {
       const now = new Date();
       const row = {
         status: 'PENDING',
+        id: randomUUID(),
         sentAt: null,
         failedAt: null,
         lastErrorCode: null,

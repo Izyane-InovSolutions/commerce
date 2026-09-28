@@ -16,6 +16,8 @@ type TokensBody = {
   data: {
     accessToken: string;
     refreshToken: string;
+    refreshExpiresIn: number;
+    refreshExpiresAt: string;
     user: { id: string; email: string; role: string; emailVerified: boolean };
   };
 };
@@ -71,6 +73,16 @@ describe('Auth (e2e)', () => {
     expect(user.email).toBe('shopper@example.com');
     expect(user.role).toBe('CUSTOMER');
     expect(user.emailVerified).toBe(false);
+    const initialTokens = (registerResponse.body as TokensBody).data;
+    const initialDeadline = Date.parse(initialTokens.refreshExpiresAt);
+    expect(Number.isFinite(initialDeadline)).toBe(true);
+    expect(initialTokens.refreshExpiresIn).toBeGreaterThan(0);
+    expect(initialTokens.refreshExpiresIn).toBeLessThanOrEqual(2_592_000);
+    expect(
+      Math.abs(
+        initialDeadline - Date.now() - initialTokens.refreshExpiresIn * 1000,
+      ),
+    ).toBeLessThan(5_000);
 
     await request(server())
       .post('/api/v1/auth/register')
@@ -94,6 +106,10 @@ describe('Auth (e2e)', () => {
       .expect(200);
     const rotated = (refreshResponse.body as TokensBody).data;
     expect(rotated.refreshToken).not.toBe(refreshToken);
+    expect(rotated.refreshExpiresAt).toBe(initialTokens.refreshExpiresAt);
+    expect(rotated.refreshExpiresIn).toBeLessThanOrEqual(
+      initialTokens.refreshExpiresIn,
+    );
 
     // The rotated access token is backed by its own, still-active session.
     await request(server())
@@ -137,6 +153,8 @@ describe('Auth (e2e)', () => {
     const recovered = (recoveryResponse.body as TokensBody).data;
     expect(recovered.accessToken).toBe(rotated.accessToken);
     expect(recovered.refreshToken).toBe(rotated.refreshToken);
+    expect(recovered.refreshExpiresAt).toBe(rotated.refreshExpiresAt);
+    expect(recovered.refreshExpiresIn).toBe(rotated.refreshExpiresIn);
 
     // Recovery leaves the one replacement session active.
     await request(server())

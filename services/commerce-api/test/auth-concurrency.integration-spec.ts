@@ -6,6 +6,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
+import { EmailDeliveriesService } from '../src/infrastructure/email/email-deliveries.service';
 import { AuditService } from '../src/modules/audit/audit.service';
 import { AuthService } from '../src/modules/auth/auth.service';
 import { hashPassword } from '../src/modules/auth/password.util';
@@ -207,6 +208,7 @@ describe('Authentication concurrency (integration, real Postgres)', () => {
       failingJwt,
       config,
       audit,
+      moduleRef.get(EmailDeliveriesService),
     );
 
     await expect(failingAuth.refresh(login.refreshToken)).rejects.toThrow(

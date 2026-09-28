@@ -449,7 +449,7 @@ describe('AuthService', () => {
       ]);
       usersService.findById.mockResolvedValue(buildUser());
 
-      await authService.refresh('raw-refresh-token');
+      const response = await authService.refresh('raw-refresh-token');
 
       const rotated = prisma.session.rows.get('session-1')!;
       const replacement = prisma.session.rows.get(
@@ -461,6 +461,10 @@ describe('AuthService', () => {
       expect(replacement.expiresAt.getTime()).toBeLessThanOrEqual(
         familyCeiling.getTime(),
       );
+      expect(response.refreshExpiresAt).toBe(
+        replacement.expiresAt.toISOString(),
+      );
+      expect(response.refreshExpiresIn).toBeLessThanOrEqual(24 * 60 * 60);
     });
 
     it('recovers the same replacement credentials when the rotated token is retried inside the 30s window', async () => {

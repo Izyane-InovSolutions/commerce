@@ -19472,6 +19472,12 @@
         "expiresIn": {
           "type": "number"
         },
+        "refreshExpiresIn": {
+          "type": "number"
+        },
+        "refreshExpiresAt": {
+          "type": "string"
+        },
         "user": {
           "$ref": "#/components/schemas/PublicUser"
         }
@@ -19481,6 +19487,8 @@
         "refreshToken",
         "tokenType",
         "expiresIn",
+        "refreshExpiresIn",
+        "refreshExpiresAt",
         "user"
       ]
     },

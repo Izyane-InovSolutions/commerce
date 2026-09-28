@@ -846,6 +846,11 @@ export class AuthService {
         refreshToken: rawRefreshToken,
         tokenType: 'Bearer',
         expiresIn: accessTtlSeconds,
+        refreshExpiresIn: Math.max(
+          0,
+          Math.floor((expiresAt.getTime() - Date.now()) / 1000),
+        ),
+        refreshExpiresAt: expiresAt.toISOString(),
         user: this.toPublicUser(user),
       },
       session,

@@ -12,6 +12,8 @@ export type AuthTokensResponse = {
   refreshToken: string;
   tokenType: 'Bearer';
   expiresIn: number;
+  refreshExpiresIn: number;
+  refreshExpiresAt: string;
   user: PublicUser;
 };
 
