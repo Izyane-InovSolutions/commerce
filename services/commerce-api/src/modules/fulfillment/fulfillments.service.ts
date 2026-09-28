@@ -1139,6 +1139,26 @@ export class FulfillmentsService {
         dispatchNumber,
         shipmentId: shipment.id,
       });
+      // Same topic and payload shape as the warehouse dispatch path, so the
+      // customer gets the same "on its way" notice whoever ships the order.
+      await this.outboxService.record(
+        {
+          topic: 'fulfillment.dispatched',
+          aggregateType: 'FulfillmentDispatch',
+          aggregateId: dispatch.id,
+          payload: {
+            fulfillmentOrderId,
+            orderId: fo.orderId,
+            dispatchNumber,
+            shipmentId: shipment.id,
+            lines: dispatchEntries.map((entry) => ({
+              lineId: entry.line.id,
+              quantity: entry.quantity,
+            })),
+          },
+        },
+        tx,
+      );
 
       return this.reloadWithShipments(tx, fulfillmentOrderId);
     });
@@ -1315,9 +1335,11 @@ export class FulfillmentsService {
       },
       tx,
     );
-    // The outbox has no consumer (see OrdersService.confirmPayment for the
-    // same convention) — enqueued directly so the refund obligation is
-    // reliably created and retried on failure.
+    // The outbox event only drives the customer's notification (see
+    // NotificationsOutboxSubscriber); the refund obligation is enqueued as
+    // its own job, in this transaction, so it is created and retried
+    // independently of whether that notice succeeds (the same split as
+    // OrdersService.confirmPayment).
     await this.backgroundJobsService.enqueue(
       {
         type: FULFILLMENT_CANCELLATION_REFUND_JOB_TYPE,

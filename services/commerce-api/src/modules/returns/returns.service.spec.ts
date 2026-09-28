@@ -475,6 +475,98 @@ describe('ReturnsService', () => {
       });
     });
 
+    it('moves to RECEIVED without isClosing once every item is fully received', async () => {
+      prisma.returnReceipt.findUnique.mockResolvedValue(null);
+      prisma.tx.returnRequest.findUnique.mockResolvedValue(
+        returnRequestFixture({ status: ReturnStatus.RECEIVING }),
+      );
+      prisma.tx.returnReceipt.create.mockResolvedValue({ id: 'rec2' });
+      // Before this receipt: 1 of 2 received; after it: 2 of 2.
+      prisma.tx.returnReceiptLine.findMany
+        .mockResolvedValueOnce([{ returnItemId: 'ri1', quantity: 1 }])
+        .mockResolvedValue([
+          { returnItemId: 'ri1', quantity: 1 },
+          { returnItemId: 'ri1', quantity: 1 },
+        ]);
+      prisma.tx.returnRequest.findUniqueOrThrow.mockResolvedValue({ id: 'r1' });
+
+      await service.postReceipt(
+        'r1',
+        { warehouseId: 'w1', lines: [{ returnItemId: 'ri1', quantity: 1 }] },
+        'staff-1',
+        Role.STAFF,
+        'key-2',
+      );
+
+      expect(prisma.tx.returnRequest.update).toHaveBeenCalledWith({
+        where: { id: 'r1' },
+        data: { status: ReturnStatus.RECEIVED, version: { increment: 1 } },
+      });
+      // Nothing was left unreceived, so nothing is released.
+      expect(prisma.tx.returnItemAllocation.update).not.toHaveBeenCalled();
+    });
+
+    it('accepts an empty closing receipt to close out an already fully received return', async () => {
+      prisma.returnReceipt.findUnique.mockResolvedValue(null);
+      prisma.tx.returnRequest.findUnique.mockResolvedValue(
+        returnRequestFixture({ status: ReturnStatus.RECEIVING }),
+      );
+      prisma.tx.returnReceipt.create.mockResolvedValue({ id: 'rec3' });
+      prisma.tx.returnReceiptLine.findMany.mockResolvedValue([
+        { returnItemId: 'ri1', quantity: 2 },
+      ]);
+      prisma.tx.returnRequest.findUniqueOrThrow.mockResolvedValue({ id: 'r1' });
+
+      await service.postReceipt(
+        'r1',
+        { warehouseId: 'w1', lines: [], isClosing: true },
+        'staff-1',
+        Role.STAFF,
+        'key-3',
+      );
+
+      expect(prisma.tx.returnReceipt.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ isClosing: true }) as object,
+        }),
+      );
+      expect(prisma.tx.returnRequest.update).toHaveBeenCalledWith({
+        where: { id: 'r1' },
+        data: { status: ReturnStatus.RECEIVED, version: { increment: 1 } },
+      });
+    });
+
+    it('rejects an empty receipt that is not closing', async () => {
+      await expect(
+        service.postReceipt(
+          'r1',
+          { warehouseId: 'w1', lines: [] },
+          'staff-1',
+          Role.STAFF,
+          'key-4',
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('rejects an empty closing receipt when nothing has been received', async () => {
+      prisma.returnReceipt.findUnique.mockResolvedValue(null);
+      prisma.tx.returnRequest.findUnique.mockResolvedValue(
+        returnRequestFixture({ status: ReturnStatus.RECEIVING }),
+      );
+
+      await expect(
+        service.postReceipt(
+          'r1',
+          { warehouseId: 'w1', lines: [], isClosing: true },
+          'staff-1',
+          Role.STAFF,
+          'key-5',
+        ),
+      ).rejects.toThrow(ConflictException);
+      expect(prisma.tx.returnReceipt.create).not.toHaveBeenCalled();
+    });
+
     it('rejects a receipt whose warehouse does not match the return', async () => {
       prisma.returnReceipt.findUnique.mockResolvedValue(null);
       prisma.tx.returnRequest.findUnique.mockResolvedValue(
@@ -738,11 +830,36 @@ describe('ReturnsService', () => {
                 },
               ],
             },
+            'admin-1',
+            Role.ADMIN,
+            'key-1',
+          ),
+        ).rejects.toThrow(ConflictException);
+      });
+
+      it('rejects isFinal from staff before touching the return', async () => {
+        await expect(
+          service.postInspection(
+            'r1',
+            {
+              isFinal: true,
+              lines: [
+                {
+                  returnItemId: 'ri1',
+                  warehouseId: 'w1',
+                  acceptedQuantity: 2,
+                  disposition: ReturnDisposition.RESTOCK,
+                  rejectedQuantity: 0,
+                },
+              ],
+            },
             'staff-1',
             Role.STAFF,
             'key-1',
           ),
-        ).rejects.toThrow(ConflictException);
+        ).rejects.toThrow(ForbiddenException);
+        expect(prisma.returnInspection.findUnique).not.toHaveBeenCalled();
+        expect(prisma.$transaction).not.toHaveBeenCalled();
       });
 
       it('closes with no refund when every unit is rejected', async () => {

@@ -24,7 +24,7 @@ export class PaymentReconciliationScheduler implements OnModuleInit {
     // A transaction-scoped lock also prevents duplicate sweeps across API replicas.
     await this.prisma.$transaction(async tx => {
       const [lock] = await tx.$queryRaw<{ acquired: boolean }[]>`SELECT pg_try_advisory_xact_lock(730021) AS acquired`;
-      if (!lock.acquired) return;
+      if (!lock?.acquired) return;
       const open = await tx.backgroundJob.findMany({ where: { type: PAYMENT_RECONCILIATION_JOB_TYPE, status: { in: ['PENDING', 'RUNNING'] } }, select: { payload: true } });
       const queued = open.flatMap(row => row.payload && typeof row.payload === 'object' && !Array.isArray(row.payload) && typeof row.payload.paymentId === 'string' ? [row.payload.paymentId] : []);
       const payments = await tx.payment.findMany({

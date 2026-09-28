@@ -615,11 +615,11 @@ export class OrdersService {
       data: { status: OrderStatus.PAID },
     });
 
-    // Enqueued directly (not driven by the outbox, which has no consumer
-    // yet — see BackgroundJobsService.enqueue usage elsewhere, e.g.
-    // InventoryService's reservation-expiry job) so provisioning is
-    // reliably retried on failure without needing a separate relay. The
-    // outbox write alongside it is for external/downstream listeners only.
+    // Provisioning is enqueued as its own job rather than driven by the
+    // outbox, so it is created and retried independently of the outbox's
+    // subscribers. The `order.paid` event alongside it is consumed by the
+    // OutboxDispatcherService's subscribers (NotificationsOutboxSubscriber sends
+    // the customer's order confirmation); nothing there provisions stock.
     await this.backgroundJobsService.enqueue(
       { type: FULFILLMENT_PROVISION_JOB_TYPE, payload: { orderId } },
       tx,

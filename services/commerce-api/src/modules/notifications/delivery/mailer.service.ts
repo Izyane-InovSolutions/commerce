@@ -92,7 +92,9 @@ function smtpOptions(config: ConfigService): SMTPTransportOptions | null {
     host,
     port: Number(config.get('SMTP_PORT') || (secure ? 465 : 587)),
     secure,
-    auth: user ? { user, pass: config.get<string>('SMTP_PASS') ?? '' } : undefined,
+    auth: user
+      ? { user, pass: config.get<string>('SMTP_PASS') ?? '' }
+      : undefined,
     ...timeouts,
   };
 }

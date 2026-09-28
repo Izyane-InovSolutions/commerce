@@ -1,10 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { NotificationChannel, type OutboxEvent, type Prisma } from '@prisma/client';
+import {
+  NotificationChannel,
+  type OutboxEvent,
+  type Prisma,
+} from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import type { OutboxSubscriber } from '../../infrastructure/jobs/outbox-subscriber.interface';
 import { NotificationsService } from './notifications.service';
-import { NotificationType, type CreateNotificationInput } from './notifications.types';
+import {
+  NotificationType,
+  type CreateNotificationInput,
+} from './notifications.types';
 
 /**
  * Topics turned into notifications. Written as literals rather than imported
@@ -43,7 +50,7 @@ function readString(
 ): string | undefined {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload))
     return undefined;
-  const value = (payload as Prisma.JsonObject)[key];
+  const value = payload[key];
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
@@ -104,7 +111,10 @@ export class NotificationsOutboxSubscriber implements OutboxSubscriber {
 
   /** OrdersService.confirmPayment — `{ orderId }`. */
   private async orderPaid(event: OutboxEvent): Promise<Draft[]> {
-    const order = await this.findOrder(event, readString(event.payload, 'orderId'));
+    const order = await this.findOrder(
+      event,
+      readString(event.payload, 'orderId'),
+    );
     if (!order) return [];
     return [
       {
@@ -200,12 +210,15 @@ export class NotificationsOutboxSubscriber implements OutboxSubscriber {
   }
 
   /**
-   * FulfillmentsService's warehouse dispatch — `{ fulfillmentOrderId,
+   * FulfillmentsService's warehouse and seller dispatch paths — `{ fulfillmentOrderId,
    * orderId, dispatchNumber, shipmentId, lines }`. The tracking reference
    * is read from the shipment, since it isn't in the payload.
    */
   private async fulfillmentDispatched(event: OutboxEvent): Promise<Draft[]> {
-    const order = await this.findOrder(event, readString(event.payload, 'orderId'));
+    const order = await this.findOrder(
+      event,
+      readString(event.payload, 'orderId'),
+    );
     if (!order) return [];
     const shipmentId = readString(event.payload, 'shipmentId');
     const shipment = shipmentId
@@ -235,7 +248,10 @@ export class NotificationsOutboxSubscriber implements OutboxSubscriber {
    * FulfillmentCancellationRefundHandler; `reason` is staff/seller-facing.
    */
   private async refundRequired(event: OutboxEvent): Promise<Draft[]> {
-    const order = await this.findOrder(event, readString(event.payload, 'orderId'));
+    const order = await this.findOrder(
+      event,
+      readString(event.payload, 'orderId'),
+    );
     if (!order) return [];
     return [
       {
@@ -250,14 +266,16 @@ export class NotificationsOutboxSubscriber implements OutboxSubscriber {
   }
 
   /**
-   * On the Shipment aggregate. Nothing emits this topic yet (tracking
-   * updates in ShipmentsService don't write to the outbox); it is read from
-   * the shipment row by aggregate id, so the only contract an emitter must
-   * meet is `aggregateId` = the delivered shipment's id.
+   * ShipmentsService's tracking projection — `{ shipmentId, orderId,
+   * deliveredAt }` on the Shipment aggregate, written when a shipment
+   * first becomes DELIVERED. Read from the shipment row by id, so the only
+   * contract an emitter must meet is `aggregateId` = the shipment's id.
    */
   private async shipmentDelivered(event: OutboxEvent): Promise<Draft[]> {
     const shipment = await this.prisma.shipment.findUnique({
-      where: { id: readString(event.payload, 'shipmentId') ?? event.aggregateId },
+      where: {
+        id: readString(event.payload, 'shipmentId') ?? event.aggregateId,
+      },
       select: { order: { select: { id: true, userId: true } } },
     });
     if (!shipment) return this.skip(event, 'shipment');

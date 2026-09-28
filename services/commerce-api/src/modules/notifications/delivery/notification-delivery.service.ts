@@ -1,9 +1,4 @@
-import {
-  Inject,
-  Injectable,
-  Logger,
-  type OnModuleInit,
-} from '@nestjs/common';
+import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import {
@@ -44,7 +39,10 @@ type Candidate = Pick<
 >;
 
 export function retryDelayMs(attempts: number): number {
-  return Math.min(MAX_RETRY_DELAY_MS, BASE_RETRY_DELAY_MS * 2 ** (attempts - 1));
+  return Math.min(
+    MAX_RETRY_DELAY_MS,
+    BASE_RETRY_DELAY_MS * 2 ** (attempts - 1),
+  );
 }
 
 /**

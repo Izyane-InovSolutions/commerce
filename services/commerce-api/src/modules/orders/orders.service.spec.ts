@@ -973,15 +973,15 @@ describe('OrdersService', () => {
       const order = await service.findAny('order-1');
 
       expect(prisma.order.findUnique).toHaveBeenCalledTimes(1);
-      expect(prisma.order.findUnique).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'order-1' },
-          include: expect.objectContaining({
-            items: { include: { offer: expect.any(Object) } },
-            user: expect.any(Object),
-          }),
-        }),
-      );
+      const [query] = prisma.order.findUnique.mock.calls[0] as [
+        {
+          where: unknown;
+          include: { items: { include: { offer: unknown } }; user: unknown };
+        },
+      ];
+      expect(query.where).toEqual({ id: 'order-1' });
+      expect(query.include.items.include.offer).toBeDefined();
+      expect(query.include.user).toBeDefined();
       expect(order.customer).toEqual({
         id: 'user-1',
         email: 'buyer@example.com',

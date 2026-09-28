@@ -29,6 +29,7 @@ import { FulfillmentModule } from './modules/fulfillment/fulfillment.module';
 import { HealthModule } from './modules/health/health.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { MediaModule } from './modules/media/media.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OffersModule } from './modules/offers/offers.module';
 import { OperationsModule } from './modules/operations/operations.module';
 import { OrderCancellationModule } from './modules/orders/cancellation/order-cancellation.module';
@@ -86,6 +87,7 @@ import { WorkersModule } from './infrastructure/workers/workers.module';
     ReturnsModule,
     ReviewsModule,
     AdminReviewsModule,
+    NotificationsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
