@@ -1,12 +1,13 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/services.dart';
 import '../../core/network/api_exception.dart';
 import '../../design/design.dart';
+import '../../domain/card.dart';
+import '../../domain/checkout.dart';
 import '../../domain/orders.dart';
 
 /// Waits for the payment to settle and says where it stands.
@@ -16,10 +17,19 @@ import '../../domain/orders.dart';
 /// check is available from the order page, so leaving this screen, or the
 /// app being killed mid-payment, loses nothing.
 class PaymentStatusPage extends StatefulWidget {
-  const PaymentStatusPage({super.key, required this.paymentId, this.orderId});
+  const PaymentStatusPage({
+    super.key,
+    required this.paymentId,
+    this.orderId,
+    this.method = PaymentMethod.mobileMoney,
+  });
 
   final String paymentId;
   final String? orderId;
+
+  /// Only changes the words: what "waiting" means differs between a prompt
+  /// on the customer's phone and a bank confirming a card.
+  final PaymentMethod method;
 
   @override
   State<PaymentStatusPage> createState() => _PaymentStatusPageState();
@@ -41,6 +51,8 @@ class _PaymentStatusPageState extends State<PaymentStatusPage>
   bool _gaveUp = false;
   Timer? _timer;
   late final DateTime _startedAt;
+
+  bool get _card => widget.method == PaymentMethod.card;
 
   @override
   void initState() {
@@ -79,7 +91,10 @@ class _PaymentStatusPageState extends State<PaymentStatusPage>
       _status = payment.status;
       if (!_status.isInFlight && _status != PaymentStatus.succeeded) {
         final order = await services.orders.order(payment.orderId);
-        _failureReason = order.payment?.failureReason;
+        final reason = order.payment?.failureReason;
+        _failureReason = _card && reason != null
+            ? describeCardFailure(reason)
+            : reason;
       }
     } on ApiException catch (error) {
       _error = error.message;
@@ -106,30 +121,46 @@ class _PaymentStatusPageState extends State<PaymentStatusPage>
     final type = context.type;
     final (icon, wash, ink, title, message) = switch (_status) {
       PaymentStatus.succeeded => (
-        Icons.check_rounded,
+        Glyphs.check,
         colors.accentWash,
         colors.accent,
         'Payment received',
         'Your order is confirmed. Track it any time from your orders.',
       ),
       PaymentStatus.failed || PaymentStatus.cancelled => (
-        Icons.close_rounded,
+        Glyphs.close,
         colors.dangerWash,
         colors.danger,
         _status.label,
         _failureReason ??
             "The payment didn't go through, and you haven't been charged.",
       ),
+      _ when _gaveUp && _card => (
+        Glyphs.clock,
+        colors.warningWash,
+        colors.warning,
+        'Still waiting for your bank',
+        'Your order is saved. It updates by itself once the bank confirms; '
+            'check it any time from your orders.',
+      ),
       _ when _gaveUp => (
-        Icons.schedule_rounded,
+        Glyphs.clock,
         colors.warningWash,
         colors.warning,
         'Still waiting for approval',
         'Your order is saved. If you approve the prompt later it updates '
             'by itself; check it any time from your orders.',
       ),
+      _ when _card => (
+        Glyphs.card,
+        colors.warningWash,
+        colors.warning,
+        'Confirming your card payment',
+        'This usually takes a few seconds. You can leave this screen; your '
+            'order is saved either way.',
+      ),
       _ => (
-        Icons.phone_iphone_rounded,
+        Glyphs.phone,
         colors.warningWash,
         colors.warning,
         'Approve the payment on your phone',
@@ -175,10 +206,10 @@ class _PaymentStatusPageState extends State<PaymentStatusPage>
                                 alignment: Alignment.center,
                                 children: [
                                   Spinner(size: 104, color: ink, stroke: 3),
-                                  Icon(icon, size: 40, color: ink),
+                                  Glyph(icon, size: 40, color: ink),
                                 ],
                               )
-                            : Icon(icon, size: 48, color: ink),
+                            : Glyph(icon, size: 48, color: ink),
                       ),
                       const SizedBox(height: Space.x8),
                       Text(
@@ -206,7 +237,7 @@ class _PaymentStatusPageState extends State<PaymentStatusPage>
                 const Spacer(),
                 if (_status.isInFlight) ...[
                   Button(
-                    label: "I've approved it",
+                    label: _card ? 'Check again' : "I've approved it",
                     variant: ButtonVariant.secondary,
                     loading: _checking,
                     onPressed: _check,

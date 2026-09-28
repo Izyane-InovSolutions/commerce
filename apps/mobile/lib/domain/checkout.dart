@@ -1,4 +1,5 @@
 import '../core/network/json.dart';
+import 'card.dart';
 import 'money.dart';
 import 'orders.dart';
 
@@ -16,14 +17,23 @@ extension MobileMoneyProviderInfo on MobileMoneyProvider {
   };
 }
 
-/// How the customer will pay. Mobile money only in this app for now: card
-/// checkout sends raw card numbers through this API, which puts the app in
-/// PCI scope — a decision to take deliberately, not by default.
-class PaymentDetails {
-  const PaymentDetails({required this.provider, required this.phoneNumber});
+enum PaymentMethod { mobileMoney, card }
 
-  final MobileMoneyProvider provider;
-  final String phoneNumber;
+extension PaymentMethodInfo on PaymentMethod {
+  String get label => switch (this) {
+    PaymentMethod.mobileMoney => 'Mobile money',
+    PaymentMethod.card => 'Card',
+  };
+}
+
+/// How the customer will pay: exactly the `paymentDetails` the API
+/// validates, for each method it accepts.
+sealed class PaymentDetails {
+  const PaymentDetails();
+
+  PaymentMethod get method;
+
+  Json toJson();
 
   /// Same rule as the API's validator. The server stays authoritative; this
   /// only saves a round trip for an obvious typo.
@@ -31,12 +41,36 @@ class PaymentDetails {
 
   static String normalizePhone(String raw) =>
       raw.replaceAll(RegExp(r'[\s-]'), '');
+}
 
+class MobileMoneyPayment extends PaymentDetails {
+  const MobileMoneyPayment({required this.provider, required this.phoneNumber});
+
+  final MobileMoneyProvider provider;
+  final String phoneNumber;
+
+  @override
+  PaymentMethod get method => PaymentMethod.mobileMoney;
+
+  @override
   Json toJson() => {
     'paymentMethod': 'MOBILE_MONEY',
     'provider': provider.wireValue,
-    'phoneNumber': normalizePhone(phoneNumber),
+    'phoneNumber': PaymentDetails.normalizePhone(phoneNumber),
   };
+}
+
+/// See the PCI note in `card.dart`.
+class CardPayment extends PaymentDetails {
+  const CardPayment(this.card);
+
+  final CardDetails card;
+
+  @override
+  PaymentMethod get method => PaymentMethod.card;
+
+  @override
+  Json toJson() => {'paymentMethod': 'CARD', 'card': card.toJson()};
 }
 
 class ShippingGroup {
@@ -105,7 +139,7 @@ class CheckoutResult {
     required this.orderId,
     required this.paymentId,
     required this.paymentStatus,
-    this.redirectUrl,
+    this.failureReason,
   });
 
   factory CheckoutResult.fromJson(Json json) {
@@ -114,14 +148,23 @@ class CheckoutResult {
       orderId: json.obj('order').str('id'),
       paymentId: payment.str('id'),
       paymentStatus: paymentStatusFrom(payment.strOrNull('status')),
-      redirectUrl: payment.strOrNull('redirectUrl'),
+      failureReason: payment.strOrNull('failureReason'),
     );
   }
 
   final String orderId;
   final String paymentId;
   final PaymentStatus paymentStatus;
-  final String? redirectUrl;
+
+  /// The gateway's reason, when the payment failed on the spot.
+  final String? failureReason;
+
+  /// A card is charged inside the checkout request itself, so a decline
+  /// comes back here: the API has already cancelled the order and left the
+  /// cart as it was.
+  bool get failedOnTheSpot =>
+      paymentStatus == PaymentStatus.failed ||
+      paymentStatus == PaymentStatus.cancelled;
 }
 
 /// The payment as the API sees it after reconciling with the gateway.

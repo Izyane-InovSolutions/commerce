@@ -1,0 +1,23 @@
+name: app_update
+description: >-
+  The installed app's version, and in-app updates for internal testers through
+  Firebase App Distribution.
+publish_to: "none"
+version: 0.1.0
+
+environment:
+  sdk: ">=3.8.0 <4.0.0"
+  flutter: ">=3.32.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.izyane.appupdate
+        pluginClass: AppUpdatePlugin
+      ios:
+        pluginClass: AppUpdatePlugin

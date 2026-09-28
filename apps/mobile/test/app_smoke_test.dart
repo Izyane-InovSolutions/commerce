@@ -3,8 +3,10 @@ import 'dart:io';
 
 import 'package:commerce_mobile/app/app.dart';
 import 'package:commerce_mobile/app/services.dart';
+import 'package:commerce_mobile/core/files/file_source.dart';
 import 'package:commerce_mobile/core/storage/key_value_store.dart';
 import 'package:commerce_mobile/design/design.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -16,6 +18,7 @@ Future<(AppServices, FakeApi)> boot(
   WidgetTester tester, {
   MemoryKeyValueStore? store,
   void Function(FakeApi api)? configure,
+  FileSource? files,
 }) async {
   // A phone, not the default 800×600 test surface.
   tester.view.physicalSize = const Size(1170, 2532);
@@ -49,6 +52,7 @@ Future<(AppServices, FakeApi)> boot(
   final services = await AppServices.create(
     store: store ?? MemoryKeyValueStore(),
     httpClient: api.client,
+    files: files ?? const _NoFiles(),
   );
   await tester.pumpWidget(CommerceApp(services: services));
   await services.session.restore();
@@ -62,13 +66,18 @@ void main() {
   ) async {
     await boot(tester);
 
-    expect(find.text('Commerce'), findsWidgets);
-    expect(find.text('New arrivals'), findsOneWidget);
-    expect(find.text('Electronics'), findsOneWidget);
-    expect(find.text('Laptop'), findsOneWidget);
+    expect(find.text('Good for Goods'), findsWidgets);
+    expect(find.text('Electronics'), findsWidgets);
+    expect(find.text('Laptop'), findsWidgets);
     // A tile is one screen-reader stop: name and price together, the price
     // read as one amount although it is drawn in three parts.
-    expect(find.bySemanticsLabel('Laptop, K4,500.00'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'^Laptop, K4,500\.00')), findsWidgets);
+    await tester.scrollUntilVisible(
+      find.text('New arrivals'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('New arrivals'), findsOneWidget);
   });
 
   testWidgets('opening a product shows its price and the add-to-cart action', (
@@ -76,18 +85,22 @@ void main() {
   ) async {
     await boot(tester);
 
-    await tester.tap(find.text('Laptop'));
+    await tester.ensureVisible(find.text('Laptop').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Laptop').first);
     await tester.pumpAndSettle();
 
     expect(find.text('Add to cart'), findsOneWidget);
-    expect(find.text('Sold by Zawadi'), findsOneWidget);
+    expect(find.text('Sold by Zawadi ›'), findsOneWidget);
   });
 
   testWidgets('adding to cart while signed out asks to sign in first', (
     tester,
   ) async {
     await boot(tester);
-    await tester.tap(find.text('Laptop'));
+    await tester.ensureVisible(find.text('Laptop').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Laptop').first);
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Add to cart'));
@@ -124,7 +137,8 @@ void main() {
     api.on('GET /wishlist', (_) => FakeApi.ok(<Object>[]));
     api.on('GET /orders', (_) => FakeApi.ok(<Object>[]));
 
-    await tester.tap(find.text('Account'));
+    // Account opens from the Shop screen's profile button.
+    await tester.tap(find.bySemanticsLabel('Account').first);
     await tester.pumpAndSettle();
     expect(find.text('Your account'), findsOneWidget);
 
@@ -170,6 +184,29 @@ void main() {
     expect(find.text('Try again'), findsOneWidget);
     expect(find.text('Change server'), findsOneWidget);
     expect(store.values['commerce.refresh_token'], 'stored');
+    // Let the minimum splash time run out; the gate stays up regardless.
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Change server'), findsOneWidget);
+  });
+
+  testWidgets('every cold start shows the branded splash first', (
+    tester,
+  ) async {
+    final services = await AppServices.create(
+      store: MemoryKeyValueStore(),
+      httpClient: FakeApi().client,
+    );
+    await tester.pumpWidget(CommerceApp(services: services));
+    await services.session.restore();
+    await tester.pump();
+    expect(
+      find.bySemanticsLabel('Good for Goods, by iZyane'),
+      findsOneWidget,
+      reason: 'signed out, the session settles at once; the splash holds',
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    expect(find.bySemanticsLabel('Good for Goods, by iZyane'), findsNothing);
   });
 
   testWidgets(
@@ -179,11 +216,51 @@ void main() {
       tester.platformDispatcher.textScaleFactorTestValue = 1.6;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       await boot(tester);
-      expect(find.text('New arrivals'), findsOneWidget);
+      // Scrolling past every rail lays each one out at the large size.
+      await tester.scrollUntilVisible(
+        find.text('New arrivals'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.scrollUntilVisible(
+        find.text('Laptop').first,
+        -300,
+        scrollable: find.byType(Scrollable).first,
+      );
 
-      await tester.tap(find.text('Laptop'));
+      await tester.ensureVisible(find.text('Laptop').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Laptop').first);
       await tester.pumpAndSettle();
       expect(find.text('Add to cart'), findsOneWidget);
     },
   );
+
+  for (final (mode, icons) in [
+    (Brightness.light, Brightness.dark),
+    (Brightness.dark, Brightness.light),
+  ]) {
+    testWidgets('system bar icons read against the page in ${mode.name} mode', (
+      tester,
+    ) async {
+      tester.platformDispatcher.platformBrightnessTestValue = mode;
+      addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+      await boot(tester);
+
+      final region = tester.widget<AnnotatedRegion<SystemUiOverlayStyle>>(
+        find.byType(AnnotatedRegion<SystemUiOverlayStyle>).first,
+      );
+      expect(region.value.statusBarIconBrightness, icons);
+      expect(region.value.systemNavigationBarIconBrightness, icons);
+      // iOS reads it the other way round: the bar's own brightness.
+      expect(region.value.statusBarBrightness, mode);
+    });
+  }
+}
+
+class _NoFiles implements FileSource {
+  const _NoFiles();
+
+  @override
+  Future<PickedFile?> pick(Set<FileKind> kinds) async => null;
 }

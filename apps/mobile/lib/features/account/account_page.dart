@@ -1,10 +1,10 @@
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/services.dart';
 import '../../design/design.dart';
 import '../auth/sign_in_prompt.dart';
+import '../updates/about_app.dart';
 
 class AccountPage extends StatelessWidget {
   const AccountPage({super.key});
@@ -26,26 +26,16 @@ class AccountPage extends StatelessWidget {
     return ListenableBuilder(
       listenable: session,
       builder: (context, _) {
-        final server = InsetGroup(
-          children: [
-            ListRow(
-              leading: Icons.dns_outlined,
-              title: 'Server',
-              subtitle: services.endpoint.value.host,
-              onPressed: () => context.push('/settings/server'),
-            ),
-          ],
-        );
+        const server = AboutAppGroup();
 
         if (!session.isSignedIn) {
           return PageScaffold(
             title: 'Account',
-            showBack: false,
             slivers: [
               const SliverFillRemaining(
                 hasScrollBody: false,
                 child: SignInPrompt(
-                  icon: Icons.person_outline_rounded,
+                  icon: Glyphs.person,
                   title: 'Your account',
                   message:
                       'Sign in to track orders, save addresses and keep a wishlist.',
@@ -64,7 +54,6 @@ class AccountPage extends StatelessWidget {
         final colors = context.colors;
         return PageScaffold(
           title: 'Account',
-          showBack: false,
           slivers: [
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
@@ -103,22 +92,22 @@ class AccountPage extends StatelessWidget {
                   InsetGroup(
                     children: [
                       ListRow(
-                        leading: Icons.receipt_long_outlined,
+                        leading: Glyphs.receipt,
                         title: 'Orders',
                         onPressed: () => context.push('/account/orders'),
                       ),
                       ListRow(
-                        leading: Icons.favorite_border_rounded,
+                        leading: Glyphs.heart,
                         title: 'Wishlist',
                         onPressed: () => context.push('/wishlist'),
                       ),
                       ListRow(
-                        leading: Icons.location_on_outlined,
+                        leading: Glyphs.pin,
                         title: 'Addresses',
                         onPressed: () => context.push('/account/addresses'),
                       ),
                       ListRow(
-                        leading: Icons.badge_outlined,
+                        leading: Glyphs.idCard,
                         title: 'Profile',
                         onPressed: () => context.push('/account/profile'),
                       ),
@@ -130,7 +119,7 @@ class AccountPage extends StatelessWidget {
                   InsetGroup(
                     children: [
                       ListRow(
-                        leading: Icons.logout_rounded,
+                        leading: Glyphs.signOut,
                         title: 'Sign out',
                         destructive: true,
                         showChevron: false,

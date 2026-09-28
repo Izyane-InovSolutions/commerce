@@ -1,12 +1,15 @@
 import 'dart:async';
+import 'glyphs.dart';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'button.dart';
 import 'lists.dart';
 import 'pressable.dart';
+import 'text_field.dart';
 import 'theme.dart';
 import 'tokens.dart';
 
@@ -67,31 +70,41 @@ class ToastHostState extends State<ToastHost> {
   @override
   Widget build(BuildContext context) {
     final toast = _current;
-    final bottom = MediaQuery.paddingOf(context).bottom;
+    final top = MediaQuery.paddingOf(context).top;
     return Stack(
       children: [
         widget.child,
+        // From the top, under the status bar: clear of the dock and of any
+        // pinned pay bar, and nowhere a platform puts its own snackbar.
         Positioned(
           left: Space.gutter,
           right: Space.gutter,
-          // Clear of the tab bar, which sits in the bottom 64pt.
-          bottom: bottom + 76,
-          child: AnimatedSwitcher(
-            duration: context.reduceMotion ? Duration.zero : Motion.base,
-            switchInCurve: Motion.arrive,
-            transitionBuilder: (child, animation) => FadeTransition(
-              opacity: animation,
-              child: SlideTransition(
-                position: Tween(
-                  begin: const Offset(0, 0.4),
-                  end: Offset.zero,
-                ).animate(animation),
-                child: child,
+          top: top + Space.x2,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: AnimatedSwitcher(
+                duration: context.reduceMotion ? Duration.zero : Motion.base,
+                switchInCurve: Motion.arrive,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween(
+                      begin: const Offset(0, -0.6),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                ),
+                child: toast == null
+                    ? const SizedBox.shrink()
+                    : _Toast(
+                        key: ValueKey(toast.id),
+                        data: toast,
+                        onDismiss: hide,
+                      ),
               ),
             ),
-            child: toast == null
-                ? const SizedBox.shrink()
-                : _Toast(key: ValueKey(toast.id), data: toast, onDismiss: hide),
           ),
         ),
       ],
@@ -108,38 +121,44 @@ class _Toast extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    // Inverted surface: a toast is about something that just happened, and
-    // must read against whatever screen it lands on.
-    final background = colors.ink;
-    final foreground = colors.paper;
+    // The dock's colours: a notice is part of the app's frame, and must
+    // read against whatever screen it lands on.
     return Semantics(
       liveRegion: true,
       child: GestureDetector(
-        onVerticalDragEnd: (_) => onDismiss(),
+        // Flick it away upwards, back where it came from.
+        onVerticalDragEnd: (details) {
+          if ((details.primaryVelocity ?? 0) < 0) onDismiss();
+        },
+        onTap: data.actionLabel == null ? onDismiss : null,
         child: Container(
           padding: const EdgeInsets.fromLTRB(
-            Space.x4,
+            Space.x5,
             Space.x3,
             Space.x2,
             Space.x3,
           ),
           decoration: BoxDecoration(
-            color: background,
-            borderRadius: const BorderRadius.all(Radii.control),
+            color: colors.dock,
+            borderRadius: const BorderRadius.all(Radius.circular(24)),
+            border: Border.all(color: colors.line, width: 0.8),
             boxShadow: [
               BoxShadow(
-                color: colors.ink.withValues(alpha: 0.25),
-                blurRadius: 18,
+                color: const Color(0xFF000000).withValues(
+                  alpha: colors.brightness == Brightness.dark ? 0.4 : 0.1,
+                ),
+                blurRadius: 20,
                 offset: const Offset(0, 6),
               ),
             ],
           ),
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Expanded(
+              Flexible(
                 child: Text(
                   data.message,
-                  style: context.type.small.copyWith(color: foreground),
+                  style: context.type.small.copyWith(color: colors.onDock),
                 ),
               ),
               if (data.actionLabel != null)
@@ -157,13 +176,13 @@ class _Toast extends StatelessWidget {
                     child: Text(
                       data.actionLabel!,
                       style: context.type.label.copyWith(
-                        color: colors.accentWash,
+                        color: colors.dockAccent,
                       ),
                     ),
                   ),
                 )
               else
-                const SizedBox(width: Space.x2),
+                const SizedBox(width: Space.x3),
             ],
           ),
         ),
@@ -429,6 +448,163 @@ Future<T?> showSheet<T>(
   );
 }
 
+/// One field of an [askFor] sheet.
+class AskField {
+  const AskField({
+    required this.label,
+    this.hint,
+    this.initial = '',
+    this.helper,
+    this.keyboardType,
+    this.inputFormatters,
+    this.optional = false,
+    this.validate,
+  });
+
+  final String label;
+  final String? hint;
+  final String initial;
+  final String? helper;
+  final TextInputType? keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
+  final bool optional;
+
+  /// A message when the value is not acceptable; null when it is.
+  final String? Function(String value)? validate;
+}
+
+/// A short form in a sheet — a reason, a price, a count — for an action
+/// that needs a word or a number before it can happen. Returns the trimmed
+/// values in field order, or null if dismissed.
+Future<List<String>?> askFor(
+  BuildContext context, {
+  required String title,
+  String? message,
+  required List<AskField> fields,
+  required String confirmLabel,
+  bool destructive = false,
+}) {
+  return showSheet<List<String>>(
+    context,
+    label: title,
+    builder: (context) => _AskSheet(
+      title: title,
+      message: message,
+      fields: fields,
+      confirmLabel: confirmLabel,
+      destructive: destructive,
+    ),
+  );
+}
+
+class _AskSheet extends StatefulWidget {
+  const _AskSheet({
+    required this.title,
+    required this.message,
+    required this.fields,
+    required this.confirmLabel,
+    required this.destructive,
+  });
+
+  final String title;
+  final String? message;
+  final List<AskField> fields;
+  final String confirmLabel;
+  final bool destructive;
+
+  @override
+  State<_AskSheet> createState() => _AskSheetState();
+}
+
+class _AskSheetState extends State<_AskSheet> {
+  late final _controllers = [
+    for (final f in widget.fields) TextEditingController(text: f.initial),
+  ];
+  List<String?> _errors = const [];
+
+  @override
+  void dispose() {
+    for (final c in _controllers) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  void _submit() {
+    final values = [for (final c in _controllers) c.text.trim()];
+    final errors = [
+      for (final (i, f) in widget.fields.indexed)
+        values[i].isEmpty
+            ? (f.optional ? null : 'Required')
+            : f.validate?.call(values[i]),
+    ];
+    if (errors.any((e) => e != null)) {
+      setState(() => _errors = errors);
+      return;
+    }
+    Navigator.of(context).pop(values);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(
+        Space.gutter,
+        0,
+        Space.gutter,
+        Space.x2,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(widget.title, style: context.type.heading),
+          if (widget.message != null) ...[
+            const SizedBox(height: Space.x2),
+            Text(
+              widget.message!,
+              style: context.type.body.copyWith(color: context.colors.inkMuted),
+            ),
+          ],
+          for (final (i, f) in widget.fields.indexed) ...[
+            const SizedBox(height: Space.x4),
+            InputField(
+              controller: _controllers[i],
+              label: f.label,
+              hint: f.hint,
+              helper: f.helper,
+              keyboardType: f.keyboardType,
+              inputFormatters: f.inputFormatters,
+              autofocus: i == 0,
+              textInputAction: i == widget.fields.length - 1
+                  ? TextInputAction.done
+                  : TextInputAction.next,
+              onSubmitted: i == widget.fields.length - 1
+                  ? (_) => _submit()
+                  : null,
+              error: i < _errors.length ? _errors[i] : null,
+            ),
+          ],
+          const SizedBox(height: Space.x6),
+          Button(
+            label: widget.confirmLabel,
+            variant: widget.destructive
+                ? ButtonVariant.danger
+                : ButtonVariant.primary,
+            onPressed: _submit,
+          ),
+          const SizedBox(height: Space.x2),
+          Button(
+            label: 'Cancel',
+            variant: ButtonVariant.ghost,
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class SheetOption<T> {
   const SheetOption(
     this.value,
@@ -441,7 +617,7 @@ class SheetOption<T> {
   final T value;
   final String label;
   final String? subtitle;
-  final IconData? icon;
+  final GlyphData? icon;
   final bool destructive;
 }
 

@@ -1,13 +1,13 @@
-// Icons is glyph data only — no Material component is used.
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 
+import 'glyphs.dart';
 import 'pressable.dart';
 import 'theme.dart';
 import 'tokens.dart';
 
-/// A filter or choice. Selected chips take the accent wash, so "what is
-/// applied" is readable at a glance down a scrolling row.
+/// A filter or choice: a borderless tag. The selected one turns solid ink,
+/// the strongest mark on a light page, so "what is applied" reads from
+/// across a scrolling row without a tick or an outline.
 class SelectChip extends StatelessWidget {
   const SelectChip({
     super.key,
@@ -20,11 +20,12 @@ class SelectChip extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback? onPressed;
-  final IconData? icon;
+  final GlyphData? icon;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final foreground = selected ? colors.paper : colors.ink;
     return Pressable(
       onPressed: onPressed,
       selected: selected,
@@ -35,26 +36,21 @@ class SelectChip extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 38),
         padding: const EdgeInsets.symmetric(horizontal: Space.x4),
         decoration: BoxDecoration(
-          color: selected ? colors.accentWash : colors.surface,
+          color: selected ? colors.ink : colors.tile,
           borderRadius: const BorderRadius.all(Radii.chip),
-          border: Border.all(color: selected ? colors.accent : colors.line),
         ),
         alignment: Alignment.center,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (icon != null || selected) ...[
-              Icon(
-                selected ? Icons.check_rounded : icon,
-                size: 16,
-                color: selected ? colors.accent : colors.inkMuted,
-              ),
+            if (icon != null) ...[
+              Glyph(icon!, size: 16, color: foreground),
               const SizedBox(width: Space.x1 + 2),
             ],
             Text(
               label,
               style: context.type.small.copyWith(
-                color: selected ? colors.accent : colors.ink,
+                color: foreground,
                 fontVariations: const [FontVariation('wght', 580)],
               ),
             ),
@@ -105,10 +101,18 @@ class StatusBadge extends StatelessWidget {
 
 /// A count on an icon — the cart tab.
 class CountBadge extends StatelessWidget {
-  const CountBadge({super.key, required this.count, required this.child});
+  const CountBadge({
+    super.key,
+    required this.count,
+    required this.child,
+    this.ring,
+  });
 
   final int count;
   final Widget child;
+
+  /// The colour of the gap around the badge: whatever it sits on.
+  final Color? ring;
 
   @override
   Widget build(BuildContext context) {
@@ -127,7 +131,7 @@ class CountBadge extends StatelessWidget {
               decoration: BoxDecoration(
                 color: colors.accent,
                 borderRadius: const BorderRadius.all(Radius.circular(9)),
-                border: Border.all(color: colors.paper, width: 1.5),
+                border: Border.all(color: ring ?? colors.paper, width: 2),
               ),
               alignment: Alignment.center,
               child: Text(
@@ -232,6 +236,123 @@ class SegmentedChoice<T> extends StatelessWidget {
   }
 }
 
+class ChoiceTile<T> {
+  const ChoiceTile(this.value, this.label, {required this.glyph, this.detail});
+
+  final T value;
+  final String label;
+  final GlyphData glyph;
+
+  /// One short line under the label: "MTN · Airtel", "Visa · Mastercard".
+  final String? detail;
+}
+
+/// A choice between a few *kinds* of thing — how to pay — as side-by-side
+/// tiles. Bigger and more explanatory than a segmented control, which is
+/// kept for switching between variants of one thing (which network).
+class ChoiceTiles<T> extends StatelessWidget {
+  const ChoiceTiles({
+    super.key,
+    required this.options,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final List<ChoiceTile<T>> options;
+  final T value;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final type = context.type;
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (i, option) in options.indexed) ...[
+            if (i > 0) const SizedBox(width: Space.x3),
+            Expanded(
+              child: Pressable(
+                onPressed: () => onChanged(option.value),
+                selected: option.value == value,
+                haptic: Haptic.selection,
+                pressScale: 0.98,
+                focusRadius: Radii.tile,
+                builder: (context, _) {
+                  final selected = option.value == value;
+                  return AnimatedContainer(
+                    duration: Motion.fast,
+                    curve: Motion.standard,
+                    padding: const EdgeInsets.all(Space.x4 - 1),
+                    decoration: BoxDecoration(
+                      color: colors.surface,
+                      borderRadius: const BorderRadius.all(Radii.tile),
+                      border: Border.all(
+                        color: selected ? colors.accent : colors.surface,
+                        width: 2,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Glyph(
+                              option.glyph,
+                              size: 22,
+                              color: selected ? colors.accent : colors.inkMuted,
+                            ),
+                            const Spacer(),
+                            // Shape as well as colour marks the choice.
+                            AnimatedContainer(
+                              duration: Motion.fast,
+                              width: 20,
+                              height: 20,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: selected
+                                    ? colors.accent
+                                    : const Color(0x00000000),
+                                border: Border.all(
+                                  color: selected ? colors.accent : colors.line,
+                                  width: 2,
+                                ),
+                              ),
+                              child: selected
+                                  ? Glyph(
+                                      Glyphs.check,
+                                      size: 14,
+                                      color: colors.onAccent,
+                                    )
+                                  : null,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: Space.x3),
+                        Text(option.label, style: type.label),
+                        if (option.detail != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            option.detail!,
+                            style: type.caption.copyWith(
+                              color: colors.inkMuted,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class QuantityStepper extends StatelessWidget {
   const QuantityStepper({
     super.key,
@@ -251,7 +372,7 @@ class QuantityStepper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    Widget step(IconData icon, String label, int? next) => Pressable(
+    Widget step(GlyphData icon, String label, int? next) => Pressable(
       onPressed: enabled && next != null ? () => onChanged(next) : null,
       semanticLabel: label,
       excludeChildSemantics: true,
@@ -260,9 +381,9 @@ class QuantityStepper extends StatelessWidget {
       focusRadius: const Radius.circular(20),
       builder: (context, states) => SizedBox.square(
         dimension: 44,
-        child: Icon(
+        child: Glyph(
           icon,
-          size: 20,
+          size: 18,
           color: states.contains(PressState.disabled)
               ? colors.inkSubtle
               : colors.ink,
@@ -272,15 +393,14 @@ class QuantityStepper extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: colors.surface,
-        border: Border.all(color: colors.line),
+        color: colors.tile,
         borderRadius: const BorderRadius.all(Radii.control),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           step(
-            Icons.remove_rounded,
+            Glyphs.remove,
             'Decrease quantity',
             value > min ? value - 1 : null,
           ),
@@ -298,11 +418,7 @@ class QuantityStepper extends StatelessWidget {
               ),
             ),
           ),
-          step(
-            Icons.add_rounded,
-            'Increase quantity',
-            value < max ? value + 1 : null,
-          ),
+          step(Glyphs.add, 'Increase quantity', value < max ? value + 1 : null),
         ],
       ),
     );

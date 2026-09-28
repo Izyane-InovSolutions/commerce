@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 
+import 'glyphs.dart';
 import 'pressable.dart';
 import 'theme.dart';
 import 'tokens.dart';
@@ -38,17 +38,7 @@ class InsetGroup extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (title != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
-            child: Text(
-              title!,
-              style: context.type.small.copyWith(
-                color: colors.inkMuted,
-                fontVariations: const [FontVariation('wght', 600)],
-              ),
-            ),
-          ),
+        if (title != null) GroupTitle(title!),
         ClipRRect(
           borderRadius: const BorderRadius.all(Radii.group),
           child: ColoredBox(
@@ -69,6 +59,29 @@ class InsetGroup extends StatelessWidget {
   }
 }
 
+/// The small heading above a grouped list, for use on its own where the
+/// content under it is not a single group.
+class GroupTitle extends StatelessWidget {
+  const GroupTitle(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
+    child: Semantics(
+      header: true,
+      child: Text(
+        text,
+        style: context.type.small.copyWith(
+          color: context.colors.inkMuted,
+          fontVariations: const [FontVariation('wght', 600)],
+        ),
+      ),
+    ),
+  );
+}
+
 class ListRow extends StatelessWidget {
   const ListRow({
     super.key,
@@ -84,7 +97,7 @@ class ListRow extends StatelessWidget {
 
   final String title;
   final String? subtitle;
-  final IconData? leading;
+  final GlyphData? leading;
   final Widget? trailing;
   final VoidCallback? onPressed;
   final bool destructive;
@@ -115,8 +128,8 @@ class ListRow extends StatelessWidget {
       child: Row(
         children: [
           if (leading != null) ...[
-            Icon(
-              leading,
+            Glyph(
+              leading!,
               size: 22,
               color: destructive ? colors.danger : colors.inkMuted,
             ),
@@ -140,13 +153,8 @@ class ListRow extends StatelessWidget {
           ),
           if (trailing != null) ...[const SizedBox(width: Space.x2), trailing!],
           if (selected == true)
-            Icon(Icons.check_rounded, color: colors.accent, size: 22),
-          if (chevron)
-            Icon(
-              Icons.chevron_right_rounded,
-              color: colors.inkSubtle,
-              size: 22,
-            ),
+            Glyph(Glyphs.check, color: colors.accent, size: 22),
+          if (chevron) Glyph(Glyphs.forward, color: colors.inkSubtle, size: 22),
         ],
       ),
     );
@@ -159,6 +167,124 @@ class ListRow extends StatelessWidget {
       dimOnPress: false,
       focusRadius: Radii.group,
       builder: (context, states) => row(states),
+    );
+  }
+}
+
+/// A row that turns something on or off, with a switch at its end. The
+/// whole row is the target, not just the switch.
+class SwitchRow extends StatelessWidget {
+  const SwitchRow({
+    super.key,
+    required this.title,
+    required this.value,
+    required this.onChanged,
+    this.subtitle,
+  });
+
+  final String title;
+  final String? subtitle;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final type = context.type;
+    return Semantics(
+      toggled: value,
+      child: Pressable(
+        onPressed: onChanged == null ? null : () => onChanged!(!value),
+        haptic: Haptic.selection,
+        pressScale: 1,
+        dimOnPress: false,
+        focusRadius: Radii.group,
+        builder: (context, states) => AnimatedContainer(
+          duration: Motion.fast,
+          color: states.contains(PressState.pressed)
+              ? colors.tile
+              : const Color(0x00000000),
+          constraints: const BoxConstraints(minHeight: 54),
+          padding: const EdgeInsets.symmetric(
+            horizontal: Space.x4,
+            vertical: Space.x3,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(title, style: type.body),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        style: type.small.copyWith(color: colors.inkMuted),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: Space.x3),
+              _Switch(value: value),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The switch itself: a squared-off track, in the design system's radii
+/// rather than either platform's pill, with the thumb carrying a check when
+/// on — state shown by shape as well as colour.
+class _Switch extends StatelessWidget {
+  const _Switch({required this.value});
+
+  final bool value;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final duration = context.reduceMotion ? Duration.zero : Motion.base;
+    return AnimatedContainer(
+      duration: duration,
+      curve: Motion.standard,
+      width: 50,
+      height: 30,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: value ? colors.accent : colors.line,
+        borderRadius: const BorderRadius.all(Radius.circular(10)),
+      ),
+      child: AnimatedAlign(
+        duration: duration,
+        curve: Motion.standard,
+        alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: colors.surface,
+            borderRadius: const BorderRadius.all(Radius.circular(7)),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF000000).withValues(alpha: 0.15),
+                blurRadius: 3,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: AnimatedOpacity(
+            duration: duration,
+            opacity: value ? 1 : 0,
+            child: Glyph(Glyphs.check, size: 16, color: colors.accent),
+          ),
+        ),
+      ),
     );
   }
 }
