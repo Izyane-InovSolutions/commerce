@@ -3,10 +3,21 @@ import { AttentionService } from './attention.service';
 
 type Mock = jest.Mock;
 
-function buildPrisma(): Record<string, { count?: Mock; findUnique?: Mock }> & {
+type Counter = { count: Mock };
+type PrismaMock = {
+  product: Counter;
+  seller: Counter;
+  returnRequest: Counter;
+  sellerPayoutRequest: Counter;
+  reviewReport: Counter;
+  fulfillmentOrder: Counter;
+  sellerOrder: Counter;
+  sellerRatingSummary: { findUnique: Mock };
   $queryRaw: Mock;
-} {
-  const counter = (value: number): { count: Mock } => ({
+};
+
+function buildPrisma(): PrismaMock {
+  const counter = (value: number): Counter => ({
     count: jest.fn().mockResolvedValue(value),
   });
   return {

@@ -43,6 +43,7 @@ import { PUBLIC_STOREFRONT_SELECT } from '../sellers/storefronts.service';
 import { AttachMediaDto } from './dto/attach-media.dto';
 import { BestSellersQueryDto } from './dto/best-sellers-query.dto';
 import { DealsQueryDto } from './dto/deals-query.dto';
+import { priceLeadShare, withPriceLeads } from './price-lead';
 import { CreateProductDto } from './dto/create-product.dto';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
@@ -1311,15 +1312,38 @@ export class ProductsService {
   }
 
   /**
-   * Published, buyable products with at least one offer on sale right now,
-   * biggest saving (as a share of the regular price) first.
+   * Published, buyable products with a deal right now, biggest saving (as a
+   * share) first. Two kinds count:
+   *
+   * - a price cut: an offer's time-limited price below its own regular one
+   *   (pickSale), saving measured against that regular price;
+   * - a best price: an offer at least 5% below every other in-stock seller
+   *   of the same variant (withPriceLeads), saving measured against the
+   *   runner-up.
    */
   async findDeals(query: DealsQueryDto): Promise<DealsResult> {
     const now = new Date();
+    // Variants sold by two or more published offers — the only place a
+    // best price can come from. Eligibility and stock are checked properly
+    // once the products are read through the public shape.
+    const contested = await this.prisma.$queryRaw<{ productId: string }[]>`
+      SELECT v.product_id AS "productId"
+      FROM offers f
+      JOIN product_variants v ON v.id = f.variant_id
+      JOIN products p ON p.id = v.product_id
+      WHERE f.status::text = ${ProductStatus.PUBLISHED}
+        AND v.status::text = ${ProductStatus.PUBLISHED}
+        AND p.status::text = ${ProductStatus.PUBLISHED}
+      GROUP BY v.id, v.product_id
+      HAVING COUNT(*) >= 2
+      LIMIT ${DEAL_CANDIDATES}
+    `;
+    const contestedIds = [...new Set(contested.map((row) => row.productId))];
+
     const products = await this.prisma.product.findMany({
       where: {
         status: ProductStatus.PUBLISHED,
-        variants: {
+        OR: [{ id: { in: contestedIds } }, { variants: {
           some: {
             status: ProductStatus.PUBLISHED,
             offers: {
@@ -1336,7 +1360,7 @@ export class ProductsService {
               },
             },
           },
-        },
+        } }],
       },
       include: PUBLIC_PRODUCT_INCLUDE,
       take: DEAL_CANDIDATES,
@@ -1358,12 +1382,19 @@ export class ProductsService {
         );
         let best = 0;
         for (const variant of item.variants)
-          for (const offer of variant.offers)
-            if (offer.compareAtPrice && offer.currentPrice && offer.inStock)
+          for (const offer of variant.offers) {
+            if (!offer.currentPrice || !offer.inStock) continue;
+            if (offer.compareAtPrice)
               best = Math.max(
                 best,
                 1 - offer.currentPrice.amount / offer.compareAtPrice.amount,
               );
+            if (offer.priceLead)
+              best = Math.max(
+                best,
+                priceLeadShare(offer.currentPrice, offer.priceLead),
+              );
+          }
         return { item, best };
       })
       .filter((entry) => entry.best > 0)
@@ -1473,37 +1504,40 @@ export class ProductsService {
           valueId: entry.attributeValue.id,
           value: entry.attributeValue.value,
         })),
-        offers: variant.offers.map((offer) => {
-          const currentPrice = pickCurrentPrice(offer.prices, currency);
-          const sale = pickSale(offer.prices, currency);
-          const available =
-            offer.stockSource === OfferStockSource.SELLER
-              ? (stock.byOffer.get(offer.id) ?? 0)
-              : (stock.byVariant.get(variant.id) ?? 0);
-          return {
-            id: offer.id,
-            status: offer.status,
-            seller: offer.seller ?? null,
-            isFirstParty: offer.sellerId === null,
-            currentPrice: currentPrice
-              ? { amount: currentPrice.amount, currency: currentPrice.currency }
-              : null,
-            compareAtPrice: sale
-              ? { amount: sale.regular.amount, currency: sale.regular.currency }
-              : null,
-            saleEndsAt: sale ? sale.endsAt.toISOString() : null,
-            // What the offer *is* priced in, so a client can tell "we don't
-            // sell this" apart from "we don't sell this in your currency".
-            currencies: currentPrices(offer.prices)
-              .map((price) => price.currency)
-              .sort(),
-            inStock: available > 0,
-            shippingCost:
-              offer.shippingAmount !== null && offer.shippingCurrency !== null
-                ? { amount: offer.shippingAmount, currency: offer.shippingCurrency }
+        offers: withPriceLeads(
+          variant.offers.map((offer) => {
+            const currentPrice = pickCurrentPrice(offer.prices, currency);
+            const sale = pickSale(offer.prices, currency);
+            const available =
+              offer.stockSource === OfferStockSource.SELLER
+                ? (stock.byOffer.get(offer.id) ?? 0)
+                : (stock.byVariant.get(variant.id) ?? 0);
+            return {
+              id: offer.id,
+              status: offer.status,
+              seller: offer.seller ?? null,
+              isFirstParty: offer.sellerId === null,
+              currentPrice: currentPrice
+                ? { amount: currentPrice.amount, currency: currentPrice.currency }
                 : null,
-          };
-        }),
+              compareAtPrice: sale
+                ? { amount: sale.regular.amount, currency: sale.regular.currency }
+                : null,
+              saleEndsAt: sale ? sale.endsAt.toISOString() : null,
+              // What the offer *is* priced in, so a client can tell "we don't
+              // sell this" apart from "we don't sell this in your currency".
+              currencies: currentPrices(offer.prices)
+                .map((price) => price.currency)
+                .sort(),
+              inStock: available > 0,
+              shippingCost:
+                offer.shippingAmount !== null && offer.shippingCurrency !== null
+                  ? { amount: offer.shippingAmount, currency: offer.shippingCurrency }
+                  : null,
+              priceLead: null,
+            };
+          }),
+        ),
       })),
       isFeatured: product.featuredAt !== null,
       averageRating: averageRatingFromSummary(ratingSummary),

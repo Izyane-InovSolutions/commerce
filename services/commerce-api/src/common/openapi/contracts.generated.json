@@ -30693,6 +30693,15 @@
           "type": "string",
           "nullable": true
         },
+        "priceLead": {
+          "type": "object",
+          "allOf": [
+            {
+              "$ref": "#/components/schemas/PriceLead"
+            }
+          ],
+          "nullable": true
+        },
         "currencies": {
           "type": "array",
           "items": {
@@ -30720,6 +30729,7 @@
         "currentPrice",
         "compareAtPrice",
         "saleEndsAt",
+        "priceLead",
         "currencies",
         "inStock",
         "shippingCost"
@@ -30741,6 +30751,36 @@
       ]
     },
     "__type49": {
+      "type": "object",
+      "properties": {
+        "amount": {
+          "type": "number"
+        },
+        "currency": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "amount",
+        "currency"
+      ]
+    },
+    "PriceLead": {
+      "type": "object",
+      "properties": {
+        "nextLowestPrice": {
+          "$ref": "#/components/schemas/Money"
+        },
+        "sellerCount": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "nextLowestPrice",
+        "sellerCount"
+      ]
+    },
+    "Money": {
       "type": "object",
       "properties": {
         "amount": {

@@ -1,3 +1,4 @@
+import type { PriceLead } from './price-lead';
 import type {
   Attribute,
   AttributeValue,
@@ -84,6 +85,9 @@ export type PublicOffer = {
   compareAtPrice: { amount: number; currency: string } | null;
   /** When the sale price ends (ISO); null when not on sale. */
   saleEndsAt: string | null;
+  /** Set on the one in-stock offer that undercuts every other seller of the
+   * variant by at least 5% — see withPriceLeads. Null otherwise. */
+  priceLead: PriceLead | null;
   /** Every currency this offer currently carries a price in. */
   currencies: string[];
   /** False once available stock (on-hand minus reserved) has run out. */
