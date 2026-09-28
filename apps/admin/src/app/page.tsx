@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 
 import {
+  backendGetAdminAttention,
   backendGetSalesAnalytics,
   backendListBrands,
   backendListCategories,
@@ -13,9 +14,13 @@ import { currentPrices, defaultBackendCurrency } from '@commerce/contracts';
 
 import { ApiErrorNotice } from '@/components/api-error-notice';
 import { ApiStatusCard } from '@/components/api-status-card';
-import { CategorySalesPieChart } from '@/components/category-sales-pie-chart';
+import { AttentionList } from '@/components/attention-list';
+import { BarList } from '@/components/bar-list';
+import { LowStockList } from '@/components/low-stock-list';
 import { PageHeader } from '@/components/page-header';
 import { SalesAreaChart } from '@/components/sales-area-chart';
+import { StatTile } from '@/components/stat-tile';
+import { TopProductsTable } from '@/components/top-products-table';
 import { Button } from '@/components/ui/button';
 import {
   fillSalesSeries,
@@ -23,7 +28,8 @@ import {
   type SalesReportFilters,
 } from '@/lib/analytics';
 import { apiClient } from '@/lib/api';
-import { sampleCategorySalesShares } from '@/lib/sample-category-sales';
+import { periodChange } from '@/lib/insights';
+import { formatMinor } from '@/lib/money';
 import { explainMissingRoute } from '@/lib/api-route-errors';
 import { addDays, todayIsoDate } from '@/lib/date-range';
 import { navigation, navigationFor } from '@/lib/navigation';
@@ -132,21 +138,235 @@ async function CatalogSummary() {
   );
 }
 
-/**
- * Best-selling categories, by real category names — see
- * `sampleCategorySalesShares` for why the shares themselves are sample data.
- */
-async function CategorySales() {
-  let shares;
+/** The window the headline figures and breakdowns cover. */
+const INSIGHT_DAYS = 30;
+const INSIGHT_PERIOD = `${INSIGHT_DAYS} days`;
 
+function Panel({
+  title,
+  description,
+  children,
+  className,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`space-y-4 rounded-xl border p-5 ${className ?? ''}`}>
+      <div className="space-y-1">
+        <h2 className="text-base font-semibold tracking-tight">{title}</h2>
+        {description ? (
+          <p className="text-muted-foreground text-sm">{description}</p>
+        ) : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * The last 30 days against the 30 before: headline figures, then where the
+ * money came from (categories, stores) and what sold. One report feeds all
+ * of it, so one failure explains itself once rather than in every card.
+ */
+async function SalesInsights() {
+  const to = todayIsoDate();
+  const filters: SalesReportFilters = {
+    from: addDays(to, -(INSIGHT_DAYS - 1)),
+    to,
+    interval: 'day',
+    currency: defaultBackendCurrency,
+  };
+
+  let report;
   try {
-    const categories = await backendListCategories(apiClient);
-    shares = sampleCategorySalesShares(categories);
-  } catch {
-    return null;
+    report = await backendGetSalesAnalytics(
+      apiClient,
+      toSalesAnalyticsQuery(filters),
+    );
+  } catch (error) {
+    return (
+      <ApiErrorNotice error={explainMissingRoute(error, 'sales analytics')} />
+    );
   }
 
-  return <CategorySalesPieChart shares={shares} />;
+  const { totals, previous, currency } = report;
+  const money = (amount: number) => formatMinor(amount, currency);
+
+  return (
+    <>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatTile
+          label={`Sales, last ${INSIGHT_PERIOD}`}
+          value={money(totals.grossAmount)}
+          change={
+            previous
+              ? periodChange(totals.grossAmount, previous.grossAmount)
+              : undefined
+          }
+          period={INSIGHT_PERIOD}
+          href="/analytics"
+        />
+        <StatTile
+          label="Paid orders"
+          value={totals.orderCount.toLocaleString('en-GB')}
+          change={
+            previous
+              ? periodChange(totals.orderCount, previous.orderCount)
+              : undefined
+          }
+          period={INSIGHT_PERIOD}
+          href="/orders"
+        />
+        <StatTile
+          label="Average order"
+          value={money(totals.averageOrderAmount)}
+          change={
+            previous
+              ? periodChange(
+                  totals.averageOrderAmount,
+                  previous.averageOrderAmount,
+                )
+              : undefined
+          }
+          period={INSIGHT_PERIOD}
+        />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {report.byCategory ? (
+          <Panel
+            title="Sales by category"
+            description={`Item sales over the last ${INSIGHT_PERIOD}, excluding shipping.`}
+          >
+            <BarList
+              empty="No category has sold anything in this period."
+              items={report.byCategory.map((row) => ({
+                key: row.categoryId ?? 'none',
+                label: row.categoryName,
+                value: row.grossAmount,
+                display: money(row.grossAmount),
+                detail: `${row.unitsSold} sold`,
+              }))}
+            />
+          </Panel>
+        ) : null}
+        {report.topSellers ? (
+          <Panel
+            title="Top stores"
+            description="Who the item sales went through, the platform's own offers included."
+          >
+            <BarList
+              empty="No store has sold anything in this period."
+              items={report.topSellers.map((row) => ({
+                key: row.sellerId ?? 'first-party',
+                label: row.sellerName,
+                value: row.grossAmount,
+                display: money(row.grossAmount),
+                detail: `${row.orderCount} ${row.orderCount === 1 ? 'order' : 'orders'}`,
+                href: row.sellerId ? `/sellers/${row.sellerId}` : undefined,
+              }))}
+            />
+          </Panel>
+        ) : null}
+      </div>
+
+      <Panel
+        title="Best sellers"
+        description={`By units sold over the last ${INSIGHT_PERIOD}.`}
+      >
+        <TopProductsTable products={report.topProducts} currency={currency} />
+      </Panel>
+    </>
+  );
+}
+
+/** Work queues and stock alerts, filtered to what this user can open. */
+async function AttentionPanels({ permitted }: { permitted: Set<string> }) {
+  let attention;
+  try {
+    attention = await backendGetAdminAttention(apiClient);
+  } catch (error) {
+    return (
+      <ApiErrorNotice error={explainMissingRoute(error, 'dashboard alerts')} />
+    );
+  }
+
+  const queues = [
+    {
+      section: '/orders',
+      label: 'Orders to fulfil',
+      count: attention.ordersToFulfil,
+      href: '/orders?status=PAID',
+      action:
+        attention.fulfilmentOnHold > 0
+          ? `Pick, pack and ship — ${attention.fulfilmentOnHold} on hold`
+          : 'Pick, pack and ship',
+    },
+    {
+      section: '/catalog',
+      label: 'Product submissions',
+      count: attention.pendingSubmissions,
+      href: '/catalog/submissions',
+      action: 'Approve or reject',
+    },
+    {
+      section: '/sellers',
+      label: 'Seller applications',
+      count: attention.pendingSellerApplications,
+      href: '/sellers?status=PENDING',
+      action: 'Review documents and decide',
+    },
+    {
+      section: '/returns',
+      label: 'Returns',
+      count: attention.openReturns,
+      href: '/returns',
+      action: 'Decide, inspect, or retry a refund',
+    },
+    {
+      section: '/finance',
+      label: 'Payout requests',
+      count: attention.pendingPayoutRequests,
+      href: '/finance/payouts?status=REQUESTED',
+      action: 'Approve or reject',
+    },
+    {
+      section: '/moderation',
+      label: 'Reported reviews',
+      count: attention.openReviewReports,
+      href: '/moderation',
+      action: 'Hide, remove, or dismiss',
+    },
+  ].filter((queue) => permitted.has(queue.section));
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <Panel title="Needs attention">
+        <AttentionList items={queues} />
+      </Panel>
+      <Panel
+        title="Running low"
+        description={
+          attention.outOfStock > 0
+            ? `${attention.lowStock} low and ${attention.outOfStock} out of stock.`
+            : 'At or under the reorder point, or 3 left where none is set.'
+        }
+      >
+        <LowStockList
+          items={attention.lowStockItems}
+          total={attention.lowStock + attention.outOfStock}
+        />
+        {permitted.has('/inventory') ? (
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/inventory">Open inventory</Link>
+          </Button>
+        ) : null}
+      </Panel>
+    </div>
+  );
 }
 
 /** The last 90 days of sales, by day, from the analytics report. */
@@ -234,12 +454,23 @@ export default async function OverviewPage({ searchParams }: PageProps<'/'>) {
       {restricted ? <RestrictedNotice /> : null}
 
       <Suspense fallback={null}>
-        <CatalogSummary />
+        <SalesInsights />
       </Suspense>
 
       <Suspense fallback={null}>
         <SalesSummary />
       </Suspense>
+
+      <Suspense fallback={null}>
+        <AttentionPanels permitted={permitted} />
+      </Suspense>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold tracking-tight">Catalog</h2>
+        <Suspense fallback={null}>
+          <CatalogSummary />
+        </Suspense>
+      </section>
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold tracking-tight">Sections</h2>
@@ -270,9 +501,6 @@ export default async function OverviewPage({ searchParams }: PageProps<'/'>) {
 
       <Suspense fallback={null}>
         <ApiStatusCard />
-      </Suspense>
-      <Suspense fallback={null}>
-        <CategorySales />
       </Suspense>
     </div>
   );

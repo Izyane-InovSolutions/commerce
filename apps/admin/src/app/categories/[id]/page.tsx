@@ -21,6 +21,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { apiClient } from '@/lib/api';
+import { explainMissingRoute } from '@/lib/api-route-errors';
 import { requireAdmin } from '@/lib/session';
 
 import { setCategoryAttributesAction } from '../actions';
@@ -43,7 +44,11 @@ export default async function CategoryAttributesPage({
       backendGetCategoryAttributes(apiClient, id),
     ]);
   } catch (error) {
-    return <ApiErrorNotice error={error} />;
+    return (
+      <ApiErrorNotice
+        error={explainMissingRoute(error, 'category attributes')}
+      />
+    );
   }
 
   const category = categories.find((entry) => entry.id === id);

@@ -27,7 +27,7 @@ import { formatBucket } from '@/lib/analytics';
 import { formatMinor } from '@/lib/money';
 
 const CHART_CONFIG = {
-  gross: { label: 'Gross sales', color: 'var(--chart-1)' },
+  gross: { label: 'Gross sales', color: 'var(--chart-series)' },
 } satisfies ChartConfig;
 
 /** A trailing window the reader can narrow a daily series to. */

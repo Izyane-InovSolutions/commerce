@@ -134,8 +134,16 @@ export default async function ProductPage({
   let attributes: AttributeChoice[] | null;
   let attributesFrom: string | null = null;
   try {
+    // An API from before category attributes answers 404 here; treat that
+    // as "no rules" and offer every attribute, as the API itself would.
     const fromCategory = product.category
-      ? await backendGetCategoryAttributes(apiClient, product.category.id)
+      ? await backendGetCategoryAttributes(
+          apiClient,
+          product.category.id,
+        ).catch((error: unknown) => {
+          if (error instanceof ApiError && error.status === 404) return [];
+          throw error;
+        })
       : [];
     if (fromCategory.length > 0) {
       attributesFrom = product.category?.name ?? 'its category';
