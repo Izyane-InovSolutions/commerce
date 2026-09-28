@@ -9,6 +9,8 @@ import {
   backendApproveProductSubmission,
   backendCreateOffer,
   backendCreateProduct,
+  backendDeleteProduct,
+  backendDeleteVariant,
   backendRejectProductSubmission,
   backendSetOfferShipping,
   backendSetOfferStatus,
@@ -152,6 +154,38 @@ export async function setStatusAction(
 
   revalidateCatalog(target.productId);
   return { status: 'idle', message: `Now ${status.data.toLowerCase()}.` };
+}
+
+/**
+ * Deletes a product outright. The API only allows this for one that has never
+ * sold or held stock; otherwise its refusal is shown and archiving is the way
+ * to take it off sale.
+ */
+export async function deleteProductAction(
+  productId: string,
+): Promise<FormState> {
+  try {
+    await backendDeleteProduct(apiClient, productId);
+  } catch (error) {
+    return toFormState(error);
+  }
+
+  revalidateCatalog();
+  redirect('/catalog');
+}
+
+export async function deleteVariantAction(
+  productId: string,
+  variantId: string,
+): Promise<FormState> {
+  try {
+    await backendDeleteVariant(apiClient, productId, variantId);
+  } catch (error) {
+    return toFormState(error);
+  }
+
+  revalidateCatalog(productId);
+  return { status: 'idle', message: 'Variant deleted.' };
 }
 
 export async function addVariantAction(

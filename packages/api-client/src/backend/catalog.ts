@@ -176,6 +176,14 @@ export function backendSetProductStatus(
   });
 }
 
+/** Refused with 409 once the product has order or stock history — archive it instead. */
+export function backendDeleteProduct(
+  client: ApiClient,
+  id: string,
+): Promise<null> {
+  return client.delete(`/admin/catalog/products/${id}`);
+}
+
 export function backendAddVariant(
   client: ApiClient,
   productId: string,
@@ -195,6 +203,17 @@ export function backendSetVariantStatus(
   return client.patch(
     `/admin/catalog/products/${productId}/variants/${variantId}/status`,
     { body: { status } },
+  );
+}
+
+/** Same 409 rule as {@link backendDeleteProduct}, for one variant. */
+export function backendDeleteVariant(
+  client: ApiClient,
+  productId: string,
+  variantId: string,
+): Promise<null> {
+  return client.delete(
+    `/admin/catalog/products/${productId}/variants/${variantId}`,
   );
 }
 

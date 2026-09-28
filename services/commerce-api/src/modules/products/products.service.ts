@@ -379,9 +379,17 @@ export class ProductsService {
     return this.findByIdAdmin(id);
   }
 
+  /**
+   * Hard delete, for drafts and mistakes only. Order items cascade from
+   * offers, which cascade from variants — deleting anything that has sold or
+   * held stock would silently erase order lines and inventory movements, so
+   * that is refused and the caller is pointed at ARCHIVED instead.
+   */
   async remove(id: string): Promise<void> {
     await this.findByIdAdmin(id);
-    await this.prisma.product.delete({ where: { id } });
+    await this.deleteUnlessUsed({ productId: id }, 'This product', (tx) =>
+      tx.product.delete({ where: { id } }),
+    );
   }
 
   async addVariant(
@@ -468,9 +476,12 @@ export class ProductsService {
     return this.findVariantOrThrow(variantId);
   }
 
+  /** Same guard as {@link remove}, scoped to one variant. */
   async removeVariant(productId: string, variantId: string): Promise<void> {
     await this.findProductVariant(productId, variantId);
-    await this.prisma.productVariant.delete({ where: { id: variantId } });
+    await this.deleteUnlessUsed({ id: variantId }, 'This variant', (tx) =>
+      tx.productVariant.delete({ where: { id: variantId } }),
+    );
   }
 
   async attachMedia(
@@ -999,6 +1010,35 @@ export class ProductsService {
       ratingCount: ratingSummary?.ratingCount ?? 0,
       ratingHistogram: ratingHistogramFromSummary(ratingSummary),
     };
+  }
+
+  private async deleteUnlessUsed(
+    variants: Prisma.ProductVariantWhereInput,
+    subject: string,
+    remove: (tx: Prisma.TransactionClient) => Promise<unknown>,
+  ): Promise<void> {
+    const inUse = new ConflictException(
+      `${subject} has order or stock history and can't be deleted. Archive it instead.`,
+    );
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const [orderItems, movements] = await Promise.all([
+          tx.orderItem.count({ where: { offer: { variant: variants } } }),
+          tx.inventoryMovement.count({
+            where: { inventoryRecord: { variant: variants } },
+          }),
+        ]);
+        if (orderItems > 0 || movements > 0) throw inUse;
+
+        await remove(tx);
+      });
+    } catch (error) {
+      // Fulfillment lines, purchase-order lines and reviews Restrict the
+      // delete at the database — same meaning, same answer.
+      if (this.isPrismaError(error, 'P2003')) throw inUse;
+      throw error;
+    }
   }
 
   private mapWriteError(error: unknown, conflictMessage: string): unknown {

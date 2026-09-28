@@ -1,6 +1,3 @@
-import Image from 'next/image';
-
-import heroImage from '@/assets/hero1.png';
 import {
   ProductCategorySection,
   type ProductSection,

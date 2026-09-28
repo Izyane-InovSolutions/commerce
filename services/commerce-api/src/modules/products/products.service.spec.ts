@@ -54,6 +54,8 @@ function buildPrisma(): {
   mediaAsset: { findUnique: jest.Mock; updateMany: jest.Mock };
   productRatingSummary: { findMany: jest.Mock };
   productReview: { findMany: jest.Mock; count: jest.Mock };
+  orderItem: { count: jest.Mock };
+  inventoryMovement: { count: jest.Mock };
   $transaction: jest.Mock;
 } {
   const prisma = {
@@ -96,6 +98,8 @@ function buildPrisma(): {
       findUnique: jest.fn(),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
+    orderItem: { count: jest.fn().mockResolvedValue(0) },
+    inventoryMovement: { count: jest.fn().mockResolvedValue(0) },
     $transaction: jest.fn(),
   };
   // Runs the callback with `prisma` standing in for the transaction client.
@@ -670,6 +674,56 @@ describe('ProductsService', () => {
       await expect(
         service.addVariant('p1', { skuCode: 'DUPLICATE' }),
       ).rejects.toBeInstanceOf(ConflictException);
+    });
+  });
+
+  describe('remove / removeVariant', () => {
+    beforeEach(() => {
+      prisma.product.findUnique.mockResolvedValue({ id: 'p1', media: [] });
+      prisma.productVariant.findUnique.mockResolvedValue({
+        id: 'v1',
+        productId: 'p1',
+      });
+    });
+
+    it('deletes a product that has never sold or held stock', async () => {
+      await service.remove('p1');
+
+      expect(prisma.orderItem.count).toHaveBeenCalledWith({
+        where: { offer: { variant: { productId: 'p1' } } },
+      });
+      expect(prisma.product.delete).toHaveBeenCalledWith({
+        where: { id: 'p1' },
+      });
+    });
+
+    it('refuses to delete a product with order history', async () => {
+      prisma.orderItem.count.mockResolvedValue(3);
+
+      await expect(service.remove('p1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(prisma.product.delete).not.toHaveBeenCalled();
+    });
+
+    it('refuses to delete a variant with stock movements', async () => {
+      prisma.inventoryMovement.count.mockResolvedValue(1);
+
+      await expect(service.removeVariant('p1', 'v1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(prisma.inventoryMovement.count).toHaveBeenCalledWith({
+        where: { inventoryRecord: { variant: { id: 'v1' } } },
+      });
+      expect(prisma.productVariant.delete).not.toHaveBeenCalled();
+    });
+
+    it('maps a restricting foreign key to the same conflict', async () => {
+      prisma.productVariant.delete.mockRejectedValue({ code: 'P2003' });
+
+      await expect(service.removeVariant('p1', 'v1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
     });
   });
 

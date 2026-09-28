@@ -1,7 +1,5 @@
 'use server';
 
-import { randomUUID } from 'node:crypto';
-
 import { revalidatePath } from 'next/cache';
 
 import {
@@ -22,6 +20,13 @@ import type { BackendFulfillmentOrder } from '@commerce/contracts';
 
 import { apiClient } from '@/lib/api';
 import { toFormState, type FormState } from '@/lib/form';
+
+/*
+ * Actions that take an `idempotencyKey` get it bound by the order page, which
+ * mints one per render. A double-click or a retry after a timeout therefore
+ * replays the same key and the API deduplicates it; the revalidate after a
+ * successful step re-renders the page with a fresh key for the next one.
+ */
 
 function revalidateOrder(orderId: string): void {
   revalidatePath('/orders');
@@ -70,6 +75,7 @@ export async function startPickingAction(
 export async function completePickingAction(
   orderId: string,
   fulfillmentOrderId: string,
+  idempotencyKey: string,
 ): Promise<FormState> {
   try {
     let fo = await backendGetFulfillment(apiClient, fulfillmentOrderId);
@@ -86,7 +92,7 @@ export async function completePickingAction(
         apiClient,
         fulfillmentOrderId,
         { lines },
-        randomUUID(),
+        idempotencyKey,
       );
     }
 
@@ -120,6 +126,7 @@ export async function startPackingAction(
 export async function completePackingAction(
   orderId: string,
   fulfillmentOrderId: string,
+  idempotencyKey: string,
 ): Promise<FormState> {
   try {
     let fo = await backendGetFulfillment(apiClient, fulfillmentOrderId);
@@ -135,7 +142,7 @@ export async function completePackingAction(
         apiClient,
         fulfillmentOrderId,
         { lines },
-        randomUUID(),
+        idempotencyKey,
       );
     }
 
@@ -158,6 +165,7 @@ export async function completePackingAction(
 export async function shipItAction(
   orderId: string,
   fulfillmentOrderId: string,
+  idempotencyKey: string,
 ): Promise<FormState> {
   try {
     const fo = await backendGetFulfillment(apiClient, fulfillmentOrderId);
@@ -178,7 +186,7 @@ export async function shipItAction(
     const shipment = await backendCreateShipment(
       apiClient,
       { fulfillmentOrderId, lines },
-      randomUUID(),
+      idempotencyKey,
     );
     await backendBookShipment(apiClient, shipment.id);
   } catch (error) {
@@ -192,13 +200,14 @@ export async function dispatchAction(
   orderId: string,
   fulfillmentOrderId: string,
   shipmentId: string,
+  idempotencyKey: string,
 ): Promise<FormState> {
   try {
     await backendDispatchFulfillment(
       apiClient,
       fulfillmentOrderId,
       { shipmentId },
-      randomUUID(),
+      idempotencyKey,
     );
   } catch (error) {
     return toFormState(error);

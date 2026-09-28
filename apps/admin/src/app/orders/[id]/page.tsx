@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -113,7 +115,12 @@ function nextAction(
       return {
         label: 'Complete picking',
         pendingLabel: 'Recording…',
-        action: completePickingAction.bind(null, orderId, fo.id),
+        action: completePickingAction.bind(
+          null,
+          orderId,
+          fo.id,
+          randomUUID(),
+        ),
       };
     case 'PICKED':
       return {
@@ -126,7 +133,12 @@ function nextAction(
       return {
         label: 'Complete packing',
         pendingLabel: 'Recording…',
-        action: completePackingAction.bind(null, orderId, fo.id),
+        action: completePackingAction.bind(
+          null,
+          orderId,
+          fo.id,
+          randomUUID(),
+        ),
       };
     case 'PACKED':
     case 'PARTIALLY_DISPATCHED': {
@@ -135,12 +147,18 @@ function nextAction(
         ? {
             label: `Dispatch ${booked.shipmentNumber}`,
             pendingLabel: 'Dispatching…',
-            action: dispatchAction.bind(null, orderId, fo.id, booked.id),
+            action: dispatchAction.bind(
+              null,
+              orderId,
+              fo.id,
+              booked.id,
+              randomUUID(),
+            ),
           }
         : {
             label: 'Ship it',
             pendingLabel: 'Booking…',
-            action: shipItAction.bind(null, orderId, fo.id),
+            action: shipItAction.bind(null, orderId, fo.id, randomUUID()),
           };
     }
     default:

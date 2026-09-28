@@ -1,8 +1,8 @@
 import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
-import { OrderStatus, Role } from '@prisma/client';
+import { Role } from '@prisma/client';
 
 import { Roles } from '../../common/auth/roles.decorator';
-import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
+import { ListAdminOrdersDto } from './dto/list-admin-orders.dto';
 import { OrderPage, OrdersService, OrderWithItems } from './orders.service';
 
 @Roles(Role.STAFF, Role.ADMIN)
@@ -11,11 +11,8 @@ export class AdminOrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Get()
-  findAll(
-    @Query() query: PaginationQueryDto,
-    @Query('status') status?: OrderStatus,
-  ): Promise<OrderPage> {
-    return this.ordersService.listAll({ ...query, status });
+  findAll(@Query() query: ListAdminOrdersDto): Promise<OrderPage> {
+    return this.ordersService.listAll(query);
   }
 
   @Get(':id')

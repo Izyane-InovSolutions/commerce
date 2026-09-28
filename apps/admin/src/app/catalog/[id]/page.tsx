@@ -11,6 +11,7 @@ import {
 import { currentPrices } from '@commerce/contracts';
 
 import { ApiErrorNotice } from '@/components/api-error-notice';
+import { DeleteControl } from '@/components/delete-control';
 import { OfferControls } from '@/components/offer-controls';
 import { PageHeader } from '@/components/page-header';
 import { ProductForm } from '@/components/product-form';
@@ -32,6 +33,8 @@ import {
   addPriceAction,
   addVariantAction,
   createOfferAction,
+  deleteProductAction,
+  deleteVariantAction,
   setOfferShippingAction,
   setOfferStatusAction,
   setStatusAction,
@@ -161,15 +164,26 @@ export default async function ProductPage({
                       {variant.skuCode}
                     </p>
                   </div>
-                  <StatusControl
-                    current={variant.status}
-                    label={variant.skuCode}
-                    action={setStatusAction.bind(null, {
-                      kind: 'variant',
-                      productId: product.id,
-                      id: variant.id,
-                    })}
-                  />
+                  <div className="flex flex-wrap items-start gap-3">
+                    <StatusControl
+                      current={variant.status}
+                      label={variant.skuCode}
+                      action={setStatusAction.bind(null, {
+                        kind: 'variant',
+                        productId: product.id,
+                        id: variant.id,
+                      })}
+                    />
+                    <DeleteControl
+                      action={deleteVariantAction.bind(
+                        null,
+                        product.id,
+                        variant.id,
+                      )}
+                      label="Delete"
+                      confirmLabel={variant.skuCode}
+                    />
+                  </div>
                 </div>
 
                 <OfferControls
@@ -216,6 +230,24 @@ export default async function ProductPage({
           )}
 
           <VariantAddForm action={addVariantAction.bind(null, product.id)} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Delete product</CardTitle>
+          <CardDescription>
+            Removes the product with its variants, offers and images. Only
+            possible before anything has sold or been stocked; after that,
+            archive it instead.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DeleteControl
+            action={deleteProductAction.bind(null, product.id)}
+            label="Delete product"
+            confirmLabel="this product"
+          />
         </CardContent>
       </Card>
     </div>
