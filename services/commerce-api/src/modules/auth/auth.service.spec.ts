@@ -9,9 +9,11 @@ import { Role, type User } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import type { MailerService } from '../notifications/delivery/mailer.service';
 import { UsersService } from '../users/users.service';
 import { AuthService } from './auth.service';
 import { hashPassword } from './password.util';
+import { hashOpaqueToken } from './token.util';
 
 function buildUser(overrides: Partial<User> = {}): User {
   return {
@@ -62,6 +64,7 @@ describe('AuthService', () => {
   let jwtService: { signAsync: jest.Mock };
   let configService: { get: jest.Mock };
   let auditService: { record: jest.Mock };
+  let mailer: { send: jest.Mock };
   let authService: AuthService;
 
   beforeEach(() => {
@@ -99,6 +102,7 @@ describe('AuthService', () => {
       get: jest.fn((_key: string, fallback?: number) => fallback),
     };
     auditService = { record: jest.fn().mockResolvedValue(undefined) };
+    mailer = { send: jest.fn().mockResolvedValue({ messageId: 'msg-1' }) };
 
     prisma.session.create.mockResolvedValue({
       id: 'session-1',
@@ -115,6 +119,7 @@ describe('AuthService', () => {
       jwtService as unknown as JwtService,
       configService as unknown as ConfigService,
       auditService as unknown as AuditService,
+      mailer as unknown as MailerService,
     );
   });
 
@@ -354,6 +359,44 @@ describe('AuthService', () => {
       await authService.requestPasswordReset('nobody@example.com');
 
       expect(prisma.passwordResetToken.create).not.toHaveBeenCalled();
+      expect(mailer.send).not.toHaveBeenCalled();
+    });
+
+    it('emails a reset link carrying the token whose hash was stored', async () => {
+      usersService.findByEmail.mockResolvedValue(buildUser());
+      configService.get.mockImplementation((key: string, fallback?: unknown) =>
+        key === 'WEB_APP_URL' ? 'https://shop.example.com/' : fallback,
+      );
+
+      await authService.requestPasswordReset('user@example.com');
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(mailer.send).toHaveBeenCalledTimes(1);
+      const [message] = mailer.send.mock.calls[0] as [
+        { to: string; text: string },
+      ];
+      expect(message.to).toBe('user@example.com');
+      const match =
+        /https:\/\/shop\.example\.com\/reset-password\?token=(\S+)/.exec(
+          message.text,
+        );
+      expect(match).not.toBeNull();
+      const [{ data }] = prisma.passwordResetToken.create.mock.calls[0] as [
+        { data: { tokenHash: string } },
+      ];
+      expect(hashOpaqueToken(decodeURIComponent(match![1]!))).toBe(
+        data.tokenHash,
+      );
+    });
+
+    it('does not wait on, or fail because of, the email send', async () => {
+      usersService.findByEmail.mockResolvedValue(buildUser());
+      mailer.send.mockRejectedValue(new Error('SMTP down'));
+
+      await expect(
+        authService.requestPasswordReset('user@example.com'),
+      ).resolves.toBeUndefined();
+      await new Promise((resolve) => setImmediate(resolve));
     });
 
     it('creates a reset token for a known email', async () => {
@@ -545,7 +588,11 @@ describe('AuthService', () => {
       const result = await authService.exchangeHandoffToken('valid-code');
 
       expect(prisma.handoffToken.updateMany).toHaveBeenCalledWith({
-        where: { id: 'handoff-1', usedAt: null, expiresAt: { gt: expect.any(Date) as Date } },
+        where: {
+          id: 'handoff-1',
+          usedAt: null,
+          expiresAt: { gt: expect.any(Date) as Date },
+        },
         data: { usedAt: expect.any(Date) as Date },
       });
       expect(result.accessToken).toBe('signed.jwt.token');

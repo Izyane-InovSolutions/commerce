@@ -64,7 +64,10 @@ export async function guardAction(
 ): Promise<{ status: 'error'; message: string } | null> {
   const user = await getCurrentUser();
   if (!user || !isAdmin(user)) {
-    return { status: 'error', message: 'Your session has ended. Sign in again.' };
+    return {
+      status: 'error',
+      message: 'Your session has ended. Sign in again.',
+    };
   }
   if (adminOnly && user.role !== 'ADMIN') {
     return { status: 'error', message: 'Only administrators can do this.' };

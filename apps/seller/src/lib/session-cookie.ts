@@ -13,7 +13,18 @@ import { BASE_PATH } from './base-path';
 export const ACCESS_COOKIE = 'commerce_seller_access';
 export const REFRESH_COOKIE = 'commerce_seller_refresh';
 
-const REFRESH_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
+export const REFRESH_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
+
+/** Attributes every session cookie is written with; `maxAge` in seconds. */
+export function sessionCookieOptions(maxAge: number) {
+  return {
+    httpOnly: true,
+    sameSite: 'lax' as const,
+    secure: process.env.NODE_ENV === 'production',
+    path: BASE_PATH,
+    maxAge,
+  };
+}
 
 export async function readAccessToken(): Promise<string | undefined> {
   return (await cookies()).get(ACCESS_COOKIE)?.value;
@@ -37,22 +48,16 @@ export async function writeSession(session: {
   expiresIn: number;
 }): Promise<void> {
   const jar = await cookies();
-  const secure = process.env.NODE_ENV === 'production';
-
-  jar.set(ACCESS_COOKIE, session.accessToken, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure,
-    path: BASE_PATH,
-    maxAge: session.expiresIn,
-  });
-  jar.set(REFRESH_COOKIE, session.refreshToken, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure,
-    path: BASE_PATH,
-    maxAge: REFRESH_MAX_AGE_SECONDS,
-  });
+  jar.set(
+    ACCESS_COOKIE,
+    session.accessToken,
+    sessionCookieOptions(session.expiresIn),
+  );
+  jar.set(
+    REFRESH_COOKIE,
+    session.refreshToken,
+    sessionCookieOptions(REFRESH_MAX_AGE_SECONDS),
+  );
 }
 
 export async function clearSession(): Promise<void> {
