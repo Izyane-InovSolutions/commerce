@@ -1,6 +1,6 @@
 import type { Price } from '@prisma/client';
 
-import { currentPrices, pickCurrentPrice } from './current-price';
+import { currentPrices, pickCurrentPrice, pickSale } from './current-price';
 
 function buildPrice(overrides: Partial<Price>): Price {
   return {
@@ -109,5 +109,56 @@ describe('currentPrices', () => {
     });
 
     expect(currentPrices([expired], now)).toEqual([]);
+  });
+});
+
+describe('pickSale', () => {
+  const now = new Date('2026-06-15T00:00:00Z');
+  const regular = buildPrice({
+    id: 'regular',
+    amount: 32_999_00,
+    currency: 'ZMW',
+  });
+  const sale = buildPrice({
+    id: 'sale',
+    amount: 28_999_00,
+    currency: 'ZMW',
+    startsAt: new Date('2026-06-10T00:00:00Z'),
+    endsAt: new Date('2026-06-20T00:00:00Z'),
+  });
+
+  it('reports a time-limited price that undercuts the regular one', () => {
+    expect(pickSale([regular, sale], 'ZMW', now)).toMatchObject({
+      current: { id: 'sale' },
+      regular: { id: 'regular' },
+      endsAt: sale.endsAt,
+    });
+  });
+
+  it('is not a sale once the window has closed', () => {
+    expect(
+      pickSale([regular, sale], 'ZMW', new Date('2026-06-21T00:00:00Z')),
+    ).toBeUndefined();
+  });
+
+  it('is not a sale when the current price is open-ended', () => {
+    const cheaper = buildPrice({
+      id: 'new',
+      amount: 1,
+      currency: 'ZMW',
+      startsAt: new Date('2026-06-01T00:00:00Z'),
+    });
+    expect(pickSale([regular, cheaper], 'ZMW', now)).toBeUndefined();
+  });
+
+  it('is not a sale when the limited price is not lower', () => {
+    const pricier = { ...sale, amount: 40_000_00 };
+    expect(pickSale([regular, pricier], 'ZMW', now)).toBeUndefined();
+  });
+
+  it('ignores a regular price in another currency', () => {
+    expect(
+      pickSale([{ ...regular, currency: 'USD' }, sale], 'ZMW', now),
+    ).toBeUndefined();
   });
 });

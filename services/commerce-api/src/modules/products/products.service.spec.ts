@@ -58,6 +58,7 @@ function buildPrisma(): {
   productReview: { findMany: jest.Mock; count: jest.Mock };
   orderItem: { count: jest.Mock };
   attributeValue: { findMany: jest.Mock };
+  category: { findMany: jest.Mock };
   inventoryMovement: { count: jest.Mock };
   $transaction: jest.Mock;
   $queryRaw: jest.Mock;
@@ -105,6 +106,7 @@ function buildPrisma(): {
     },
     orderItem: { count: jest.fn().mockResolvedValue(0) },
     attributeValue: { findMany: jest.fn().mockResolvedValue([]) },
+    category: { findMany: jest.fn().mockResolvedValue([]) },
     inventoryMovement: { count: jest.fn().mockResolvedValue(0) },
     $transaction: jest.fn(),
     $queryRaw: jest.fn().mockResolvedValue([]),
@@ -365,9 +367,15 @@ describe('ProductsService', () => {
       ]);
     });
 
-    it('filters by category slug, brand slug, and search text', async () => {
+    it('filters by category (sub-categories included), brand slug, and search text', async () => {
       prisma.product.findMany.mockResolvedValue([]);
       prisma.product.count.mockResolvedValue(0);
+      prisma.category.findMany.mockResolvedValue([
+        { id: 'shoes', slug: 'shoes', parentId: null },
+        { id: 'running', slug: 'running-shoes', parentId: 'shoes' },
+        { id: 'trail', slug: 'trail', parentId: 'running' },
+        { id: 'hats', slug: 'hats', parentId: null },
+      ]);
 
       await service.findPublished({
         currency: 'USD',
@@ -380,7 +388,7 @@ describe('ProductsService', () => {
 
       expect(prisma.product.count).toHaveBeenCalledWith({
         where: expect.objectContaining({
-          category: { slug: 'shoes' },
+          categoryId: { in: ['shoes', 'running', 'trail'] },
           brand: { slug: 'acme' },
           AND: [{ OR: expect.any(Array) as unknown[] }],
         }) as object,

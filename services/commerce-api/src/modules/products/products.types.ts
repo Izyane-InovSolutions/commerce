@@ -79,6 +79,11 @@ export type PublicOffer = {
   isFirstParty: boolean;
   /** Resolved in the requested currency; null when it has no price in it. */
   currentPrice: { amount: number; currency: string } | null;
+  /** On sale: the regular price the current, time-limited one undercuts —
+   * see pickSale. Null when not on sale. */
+  compareAtPrice: { amount: number; currency: string } | null;
+  /** When the sale price ends (ISO); null when not on sale. */
+  saleEndsAt: string | null;
   /** Every currency this offer currently carries a price in. */
   currencies: string[];
   /** False once available stock (on-hand minus reserved) has run out. */
@@ -125,6 +130,8 @@ export type PublicProduct = {
     url: string;
   }[];
   variants: PublicVariant[];
+  /** Chosen by an admin for the storefront's featured shelf. */
+  isFeatured: boolean;
   /** null when the product has never been reviewed (no ProductRatingSummary row yet). */
   averageRating: number | null;
   ratingCount: number;
@@ -148,6 +155,8 @@ export type PublicProductReview = {
 
 /** `GET /catalog/best-sellers` — items are exactly the product listing's
  * shape, ranked by units sold rather than paginated. */
+export type DealsResult = { items: PublicProduct[] };
+
 export type BestSellersResult = {
   items: PublicProduct[];
 };

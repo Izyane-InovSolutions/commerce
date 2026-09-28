@@ -28,6 +28,7 @@ import { MediaService } from '../media/media.service';
 import { PrismaService } from '../../database/prisma.service';
 import {
   currentPrices,
+  pickSale,
   pickCurrentPrice,
 } from '../../common/catalog/current-price';
 import {
@@ -41,6 +42,7 @@ import { SellersService } from '../sellers/sellers.service';
 import { PUBLIC_STOREFRONT_SELECT } from '../sellers/storefronts.service';
 import { AttachMediaDto } from './dto/attach-media.dto';
 import { BestSellersQueryDto } from './dto/best-sellers-query.dto';
+import { DealsQueryDto } from './dto/deals-query.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
@@ -53,6 +55,7 @@ import { SellerUpdateProductDto } from './dto/seller-update-product.dto';
 import { searchTerms } from './product-search';
 import {
   BestSellersResult,
+  DealsResult,
   ProductRowWithRelations,
   ProductWithRelations,
   PublicProduct,
@@ -88,6 +91,9 @@ const PRODUCT_MEDIA_INCLUDE = {
  * A pending/rejected/suspended seller's offers stay invisible even if
  * published, same as an incomplete storefront's.
  */
+/** Products scanned for a live sale before ranking; deals are few. */
+const DEAL_CANDIDATES = 200;
+
 const PUBLICLY_ELIGIBLE_OFFER: Prisma.OfferWhereInput = {
   OR: [
     { sellerId: null },
@@ -165,8 +171,8 @@ export class ProductsService {
   async findPublished(
     query: ProductQueryDto,
   ): Promise<PaginatedResult<PublicProduct>> {
-    const where = this.buildPublicWhere(query);
-    const orderBy = this.buildOrderBy(query.sort);
+    const where = await this.buildPublicWhere(query);
+    const orderBy = this.buildOrderBy(query.sort, query.featured);
 
     const [products, total] = await Promise.all([
       this.prisma.product.findMany({
@@ -1179,7 +1185,9 @@ export class ProductsService {
     return variant;
   }
 
-  private buildPublicWhere(query: ProductQueryDto): Prisma.ProductWhereInput {
+  private async buildPublicWhere(
+    query: ProductQueryDto,
+  ): Promise<Prisma.ProductWhereInput> {
     const where: Prisma.ProductWhereInput = { status: ProductStatus.PUBLISHED };
 
     // Every term has to match somewhere, but each may match a different
@@ -1190,8 +1198,16 @@ export class ProductsService {
       where.AND = terms.map((term) => this.searchTermWhere(term));
     }
 
+    // A category includes its sub-categories, so "Electronics" lists the
+    // phones filed under Electronics › Smartphones.
     if (query.categorySlug) {
-      where.category = { slug: query.categorySlug };
+      where.categoryId = {
+        in: await this.categoryAndDescendantIds(query.categorySlug),
+      };
+    }
+
+    if (query.featured) {
+      where.featuredAt = { not: null };
     }
 
     if (query.brandSlug) {
@@ -1261,6 +1277,7 @@ export class ProductsService {
 
   private buildOrderBy(
     sort: string | string[] | undefined,
+    featured?: boolean,
   ): Prisma.ProductOrderByWithRelationInput[] {
     const sortFields = parseSort(sort);
     const allowedFields = new Set(['name', 'createdAt']);
@@ -1268,7 +1285,104 @@ export class ProductsService {
       .filter((field) => allowedFields.has(field.field))
       .map((field) => ({ [field.field]: field.order }));
 
-    return orderBy.length > 0 ? orderBy : [{ createdAt: 'desc' }];
+    if (orderBy.length > 0) return orderBy;
+    return featured
+      ? [{ featuredAt: 'desc' }, { createdAt: 'desc' }]
+      : [{ createdAt: 'desc' }];
+  }
+
+  /** The category's id plus every sub-category's, however deep. Unknown
+   * slug → no ids, so the listing is empty rather than unfiltered. */
+  private async categoryAndDescendantIds(slug: string): Promise<string[]> {
+    const categories = await this.prisma.category.findMany({
+      select: { id: true, slug: true, parentId: true },
+    });
+    const root = categories.find((category) => category.slug === slug);
+    if (!root) return [];
+
+    const ids = [root.id];
+    for (let index = 0; index < ids.length; index += 1) {
+      for (const category of categories) {
+        if (category.parentId === ids[index] && !ids.includes(category.id))
+          ids.push(category.id);
+      }
+    }
+    return ids;
+  }
+
+  /**
+   * Published, buyable products with at least one offer on sale right now,
+   * biggest saving (as a share of the regular price) first.
+   */
+  async findDeals(query: DealsQueryDto): Promise<DealsResult> {
+    const now = new Date();
+    const products = await this.prisma.product.findMany({
+      where: {
+        status: ProductStatus.PUBLISHED,
+        variants: {
+          some: {
+            status: ProductStatus.PUBLISHED,
+            offers: {
+              some: {
+                status: ProductStatus.PUBLISHED,
+                ...PUBLICLY_ELIGIBLE_OFFER,
+                prices: {
+                  some: {
+                    currency: query.currency,
+                    startsAt: { lte: now },
+                    endsAt: { gt: now },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      include: PUBLIC_PRODUCT_INCLUDE,
+      take: DEAL_CANDIDATES,
+    });
+    if (products.length === 0) return { items: [] };
+
+    const [stock, ratingSummaries] = await Promise.all([
+      this.loadStock(products),
+      this.loadRatingSummaries(products),
+    ]);
+
+    const ranked = products
+      .map((product) => {
+        const item = this.toPublicProduct(
+          product,
+          query.currency,
+          stock,
+          ratingSummaries.get(product.id),
+        );
+        let best = 0;
+        for (const variant of item.variants)
+          for (const offer of variant.offers)
+            if (offer.compareAtPrice && offer.currentPrice && offer.inStock)
+              best = Math.max(
+                best,
+                1 - offer.currentPrice.amount / offer.compareAtPrice.amount,
+              );
+        return { item, best };
+      })
+      .filter((entry) => entry.best > 0)
+      .sort((left, right) => right.best - left.best);
+
+    return { items: ranked.slice(0, query.limit).map((entry) => entry.item) };
+  }
+
+  /** Features a product on the storefront, or takes it off the shelf. */
+  async setFeatured(
+    id: string,
+    featured: boolean,
+  ): Promise<ProductWithRelations> {
+    await this.findByIdAdmin(id);
+    await this.prisma.product.update({
+      where: { id },
+      data: { featuredAt: featured ? new Date() : null },
+    });
+    return this.findByIdAdmin(id);
   }
 
   /**
@@ -1361,6 +1475,7 @@ export class ProductsService {
         })),
         offers: variant.offers.map((offer) => {
           const currentPrice = pickCurrentPrice(offer.prices, currency);
+          const sale = pickSale(offer.prices, currency);
           const available =
             offer.stockSource === OfferStockSource.SELLER
               ? (stock.byOffer.get(offer.id) ?? 0)
@@ -1373,6 +1488,10 @@ export class ProductsService {
             currentPrice: currentPrice
               ? { amount: currentPrice.amount, currency: currentPrice.currency }
               : null,
+            compareAtPrice: sale
+              ? { amount: sale.regular.amount, currency: sale.regular.currency }
+              : null,
+            saleEndsAt: sale ? sale.endsAt.toISOString() : null,
             // What the offer *is* priced in, so a client can tell "we don't
             // sell this" apart from "we don't sell this in your currency".
             currencies: currentPrices(offer.prices)
@@ -1386,6 +1505,7 @@ export class ProductsService {
           };
         }),
       })),
+      isFeatured: product.featuredAt !== null,
       averageRating: averageRatingFromSummary(ratingSummary),
       ratingCount: ratingSummary?.ratingCount ?? 0,
       ratingHistogram: ratingHistogramFromSummary(ratingSummary),

@@ -446,10 +446,13 @@ model Product {
   reviewReason      String?                 @map("review_reason")
   reviewedBy        String?                 @map("reviewed_by") @db.Uuid
   reviewedAt        DateTime?               @map("reviewed_at")
+  // Set when an admin features the product on the storefront; newest first.
+  featuredAt        DateTime?               @map("featured_at")
   createdAt         DateTime                @default(now()) @map("created_at")
   updatedAt         DateTime                @updatedAt @map("updated_at")
 
   @@index([brandId])
+  @@index([featuredAt])
   @@index([categoryId])
   @@index([status])
   @@index([createdBySellerId, submissionStatus])

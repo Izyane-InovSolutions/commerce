@@ -59,3 +59,31 @@ export function currentPrices(prices: Price[], at: Date = new Date()): Price[] {
 
   return [...byCurrency.values()];
 }
+
+/**
+ * A sale in force for one currency: the current price is time-limited (it has
+ * an `endsAt`) and undercuts the open-ended price it is overriding. That's
+ * how an admin runs a sale — add a lower price with an end date — so a "was"
+ * price is always one the offer really had, never an invented one.
+ */
+export function pickSale(
+  prices: Price[],
+  currency: string,
+  at: Date = new Date(),
+): { current: Price; regular: Price; endsAt: Date } | undefined {
+  const current = pickCurrentPrice(prices, currency, at);
+  if (!current?.endsAt) return undefined;
+
+  const regular = prices
+    .filter(
+      (price) =>
+        price.id !== current.id &&
+        price.currency === currency &&
+        price.endsAt === null &&
+        price.startsAt <= at,
+    )
+    .sort(newestFirst)[0];
+  if (!regular || regular.amount <= current.amount) return undefined;
+
+  return { current, regular, endsAt: current.endsAt };
+}

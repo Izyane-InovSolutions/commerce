@@ -1,6 +1,7 @@
 import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -20,6 +21,7 @@ import {
   DEFAULT_CURRENCY,
   SUPPORTED_CURRENCIES,
 } from '../../../common/catalog/current-price';
+import { booleanQuery } from '../../../common/pagination/boolean-query.transform';
 
 const SORT_PATTERN = /^([a-zA-Z0-9_]+):(asc|desc)$/;
 
@@ -73,4 +75,11 @@ export class ProductQueryDto {
   @IsArray()
   @IsUUID('4', { each: true })
   attributeValueId?: string[];
+
+  /** Only products an admin has featured, most recently featured first
+   * unless a sort is given. */
+  @IsOptional()
+  @Transform(booleanQuery)
+  @IsBoolean()
+  featured?: boolean;
 }
