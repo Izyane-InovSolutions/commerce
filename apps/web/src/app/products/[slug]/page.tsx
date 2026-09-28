@@ -143,7 +143,7 @@ export default async function ProductDetailPage({
     });
 
   return (
-    <div className="mx-auto max-w-4xl space-y-12 px-4 py-12">
+    <div className="space-y-12">
       <RecordProductView
         id={product.id}
         slug={product.slug}

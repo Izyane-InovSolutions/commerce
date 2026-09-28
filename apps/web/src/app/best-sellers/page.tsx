@@ -21,7 +21,7 @@ export default async function BestSellersPage() {
     products = await listBestSellers({ limit: 24, days: RANKING_DAYS });
   } catch (error) {
     return (
-      <div className="mx-auto max-w-6xl space-y-4 px-4 py-12">
+      <div className="space-y-4">
         <h1 className="text-2xl font-semibold tracking-tight">Best Sellers</h1>
         <ApiErrorNotice error={error} />
       </div>
@@ -29,7 +29,7 @@ export default async function BestSellersPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-12">
+    <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Best Sellers</h1>
         <p className="text-muted-foreground text-sm">

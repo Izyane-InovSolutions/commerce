@@ -50,7 +50,7 @@ function Section({
 
 export default function HelpPage() {
   return (
-    <div className="mx-auto max-w-6xl px-4 py-12">
+    <div>
       <div className="grid gap-10 md:grid-cols-[12rem_1fr]">
         <nav aria-label="Help topics" className="md:sticky md:top-20 md:self-start">
           <p className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">

@@ -16,7 +16,7 @@ export const metadata: Metadata = {
  */
 export default function DealsPage() {
   return (
-    <div className="mx-auto max-w-6xl px-4 py-12">
+    <div>
       <div className="mx-auto max-w-md space-y-4 rounded-2xl border border-dashed p-8 text-center">
         <Tag className="text-muted-foreground mx-auto size-8" aria-hidden="true" />
         <h1 className="text-xl font-semibold tracking-tight">

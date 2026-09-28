@@ -57,7 +57,7 @@ export default async function BuyNowPage({
 
   if (!user) {
     return (
-      <div className="mx-auto max-w-4xl space-y-4 px-4 py-12">
+      <div className="space-y-4">
         <h1 className="text-2xl font-semibold tracking-tight">Buy now</h1>
         <p className="text-muted-foreground text-sm text-pretty">
           Sign in to buy this. Buying now still needs an account to ship and pay
@@ -79,7 +79,7 @@ export default async function BuyNowPage({
 
   if (!selection || !selection.offer.inStock) {
     return (
-      <div className="mx-auto max-w-4xl space-y-4 px-4 py-12">
+      <div className="space-y-4">
         <h1 className="text-2xl font-semibold tracking-tight">Buy now</h1>
         <p className="text-muted-foreground text-sm text-pretty">
           {selection
@@ -101,7 +101,7 @@ export default async function BuyNowPage({
     addresses = await listAddresses();
   } catch (error) {
     return (
-      <div className="mx-auto max-w-5xl space-y-4 px-4 py-12">
+      <div className="space-y-4">
         <h1 className="text-2xl font-semibold tracking-tight">Buy now</h1>
         <ApiErrorNotice error={error} />
       </div>
@@ -109,7 +109,7 @@ export default async function BuyNowPage({
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-12">
+    <div>
       <BackButton />
       <h1 className="mt-4 text-2xl font-semibold tracking-tight">Buy now</h1>
       <p className="text-muted-foreground mt-1 text-sm text-pretty">

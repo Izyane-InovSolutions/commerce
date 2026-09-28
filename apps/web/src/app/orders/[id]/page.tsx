@@ -78,7 +78,7 @@ export default async function OrderPage({ params }: PageProps<'/orders/[id]'>) {
       : null;
   } catch (error) {
     return (
-      <div className="mx-auto max-w-5xl space-y-4 px-4 py-12">
+      <div className="space-y-4">
         <h1 className="text-2xl font-semibold tracking-tight">Order</h1>
         <ApiErrorNotice error={error} />
       </div>
@@ -118,7 +118,7 @@ export default async function OrderPage({ params }: PageProps<'/orders/[id]'>) {
   );
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-12">
+    <div className="space-y-6">
       <Button variant="ghost" size="sm" asChild>
         <Link href="/account?tab=orders">
           <ArrowLeft data-icon="inline-start" />

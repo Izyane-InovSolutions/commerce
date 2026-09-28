@@ -68,7 +68,7 @@ export default async function AccountPage({
 
   if (!user) {
     return (
-      <div className="px-4 py-12">
+      <div>
         <AuthPanel
           signIn={signInAction}
           signUp={signUpAction}
@@ -115,7 +115,7 @@ export default async function AccountPage({
     ]);
   } catch (error) {
     return (
-      <div className="mx-auto max-w-4xl space-y-4 px-4 py-12">
+      <div className="space-y-4">
         <h1 className="text-2xl font-semibold tracking-tight">Account</h1>
         <ApiErrorNotice error={error} />
       </div>
@@ -131,7 +131,7 @@ export default async function AccountPage({
     typeof params.placed === 'string' ? params.placed : undefined;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 px-4 py-12">
+    <div className="space-y-6">
       <SellerAccountCard
         seller={seller}
         becomeSeller={becomeSellerAction}

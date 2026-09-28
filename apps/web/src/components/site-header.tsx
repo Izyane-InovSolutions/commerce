@@ -10,6 +10,7 @@ import { signOutAction } from '@/app/account/actions';
 import { unreadBadgeLabel } from '@/lib/notification-link';
 import { countUnreadNotifications } from '@/lib/notifications';
 import { getCurrentUser } from '@/lib/session';
+import { pageFrame } from '@/lib/page-frame';
 const linkClasses =
   'block rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-950 dark:hover:text-blue-300';
 
@@ -22,7 +23,7 @@ export async function SiteHeader() {
 
   return (
     <header className="bg-background sticky top-0 z-40 border-b">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-4 py-3">
+      <div className={`${pageFrame} flex flex-wrap items-center gap-4 py-3`}>
         <Link
           href="/"
           aria-label="iZyane Marketplace"

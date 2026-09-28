@@ -55,7 +55,7 @@ export default async function RequestReturnPage({
     }
   } catch (error) {
     return (
-      <div className="mx-auto max-w-3xl space-y-4 px-4 py-12">
+      <div className="space-y-4">
         <h1 className="text-2xl font-semibold tracking-tight">
           Request a return
         </h1>
@@ -99,7 +99,7 @@ export default async function RequestReturnPage({
   const anyReturnable = lines.some((line) => line.maxQuantity > 0);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-12">
+    <div className="space-y-6">
       <Button variant="ghost" size="sm" asChild>
         <Link href={`/orders/${order.id}`}>
           <ArrowLeft data-icon="inline-start" />

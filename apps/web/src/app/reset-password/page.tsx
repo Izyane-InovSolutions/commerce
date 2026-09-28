@@ -33,7 +33,7 @@ export default async function ResetPasswordPage({
   const token = Array.isArray(rawToken) ? rawToken[0] : rawToken;
 
   return (
-    <div className="px-4 py-12">
+    <div>
       <Card className="mx-auto max-w-sm">
         <CardHeader>
           <CardTitle>Choose a new password</CardTitle>

@@ -91,7 +91,7 @@ export default async function ReturnPage({
     labels = request ? await labelItems(request) : null;
   } catch (error) {
     return (
-      <div className="mx-auto max-w-4xl space-y-4 px-4 py-12">
+      <div className="space-y-4">
         <h1 className="text-2xl font-semibold tracking-tight">Return</h1>
         <ApiErrorNotice error={error} />
       </div>
@@ -108,7 +108,7 @@ export default async function ReturnPage({
   );
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 px-4 py-12">
+    <div className="space-y-6">
       <Button variant="ghost" size="sm" asChild>
         <Link href="/returns">
           <ArrowLeft data-icon="inline-start" />

@@ -29,7 +29,7 @@ export default async function CartPage() {
     mergeFailed = (await hasCartMergeFailed()) && (await getCurrentUser()) !== null;
   } catch (error) {
     return (
-      <div className="mx-auto max-w-5xl space-y-6 px-4 py-12">
+      <div className="space-y-6">
         <h1 className="text-2xl font-semibold tracking-tight">Cart</h1>
         <ApiErrorNotice error={error} />
       </div>
@@ -37,7 +37,7 @@ export default async function CartPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-12">
+    <div className="space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight">Cart</h1>
       {mergeFailed ? (
         <CartMergeNotice

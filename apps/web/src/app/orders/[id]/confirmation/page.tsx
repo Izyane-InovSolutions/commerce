@@ -53,7 +53,7 @@ export default async function OrderConfirmationPage({
       : null;
   } catch (error) {
     return (
-      <div className="mx-auto max-w-5xl space-y-4 px-4 py-12">
+      <div className="space-y-4">
         <h1 className="text-2xl font-semibold tracking-tight">
           Order confirmation
         </h1>
@@ -75,7 +75,7 @@ export default async function OrderConfirmationPage({
         : 'Thank you — your order is placed';
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-12">
+    <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight text-balance">
           {heading}

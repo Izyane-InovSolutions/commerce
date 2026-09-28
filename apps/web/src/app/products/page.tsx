@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
 import { ApiErrorNotice } from '@/components/api-error-notice';
-import { SideNav } from '@/components/side-nav';
 import { StorefrontCatalog } from '@/components/storefront-catalog';
 import {
   listBestSellers,
@@ -87,32 +86,28 @@ export default async function ProductsPage({
   const categories: Category[] = main.ok ? main.categories : [];
 
   return (
-    <div className="flex flex-col gap-10 px-4 py-12 sm:flex-row">
-      <SideNav categories={categories} />
-
-      <div className="min-w-0 flex-1 space-y-6">
-        {!main.ok ? (
-          <div className="space-y-3">
-            <h2 className="text-2xl font-semibold tracking-tight">
-              All Products
-            </h2>
-            <ApiErrorNotice error={main.error} />
-          </div>
-        ) : (
-          <StorefrontCatalog
-            products={main.result.products}
-            total={main.result.total}
-            pageSize={CATALOG_PAGE_SIZE}
-            params={params}
-            categories={categories}
-            brands={brands}
-            facets={facets}
-            bestSellerIds={bestSellerIds}
-            title="All Products"
-            description="Browse by category or brand, refine by option, and sort by name or date added."
-          />
-        )}
-      </div>
+    <div className="space-y-6">
+      {!main.ok ? (
+        <div className="space-y-3">
+          <h2 className="text-2xl font-semibold tracking-tight">
+            All Products
+          </h2>
+          <ApiErrorNotice error={main.error} />
+        </div>
+      ) : (
+        <StorefrontCatalog
+          products={main.result.products}
+          total={main.result.total}
+          pageSize={CATALOG_PAGE_SIZE}
+          params={params}
+          categories={categories}
+          brands={brands}
+          facets={facets}
+          bestSellerIds={bestSellerIds}
+          title="All Products"
+          description="Browse by category or brand, refine by option, and sort by name or date added."
+        />
+      )}
     </div>
   );
 }

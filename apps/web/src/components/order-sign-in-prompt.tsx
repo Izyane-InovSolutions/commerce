@@ -15,7 +15,7 @@ export function OrderSignInPrompt({
   message: string;
 }) {
   return (
-    <div className="mx-auto max-w-4xl space-y-4 px-4 py-12">
+    <div className="space-y-4">
       <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
       <p className="text-muted-foreground text-sm text-pretty">{message}</p>
       <Button asChild size="sm">

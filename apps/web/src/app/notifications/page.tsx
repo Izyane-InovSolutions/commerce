@@ -70,7 +70,7 @@ export default async function NotificationsPage({
     }
   } catch (error) {
     return (
-      <div className="mx-auto max-w-3xl space-y-4 px-4 py-12">
+      <div className="space-y-4">
         <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
         {isNotificationsUnavailable(error) ? (
           <p className="text-muted-foreground rounded-2xl border border-dashed px-4 py-3 text-sm text-pretty">
@@ -88,7 +88,7 @@ export default async function NotificationsPage({
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-12">
+    <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
         <p className="text-muted-foreground text-sm">

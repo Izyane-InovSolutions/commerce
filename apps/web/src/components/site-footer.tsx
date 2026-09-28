@@ -5,6 +5,7 @@ import { backendCurrencies } from '@commerce/contracts';
 import { setCurrencyAction } from '@/app/currency/actions';
 import { CurrencySwitcher } from '@/components/currency-switcher';
 import { readCurrency } from '@/lib/currency-cookie';
+import { pageFrame } from '@/lib/page-frame';
 
 /** Kept short: the side nav already carries the catalog, so the footer is
  * for the pages people look for at the bottom of a shop. */
@@ -26,7 +27,7 @@ export async function SiteFooter() {
     <footer className="mt-auto border-t">
       <nav
         aria-label="Footer"
-        className="mx-auto flex max-w-6xl flex-wrap justify-center gap-x-6 gap-y-2 px-4 pt-6 text-sm sm:justify-start"
+        className={`${pageFrame} flex flex-wrap justify-center gap-x-6 gap-y-2 pt-6 text-sm sm:justify-start`}
       >
         {FOOTER_LINKS.map((link) => (
           <Link
@@ -38,7 +39,9 @@ export async function SiteFooter() {
           </Link>
         ))}
       </nav>
-      <div className="text-muted-foreground mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-4 py-6 text-sm sm:flex-row">
+      <div
+        className={`${pageFrame} text-muted-foreground flex flex-col items-center justify-between gap-2 py-6 text-sm sm:flex-row`}
+      >
         <span>
           iZyane Marketplace — retail and marketplace offers in one catalog.
         </span>
