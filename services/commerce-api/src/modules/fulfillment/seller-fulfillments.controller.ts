@@ -11,6 +11,7 @@ import { isUUID } from 'class-validator';
 
 import type { AuthenticatedUser } from '../../common/auth/authenticated-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
+import { RequireVerifiedEmail } from '../../common/auth/require-verified-email.decorator';
 import { CancelLinesDto } from './dto/cancel-lines.dto';
 import { RecordQuantitiesDto } from './dto/record-quantities.dto';
 import { RejectFulfillmentDto } from './dto/reject-fulfillment.dto';
@@ -35,6 +36,7 @@ function requireIdempotencyKey(key: string | undefined): string {
  * inside FulfillmentsService via SellersService.lockApproved plus the
  * cross-tenant 404 ownership check, mirroring SellerOrdersController. */
 @Controller('sellers/me/fulfillments')
+@RequireVerifiedEmail()
 export class SellerFulfillmentsController {
   constructor(private readonly fulfillmentsService: FulfillmentsService) {}
 
@@ -44,7 +46,11 @@ export class SellerFulfillmentsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: VersionDto,
   ): Promise<FulfillmentOrderWithDetail> {
-    return this.fulfillmentsService.acceptSellerFulfillment(id, user.id, dto.version);
+    return this.fulfillmentsService.acceptSellerFulfillment(
+      id,
+      user.id,
+      dto.version,
+    );
   }
 
   @Post(':id/reject')

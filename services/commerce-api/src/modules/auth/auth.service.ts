@@ -31,6 +31,8 @@ import { generateOpaqueToken, hashOpaqueToken } from './token.util';
 
 const PASSWORD_RESET_TOKEN_TTL_SECONDS = 60 * 60;
 const PASSWORD_RESET_REQUEST_COOLDOWN_MS = 60 * 1000;
+const EMAIL_VERIFICATION_TOKEN_TTL_SECONDS = 24 * 60 * 60;
+const EMAIL_VERIFICATION_RESEND_COOLDOWN_MS = 60 * 1000;
 const HANDOFF_TOKEN_TTL_SECONDS = 60;
 const INVALID_CREDENTIALS_MESSAGE = 'Invalid email or password';
 
@@ -89,23 +91,22 @@ export class AuthService {
     }
 
     const passwordHash = await hashPassword(password);
-    const user = await this.usersService.create(email, passwordHash);
-
-    await this.auditService.record({
-      actorUserId: user.id,
-      action: 'auth.register',
-      targetType: 'User',
-      targetId: user.id,
-      ...context,
+    return this.prisma.$transaction(async (tx) => {
+      const user = await this.usersService.create(email, passwordHash, tx);
+      await this.createEmailVerification(user, tx, false);
+      await this.auditService.record(
+        {
+          actorUserId: user.id,
+          action: 'auth.register',
+          targetType: 'User',
+          targetId: user.id,
+          ...context,
+        },
+        tx,
+      );
+      const { response } = await this.issueTokens(user, tx, undefined, context);
+      return response;
     });
-
-    const { response } = await this.issueTokens(
-      user,
-      this.prisma,
-      undefined,
-      context,
-    );
-    return response;
   }
 
   async login(
@@ -546,6 +547,95 @@ export class AuthService {
     });
   }
 
+  async resendEmailVerification(
+    userId: string,
+    context: RequestContext = {},
+  ): Promise<void> {
+    await this.withUserLock(userId, async (tx) => {
+      const user = await this.usersService.findById(userId, tx);
+      if (!user || user.emailVerifiedAt) return;
+
+      const created = await this.createEmailVerification(user, tx, true);
+      if (created) {
+        await this.auditService.record(
+          {
+            actorUserId: user.id,
+            action: 'auth.email_verification.resent',
+            targetType: 'User',
+            targetId: user.id,
+            ...context,
+          },
+          tx,
+        );
+      }
+    });
+  }
+
+  async confirmEmailVerification(
+    rawToken: string,
+    context: RequestContext = {},
+  ): Promise<void> {
+    const record = await this.prisma.emailVerificationToken.findUnique({
+      where: { tokenHash: hashOpaqueToken(rawToken) },
+    });
+    if (!record || record.usedAt || record.expiresAt <= new Date()) {
+      throw new UnauthorizedException('Invalid or expired verification token');
+    }
+
+    await this.withUserLock(record.userId, async (tx) => {
+      const user = await this.usersService.findById(record.userId, tx);
+      const currentEmail = user
+        ? this.usersService.normalizeEmail(user.email)
+        : null;
+      if (!user || currentEmail !== record.targetEmail) {
+        throw new UnauthorizedException(
+          'Invalid or expired verification token',
+        );
+      }
+
+      const now = new Date();
+      const claimed = await tx.emailVerificationToken.updateMany({
+        where: {
+          id: record.id,
+          userId: user.id,
+          targetEmail: currentEmail,
+          usedAt: null,
+          expiresAt: { gt: now },
+        },
+        data: { usedAt: now },
+      });
+      if (claimed.count !== 1) {
+        throw new UnauthorizedException(
+          'Invalid or expired verification token',
+        );
+      }
+
+      const verified = await tx.user.updateMany({
+        where: { id: user.id, email: currentEmail },
+        data: { emailVerifiedAt: now, verificationGraceUntil: null },
+      });
+      if (verified.count !== 1) {
+        throw new UnauthorizedException(
+          'Invalid or expired verification token',
+        );
+      }
+      await tx.emailVerificationToken.updateMany({
+        where: { userId: user.id, usedAt: null },
+        data: { usedAt: now },
+      });
+      await this.auditService.record(
+        {
+          actorUserId: user.id,
+          action: 'auth.email_verification.confirmed',
+          targetType: 'User',
+          targetId: user.id,
+          ...context,
+        },
+        tx,
+      );
+    });
+  }
+
   /**
    * Mints a one-time code letting the caller's already-verified session on
    * this app be honoured on another app's own login, without handing over a
@@ -778,6 +868,60 @@ export class AuthService {
     });
   }
 
+  private async createEmailVerification(
+    user: User,
+    tx: Prisma.TransactionClient,
+    enforceCooldown: boolean,
+  ): Promise<boolean> {
+    const targetEmail = this.usersService.normalizeEmail(user.email);
+    if (enforceCooldown) {
+      const recent = await tx.emailVerificationToken.findFirst({
+        where: {
+          userId: user.id,
+          targetEmail,
+          createdAt: {
+            gt: new Date(Date.now() - EMAIL_VERIFICATION_RESEND_COOLDOWN_MS),
+          },
+        },
+        select: { id: true },
+      });
+      if (recent) return false;
+    }
+
+    const now = new Date();
+    await tx.emailVerificationToken.updateMany({
+      where: { userId: user.id, usedAt: null },
+      data: { usedAt: now },
+    });
+    const rawToken = generateOpaqueToken();
+    const expiresAt = new Date(
+      now.getTime() + EMAIL_VERIFICATION_TOKEN_TTL_SECONDS * 1000,
+    );
+    const token = await tx.emailVerificationToken.create({
+      data: {
+        userId: user.id,
+        targetEmail,
+        tokenHash: hashOpaqueToken(rawToken),
+        expiresAt,
+      },
+    });
+    const verificationUrl = new URL(
+      '/verify-email',
+      this.configService.getOrThrow<string>('CUSTOMER_WEB_URL'),
+    );
+    verificationUrl.searchParams.set('token', rawToken);
+    await this.emailDeliveries.enqueue(tx, {
+      template: 'email-verification',
+      recipient: targetEmail,
+      variables: {
+        verificationUrl: verificationUrl.toString(),
+        verificationTokenId: token.id,
+      },
+      expiresAt,
+    });
+    return true;
+  }
+
   private encryptionKeyring(
     purpose: 'REFRESH_RECOVERY',
   ): FieldEncryptionKeyring {
@@ -796,6 +940,11 @@ export class AuthService {
   }
 
   private toPublicUser(user: User): PublicUser {
-    return { id: user.id, email: user.email, role: user.role };
+    return {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      emailVerified: user.emailVerifiedAt !== null,
+    };
   }
 }

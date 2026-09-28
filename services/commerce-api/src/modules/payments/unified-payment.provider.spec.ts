@@ -257,6 +257,42 @@ describe('UnifiedPaymentProvider', () => {
     );
   });
 
+  it('matches a charge carrying a service charge against the requested amount', async () => {
+    reply({
+      success: true,
+      data: {
+        ...data,
+        amount: 125.95,
+        requestedAmount: 123.45,
+        serviceCharge: 2.5,
+      },
+    });
+    await expect(provider.initialize(input)).resolves.toMatchObject({
+      providerReference: 'pay_123',
+      status: 'PENDING',
+    });
+    await expect(provider.getPayment('pay_123')).resolves.toMatchObject({
+      amount: 12345,
+    });
+    await expect(provider.getDetails('pay_123')).resolves.toMatchObject({
+      amount: 123.45,
+      serviceCharge: 2.5,
+    });
+  });
+
+  it('does not trust a total below the requested amount or a malformed breakdown', async () => {
+    for (const breakdown of [
+      { amount: 100, requestedAmount: 123.45 },
+      { requestedAmount: '123.45' },
+      { serviceCharge: -1 },
+    ]) {
+      reply({ success: true, data: { ...data, ...breakdown } });
+      await expect(provider.initialize(input)).rejects.toBeInstanceOf(
+        PaymentOutcomeUnknownException,
+      );
+    }
+  });
+
   it('surfaces unsupported cancellation and refunds without fake success', async () => {
     reply({ success: false, error: { code: 'OPERATION_NOT_SUPPORTED' } }, 422);
     await expect(

@@ -1,8 +1,16 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import type { AuthenticatedUser } from '../../common/auth/authenticated-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
+import { RequireVerifiedEmail } from '../../common/auth/require-verified-email.decorator';
 import { AttachMediaDto } from './dto/attach-media.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { CreateVariantDto } from './dto/create-variant.dto';
@@ -22,6 +30,7 @@ import { ProductWithRelations, VariantWithRelations } from './products.types';
 @ApiTags('Seller products')
 @ApiBearerAuth()
 @Controller('sellers/me/products')
+@RequireVerifiedEmail()
 export class SellerProductsController {
   constructor(private readonly productsService: ProductsService) {}
 

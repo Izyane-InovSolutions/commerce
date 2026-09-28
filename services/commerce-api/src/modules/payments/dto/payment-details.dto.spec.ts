@@ -64,6 +64,24 @@ describe('PaymentDetailsDto', () => {
     expect(errors({ ...mobile, provider: 'AIRTEL' })).toEqual([]);
   });
 
+  it.each(['0977123456', '0767123456', '0573687168', '+260573687168'])(
+    'accepts the Zambian mobile number %s',
+    (phoneNumber) => {
+      expect(errors({ paymentMethod: 'MOBILE_MONEY', phoneNumber })).toEqual(
+        [],
+      );
+    },
+  );
+
+  it.each(['0211234567', '097123456', '+27971234567'])(
+    'rejects %s, which is not a Zambian mobile number',
+    (phoneNumber) => {
+      expect(errors({ paymentMethod: 'MOBILE_MONEY', phoneNumber })).toContain(
+        'phoneNumber',
+      );
+    },
+  );
+
   // Every billing field is required by the processor, so a form that stopped
   // collecting one has to fail loudly here rather than at the gateway.
   it.each([

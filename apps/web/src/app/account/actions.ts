@@ -109,6 +109,23 @@ export async function signOutAction(): Promise<void> {
   redirect('/account');
 }
 
+export async function resendEmailVerificationAction(
+  _state: FormState,
+): Promise<FormState> {
+  void _state;
+  try {
+    await apiClient.post('/auth/email-verification/resend');
+  } catch (error) {
+    return toFormState(error);
+  }
+
+  revalidatePath('/account');
+  return {
+    status: 'idle',
+    message: 'Verification email sent. Check your inbox.',
+  };
+}
+
 export async function addAddressAction(
   _state: FormState,
   formData: FormData,

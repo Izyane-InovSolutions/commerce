@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 
+import { EmailVerificationGuard } from '../../common/auth/email-verification.guard';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
 import { EmailModule } from '../../infrastructure/email/email.module';
@@ -33,6 +34,7 @@ import { AuthService } from './auth.service';
     // APP_GUARD providers are global regardless of which module declares them.
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_GUARD, useClass: EmailVerificationGuard },
   ],
 })
 export class AuthModule {}

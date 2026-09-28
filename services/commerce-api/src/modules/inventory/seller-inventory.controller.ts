@@ -12,6 +12,7 @@ import { Role, type InventoryMovement } from '@prisma/client';
 
 import type { AuthenticatedUser } from '../../common/auth/authenticated-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
+import { RequireVerifiedEmail } from '../../common/auth/require-verified-email.decorator';
 import { Roles } from '../../common/auth/roles.decorator';
 import {
   BulkSellerInventoryDto,
@@ -24,6 +25,7 @@ import { SellerInventoryService } from './seller-inventory.service';
 @ApiBearerAuth()
 @Roles(Role.SELLER)
 @Controller('sellers/me/inventory')
+@RequireVerifiedEmail()
 export class SellerInventoryController {
   constructor(private readonly inventory: SellerInventoryService) {}
 

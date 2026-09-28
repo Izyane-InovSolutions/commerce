@@ -98,6 +98,27 @@ export class EmailDeliveriesService {
       }
     }
 
+    if (delivery.template === 'email-verification') {
+      const tokenId = variables.verificationTokenId;
+      if (typeof tokenId !== 'string') {
+        await this.failPermanently(deliveryId, 'INVALID_EMAIL_TEMPLATE_DATA');
+        return;
+      }
+      const token = await this.prisma.emailVerificationToken.findUnique({
+        where: { id: tokenId },
+        include: { user: { select: { email: true } } },
+      });
+      if (
+        !token ||
+        token.usedAt ||
+        token.expiresAt <= new Date() ||
+        token.targetEmail !== token.user.email.trim().toLowerCase()
+      ) {
+        await this.failPermanently(deliveryId, 'VERIFICATION_TOKEN_INACTIVE');
+        return;
+      }
+    }
+
     let rendered;
     try {
       rendered = renderEmail(delivery.template, variables);

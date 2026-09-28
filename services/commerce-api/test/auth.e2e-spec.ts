@@ -16,7 +16,7 @@ type TokensBody = {
   data: {
     accessToken: string;
     refreshToken: string;
-    user: { id: string; email: string; role: string };
+    user: { id: string; email: string; role: string; emailVerified: boolean };
   };
 };
 type ErrorBody = { error: { code: string } };
@@ -70,6 +70,7 @@ describe('Auth (e2e)', () => {
 
     expect(user.email).toBe('shopper@example.com');
     expect(user.role).toBe('CUSTOMER');
+    expect(user.emailVerified).toBe(false);
 
     await request(server())
       .post('/api/v1/auth/register')
@@ -81,6 +82,11 @@ describe('Auth (e2e)', () => {
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(200);
     expect((meResponse.body as { data: { id: string } }).data.id).toBe(user.id);
+
+    await request(server())
+      .post('/api/v1/auth/email-verification/resend')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(204);
 
     const refreshResponse = await request(server())
       .post('/api/v1/auth/refresh')

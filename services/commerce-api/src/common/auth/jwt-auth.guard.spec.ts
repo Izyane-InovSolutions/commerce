@@ -27,6 +27,7 @@ const activeSession = {
     role: Role.CUSTOMER,
     isActive: true,
     emailVerifiedAt: null,
+    verificationGraceUntil: null,
   },
 };
 
@@ -103,6 +104,7 @@ describe('JwtAuthGuard', () => {
       role: Role.CUSTOMER,
       sessionId: 'session-1',
       emailVerified: false,
+      verificationGraceUntil: null,
     });
   });
 
@@ -275,6 +277,7 @@ describe('JwtAuthGuard', () => {
         role: Role.CUSTOMER,
         sessionId: 'session-1',
         emailVerified: false,
+        verificationGraceUntil: null,
       });
     });
 

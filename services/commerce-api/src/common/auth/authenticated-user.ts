@@ -6,6 +6,7 @@ export type AuthenticatedUser = {
   role: Role;
   sessionId: string;
   emailVerified: boolean;
+  verificationGraceUntil: Date | null;
 };
 
 export type RequestWithUser = Request & { user?: AuthenticatedUser };

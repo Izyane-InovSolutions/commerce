@@ -43,6 +43,16 @@ type FakePasswordResetToken = {
   createdAt: Date;
 };
 
+type FakeEmailVerificationToken = {
+  id: string;
+  userId: string;
+  targetEmail: string;
+  tokenHash: string;
+  expiresAt: Date;
+  usedAt: Date | null;
+  createdAt: Date;
+};
+
 /**
  * A minimal in-memory stand-in for PrismaClient covering only the operations
  * AuthService uses, so auth e2e flows can run without a real database.
@@ -54,6 +64,11 @@ export class FakePrismaService {
     string,
     FakePasswordResetToken
   >();
+  private readonly emailVerificationTokens = new Map<
+    string,
+    FakeEmailVerificationToken
+  >();
+  private readonly emailDeliveries = new Map<string, Record<string, unknown>>();
 
   $connect(): Promise<void> {
     return Promise.resolve();
@@ -208,6 +223,22 @@ export class FakePrismaService {
 
       Object.assign(user, data, { updatedAt: new Date() });
       return Promise.resolve(user);
+    },
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: { id?: string; email?: string };
+      data: Partial<FakeUser>;
+    }): Promise<{ count: number }> => {
+      let count = 0;
+      for (const user of this.users.values()) {
+        if (where.id && user.id !== where.id) continue;
+        if (where.email && user.email !== where.email) continue;
+        Object.assign(user, data, { updatedAt: new Date() });
+        count += 1;
+      }
+      return Promise.resolve({ count });
     },
   };
 
@@ -400,6 +431,103 @@ export class FakePrismaService {
 
       Object.assign(record, data);
       return Promise.resolve(record);
+    },
+  };
+
+  emailVerificationToken = {
+    create: ({
+      data,
+    }: {
+      data: Omit<FakeEmailVerificationToken, 'id' | 'usedAt' | 'createdAt'>;
+    }): Promise<FakeEmailVerificationToken> => {
+      const row: FakeEmailVerificationToken = {
+        id: randomUUID(),
+        usedAt: null,
+        createdAt: new Date(),
+        ...data,
+      };
+      this.emailVerificationTokens.set(row.id, row);
+      return Promise.resolve(row);
+    },
+    findUnique: ({
+      where,
+    }: {
+      where: { id?: string; tokenHash?: string };
+    }): Promise<FakeEmailVerificationToken | null> => {
+      if (where.id) {
+        return Promise.resolve(
+          this.emailVerificationTokens.get(where.id) ?? null,
+        );
+      }
+      return Promise.resolve(
+        [...this.emailVerificationTokens.values()].find(
+          (row) => row.tokenHash === where.tokenHash,
+        ) ?? null,
+      );
+    },
+    findFirst: ({
+      where,
+    }: {
+      where: {
+        userId: string;
+        targetEmail: string;
+        createdAt: { gt: Date };
+      };
+    }): Promise<FakeEmailVerificationToken | null> =>
+      Promise.resolve(
+        [...this.emailVerificationTokens.values()].find(
+          (row) =>
+            row.userId === where.userId &&
+            row.targetEmail === where.targetEmail &&
+            row.createdAt > where.createdAt.gt,
+        ) ?? null,
+      ),
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: {
+        id?: string;
+        userId?: string;
+        targetEmail?: string;
+        usedAt?: null;
+        expiresAt?: { gt: Date };
+      };
+      data: { usedAt: Date };
+    }): Promise<{ count: number }> => {
+      let count = 0;
+      for (const row of this.emailVerificationTokens.values()) {
+        if (where.id && row.id !== where.id) continue;
+        if (where.userId && row.userId !== where.userId) continue;
+        if (where.targetEmail && row.targetEmail !== where.targetEmail)
+          continue;
+        if (where.usedAt === null && row.usedAt !== null) continue;
+        if (where.expiresAt && row.expiresAt <= where.expiresAt.gt) continue;
+        row.usedAt = data.usedAt;
+        count += 1;
+      }
+      return Promise.resolve({ count });
+    },
+  };
+
+  emailDelivery = {
+    create: ({
+      data,
+    }: {
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const now = new Date();
+      const row = {
+        status: 'PENDING',
+        sentAt: null,
+        failedAt: null,
+        lastErrorCode: null,
+        createdAt: now,
+        updatedAt: now,
+        ...data,
+      };
+      this.emailDeliveries.set(row.id as string, row);
+      return Promise.resolve(row);
     },
   };
 

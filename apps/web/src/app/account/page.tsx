@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 
 import { AccountTabs, type AccountTabValue } from '@/components/account-tabs';
 import { AddressesSection } from '@/components/addresses-section';
+import { EmailVerificationNotice } from '@/components/email-verification-notice';
 import { ApiErrorNotice } from '@/components/api-error-notice';
 import { AuthPanel } from '@/components/auth-panel';
 import { OrderStatusPoller } from '@/components/order-status-poller';
@@ -20,7 +21,11 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { labelOffers } from '@/lib/cart';
-import { listAddresses, listOrders, reconcileOrderPayments } from '@/lib/orders';
+import {
+  listAddresses,
+  listOrders,
+  reconcileOrderPayments,
+} from '@/lib/orders';
 import { listSavedSellers } from '@/lib/saved-sellers';
 import { getCurrentUser } from '@/lib/session';
 import { getOwnSeller } from '@/lib/sellers';
@@ -31,6 +36,7 @@ import {
   becomeSellerAction,
   deleteAddressAction,
   goToSellerDashboardAction,
+  resendEmailVerificationAction,
   setDefaultAddressAction,
   signInAction,
   signOutAction,
@@ -70,7 +76,11 @@ export default async function AccountPage({
   if (!user) {
     return (
       <div className="px-4 py-12">
-        <AuthPanel signIn={signInAction} signUp={signUpAction} next="/account" />
+        <AuthPanel
+          signIn={signInAction}
+          signUp={signUpAction}
+          next="/account"
+        />
       </div>
     );
   }
@@ -123,6 +133,12 @@ export default async function AccountPage({
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-12">
+      {!user.emailVerified ? (
+        <EmailVerificationNotice
+          email={user.email}
+          resend={resendEmailVerificationAction}
+        />
+      ) : null}
       <SellerAccountCard
         seller={seller}
         becomeSeller={becomeSellerAction}

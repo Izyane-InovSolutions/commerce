@@ -1,4 +1,7 @@
-export type EmailTemplate = 'password-reset' | 'password-changed';
+export type EmailTemplate =
+  | 'password-reset'
+  | 'password-changed'
+  | 'email-verification';
 
 type RenderedEmail = { subject: string; text: string; html: string };
 
@@ -24,6 +27,19 @@ export function renderEmail(
       subject: 'Your Commerce password was changed',
       text: 'Your Commerce password was changed. If this was not you, contact support immediately.',
       html: '<p>Your Commerce password was changed.</p><p>If this was not you, contact support immediately.</p>',
+    };
+  }
+
+  if (template === 'email-verification') {
+    const verificationUrl = variables.verificationUrl;
+    if (typeof verificationUrl !== 'string') {
+      throw new Error('INVALID_EMAIL_TEMPLATE_DATA');
+    }
+    const safeUrl = escapeHtml(verificationUrl);
+    return {
+      subject: 'Verify your Commerce email address',
+      text: `Use this link to verify your email address. It expires in 24 hours:\n\n${verificationUrl}\n\nIf you did not create this account, you can ignore this email.`,
+      html: `<p>Use the link below to verify your Commerce email address. It expires in 24 hours.</p><p><a href="${safeUrl}">Verify email address</a></p><p>If you did not create this account, you can ignore this email.</p>`,
     };
   }
 

@@ -139,4 +139,57 @@ describe('EmailDeliveriesService', () => {
 
     await expect(service.send(id)).rejects.toThrow('SMTP_DELIVERY_FAILED');
   });
+
+  it('does not send verification mail after the account email changes', async () => {
+    const id = 'ce838c8d-41cf-4678-bf67-70faef91b370';
+    const prisma = {
+      emailDelivery: {
+        findUnique: jest.fn().mockResolvedValue({
+          id,
+          template: 'email-verification',
+          recipient: 'old@example.com',
+          encryptedVars: encryptField(
+            JSON.stringify({
+              verificationUrl: 'https://store.test/verify-email?token=secret',
+              verificationTokenId: 'verification-1',
+            }),
+            keyring,
+            `email-delivery:${id}`,
+          ),
+          status: EmailDeliveryStatus.PENDING,
+          expiresAt: new Date(Date.now() + 60_000),
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      emailVerificationToken: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'verification-1',
+          targetEmail: 'old@example.com',
+          usedAt: null,
+          expiresAt: new Date(Date.now() + 60_000),
+          user: { email: 'new@example.com' },
+        }),
+      },
+    };
+    const sender = { send: jest.fn() };
+    const service = new EmailDeliveriesService(
+      prisma as unknown as PrismaService,
+      config as unknown as ConfigService,
+      {} as BackgroundJobsService,
+      sender,
+    );
+
+    await service.send(id);
+
+    expect(sender.send).not.toHaveBeenCalled();
+    expect(prisma.emailDelivery.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: EmailDeliveryStatus.FAILED,
+          encryptedVars: null,
+          lastErrorCode: 'VERIFICATION_TOKEN_INACTIVE',
+        }) as object,
+      }),
+    );
+  });
 });

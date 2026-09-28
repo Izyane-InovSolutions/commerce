@@ -26,7 +26,10 @@ import { FxRatesService } from './fx-rates.service';
 export type GatewayPayment = {
   paymentId: string;
   status: string;
+  /** What the order asked for — never the fee-inclusive total. */
   amount: number;
+  /** The gateway's own fee on top of `amount`, when it reports one. */
+  serviceCharge?: number;
   currency: string;
   reference: string;
   failureCode?: string;
@@ -68,6 +71,10 @@ export type GatewayPaymentPage = {
 };
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function money(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 
 /** Keeps an optional string field only when it carries something. */
@@ -304,18 +311,32 @@ export class UnifiedPaymentProvider implements PaymentProvider {
       !/^pay_[A-Za-z0-9_-]+$/.test(value.paymentId) ||
       typeof value.status !== 'string' ||
       !/^[A-Z_]{1,50}$/.test(value.status) ||
-      typeof value.amount !== 'number' ||
-      !Number.isFinite(value.amount) ||
-      value.amount < 0 ||
+      !money(value.amount) ||
       typeof value.currency !== 'string' ||
       !/^[A-Z]{3}$/.test(value.currency) ||
       typeof value.reference !== 'string'
     )
       throw new PaymentOutcomeUnknownException();
+    // The gateway can add a service charge, reporting the order's own figure
+    // as `requestedAmount` and the fee-inclusive total as `amount`. Every
+    // caller matches this against the order, so the order's figure is the one
+    // kept. A total below what was asked for, or a malformed breakdown, is
+    // not something to settle an order on.
+    if (
+      (value.requestedAmount !== undefined && !money(value.requestedAmount)) ||
+      (value.serviceCharge !== undefined && !money(value.serviceCharge)) ||
+      (money(value.requestedAmount) && value.amount < value.requestedAmount)
+    )
+      throw new PaymentOutcomeUnknownException();
     return {
       paymentId: value.paymentId,
       status: value.status,
-      amount: value.amount,
+      amount: money(value.requestedAmount)
+        ? value.requestedAmount
+        : value.amount,
+      ...(money(value.serviceCharge)
+        ? { serviceCharge: value.serviceCharge }
+        : {}),
       currency: value.currency,
       reference: value.reference,
       // Optional and only kept when the gateway sends a usable string, so a

@@ -14,6 +14,7 @@ import { isUUID } from 'class-validator';
 
 import type { AuthenticatedUser } from '../../common/auth/authenticated-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
+import { RequireVerifiedEmail } from '../../common/auth/require-verified-email.decorator';
 import {
   PayoutAccountVersionDto,
   SavePayoutAccountDto,
@@ -39,6 +40,7 @@ function requireIdempotencyKey(key: string | undefined): string {
 }
 
 @Controller('sellers/me')
+@RequireVerifiedEmail()
 export class SellerPayoutsController {
   constructor(private readonly payouts: PayoutsService) {}
 

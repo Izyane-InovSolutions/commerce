@@ -74,6 +74,22 @@ describe('Authentication concurrency (integration, real Postgres)', () => {
     return rawToken;
   }
 
+  async function createVerificationToken(
+    userId: string,
+    email: string,
+  ): Promise<string> {
+    const rawToken = `verify-${randomUUID()}-${randomUUID()}`;
+    await prisma.emailVerificationToken.create({
+      data: {
+        userId,
+        targetEmail: email,
+        tokenHash: hashOpaqueToken(rawToken),
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+    return rawToken;
+  }
+
   it('creates one replacement and returns it to concurrent refresh callers', async () => {
     const user = await createUser();
     const login = await auth.login(user.email, user.password);
@@ -93,6 +109,32 @@ describe('Authentication concurrency (integration, real Postgres)', () => {
       sessions.filter((session) => session.revokedAt === null),
     ).toHaveLength(1);
     expect(sessions[0]?.replacedBySessionId).toBe(sessions[1]?.id);
+  });
+
+  it('allows exactly one concurrent verification claim for the current email', async () => {
+    const user = await createUser();
+    const token = await createVerificationToken(user.id, user.email);
+
+    const results = await Promise.allSettled([
+      auth.confirmEmailVerification(token),
+      auth.confirmEmailVerification(token),
+    ]);
+
+    expect(
+      results.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(1);
+    expect(
+      results.filter((result) => result.status === 'rejected'),
+    ).toHaveLength(1);
+    const verified = await prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+    });
+    expect(verified.emailVerifiedAt).not.toBeNull();
+    expect(
+      await prisma.emailVerificationToken.count({
+        where: { userId: user.id, usedAt: null },
+      }),
+    ).toBe(0);
   });
 
   it('leaves no old-password login session active after a concurrent reset', async () => {

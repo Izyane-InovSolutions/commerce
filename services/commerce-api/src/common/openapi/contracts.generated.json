@@ -487,6 +487,84 @@
         }
       }
     },
+    "AuthController_resendEmailVerification": {
+      "operationId": "AuthController_resendEmailVerification",
+      "tags": [
+        "auth"
+      ],
+      "parameters": [
+        {
+          "name": "user-agent",
+          "in": "header",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "204": {
+          "description": "No content"
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      }
+    },
+    "AuthController_confirmEmailVerification": {
+      "operationId": "AuthController_confirmEmailVerification",
+      "tags": [
+        "auth"
+      ],
+      "parameters": [
+        {
+          "name": "user-agent",
+          "in": "header",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "security": [],
+      "responses": {
+        "204": {
+          "description": "No content"
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InputConfirmEmailVerificationDto"
+            }
+          }
+        }
+      }
+    },
     "AuthController_mintHandoff": {
       "operationId": "AuthController_mintHandoff",
       "tags": [
@@ -19423,12 +19501,16 @@
             "STAFF",
             "ADMIN"
           ]
+        },
+        "emailVerified": {
+          "type": "boolean"
         }
       },
       "required": [
         "id",
         "email",
-        "role"
+        "role",
+        "emailVerified"
       ]
     },
     "InputLoginDto": {
@@ -19508,6 +19590,19 @@
       "required": [
         "token",
         "newPassword"
+      ],
+      "additionalProperties": false
+    },
+    "InputConfirmEmailVerificationDto": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "token"
       ],
       "additionalProperties": false
     },
@@ -20084,7 +20179,7 @@
         },
         "phoneNumber": {
           "type": "string",
-          "pattern": "^(?:0|\\+?260)9\\d{8}$"
+          "pattern": "^(?:0|\\+?260)[579]\\d{8}$"
         },
         "provider": {
           "type": "string",
@@ -25362,6 +25457,9 @@
           "type": "string"
         },
         "amount": {
+          "type": "number"
+        },
+        "serviceCharge": {
           "type": "number"
         },
         "currency": {

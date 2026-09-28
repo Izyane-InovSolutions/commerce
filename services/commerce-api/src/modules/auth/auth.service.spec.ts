@@ -193,6 +193,13 @@ describe('AuthService', () => {
       create: jest.Mock;
       findUnique: jest.Mock;
     };
+    emailVerificationToken: {
+      updateMany: jest.Mock;
+      create: jest.Mock;
+      findUnique: jest.Mock;
+      findFirst: jest.Mock;
+    };
+    user: { updateMany: jest.Mock };
     $transaction: jest.Mock;
     $queryRaw: jest.Mock;
   };
@@ -223,6 +230,13 @@ describe('AuthService', () => {
         create: jest.fn(),
         findUnique: jest.fn(),
       },
+      emailVerificationToken: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        create: jest.fn().mockResolvedValue({ id: 'verification-1' }),
+        findUnique: jest.fn(),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      user: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       $transaction: jest.fn(),
       $queryRaw: jest.fn().mockResolvedValue(undefined),
     };
@@ -286,6 +300,7 @@ describe('AuthService', () => {
       expect(usersService.create).toHaveBeenCalledWith(
         'user@example.com',
         expect.any(String),
+        prisma,
       );
       expect(result.accessToken).toBe('signed.jwt.token');
       expect(result.refreshToken).toEqual(expect.any(String));
@@ -293,12 +308,24 @@ describe('AuthService', () => {
         id: 'user-1',
         email: 'user@example.com',
         role: Role.CUSTOMER,
+        emailVerified: false,
       });
       expect(auditService.record).toHaveBeenCalledWith(
         expect.objectContaining({
           action: 'auth.register',
           actorUserId: 'user-1',
         }) as object,
+        prisma,
+      );
+      expect(emailDeliveries.enqueue).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({
+          template: 'email-verification',
+          recipient: 'user@example.com',
+          variables: expect.objectContaining({
+            verificationTokenId: 'verification-1',
+          }) as object,
+        }),
       );
     });
   });
@@ -775,6 +802,104 @@ describe('AuthService', () => {
         }) as object,
         prisma,
       );
+    });
+  });
+
+  describe('email verification', () => {
+    it('queues a new email-bound token when an unverified user resends', async () => {
+      usersService.findById.mockResolvedValue(buildUser());
+
+      await authService.resendEmailVerification('user-1');
+
+      expect(prisma.emailVerificationToken.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userId: 'user-1',
+          targetEmail: 'user@example.com',
+        }) as object,
+      });
+      expect(emailDeliveries.enqueue).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({ template: 'email-verification' }),
+      );
+    });
+
+    it('does not resend during the per-account cooldown', async () => {
+      usersService.findById.mockResolvedValue(buildUser());
+      prisma.emailVerificationToken.findFirst.mockResolvedValue({
+        id: 'recent',
+      });
+
+      await authService.resendEmailVerification('user-1');
+
+      expect(prisma.emailVerificationToken.create).not.toHaveBeenCalled();
+      expect(emailDeliveries.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('rejects a token when the account email has changed', async () => {
+      prisma.emailVerificationToken.findUnique.mockResolvedValue({
+        id: 'verification-1',
+        userId: 'user-1',
+        targetEmail: 'old@example.com',
+        usedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      usersService.findById.mockResolvedValue(
+        buildUser({ email: 'new@example.com' }),
+      );
+
+      await expect(
+        authService.confirmEmailVerification('raw-token'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(prisma.user.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('atomically claims the token and verifies only its current email', async () => {
+      prisma.emailVerificationToken.findUnique.mockResolvedValue({
+        id: 'verification-1',
+        userId: 'user-1',
+        targetEmail: 'user@example.com',
+        usedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      usersService.findById.mockResolvedValue(buildUser());
+
+      await authService.confirmEmailVerification('raw-token');
+
+      expect(prisma.emailVerificationToken.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: 'verification-1',
+            targetEmail: 'user@example.com',
+            usedAt: null,
+          }) as object,
+        }),
+      );
+      expect(prisma.user.updateMany).toHaveBeenCalledWith({
+        where: { id: 'user-1', email: 'user@example.com' },
+        data: {
+          emailVerifiedAt: expect.any(Date) as Date,
+          verificationGraceUntil: null,
+        },
+      });
+    });
+
+    it('rejects a token already claimed by a concurrent confirmation', async () => {
+      prisma.emailVerificationToken.findUnique.mockResolvedValue({
+        id: 'verification-1',
+        userId: 'user-1',
+        targetEmail: 'user@example.com',
+        usedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      usersService.findById.mockResolvedValue(buildUser());
+      prisma.emailVerificationToken.updateMany.mockResolvedValueOnce({
+        count: 0,
+      });
+
+      await expect(
+        authService.confirmEmailVerification('raw-token'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(prisma.user.updateMany).not.toHaveBeenCalled();
     });
   });
 

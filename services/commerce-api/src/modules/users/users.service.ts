@@ -40,8 +40,12 @@ export class UsersService {
     return tx.user.findUnique({ where: { id } });
   }
 
-  create(email: string, passwordHash: string): Promise<User> {
-    return this.prisma.user.create({
+  create(
+    email: string,
+    passwordHash: string,
+    tx: Prisma.TransactionClient = this.prisma,
+  ): Promise<User> {
+    return tx.user.create({
       data: { email: this.normalizeEmail(email), passwordHash },
     });
   }
