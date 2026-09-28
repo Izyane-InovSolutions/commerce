@@ -65,7 +65,7 @@ export default async function HomePage() {
       <div className="min-w-0 flex-1 space-y-12">
         
 
-        {/* Interactive Storefront Catalog with Categories & Trending Filters */}
+        {/* The first page of the catalog, with category, brand and sort controls */}
         <StorefrontCatalog
           products={allProducts}
           total={total}

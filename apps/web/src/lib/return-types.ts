@@ -256,11 +256,13 @@ function progress(status: ReturnStatus): number {
   return 0;
 }
 
-/** When the request last moved into one of `statuses`, from its
- * `STATUS_CHANGED` events (`data.to`); null when no event says. */
+/** When the request moved into one of `statuses` — last time by default,
+ * first with `which: 'first'` — from its `STATUS_CHANGED` events
+ * (`data.to`); null when no event says. */
 function reachedAt(
   events: ReturnEvent[],
   statuses: ReturnStatus[],
+  which: 'first' | 'last' = 'last',
 ): string | null {
   const matches = events
     .filter((event) => {
@@ -270,7 +272,7 @@ function reachedAt(
     })
     .map((event) => event.createdAt)
     .sort((a, b) => Date.parse(a) - Date.parse(b));
-  return matches.at(-1) ?? null;
+  return (which === 'first' ? matches.at(0) : matches.at(-1)) ?? null;
 }
 
 /**
@@ -329,7 +331,9 @@ export function buildReturnTimeline(
     waiting: string,
   ): ReturnTimelineStep =>
     reached >= index
-      ? { key, label, timestamp: reachedAt(events, at), state: 'done' }
+      ? // The first time: inspection finished when the request was first
+        // decided, not when its refund later settled.
+        { key, label, timestamp: reachedAt(events, at, 'first'), state: 'done' }
       : {
           key,
           label,

@@ -13,16 +13,24 @@ describe('SideNav', () => {
     );
     expect(screen.getByRole('link', { name: 'New Arrivals' })).toHaveAttribute(
       'href',
-      '/products?filter=new-arrivals',
+      '/new-arrivals',
     );
     expect(screen.getByRole('link', { name: 'Best Sellers' })).toHaveAttribute(
       'href',
       '/best-sellers',
     );
-    expect(screen.getByRole('link', { name: 'Deals' })).toHaveAttribute(
-      'href',
-      '/deals',
+  });
+
+  it('has one link to Best Sellers, and none to the always-empty Deals', () => {
+    render(<SideNav />);
+
+    expect(screen.getAllByRole('link', { name: 'Best Sellers' })).toHaveLength(
+      1,
     );
+    expect(
+      screen.queryByRole('link', { name: 'Trending' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Deals' })).not.toBeInTheDocument();
   });
 
   it('links the account and support shortcuts to their routes', () => {

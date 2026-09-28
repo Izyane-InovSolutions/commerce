@@ -48,13 +48,17 @@ export function AccountMenu({
             Profile
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem disabled>
-          <Bell />
-          Notifications
+        <DropdownMenuItem asChild>
+          <Link href="/notifications">
+            <Bell />
+            Notifications
+          </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem disabled>
-          <Settings />
-          Settings
+        <DropdownMenuItem asChild>
+          <Link href="/account?tab=settings">
+            <Settings />
+            Settings
+          </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild variant="destructive">

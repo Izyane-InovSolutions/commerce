@@ -207,9 +207,9 @@ export default async function ReturnPage({
               </ul>
             ) : refund?.estimated ? (
               <p className="text-muted-foreground text-xs text-pretty">
-                The items’ price, before any shipping refund. The final
-                amount is set once they’ve been inspected, and goes back to
-                how you paid.
+                The items’ price, before any shipping refund. The final amount
+                is set once they’ve been inspected, and goes back to how you
+                paid.
               </p>
             ) : null}
           </CardContent>
@@ -240,7 +240,10 @@ export default async function ReturnPage({
                     ) : null}
                   </div>
                   <span className="font-medium">
-                    {formatMinor(item.unitAmount * item.quantity, item.currency)}
+                    {formatMinor(
+                      item.unitAmount * item.quantity,
+                      item.currency,
+                    )}
                   </span>
                 </div>
               </li>

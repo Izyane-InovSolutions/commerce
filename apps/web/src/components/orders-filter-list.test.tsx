@@ -138,3 +138,13 @@ describe('OrdersFilterList', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('OrdersFilterList order links', () => {
+  it('links each order to its own page', () => {
+    render(<OrdersFilterList orders={[order({ id: 'order-42' })]} />);
+
+    expect(
+      screen.getByRole('link', { name: 'View order details' }),
+    ).toHaveAttribute('href', '/orders/order-42');
+  });
+});

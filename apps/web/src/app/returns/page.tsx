@@ -126,8 +126,7 @@ export default async function ReturnsPage() {
                         Return {request.rmaNumber ?? request.id.slice(0, 8)}
                       </Link>
                       <Badge variant={returnStatusTone(request.status)}>
-                        {RETURN_STATUS_LABELS[request.status] ??
-                          request.status}
+                        {RETURN_STATUS_LABELS[request.status] ?? request.status}
                       </Badge>
                     </div>
                     <p className="text-muted-foreground text-xs">

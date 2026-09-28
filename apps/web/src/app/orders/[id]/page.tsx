@@ -103,7 +103,8 @@ export default async function OrderPage({ params }: PageProps<'/orders/[id]'>) {
       : Promise.resolve<ReturnEligibility[]>([]),
     returnable
       ? readOptional(() => listReturns()).then(
-          (all) => all?.filter((request) => request.orderId === orderId) ?? null,
+          (all) =>
+            all?.filter((request) => request.orderId === orderId) ?? null,
         )
       : Promise.resolve<ReturnRequest[]>([]),
   ]);
@@ -202,8 +203,7 @@ export default async function OrderPage({ params }: PageProps<'/orders/[id]'>) {
                         href={`/returns/${request.id}`}
                         className="font-medium hover:underline"
                       >
-                        Return{' '}
-                        {request.rmaNumber ?? request.id.slice(0, 8)}
+                        Return {request.rmaNumber ?? request.id.slice(0, 8)}
                       </Link>
                       <Badge variant="secondary">
                         {RETURN_STATUS_LABELS[request.status] ?? request.status}
@@ -224,9 +224,9 @@ export default async function OrderPage({ params }: PageProps<'/orders/[id]'>) {
                 </Button>
               ) : (
                 <p className="text-muted-foreground text-sm text-pretty">
-                  Nothing on this order can be returned right now. Items
-                  become returnable once delivered, for as long as their
-                  return window lasts.{' '}
+                  Nothing on this order can be returned right now. Items become
+                  returnable once delivered, for as long as their return window
+                  lasts.{' '}
                   <Link href="/help#returns" className="underline">
                     Returns policy
                   </Link>

@@ -35,6 +35,12 @@ vi.mock('@/lib/session', () => session);
 // `app/account/actions` imports.
 vi.mock('@/app/account/actions', () => ({ signOutAction: vi.fn() }));
 
+// The signed-in header asks how many notifications are unread for its bell.
+const notifications = vi.hoisted(() => ({
+  countUnreadNotifications: vi.fn().mockResolvedValue(0),
+}));
+vi.mock('@/lib/notifications', () => notifications);
+
 describe('SiteHeader', () => {
   it('renders the primary storefront navigation', async () => {
     render(await SiteHeader());
@@ -74,6 +80,29 @@ describe('SiteHeader', () => {
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('link', { name: 'Account' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows a notifications bell with the unread count once signed in', async () => {
+    session.getCurrentUser.mockResolvedValueOnce({
+      id: 'user-1',
+      email: 'shopper@example.test',
+      role: 'CUSTOMER',
+    });
+    notifications.countUnreadNotifications.mockResolvedValueOnce(3);
+
+    render(await SiteHeader());
+
+    expect(
+      screen.getByRole('link', { name: 'Notifications, 3 unread' }),
+    ).toHaveAttribute('href', '/notifications');
+  });
+
+  it('leaves the bell out for a signed-out visitor', async () => {
+    render(await SiteHeader());
+
+    expect(
+      screen.queryByRole('link', { name: /Notifications/ }),
     ).not.toBeInTheDocument();
   });
 });

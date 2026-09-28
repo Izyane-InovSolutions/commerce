@@ -233,7 +233,9 @@ function item(unitAmount: number, quantity: number): ReturnItem {
 describe('summarizeRefund', () => {
   it('estimates from the items until a refund exists', () => {
     expect(
-      summarizeRefund(request('APPROVED', [], { items: [item(1000, 2), item(250, 1)] })),
+      summarizeRefund(
+        request('APPROVED', [], { items: [item(1000, 2), item(250, 1)] }),
+      ),
     ).toEqual({ amount: 2250, currency: 'ZMW', estimated: true });
   });
 
@@ -243,8 +245,20 @@ describe('summarizeRefund', () => {
         request('REFUNDED', [], {
           items: [item(1000, 2)],
           refundCases: [
-            { id: 'rc-1', status: 'SUCCEEDED', amount: 2300, shippingAmount: 300, currency: 'ZMW' },
-            { id: 'rc-2', status: 'CANCELLED', amount: 900, shippingAmount: 0, currency: 'ZMW' },
+            {
+              id: 'rc-1',
+              status: 'SUCCEEDED',
+              amount: 2300,
+              shippingAmount: 300,
+              currency: 'ZMW',
+            },
+            {
+              id: 'rc-2',
+              status: 'CANCELLED',
+              amount: 900,
+              shippingAmount: 0,
+              currency: 'ZMW',
+            },
           ],
         }),
       ),
@@ -252,8 +266,14 @@ describe('summarizeRefund', () => {
   });
 
   it('has nothing to say for a return that will not be refunded', () => {
-    for (const status of ['CANCELLED', 'REJECTED', 'CLOSED_NO_REFUND'] as const) {
-      expect(summarizeRefund(request(status, [], { items: [item(1000, 1)] }))).toBeNull();
+    for (const status of [
+      'CANCELLED',
+      'REJECTED',
+      'CLOSED_NO_REFUND',
+    ] as const) {
+      expect(
+        summarizeRefund(request(status, [], { items: [item(1000, 1)] })),
+      ).toBeNull();
     }
   });
 });

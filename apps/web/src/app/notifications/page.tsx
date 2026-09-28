@@ -97,11 +97,7 @@ export default async function NotificationsPage({
       </div>
 
       <nav aria-label="Filter notifications" className="flex gap-1">
-        <Button
-          asChild
-          size="sm"
-          variant={unreadOnly ? 'ghost' : 'secondary'}
-        >
+        <Button asChild size="sm" variant={unreadOnly ? 'ghost' : 'secondary'}>
           <Link
             href={hrefFor(1, false)}
             aria-current={unreadOnly ? undefined : 'page'}
@@ -109,11 +105,7 @@ export default async function NotificationsPage({
             All
           </Link>
         </Button>
-        <Button
-          asChild
-          size="sm"
-          variant={unreadOnly ? 'secondary' : 'ghost'}
-        >
+        <Button asChild size="sm" variant={unreadOnly ? 'secondary' : 'ghost'}>
           <Link
             href={hrefFor(1, true)}
             aria-current={unreadOnly ? 'page' : undefined}

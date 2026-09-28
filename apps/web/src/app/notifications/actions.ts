@@ -28,7 +28,9 @@ export async function markNotificationReadAction(
   try {
     await markNotificationRead(id);
   } catch (error) {
-    return isNotificationsUnavailable(error) ? unavailable() : toFormState(error);
+    return isNotificationsUnavailable(error)
+      ? unavailable()
+      : toFormState(error);
   }
 
   revalidateNotifications();
@@ -39,7 +41,9 @@ export async function markAllNotificationsReadAction(): Promise<FormState> {
   try {
     await markAllNotificationsRead();
   } catch (error) {
-    return isNotificationsUnavailable(error) ? unavailable() : toFormState(error);
+    return isNotificationsUnavailable(error)
+      ? unavailable()
+      : toFormState(error);
   }
 
   revalidateNotifications();

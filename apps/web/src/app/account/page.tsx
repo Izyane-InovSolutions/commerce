@@ -13,15 +13,7 @@ import { RecentlyViewedSection } from '@/components/recently-viewed-section';
 import { SavedSellersList } from '@/components/saved-sellers-list';
 import { SellerAccountCard } from '@/components/seller-account-card';
 import { WishlistList } from '@/components/wishlist-list';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import { labelOffers } from '@/lib/cart';
 import { listAddresses, listOrders, reconcileOrderPayments } from '@/lib/orders';
 import { getProfile } from '@/lib/profile';
@@ -38,7 +30,6 @@ import {
   goToSellerDashboardAction,
   setDefaultAddressAction,
   signInAction,
-  signOutAction,
   signUpAction,
   updateAddressAction,
   updateProfileAction,

@@ -5,12 +5,13 @@ import { Separator } from '@/components/ui/separator';
 
 import type { Category } from '@/lib/catalog-types';
 
+// No "Trending" (it was only ever a second way to reach Best Sellers) and no
+// "Deals" (offers carry no compare-at price, so that page is always empty);
+// both old URLs still resolve.
 const quickLinks = [
   { label: 'All Products', href: '/products' },
-  { label: 'Trending', href: '/products?filter=trending' },
-  { label: 'New Arrivals', href: '/products?filter=new-arrivals' },
+  { label: 'New Arrivals', href: '/new-arrivals' },
   { label: 'Best Sellers', href: '/best-sellers' },
-  { label: 'Deals', href: '/deals' },
 ] as const;
 
 const linkClasses =

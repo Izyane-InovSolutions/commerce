@@ -72,8 +72,9 @@ export default async function RequestReturnPage({
   const lines: ReturnFormLine[] = order.items.map((item) => {
     const line = byItem.get(item.id);
     const label = labels.get(item.offerId);
-    const maxQuantity =
-      line?.returnable ? Math.max(0, line.totalRemainingQuantity) : 0;
+    const maxQuantity = line?.returnable
+      ? Math.max(0, line.totalRemainingQuantity)
+      : 0;
     return {
       orderItemId: item.id,
       name: label?.name ?? 'Item',
@@ -115,8 +116,8 @@ export default async function RequestReturnPage({
           <span className="text-foreground font-mono">
             {order.id.slice(0, 8)}
           </span>
-          . Once it’s approved you’ll get a return number and instructions
-          for sending the items back.{' '}
+          . Once it’s approved you’ll get a return number and instructions for
+          sending the items back.{' '}
           <Link href="/help#returns" className="underline">
             Returns policy
           </Link>

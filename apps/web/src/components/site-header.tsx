@@ -1,16 +1,21 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { ShoppingCart, User } from 'lucide-react';
+import { Bell, ShoppingCart, User } from 'lucide-react';
 
 import izyaneLogo from '@/assets/izyane-black.svg';
 import { AccountMenu } from '@/components/account-menu';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { signOutAction } from '@/app/account/actions';
+import { unreadBadgeLabel } from '@/lib/notification-link';
+import { countUnreadNotifications } from '@/lib/notifications';
 import { getCurrentUser } from '@/lib/session';
 
 export async function SiteHeader() {
   const user = await getCurrentUser();
+  // Zero whenever it can't be told (signed out, API without notifications)
+  // — `countUnreadNotifications` never throws, so the header never breaks.
+  const unread = user ? unreadBadgeLabel(await countUnreadNotifications()) : null;
 
   return (
     <header className="bg-background sticky top-0 z-40 border-b">
@@ -40,6 +45,31 @@ export async function SiteHeader() {
         </form>
 
         <nav className="ml-auto flex items-center gap-1">
+          {user ? (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              asChild
+              className="relative hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-950 dark:hover:text-blue-300"
+            >
+              <Link
+                href="/notifications"
+                aria-label={
+                  unread ? `Notifications, ${unread} unread` : 'Notifications'
+                }
+              >
+                <Bell />
+                {unread ? (
+                  <span
+                    aria-hidden
+                    className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] leading-none font-semibold text-white"
+                  >
+                    {unread}
+                  </span>
+                ) : null}
+              </Link>
+            </Button>
+          ) : null}
           {user ? (
             <AccountMenu email={user.email} signOut={signOutAction} />
           ) : (

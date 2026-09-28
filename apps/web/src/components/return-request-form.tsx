@@ -64,9 +64,7 @@ export function ReturnRequestForm({
   const [selected, setSelected] = useState<Set<string>>(() => {
     // One returnable line is almost certainly the one they came for.
     const returnable = lines.filter((line) => line.maxQuantity > 0);
-    return new Set(
-      returnable.length === 1 ? [returnable[0]!.orderItemId] : [],
-    );
+    return new Set(returnable.length === 1 ? [returnable[0]!.orderItemId] : []);
   });
   // Minted once per mounted form, so a double submit is the same request
   // rather than a second return claiming the same units.

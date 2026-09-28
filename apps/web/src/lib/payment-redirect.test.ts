@@ -51,7 +51,9 @@ describe('safePaymentRedirect', () => {
 
   it('reads the allow-list from PAYMENT_REDIRECT_HOSTS, and refuses everything when it is unset', () => {
     vi.stubEnv('PAYMENT_REDIRECT_HOSTS', '');
-    expect(safePaymentRedirect('https://secure.gateway.example/3ds')).toBeNull();
+    expect(
+      safePaymentRedirect('https://secure.gateway.example/3ds'),
+    ).toBeNull();
 
     vi.stubEnv(
       'PAYMENT_REDIRECT_HOSTS',

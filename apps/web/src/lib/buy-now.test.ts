@@ -37,7 +37,11 @@ function product(variants: ProductVariant[]): Product {
 describe('resolveBuyNowSelection', () => {
   const twoVariants = product([
     variant('v-black', [offer('o-black', 5000)], 'Black'),
-    variant('v-red', [offer('o-red-unpriced', null), offer('o-red', 5500)], 'Red'),
+    variant(
+      'v-red',
+      [offer('o-red-unpriced', null), offer('o-red', 5500)],
+      'Red',
+    ),
   ]);
 
   it('buys the lead offer when no variant is named', () => {
@@ -73,7 +77,10 @@ describe('resolveBuyNowSelection', () => {
 
   it('is null when nothing on the product is priced', () => {
     expect(
-      resolveBuyNowSelection(product([variant('v-1', [offer('o-1', null)])]), undefined),
+      resolveBuyNowSelection(
+        product([variant('v-1', [offer('o-1', null)])]),
+        undefined,
+      ),
     ).toBeNull();
   });
 });
