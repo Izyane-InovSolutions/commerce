@@ -2,11 +2,13 @@ import Link from 'next/link';
 
 import { ProductImage } from '@/components/product-image';
 import {
-  getBestSale,
+  describeLeadRivals,
+  getBestDeal,
   getPrimaryImage,
+  getProductHref,
   getVariantLabel,
+  type Deal as ProductDeal,
   type Product,
-  type Sale,
 } from '@/lib/catalog-types';
 import { formatMinor } from '@/lib/currency';
 import { cn } from '@/lib/utils';
@@ -21,33 +23,29 @@ function endsOn(iso: string): string {
   }).format(new Date(iso));
 }
 
-type Deal = { product: Product; sale: Sale; variantId: string; option: string };
+type Deal = { product: Product; deal: ProductDeal; option: string };
 
-/** Each product's best live saving, with the variant it's on. */
+/** Each product's best live deal, with the variant it's on. */
 export function toDeals(products: Product[]): Deal[] {
   const deals: Deal[] = [];
   for (const product of products) {
-    const sale = getBestSale(product);
-    if (!sale) continue;
-    const variant = product.variants.find((candidate) =>
-      candidate.offers.some((offer) => offer.id === sale.offer.id),
-    );
-    if (!variant) continue;
+    const deal = getBestDeal(product);
+    if (!deal) continue;
     deals.push({
       product,
-      sale,
-      variantId: variant.id,
-      option: product.variants.length > 1 ? getVariantLabel(variant) : '',
+      deal,
+      option: product.variants.length > 1 ? getVariantLabel(deal.variant) : '',
     });
   }
   return deals;
 }
 
 /**
- * The homepage's one loud moment: prices an admin has cut for a limited
- * time, each showing the real saving and when it ends. Nothing here is
- * invented — a deal is a time-limited price below the offer's regular one —
- * so with no sale running the band doesn't render at all.
+ * The homepage's one loud moment: real deals only, of two kinds (see
+ * `Deal` in catalog-types). A price cut shows its regular price struck
+ * through and when it ends; a best price says how far under the next
+ * seller it is, with nothing struck through — that other price was never
+ * this offer's. With no deal running the band doesn't render at all.
  */
 export function DealsBand({
   products,
@@ -91,7 +89,7 @@ export function DealsBand({
             Hot deals
           </Heading>
           <p className="text-sm text-blue-100">
-            Prices cut for a limited time. Each deal ends on the date shown.
+            Limited-time price cuts, and the lowest price among sellers.
           </p>
         </div>
         {standalone ? null : (
@@ -111,15 +109,15 @@ export function DealsBand({
             : '-mx-5 flex snap-x gap-4 overflow-x-auto px-5 pb-1 sm:-mx-8 sm:px-8 lg:mx-0 lg:grid lg:grid-cols-4 lg:overflow-visible lg:px-0'
         }
       >
-        {deals.map(({ product, sale, variantId, option }) => {
-          const saving = sale.was.amount - sale.price.amount;
+        {deals.map(({ product, deal, option }) => {
+          const saving = deal.compareWith.amount - deal.price.amount;
           return (
             <li
               key={product.id}
               className={few ? 'min-w-0' : 'w-56 shrink-0 snap-start lg:w-auto'}
             >
               <Link
-                href={`/products/${product.slug}?variant=${encodeURIComponent(variantId)}`}
+                href={getProductHref(product, deal.variant)}
                 className={cn(
                   'bg-background text-foreground group flex h-full flex-col gap-3 rounded-xl p-3 focus-visible:ring-3 focus-visible:ring-white/60 focus-visible:outline-none',
                   few && 'sm:flex-row sm:items-center sm:gap-5',
@@ -138,7 +136,9 @@ export function DealsBand({
                     className="aspect-square rounded-lg"
                   />
                   <span className="absolute top-2 left-2 rounded-full bg-blue-600 px-2.5 py-1 text-sm font-bold text-white">
-                    −{sale.percentOff}%
+                    {deal.kind === 'sale'
+                      ? `−${deal.percentOff}%`
+                      : 'Best price'}
                   </span>
                 </div>
                 <div className="flex flex-1 flex-col gap-1">
@@ -148,18 +148,29 @@ export function DealsBand({
                   {option ? (
                     <p className="text-muted-foreground text-xs">{option}</p>
                   ) : null}
+                  <p className="text-muted-foreground text-xs">
+                    Sold by {deal.offer.seller?.displayName ?? 'iZyane'}
+                  </p>
                   <p className="mt-auto pt-1">
                     <span className="text-lg font-bold">
-                      {formatMinor(sale.price.amount, sale.price.currency)}
+                      {formatMinor(deal.price.amount, deal.price.currency)}
                     </span>
-                    <span className="text-muted-foreground ml-2 text-sm line-through">
-                      <span className="sr-only">was </span>
-                      {formatMinor(sale.was.amount, sale.was.currency)}
-                    </span>
+                    {deal.kind === 'sale' ? (
+                      <span className="text-muted-foreground ml-2 text-sm line-through">
+                        <span className="sr-only">was </span>
+                        {formatMinor(
+                          deal.compareWith.amount,
+                          deal.compareWith.currency,
+                        )}
+                      </span>
+                    ) : null}
                   </p>
                   <p className="text-xs font-medium text-blue-700 dark:text-blue-300">
-                    You save {formatMinor(saving, sale.price.currency)}
-                    {sale.endsAt ? ` until ${endsOn(sale.endsAt)}` : ''}
+                    {deal.kind === 'sale'
+                      ? `You save ${formatMinor(saving, deal.price.currency)}${
+                          deal.endsAt ? ` until ${endsOn(deal.endsAt)}` : ''
+                        }`
+                      : `${formatMinor(saving, deal.price.currency)} ${describeLeadRivals(deal.sellerCount ?? 2)}`}
                   </p>
                 </div>
               </Link>

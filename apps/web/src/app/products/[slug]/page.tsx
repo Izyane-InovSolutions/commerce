@@ -23,6 +23,7 @@ import {
 } from '@/lib/catalog';
 import {
   buildOtherOffers,
+  describeLeadRivals,
   DEFAULT_RETURN_WINDOW_DAYS,
   getOrderedMedia,
   getPrimaryImage,
@@ -210,6 +211,10 @@ export default async function ProductDetailPage({
                 <span className="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-semibold text-white">
                   Save {sale.percentOff}%
                 </span>
+              ) : offer?.priceLead ? (
+                <span className="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-semibold text-white">
+                  Best price
+                </span>
               ) : null}
               {price !== null && !inStock ? (
                 <span className="inline-flex items-center rounded-full bg-destructive/90 px-2.5 py-0.5 text-xs font-medium text-white">
@@ -217,6 +222,16 @@ export default async function ProductDetailPage({
                 </span>
               ) : null}
             </div>
+            {!sale && offer?.priceLead && price ? (
+              <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                {formatMinor(
+                  offer.priceLead.nextLowestPrice.amount - price.amount,
+                  price.currency,
+                )}{' '}
+                {describeLeadRivals(offer.priceLead.sellerCount)} of this
+                option.
+              </p>
+            ) : null}
             {sale?.endsAt ? (
               <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
                 Sale price until{' '}

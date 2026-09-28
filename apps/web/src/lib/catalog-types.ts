@@ -39,6 +39,12 @@ export type ProductOffer = {
   compareAtPrice?: { amount: number; currency: string } | null;
   /** When the sale price ends (ISO). */
   saleEndsAt?: string | null;
+  /** Set on the one in-stock offer at least 5% below every other seller of
+   * the same variant; `nextLowestPrice` is the runner-up it beats. */
+  priceLead?: {
+    nextLowestPrice: { amount: number; currency: string };
+    sellerCount: number;
+  } | null;
   currencies: string[];
   /** False once available stock (on-hand minus reserved) has run out. */
   inStock: boolean;
@@ -288,10 +294,58 @@ export function getPrimaryOffer(product: Product): ProductOffer | null {
   return null;
 }
 
-/** A variant's lead offer: its first priced one, in the API's order — the
- * same rule `getPrimaryOffer` applies across the whole product. */
+/**
+ * Orders offers the way a shopper would choose between them: something you
+ * can buy now before something out of stock, then the lower price. Ties
+ * keep the API's order, so the result is stable between renders.
+ */
+function byBestOffer(left: ProductOffer, right: ProductOffer): number {
+  if (left.inStock !== right.inStock) return left.inStock ? -1 : 1;
+  return left.currentPrice!.amount - right.currentPrice!.amount;
+}
+
+/**
+ * A variant's lead offer — the one its price, "Add to cart" and store card
+ * use: the cheapest in-stock priced offer, else the cheapest priced one.
+ * Other sellers of the variant are listed under it on the product page.
+ */
 export function getVariantOffer(variant: ProductVariant): ProductOffer | null {
-  return variant.offers.find((candidate) => candidate.currentPrice) ?? null;
+  const priced = variant.offers.filter((candidate) => candidate.currentPrice);
+  return [...priced].sort(byBestOffer)[0] ?? null;
+}
+
+/** What a product card shows: the product's best offer across every
+ * variant, whether prices vary ("From …"), and how many stores sell it. */
+export type PriceSummary = {
+  offer: ProductOffer;
+  variant: ProductVariant;
+  /** More than one price across variants and sellers. */
+  varies: boolean;
+  /** Distinct stores (the platform's own offers count as one). */
+  sellerCount: number;
+};
+
+export function getPriceSummary(product: Product): PriceSummary | null {
+  const entries = product.variants.flatMap((variant) =>
+    variant.offers
+      .filter((offer) => offer.currentPrice)
+      .map((offer) => ({ offer, variant })),
+  );
+  if (entries.length === 0) return null;
+
+  const best = [...entries].sort((left, right) =>
+    byBestOffer(left.offer, right.offer),
+  )[0]!;
+  const prices = new Set(entries.map(({ offer }) => offer.currentPrice!.amount));
+  const sellers = new Set(
+    entries.map(({ offer }) => offer.seller?.id ?? 'first-party'),
+  );
+  return {
+    offer: best.offer,
+    variant: best.variant,
+    varies: prices.size > 1,
+    sellerCount: sellers.size,
+  };
 }
 
 /**
@@ -442,6 +496,12 @@ export type Sale = {
   endsAt: string | null;
 };
 
+/** Whole percent `price` is below `reference`, rounded down — in integer
+ * arithmetic, since `1 - 9000 / 10000` is 0.0999… and would floor to 9. */
+function percentBelow(price: number, reference: number): number {
+  return Math.floor(((reference - price) * 100) / reference);
+}
+
 /** The offer's sale, if its current price undercuts a regular one. */
 export function getOfferSale(offer: ProductOffer): Sale | null {
   const price = offer.currentPrice;
@@ -452,7 +512,7 @@ export function getOfferSale(offer: ProductOffer): Sale | null {
     offer,
     price,
     was,
-    percentOff: Math.floor((1 - price.amount / was.amount) * 100),
+    percentOff: percentBelow(price.amount, was.amount),
     endsAt: offer.saleEndsAt ?? null,
   };
 }
@@ -463,15 +523,94 @@ export function getDisplaySale(product: Product): Sale | null {
   return offer ? getOfferSale(offer) : null;
 }
 
-/** The product's biggest in-stock saving across every variant, for deal
- * shelves — the discounted variant needn't be the one a card leads with. */
-export function getBestSale(product: Product): Sale | null {
-  let best: Sale | null = null;
+/**
+ * A deal an offer really has, in one of two honest forms:
+ *
+ * - `sale`: its own time-limited price below its own regular price — shown
+ *   with that regular price struck through;
+ * - `lead`: at least 5% below every other in-stock seller of the variant —
+ *   shown as "less than other sellers", never struck through, because the
+ *   comparison is someone else's price, not one this offer charged.
+ */
+export type Deal = {
+  kind: 'sale' | 'lead';
+  offer: ProductOffer;
+  variant: ProductVariant;
+  price: { amount: number; currency: string };
+  /** The regular price (sale) or the next seller's price (lead). */
+  compareWith: { amount: number; currency: string };
+  /** Whole percent saved against `compareWith`, rounded down. */
+  percentOff: number;
+  /** Sale end (sale only). */
+  endsAt: string | null;
+  /** Stores selling the variant (lead only). */
+  sellerCount: number | null;
+};
+
+/** The offer's deal, if it has one; a sale wins over a lead on the same
+ * offer, since its saving is against the offer's own price. */
+export function getOfferDeal(
+  offer: ProductOffer,
+  variant: ProductVariant,
+): Deal | null {
+  const sale = getOfferSale(offer);
+  if (sale) {
+    return {
+      kind: 'sale',
+      offer,
+      variant,
+      price: sale.price,
+      compareWith: sale.was,
+      percentOff: sale.percentOff,
+      endsAt: sale.endsAt,
+      sellerCount: null,
+    };
+  }
+  const lead = offer.priceLead;
+  const price = offer.currentPrice;
+  if (!lead || !price || lead.nextLowestPrice.currency !== price.currency) {
+    return null;
+  }
+  return {
+    kind: 'lead',
+    offer,
+    variant,
+    price,
+    compareWith: lead.nextLowestPrice,
+    percentOff: percentBelow(price.amount, lead.nextLowestPrice.amount),
+    endsAt: null,
+    sellerCount: lead.sellerCount,
+  };
+}
+
+/** The product's biggest in-stock deal across every variant and seller. */
+export function getBestDeal(product: Product): Deal | null {
+  let best: Deal | null = null;
   for (const variant of product.variants) {
     for (const offer of variant.offers) {
-      const sale = offer.inStock ? getOfferSale(offer) : null;
-      if (sale && (!best || sale.percentOff > best.percentOff)) best = sale;
+      const deal = offer.inStock ? getOfferDeal(offer, variant) : null;
+      if (deal && (!best || deal.percentOff > best.percentOff)) best = deal;
     }
   }
   return best;
+}
+
+/** A product link that lands on `variant` when the product has several, so
+ * the page opens on the option (and price) the link was showing. */
+export function getProductHref(
+  product: Pick<Product, 'slug' | 'variants'>,
+  variant: ProductVariant | null,
+): string {
+  const base = `/products/${product.slug}`;
+  return variant && product.variants.length > 1
+    ? `${base}?variant=${encodeURIComponent(variant.id)}`
+    : base;
+}
+
+/** "less than the other seller" / "less than the next-cheapest of 4
+ * sellers", for a best-price offer's saving line. */
+export function describeLeadRivals(sellerCount: number): string {
+  return sellerCount <= 2
+    ? 'less than the other seller'
+    : `less than the next-cheapest of ${sellerCount} sellers`;
 }
