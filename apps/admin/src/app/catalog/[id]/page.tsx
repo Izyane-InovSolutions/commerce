@@ -102,6 +102,49 @@ function priceHistory(offer: BackendAdminOffer) {
     }));
 }
 
+/** Where the variant pickers' options come from, and how to change them. */
+function VariantOptionsNote({
+  source,
+  category,
+}: {
+  source: 'category' | 'none' | 'uncategorised' | 'legacy';
+  category: { id: string; name: string } | null;
+}) {
+  if (source === 'legacy') return null;
+
+  const manage = category ? (
+    <Link
+      href={`/categories/${category.id}`}
+      className="font-medium underline underline-offset-4"
+    >
+      {source === 'category'
+        ? 'Change them'
+        : `Attach attributes to ${category.name}`}
+    </Link>
+  ) : null;
+
+  return (
+    <p className="bg-muted/40 rounded-lg border px-3 py-2 text-sm">
+      {source === 'category' && category ? (
+        <>
+          Options come from {category.name}&apos;s attributes. {manage}.
+        </>
+      ) : source === 'none' && category ? (
+        <>
+          {category.name} has no attributes yet, so variants are told apart by
+          SKU and name only. {manage} — for example Size or Colour — to offer
+          them as options here and on the storefront.
+        </>
+      ) : (
+        <>
+          Choose a category in the details above to pick variant options from
+          its attributes.
+        </>
+      )}
+    </p>
+  );
+}
+
 export default async function ProductPage({
   params,
 }: PageProps<'/catalog/[id]'>) {
@@ -131,38 +174,47 @@ export default async function ProductPage({
   // A category with attributes attached (its own or inherited) decides which
   // pickers show, in its order, with required ones marked — the API holds
   // variants to exactly that. Otherwise every catalog attribute is offered.
+  // Variant pickers show only what the product's category is described by
+  // (its own attributes and its parents'), in its order, required ones
+  // marked — the same rules the API holds variants to. A category with none
+  // attached offers none, rather than every attribute in the catalog (a
+  // drink would otherwise be offered "Carrier"); the card says how to add
+  // some. Only an API from before category attributes (404) still gets the
+  // whole list, since it has no rules to follow.
   let attributes: AttributeChoice[] | null;
-  let attributesFrom: string | null = null;
+  let attributeSource: 'category' | 'none' | 'uncategorised' | 'legacy' =
+    'uncategorised';
   try {
-    // An API from before category attributes answers 404 here; treat that
-    // as "no rules" and offer every attribute, as the API itself would.
-    const fromCategory = product.category
-      ? await backendGetCategoryAttributes(
-          apiClient,
-          product.category.id,
-        ).catch((error: unknown) => {
-          if (error instanceof ApiError && error.status === 404) return [];
-          throw error;
-        })
-      : [];
-    if (fromCategory.length > 0) {
-      attributesFrom = product.category?.name ?? 'its category';
-      attributes = fromCategory.map((attribute) => ({
-        id: attribute.attributeId,
-        name: attribute.name,
-        isRequired: attribute.isRequired,
-        values: attribute.values,
-      }));
+    if (!product.category) {
+      attributes = [];
     } else {
-      attributes = (await backendListAttributes(apiClient)).map(
-        (attribute) => ({
-          id: attribute.id,
+      const fromCategory = await backendGetCategoryAttributes(
+        apiClient,
+        product.category.id,
+      ).catch((error: unknown) => {
+        if (error instanceof ApiError && error.status === 404) return null;
+        throw error;
+      });
+      if (fromCategory === null) {
+        attributeSource = 'legacy';
+        attributes = (await backendListAttributes(apiClient)).map(
+          (attribute) => ({
+            id: attribute.id,
+            name: attribute.name,
+            values: [...attribute.values].sort((left, right) =>
+              left.value.localeCompare(right.value),
+            ),
+          }),
+        );
+      } else {
+        attributeSource = fromCategory.length > 0 ? 'category' : 'none';
+        attributes = fromCategory.map((attribute) => ({
+          id: attribute.attributeId,
           name: attribute.name,
-          values: [...attribute.values].sort((left, right) =>
-            left.value.localeCompare(right.value),
-          ),
-        }),
-      );
+          isRequired: attribute.isRequired,
+          values: attribute.values,
+        }));
+      }
     }
   } catch {
     attributes = null;
@@ -244,29 +296,13 @@ export default async function ProductPage({
           <CardDescription>
             Each variant carries a SKU. An offer holds the price, and a
             published offer is what makes the variant buyable.
-            {attributesFrom ? (
-              <>
-                {' '}
-                Options come from {attributesFrom}&apos;s attributes
-                {product.category ? (
-                  <>
-                    {' '}
-                    (
-                    <Link
-                      href={`/categories/${product.category.id}`}
-                      className="underline underline-offset-4"
-                    >
-                      manage
-                    </Link>
-                    )
-                  </>
-                ) : null}
-                .
-              </>
-            ) : null}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          <VariantOptionsNote
+            source={attributeSource}
+            category={product.category}
+          />
           {product.variants.length === 0 ? (
             <p className="text-muted-foreground text-sm">
               No variants yet. Add one below to be able to price this product.
