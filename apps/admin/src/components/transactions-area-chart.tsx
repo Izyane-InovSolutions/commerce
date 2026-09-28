@@ -18,6 +18,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from '@/components/ui/chart';
+import { aggregateTransactionsByMonth } from '@/lib/sample-transactions';
 
 export type TransactionDayTotal = {
   /** ISO date, e.g. `2026-09-25`. */
@@ -26,32 +27,40 @@ export type TransactionDayTotal = {
   mobileMoney: number;
 };
 
+export type TransactionMonthTotal = {
+  /** Year and month, e.g. `2026-09`. */
+  month: string;
+  card: number;
+  mobileMoney: number;
+};
+
 const CHART_CONFIG = {
-  card: { label: 'Card', color: 'var(--chart-1)' },
-  mobileMoney: { label: 'Mobile money', color: 'var(--chart-3)' },
+  card: { label: 'Card', color: 'var(--color-blue-600)' },
+  mobileMoney: { label: 'Mobile money', color: 'var(--color-amber-500)' },
 } satisfies ChartConfig;
 
 const RANGE_OPTIONS = [
-  { value: '90', label: 'Last 3 months' },
-  { value: '30', label: 'Last 30 days' },
-  { value: '7', label: 'Last 7 days' },
+  { value: '12', label: 'Last 12 months' },
+  { value: '6', label: 'Last 6 months' },
+  { value: '3', label: 'Last 3 months' },
 ];
 
 const RANGE_DESCRIPTION: Record<string, string> = {
-  '90': 'Card and mobile money transaction volume for the last 3 months.',
-  '30': 'Card and mobile money transaction volume for the last 30 days.',
-  '7': 'Card and mobile money transaction volume for the last 7 days.',
+  '12': 'Card and mobile money transaction volume for the last 12 months.',
+  '6': 'Card and mobile money transaction volume for the last 6 months.',
+  '3': 'Card and mobile money transaction volume for the last 3 months.',
 };
 
-function formatTick(value: string): string {
-  return new Date(value).toLocaleDateString('en-US', {
+function formatMonthTick(value: string): string {
+  const [year = 0, month = 1] = value.split('-').map(Number);
+  return new Date(year, month - 1, 1).toLocaleDateString('en-US', {
     month: 'short',
-    day: 'numeric',
+    year: 'numeric',
   });
 }
 
 /**
- * The overview page's payment method trend — card vs mobile money, by day.
+ * The overview page's payment method trend — card vs mobile money, by month.
  *
  * There is no admin reporting endpoint for this yet (payment method is
  * collected at checkout but never persisted against the payment), so `data`
@@ -63,20 +72,24 @@ export function TransactionsAreaChart({
 }: {
   data: TransactionDayTotal[];
 }) {
-  const [days, setDays] = useState('90');
+  const [months, setMonths] = useState('12');
 
-  const filtered = useMemo(() => data.slice(-Number(days)), [data, days]);
+  const monthly = useMemo(() => aggregateTransactionsByMonth(data), [data]);
+  const filtered = useMemo(
+    () => monthly.slice(-Number(months)),
+    [monthly, months],
+  );
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Transactions</CardTitle>
-        <CardDescription>{RANGE_DESCRIPTION[days]}</CardDescription>
+        <CardDescription>{RANGE_DESCRIPTION[months]}</CardDescription>
         <CardAction>
           <SelectField
             aria-label="Date range"
-            value={days}
-            onChange={(event) => setDays(event.target.value)}
+            value={months}
+            onChange={(event) => setMonths(event.target.value)}
             options={RANGE_OPTIONS}
             className="w-40"
           />
@@ -92,7 +105,7 @@ export function TransactionsAreaChart({
               <linearGradient id="fillCard" x1="0" y1="0" x2="0" y2="1">
                 <stop
                   offset="5%"
-                  stopColor="var(--color-blue-500)"
+                  stopColor="var(--color-card)"
                   stopOpacity={0.8}
                 />
                 <stop
@@ -104,7 +117,7 @@ export function TransactionsAreaChart({
               <linearGradient id="fillMobileMoney" x1="0" y1="0" x2="0" y2="1">
                 <stop
                   offset="5%"
-                  stopColor="var(--color-blue-800)"
+                  stopColor="var(--color-mobileMoney)"
                   stopOpacity={0.8}
                 />
                 <stop
@@ -116,24 +129,18 @@ export function TransactionsAreaChart({
             </defs>
             <CartesianGrid vertical={false} />
             <XAxis
-              dataKey="date"
+              dataKey="month"
               tickLine={false}
               axisLine={false}
               tickMargin={8}
               minTickGap={32}
-              tickFormatter={formatTick}
+              tickFormatter={formatMonthTick}
             />
             <ChartTooltip
               cursor={false}
               content={
                 <ChartTooltipContent
-                  labelFormatter={(value) =>
-                    new Date(String(value)).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })
-                  }
+                  labelFormatter={(value) => formatMonthTick(String(value))}
                   indicator="dot"
                 />
               }
@@ -142,14 +149,14 @@ export function TransactionsAreaChart({
               dataKey="mobileMoney"
               type="natural"
               fill="url(#fillMobileMoney)"
-              stroke="var(--color-blue-800)"
+              stroke="var(--color-mobileMoney)"
               stackId="a"
             />
             <Area
               dataKey="card"
               type="natural"
               fill="url(#fillCard)"
-              stroke="var(--color-blue-500)"
+              stroke="var(--color-card)"
               stackId="a"
             />
           </AreaChart>

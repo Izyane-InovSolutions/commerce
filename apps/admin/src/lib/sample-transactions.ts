@@ -1,4 +1,7 @@
-import type { TransactionDayTotal } from '@/components/transactions-area-chart';
+import type {
+  TransactionDayTotal,
+  TransactionMonthTotal,
+} from '@/components/transactions-area-chart';
 
 /**
  * Sample day totals for the overview page's transactions chart.
@@ -8,9 +11,12 @@ import type { TransactionDayTotal } from '@/components/transactions-area-chart';
  * it from yet — this generates a deterministic, clearly-labelled stand-in
  * series instead of leaving the chart empty. Swap this out once that
  * reporting endpoint exists.
+ *
+ * Defaults to a full year so the chart's monthly timeline always has 12
+ * months to show.
  */
 export function sampleTransactionSeries(
-  days = 90,
+  days = 365,
   endDate: Date = new Date(),
 ): TransactionDayTotal[] {
   const end = new Date(
@@ -44,4 +50,26 @@ export function sampleTransactionSeries(
       mobileMoney: Math.max(mobileMoney, 0),
     };
   });
+}
+
+/** Rolls a daily series up into calendar-month totals, oldest first. */
+export function aggregateTransactionsByMonth(
+  data: TransactionDayTotal[],
+): TransactionMonthTotal[] {
+  const totals = new Map<string, TransactionMonthTotal>();
+
+  for (const day of data) {
+    const month = day.date.slice(0, 7);
+    const existing = totals.get(month);
+    if (existing) {
+      existing.card += day.card;
+      existing.mobileMoney += day.mobileMoney;
+    } else {
+      totals.set(month, { month, card: day.card, mobileMoney: day.mobileMoney });
+    }
+  }
+
+  return Array.from(totals.values()).sort((a, b) =>
+    a.month.localeCompare(b.month),
+  );
 }

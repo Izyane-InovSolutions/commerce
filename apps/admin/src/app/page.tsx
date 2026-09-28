@@ -10,24 +10,13 @@ import {
 
 import { currentPrices } from '@commerce/contracts';
 
-import { ApiStatusCard } from '@/components/api-status-card';
+import { CategorySalesPieChart } from '@/components/category-sales-pie-chart';
 import { PageHeader } from '@/components/page-header';
 import { TransactionsAreaChart } from '@/components/transactions-area-chart';
 import { apiClient } from '@/lib/api';
+import { sampleCategorySalesShares } from '@/lib/sample-category-sales';
 import { sampleTransactionSeries } from '@/lib/sample-transactions';
 import { requireAdmin } from '@/lib/session';
-
-const SECTIONS = [
-  { href: '/catalog', label: 'Catalog', live: true },
-  { href: '/categories', label: 'Categories', live: true },
-  { href: '/brands', label: 'Brands', live: true },
-  { href: '/inventory', label: 'Inventory', live: true },
-  { href: '/sellers', label: 'Sellers', live: false },
-  { href: '/orders', label: 'Orders', live: false },
-  { href: '/payments', label: 'Payments', live: false },
-  { href: '/finance', label: 'Finance', live: false },
-  { href: '/audit', label: 'Audit', live: false },
-];
 
 /**
  * What can be counted from the endpoints that exist.
@@ -101,6 +90,23 @@ async function CatalogSummary() {
   );
 }
 
+/**
+ * Best-selling categories, by real category names — see
+ * `sampleCategorySalesShares` for why the shares themselves are sample data.
+ */
+async function CategorySales() {
+  let shares;
+
+  try {
+    const categories = await backendListCategories(apiClient);
+    shares = sampleCategorySalesShares(categories);
+  } catch {
+    return null;
+  }
+
+  return <CategorySalesPieChart shares={shares} />;
+}
+
 export default async function OverviewPage() {
   await requireAdmin();
 
@@ -117,30 +123,9 @@ export default async function OverviewPage() {
 
       <TransactionsAreaChart data={sampleTransactionSeries()} />
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold tracking-tight">Sections</h2>
-        <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          {SECTIONS.map((section) => (
-            <li key={section.href}>
-              <Link
-                href={section.href}
-                className="hover:border-foreground/25 flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors"
-              >
-                {section.label}
-                <span
-                  className={
-                    section.live
-                      ? 'text-muted-foreground text-xs'
-                      : 'text-muted-foreground text-xs italic'
-                  }
-                >
-                  {section.live ? 'live' : 'awaiting API'}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <Suspense fallback={null}>
+        <CategorySales />
+      </Suspense>
     </div>
   );
 }
