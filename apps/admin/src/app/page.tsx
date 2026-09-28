@@ -12,7 +12,9 @@ import { currentPrices } from '@commerce/contracts';
 
 import { ApiStatusCard } from '@/components/api-status-card';
 import { PageHeader } from '@/components/page-header';
+import { TransactionsAreaChart } from '@/components/transactions-area-chart';
 import { apiClient } from '@/lib/api';
+import { sampleTransactionSeries } from '@/lib/sample-transactions';
 import { requireAdmin } from '@/lib/session';
 
 const SECTIONS = [
@@ -106,16 +108,14 @@ export default async function OverviewPage() {
     <div className="space-y-10">
       <PageHeader
         title="Admin portal"
-        description="Connected to the Commerce API. Catalog, taxonomy, and inventory are live; the sections below marked as waiting have no endpoints yet."
+        description="Manage catalog, inventory, sellers, payments and others."
       />
 
       <Suspense fallback={null}>
         <CatalogSummary />
       </Suspense>
 
-      <Suspense fallback={null}>
-        <ApiStatusCard />
-      </Suspense>
+      <TransactionsAreaChart data={sampleTransactionSeries()} />
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold tracking-tight">Sections</h2>
