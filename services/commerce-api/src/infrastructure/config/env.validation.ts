@@ -1,4 +1,4 @@
-import { Type, plainToInstance } from 'class-transformer';
+import { Transform, Type, plainToInstance } from 'class-transformer';
 import {
   IsEnum,
   IsIn,
@@ -59,14 +59,23 @@ class EnvironmentVariables {
   @IsNotEmpty()
   SMTP_HOST!: string;
 
-  @Type(() => Number)
+  // Unset (or blank, as .env.example ships it) means 465 when SMTP_SECURE is
+  // true, else 587 — see smtpPort(). 587 is STARTTLS (secure=false);
+  // implicit TLS (secure=true) is 465.
+  // Reads the raw input: implicit conversion would already have made '' 0.
+  @Transform(({ obj }: { obj: Record<string, unknown> }) =>
+    obj.SMTP_PORT === undefined || obj.SMTP_PORT === ''
+      ? undefined
+      : Number(obj.SMTP_PORT),
+  )
+  @IsOptional()
   @IsInt()
   @Min(1)
   @Max(65535)
-  SMTP_PORT = 587;
+  SMTP_PORT?: number;
 
   @IsIn(['true', 'false'])
-  SMTP_SECURE = 'true';
+  SMTP_SECURE = 'false';
 
   @IsString()
   SMTP_USER = '';
@@ -78,7 +87,9 @@ class EnvironmentVariables {
   @IsNotEmpty()
   EMAIL_FROM!: string;
 
-  @IsOptional()
+  // Required: every verification and password-reset email links here, and
+  // AuthService reads it with getOrThrow — unset, register, resend and reset
+  // all fail with a 500 instead of the API refusing to start.
   @IsUrl({ protocols: ['http', 'https'], require_tld: false })
   CUSTOMER_WEB_URL!: string;
 
@@ -351,8 +362,32 @@ export function validate(
       'SMTP_USER and SMTP_PASS must either both be set or both be empty',
     );
   }
+  // This pairing never connects: the TLS handshake fails against a STARTTLS
+  // port, and because sending happens in a background job the failure is
+  // otherwise invisible — emails just retry and dead-letter.
+  if (
+    validatedConfig.SMTP_PORT === 587 &&
+    validatedConfig.SMTP_SECURE === 'true'
+  ) {
+    throw new Error(
+      'SMTP_PORT=587 requires SMTP_SECURE=false (STARTTLS); use port 465 for SMTP_SECURE=true',
+    );
+  }
 
   return validatedConfig;
+}
+
+/** The SMTP port both mail transports use: explicit, else derived from SMTP_SECURE. */
+export function smtpPort(port: unknown, secure: unknown): number {
+  const explicit = Number(port);
+  if (
+    port !== undefined &&
+    port !== '' &&
+    Number.isInteger(explicit) &&
+    explicit > 0
+  )
+    return explicit;
+  return String(secure) === 'true' ? 465 : 587;
 }
 
 function validateEncryptionKeyring(

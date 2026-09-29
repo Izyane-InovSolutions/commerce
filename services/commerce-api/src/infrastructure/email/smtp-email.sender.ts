@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import nodemailer, { type Transporter } from 'nodemailer';
 
+import { smtpPort } from '../config/env.validation';
 import type { EmailSender, OutboundEmail } from './email-sender.interface';
 
 @Injectable()
@@ -13,10 +14,11 @@ export class SmtpEmailSender implements EmailSender {
     const user = config.get<string>('SMTP_USER', '');
     const pass = config.get<string>('SMTP_PASS', '');
     this.from = config.getOrThrow<string>('EMAIL_FROM');
+    const secure = config.get<string>('SMTP_SECURE', 'false') === 'true';
     this.transporter = nodemailer.createTransport({
       host: config.getOrThrow<string>('SMTP_HOST'),
-      port: config.get<number>('SMTP_PORT', 1025),
-      secure: config.get<string>('SMTP_SECURE', 'false') === 'true',
+      port: smtpPort(config.get('SMTP_PORT'), secure),
+      secure,
       ...(user && pass ? { auth: { user, pass } } : {}),
       connectionTimeout: config.get<number>(
         'SMTP_CONNECTION_TIMEOUT_MS',
