@@ -2,6 +2,8 @@
 
 Everything you need to exercise every endpoint in `commerce-api` via Swagger UI.
 
+> This guide predates reviews, saved sellers, email verification and session management. The current route tables, with access rules, are in the module pages under [docs/backend/](../../docs/backend/README.md#modules).
+
 ## 1. Setup
 
 1. Copy `.env.example` to `.env` and fill in `DATABASE_URL`, `JWT_SECRET` (32+ chars), `MEDIA_SIGNING_SECRET` (32+ chars). Keep `NODE_ENV=development`.

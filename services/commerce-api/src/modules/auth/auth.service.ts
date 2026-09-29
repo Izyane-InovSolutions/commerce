@@ -215,7 +215,10 @@ export class AuthService {
               familyId: current.familyId,
               familyCreatedAt: current.familyCreatedAt,
             },
-            context,
+            {
+              ipAddress: context.ipAddress ?? current.ipAddress ?? undefined,
+              userAgent: context.userAgent ?? current.userAgent ?? undefined,
+            },
           );
 
           await tx.session.update({
@@ -718,7 +721,17 @@ export class AuthService {
     });
   }
 
-  async listSessions(userId: string): Promise<SessionSummary[]> {
+  async listSessions(
+    userId: string,
+    currentSessionId?: string,
+  ): Promise<SessionSummary[]> {
+    const current = currentSessionId
+      ? await this.prisma.session.findUnique({
+          where: { id: currentSessionId },
+        })
+      : null;
+    const currentFamilyId =
+      current?.userId === userId ? current.familyId : null;
     const sessions = await this.prisma.session.findMany({
       where: { userId, revokedAt: null, expiresAt: { gt: new Date() } },
       orderBy: { createdAt: 'desc' },
@@ -728,6 +741,11 @@ export class AuthService {
       id: session.id,
       createdAt: session.createdAt,
       expiresAt: session.expiresAt,
+      signedInAt: session.familyCreatedAt,
+      lastUsedAt: session.lastUsedAt,
+      ipAddress: session.ipAddress,
+      userAgent: session.userAgent,
+      isCurrent: session.familyId === currentFamilyId,
     }));
   }
 
@@ -745,23 +763,92 @@ export class AuthService {
         throw new NotFoundException('Session not found');
       }
 
-      if (session.revokedAt) {
-        return;
-      }
-
-      await tx.session.update({
-        where: { id: sessionId },
+      // The listed row may have rotated before the revoke request arrived.
+      // Revoke the whole login family while holding the same lock as refresh.
+      const result = await tx.session.updateMany({
+        where: {
+          userId,
+          familyId: session.familyId,
+          OR: [
+            { revokedAt: null },
+            { revokedReason: RevocationReason.Rotated },
+          ],
+        },
         data: {
           revokedAt: new Date(),
           revokedReason: RevocationReason.SessionRevoked,
+          recoveryData: null,
+          recoveryExpiresAt: null,
         },
       });
+      if (result.count === 0) return;
       await this.auditService.record(
         {
           actorUserId: userId,
           action: 'auth.session.revoked',
           targetType: 'Session',
           targetId: sessionId,
+          ...context,
+        },
+        tx,
+      );
+    });
+  }
+
+  async revokeOtherSessions(
+    userId: string,
+    currentSessionId: string,
+    context: RequestContext = {},
+  ): Promise<void> {
+    await this.withUserLock(userId, async (tx) => {
+      const current = await tx.session.findUnique({
+        where: { id: currentSessionId },
+      });
+      if (
+        !current ||
+        current.userId !== userId ||
+        current.expiresAt <= new Date() ||
+        (current.revokedAt &&
+          current.revokedReason !== RevocationReason.Rotated)
+      ) {
+        throw new UnauthorizedException('Session has been revoked or expired');
+      }
+      // Keep the current login family even if its row rotated after the guard.
+      const active = await tx.session.findMany({
+        where: {
+          userId,
+          familyId: current.familyId,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+      });
+      if (active.length === 0) {
+        throw new UnauthorizedException('Session has been revoked or expired');
+      }
+      const result = await tx.session.updateMany({
+        where: {
+          userId,
+          familyId: { not: current.familyId },
+          OR: [
+            { revokedAt: null },
+            { revokedReason: RevocationReason.Rotated },
+          ],
+        },
+        data: {
+          revokedAt: new Date(),
+          revokedReason: RevocationReason.SessionRevoked,
+          recoveryData: null,
+          recoveryExpiresAt: null,
+        },
+      });
+      if (result.count === 0) return;
+      await this.auditService.record(
+        {
+          actorUserId: userId,
+          action: 'auth.sessions.others_revoked',
+          targetType: 'User',
+          targetId: userId,
+          metadata: { revokedCount: result.count },
           ...context,
         },
         tx,
@@ -830,8 +917,10 @@ export class AuthService {
         expiresAt,
         familyId,
         familyCreatedAt,
-        ipAddress: requestMeta.ipAddress,
-        userAgent: requestMeta.userAgent,
+        ipAddress: requestMeta.ipAddress?.slice(0, 64),
+        userAgent: requestMeta.userAgent
+          ?.replace(/[\r\n\t]/g, ' ')
+          .slice(0, 512),
       },
     });
 

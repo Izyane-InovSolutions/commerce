@@ -218,7 +218,21 @@ export class AuthController {
   listSessions(
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<SessionSummary[]> {
-    return this.authService.listSessions(user.id);
+    return this.authService.listSessions(user.id, user.sessionId);
+  }
+
+  @Delete('sessions/others')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  revokeOtherSessions(
+    @CurrentUser() user: AuthenticatedUser,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
+  ): Promise<void> {
+    return this.authService.revokeOtherSessions(
+      user.id,
+      user.sessionId,
+      this.requestContext(ip, userAgent),
+    );
   }
 
   @Delete('sessions/:id')
