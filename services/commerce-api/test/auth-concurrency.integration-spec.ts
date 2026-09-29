@@ -112,6 +112,38 @@ describe('Authentication concurrency (integration, real Postgres)', () => {
     expect(sessions[0]?.replacedBySessionId).toBe(sessions[1]?.id);
   });
 
+  it('leaves no active family after refresh races with individual revocation', async () => {
+    const user = await createUser();
+    const login = await auth.login(user.email, user.password);
+    const [session] = await auth.listSessions(user.id);
+    const results = await Promise.allSettled([
+      auth.refresh(login.refreshToken),
+      auth.revokeSession(user.id, session!.id),
+    ]);
+    expect(results[1]?.status).toBe('fulfilled');
+    expect(
+      await prisma.session.count({
+        where: { userId: user.id, revokedAt: null },
+      }),
+    ).toBe(0);
+  });
+
+  it('preserves only the current family when another family refreshes during revoke-others', async () => {
+    const user = await createUser();
+    const current = await auth.login(user.email, user.password);
+    const [currentSession] = await auth.listSessions(user.id);
+    const other = await auth.login(user.email, user.password);
+    const results = await Promise.allSettled([
+      auth.refresh(other.refreshToken),
+      auth.revokeOtherSessions(user.id, currentSession!.id),
+    ]);
+    expect(results[1]?.status).toBe('fulfilled');
+    const remaining = await auth.listSessions(user.id, currentSession!.id);
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]?.isCurrent).toBe(true);
+    await expect(auth.refresh(current.refreshToken)).resolves.toBeDefined();
+  });
+
   it('allows exactly one concurrent verification claim for the current email', async () => {
     const user = await createUser();
     const token = await createVerificationToken(user.id, user.email);

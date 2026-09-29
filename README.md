@@ -60,6 +60,8 @@ The goal is strong domain boundaries without introducing distributed-system comp
 
 ## Getting Started
 
+> The sections from *Project Vision* onward describe the target architecture. For what the backend does **today**, including where it still falls short of that vision, see [docs/backend/](docs/backend/README.md).
+
 ### Requirements
 
 - Node.js 24 or later
