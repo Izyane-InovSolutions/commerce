@@ -1,5 +1,7 @@
 # Backend development
 
+> **Superseded.** This is an older, diverged copy of [docs/backend-development.md](../../docs/backend-development.md). Use that for the quick start, and [docs/backend/](../../docs/backend/README.md) for the full backend reference.
+
 The Commerce API is a NestJS modular monolith in `services/commerce-api`. It uses
 TypeScript, PostgreSQL, and Prisma.
 
