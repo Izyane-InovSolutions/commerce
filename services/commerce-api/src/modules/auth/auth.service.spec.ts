@@ -87,6 +87,14 @@ function matchesWhere(
 ): boolean {
   if ('id' in where && row.id !== where.id) return false;
   if ('userId' in where && row.userId !== where.userId) return false;
+  if ('revokedReason' in where && row.revokedReason !== where.revokedReason)
+    return false;
+  const alternatives = where.OR as Record<string, unknown>[] | undefined;
+  if (
+    alternatives &&
+    !alternatives.some((alternative) => matchesWhere(row, alternative))
+  )
+    return false;
   if (
     'revokedAt' in where &&
     where.revokedAt === null &&
@@ -97,6 +105,8 @@ function matchesWhere(
   if (expiresGt && !(row.expiresAt > expiresGt)) return false;
   const familyNot = (where.familyId as { not?: string } | undefined)?.not;
   if (familyNot && row.familyId === familyNot) return false;
+  if (typeof where.familyId === 'string' && row.familyId !== where.familyId)
+    return false;
   return true;
 }
 
@@ -1017,6 +1027,34 @@ describe('AuthService', () => {
   });
 
   describe('sessions', () => {
+    it('exposes metadata without token hashes or recovery credentials and identifies the current family', async () => {
+      const previous = makeSessionRow({
+        id: 'previous',
+        revokedAt: new Date(),
+        revokedReason: 'rotated',
+      });
+      const active = makeSessionRow({
+        id: 'active',
+        ipAddress: '192.0.2.1',
+        userAgent: 'Test browser',
+        recoveryData: 'secret',
+      });
+      prisma.session = createSessionStore([previous, active]);
+      const sessions = await authService.listSessions('user-1', 'previous');
+      expect(sessions).toEqual([
+        {
+          id: active.id,
+          createdAt: active.createdAt,
+          expiresAt: active.expiresAt,
+          signedInAt: active.familyCreatedAt,
+          lastUsedAt: active.lastUsedAt,
+          ipAddress: '192.0.2.1',
+          userAgent: 'Test browser',
+          isCurrent: true,
+        },
+      ]);
+    });
+
     it('lists only the caller-owned active sessions', async () => {
       prisma.session = createSessionStore([
         makeSessionRow({ id: 's1', userId: 'user-1' }),
@@ -1053,6 +1091,67 @@ describe('AuthService', () => {
         expect.objectContaining({ action: 'auth.session.revoked' }) as object,
         prisma,
       );
+    });
+
+    it('revokes the replacement when the listed session already rotated, leaving other families intact', async () => {
+      prisma.session = createSessionStore([
+        makeSessionRow({
+          id: 'old',
+          revokedAt: new Date(),
+          revokedReason: 'rotated',
+        }),
+        makeSessionRow({ id: 'replacement' }),
+        makeSessionRow({ id: 'other', familyId: 'family-2' }),
+      ]);
+      await authService.revokeSession('user-1', 'old');
+      expect(prisma.session.rows.get('replacement')?.revokedReason).toBe(
+        'session_revoked',
+      );
+      expect(prisma.session.rows.get('other')?.revokedAt).toBeNull();
+      await authService.revokeSession('user-1', 'old');
+      expect(auditService.record).toHaveBeenCalledTimes(1);
+    });
+
+    it('revokes other families while preserving a rotated current family and other users', async () => {
+      prisma.session = createSessionStore([
+        makeSessionRow({
+          id: 'old',
+          revokedAt: new Date(),
+          revokedReason: 'rotated',
+        }),
+        makeSessionRow({ id: 'current' }),
+        makeSessionRow({ id: 'other', familyId: 'family-2' }),
+        makeSessionRow({
+          id: 'foreign',
+          userId: 'someone-else',
+          familyId: 'family-3',
+        }),
+      ]);
+      await authService.revokeOtherSessions('user-1', 'old');
+      expect(prisma.session.rows.get('current')?.revokedAt).toBeNull();
+      expect(prisma.session.rows.get('other')?.revokedReason).toBe(
+        'session_revoked',
+      );
+      expect(prisma.session.rows.get('foreign')?.revokedAt).toBeNull();
+      await authService.revokeOtherSessions('user-1', 'current');
+      expect(auditService.record).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects revoke-others for a foreign or no-longer-active current session', async () => {
+      prisma.session = createSessionStore([
+        makeSessionRow({ id: 'foreign', userId: 'someone-else' }),
+        makeSessionRow({
+          id: 'revoked',
+          revokedAt: new Date(),
+          revokedReason: 'logout',
+        }),
+      ]);
+      for (const id of ['foreign', 'revoked', 'missing']) {
+        await expect(
+          authService.revokeOtherSessions('user-1', id),
+        ).rejects.toBeInstanceOf(UnauthorizedException);
+      }
+      expect(prisma.session.updateMany).not.toHaveBeenCalled();
     });
   });
 });

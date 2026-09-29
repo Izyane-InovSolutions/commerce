@@ -329,13 +329,25 @@ export class FakePrismaService {
         userId?: string;
         revokedAt?: null;
         expiresAt?: { gt: Date };
-        familyId?: { not: string };
+        familyId?: string | { not: string };
+        lastUsedAt?: { lte: Date };
+        OR?: Array<{ revokedAt?: null; revokedReason?: string }>;
       };
       data: Partial<FakeSession>;
     }): Promise<{ count: number }> => {
       let count = 0;
 
       for (const session of this.sessions.values()) {
+        if (
+          where.OR &&
+          !where.OR.some(
+            (alternative) =>
+              ('revokedAt' in alternative && session.revokedAt === null) ||
+              ('revokedReason' in alternative &&
+                session.revokedReason === alternative.revokedReason),
+          )
+        )
+          continue;
         if (where.id && session.id !== where.id) {
           continue;
         }
@@ -348,7 +360,19 @@ export class FakePrismaService {
         if (where.expiresAt?.gt && session.expiresAt <= where.expiresAt.gt) {
           continue;
         }
-        if (where.familyId && session.familyId === where.familyId.not) {
+        if (
+          typeof where.familyId === 'string' &&
+          session.familyId !== where.familyId
+        ) {
+          continue;
+        }
+        if (
+          typeof where.familyId === 'object' &&
+          session.familyId === where.familyId.not
+        ) {
+          continue;
+        }
+        if (where.lastUsedAt && session.lastUsedAt > where.lastUsedAt.lte) {
           continue;
         }
 
@@ -361,12 +385,13 @@ export class FakePrismaService {
     findMany: ({
       where,
     }: {
-      where: { userId: string };
+      where: { userId: string; familyId?: string };
     }): Promise<FakeSession[]> => {
       return Promise.resolve(
         [...this.sessions.values()].filter(
           (session) =>
             session.userId === where.userId &&
+            (!where.familyId || session.familyId === where.familyId) &&
             session.revokedAt === null &&
             session.expiresAt > new Date(),
         ),

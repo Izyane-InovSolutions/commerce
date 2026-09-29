@@ -754,6 +754,42 @@
         }
       }
     },
+    "AuthController_revokeOtherSessions": {
+      "operationId": "AuthController_revokeOtherSessions",
+      "tags": [
+        "auth"
+      ],
+      "parameters": [
+        {
+          "name": "user-agent",
+          "in": "header",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
+      "responses": {
+        "204": {
+          "description": "No content"
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      }
+    },
     "AuthController_revokeSession": {
       "operationId": "AuthController_revokeSession",
       "tags": [
@@ -19655,12 +19691,36 @@
         "expiresAt": {
           "type": "string",
           "format": "date-time"
+        },
+        "signedInAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lastUsedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "ipAddress": {
+          "type": "string",
+          "nullable": true
+        },
+        "userAgent": {
+          "type": "string",
+          "nullable": true
+        },
+        "isCurrent": {
+          "type": "boolean"
         }
       },
       "required": [
         "id",
         "createdAt",
-        "expiresAt"
+        "expiresAt",
+        "signedInAt",
+        "lastUsedAt",
+        "ipAddress",
+        "userAgent",
+        "isCurrent"
       ]
     },
     "InputCurrencyQueryDto": {

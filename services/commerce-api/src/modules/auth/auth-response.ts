@@ -21,6 +21,11 @@ export type SessionSummary = {
   id: string;
   createdAt: Date;
   expiresAt: Date;
+  signedInAt: Date;
+  lastUsedAt: Date;
+  ipAddress: string | null;
+  userAgent: string | null;
+  isCurrent: boolean;
 };
 
 /** A one-time code minted for handing a signed-in session off to another

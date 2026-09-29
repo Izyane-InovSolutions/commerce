@@ -1,5 +1,7 @@
 # Backend development
 
+> Quick start only. The full engineer reference for the API is in [docs/backend/](backend/README.md): architecture, every module and route, configuration, data model and known gaps.
+
 The Commerce API is a NestJS modular monolith in `services/commerce-api`. It uses
 TypeScript, PostgreSQL, and Prisma.
 

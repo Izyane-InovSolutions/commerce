@@ -70,15 +70,31 @@ export class JwtAuthGuard implements CanActivate {
       include: { user: true },
     });
 
+    const now = new Date();
     if (
       !session ||
       session.revokedAt ||
-      session.expiresAt < new Date() ||
+      session.expiresAt <= now ||
       session.userId !== payload.sub ||
       !session.user ||
       !session.user.isActive
     ) {
       throw new UnauthorizedException('Session has been revoked or expired');
+    }
+
+    // Activity is approximate to one minute, avoiding a write on every request.
+    const activityCutoff = new Date(now.getTime() - 60_000);
+    if (session.lastUsedAt <= activityCutoff) {
+      await this.prisma.session.updateMany({
+        where: {
+          id: session.id,
+          userId: session.userId,
+          revokedAt: null,
+          expiresAt: { gt: now },
+          lastUsedAt: { lte: activityCutoff },
+        },
+        data: { lastUsedAt: now },
+      });
     }
 
     request.user = {

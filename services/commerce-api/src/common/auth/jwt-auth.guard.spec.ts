@@ -22,6 +22,7 @@ const activeSession = {
   userId: 'user-1',
   revokedAt: null,
   expiresAt: new Date(Date.now() + 60_000),
+  lastUsedAt: new Date(),
   user: {
     id: 'user-1',
     role: Role.CUSTOMER,
@@ -34,7 +35,7 @@ const activeSession = {
 describe('JwtAuthGuard', () => {
   let jwtService: { verifyAsync: jest.Mock };
   let reflector: { getAllAndOverride: jest.Mock };
-  let prisma: { session: { findUnique: jest.Mock } };
+  let prisma: { session: { findUnique: jest.Mock; updateMany: jest.Mock } };
   let guard: JwtAuthGuard;
   let metadata: Record<string, boolean>;
 
@@ -45,7 +46,10 @@ describe('JwtAuthGuard', () => {
       getAllAndOverride: jest.fn((key: string) => metadata[key] ?? false),
     };
     prisma = {
-      session: { findUnique: jest.fn().mockResolvedValue(activeSession) },
+      session: {
+        findUnique: jest.fn().mockResolvedValue(activeSession),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
     };
     guard = new JwtAuthGuard(
       jwtService as unknown as JwtService,
@@ -60,6 +64,49 @@ describe('JwtAuthGuard', () => {
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
     expect(jwtService.verifyAsync).not.toHaveBeenCalled();
+  });
+
+  it('updates stale activity only for the active owning session', async () => {
+    jwtService.verifyAsync.mockResolvedValue({
+      sub: 'user-1',
+      sid: 'session-1',
+    });
+    prisma.session.findUnique.mockResolvedValue({
+      ...activeSession,
+      lastUsedAt: new Date(Date.now() - 120_000),
+    });
+    await guard.canActivate(
+      createContext({
+        header: () => 'Bearer good-token',
+      } as unknown as RequestWithUser),
+    );
+    expect(prisma.session.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'session-1',
+        userId: 'user-1',
+        revokedAt: null,
+        expiresAt: { gt: expect.any(Date) as Date },
+        lastUsedAt: { lte: expect.any(Date) as Date },
+      },
+      data: { lastUsedAt: expect.any(Date) as Date },
+    });
+  });
+
+  it('does not write activity again within one minute', async () => {
+    jwtService.verifyAsync.mockResolvedValue({
+      sub: 'user-1',
+      sid: 'session-1',
+    });
+    prisma.session.findUnique.mockResolvedValue({
+      ...activeSession,
+      lastUsedAt: new Date(),
+    });
+    await guard.canActivate(
+      createContext({
+        header: () => 'Bearer good-token',
+      } as unknown as RequestWithUser),
+    );
+    expect(prisma.session.updateMany).not.toHaveBeenCalled();
   });
 
   it('rejects a request with no bearer header', async () => {
