@@ -63,10 +63,10 @@ class EnvironmentVariables {
   @IsInt()
   @Min(1)
   @Max(65535)
-  SMTP_PORT = 1025;
+  SMTP_PORT = 587;
 
   @IsIn(['true', 'false'])
-  SMTP_SECURE = 'false';
+  SMTP_SECURE = 'true';
 
   @IsString()
   SMTP_USER = '';
@@ -78,6 +78,7 @@ class EnvironmentVariables {
   @IsNotEmpty()
   EMAIL_FROM!: string;
 
+  @IsOptional()
   @IsUrl({ protocols: ['http', 'https'], require_tld: false })
   CUSTOMER_WEB_URL!: string;
 
