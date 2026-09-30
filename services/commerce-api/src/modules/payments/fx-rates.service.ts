@@ -40,7 +40,9 @@ export class FxRatesService implements OnModuleInit {
       fetchedAt.getTime() + intervalMs * EXPIRY_GRACE_CYCLES,
     );
 
-    const entries = Object.entries(rates).filter(([currency]) => currency !== base);
+    const entries = Object.entries(rates).filter(
+      ([currency]) => currency !== base,
+    );
     if (entries.length === 0) return;
 
     await this.prisma.$transaction(

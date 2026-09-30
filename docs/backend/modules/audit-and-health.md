@@ -4,7 +4,7 @@
 
 ## Purpose and features
 
-- **Audit.** Any module can inject `AuditService` and call `record(event, tx?)`. It writes one `AuditEvent` row, inside the caller's transaction when a client is passed. Metadata goes through `redact` first. There is no HTTP surface for reading audit events.
+- **Audit.** Any module can inject `AuditService` and call `record(event, tx?)`. It writes one `AuditEvent` row, inside the caller's transaction when a client is passed. Metadata goes through `redact` first. ADMIN-only audit list and action-filter endpoints exist.
 - **Health.** Anyone can call two `@Public` probes, used by load balancers and orchestrators: liveness (always `{status: 'ok'}`) and readiness (Prisma `SELECT 1` through `@nestjs/terminus`).
 
 ## Routes
@@ -17,7 +17,7 @@ Conventions: see [../architecture.md](../architecture.md).
 | GET    | /api/v1/health/ready | Public | n/a         | Readiness: terminus `HealthCheckResult` with a `database` ping; 503 when the ping fails ([health.controller.ts:32](../../../services/commerce-api/src/modules/health/health.controller.ts#L32))                                                                                                                                                        |
 | GET    | /api/v1/metrics      | Public | n/a         | In-memory request counters per method, route and status, plus uptime. It lives in `infrastructure/metrics`, not in a module, and is listed here with the other operational probes ([metrics.controller.ts:13](../../../services/commerce-api/src/infrastructure/metrics/metrics.controller.ts#L13)). The counters reset on restart and are per process |
 
-The audit module has no routes.
+The audit module exposes ADMIN-only `GET /api/v1/admin/audit-events` (filtered, paginated) and `GET /api/v1/admin/audit-events/actions`; see [audit-events.controller.ts](../../../services/commerce-api/src/modules/audit/audit-events.controller.ts).
 
 ## Services
 
@@ -96,7 +96,7 @@ None.
 ## Known gaps
 
 - **No read path.** There is no admin API to query `AuditEvent`, so it is only readable directly in the DB.
-- **`ipAddress`/`userAgent` are never set.** Both fields exist, but no caller passes them. Auth records request metadata on `Session` instead ([audit.service.ts:32](../../../services/commerce-api/src/modules/audit/audit.service.ts#L32)).
+- **Request metadata coverage varies.** Auth supplies request IP/user-agent metadata on relevant audit writes; other writers require individual review. Do not infer complete coverage from the schema fields.
 - **Redaction misses variants.** It only matches exact key names. `accountNumber`, `iban`, `destination`, `email`, `mobileNumber`, `phone`, or `phone_number` in metadata are **not** redacted. Nested payout destinations or contact details would be stored in clear.
 - **Four modules bypass `AuditService`** (sellers, storefronts, marketplace offers, gateway payments). Their metadata is not redacted, and the gateway-payments write is not transactional with the payment change.
 - **Inconsistent coverage across domains.** Returns, fulfillment commands (cancel, exception resolve, seller reject), payout request transitions and operations have no `AuditEvent` rows (see those modules' docs).

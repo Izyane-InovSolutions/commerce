@@ -60,7 +60,10 @@ describe('Admin review moderation (integration, real Postgres)', () => {
         where: { sellerOrderId: { in: sellerOrderIds } },
         select: { id: true },
       });
-      const targetIds = [...reviews.map((r) => r.id), ...ratings.map((r) => r.id)];
+      const targetIds = [
+        ...reviews.map((r) => r.id),
+        ...ratings.map((r) => r.id),
+      ];
       await prisma.reviewReport.deleteMany({
         where: {
           OR: [
@@ -81,7 +84,9 @@ describe('Admin review moderation (integration, real Postgres)', () => {
       await prisma.sellerRating.deleteMany({
         where: { sellerOrderId: { in: sellerOrderIds } },
       });
-      await prisma.orderItem.deleteMany({ where: { orderId: { in: createdOrderIds } } });
+      await prisma.orderItem.deleteMany({
+        where: { orderId: { in: createdOrderIds } },
+      });
       await prisma.order.deleteMany({ where: { id: { in: createdOrderIds } } });
     }
     if (createdProductIds.length) {
@@ -94,13 +99,17 @@ describe('Admin review moderation (integration, real Postgres)', () => {
       await prisma.productVariant.deleteMany({
         where: { productId: { in: createdProductIds } },
       });
-      await prisma.product.deleteMany({ where: { id: { in: createdProductIds } } });
+      await prisma.product.deleteMany({
+        where: { id: { in: createdProductIds } },
+      });
     }
     if (createdSellerIds.length) {
       await prisma.sellerRatingSummary.deleteMany({
         where: { sellerId: { in: createdSellerIds } },
       });
-      await prisma.seller.deleteMany({ where: { id: { in: createdSellerIds } } });
+      await prisma.seller.deleteMany({
+        where: { id: { in: createdSellerIds } },
+      });
     }
     if (createdUserIds.length) {
       await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
@@ -111,7 +120,10 @@ describe('Admin review moderation (integration, real Postgres)', () => {
   async function createUser(label: string): Promise<string> {
     const rowSuffix = `${suffix}-${randomUUID().slice(0, 8)}`;
     const user = await prisma.user.create({
-      data: { email: `admin-reviews-${label}-${rowSuffix}@example.test`, passwordHash: 'x' },
+      data: {
+        email: `admin-reviews-${label}-${rowSuffix}@example.test`,
+        passwordHash: 'x',
+      },
     });
     createdUserIds.push(user.id);
     return user.id;
@@ -124,13 +136,18 @@ describe('Admin review moderation (integration, real Postgres)', () => {
   ): Promise<{ review: ProductReview; productId: string }> {
     const rowSuffix = `${suffix}-${randomUUID().slice(0, 8)}`;
     const product = await prisma.product.create({
-      data: { name: `Admin Reviews Product ${rowSuffix}`, slug: `admin-reviews-product-${rowSuffix}` },
+      data: {
+        name: `Admin Reviews Product ${rowSuffix}`,
+        slug: `admin-reviews-product-${rowSuffix}`,
+      },
     });
     createdProductIds.push(product.id);
     const variant = await prisma.productVariant.create({
       data: { productId: product.id, skuCode: `ADMREV-SKU-${rowSuffix}` },
     });
-    const offer = await prisma.offer.create({ data: { variantId: variant.id } });
+    const offer = await prisma.offer.create({
+      data: { variantId: variant.id },
+    });
     const order = await prisma.order.create({
       data: {
         userId: authorUserId,

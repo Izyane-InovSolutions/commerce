@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import {
   Prisma,
@@ -27,7 +31,10 @@ import { SubmitProductReviewDto } from './dto/submit-product-review.dto';
 import { SubmitSellerRatingDto } from './dto/submit-seller-rating.dto';
 import { RatingAggregateService } from './rating-aggregate.service';
 import { ReviewEligibilityService } from './review-eligibility.service';
-import type { OrderReviewEligibilityView, OwnReviewsPage } from './reviews.types';
+import type {
+  OrderReviewEligibilityView,
+  OwnReviewsPage,
+} from './reviews.types';
 
 const EDIT_WINDOW_DAYS = 30;
 
@@ -836,9 +843,7 @@ export class ReviewsService {
 
   private assertReportPayload(dto: ReportReviewDto): void {
     if (dto.reason === 'OTHER' && !dto.details?.trim()) {
-      throw new ConflictException(
-        'details is required when reason is OTHER',
-      );
+      throw new ConflictException('details is required when reason is OTHER');
     }
   }
 

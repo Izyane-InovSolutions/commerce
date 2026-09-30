@@ -36,7 +36,9 @@ const PACK_ITEM = {
   version: 0,
 };
 
-function fulfillmentLine(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+function fulfillmentLine(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
   return {
     id: 'fl-1',
     orderItemId: 'oi-1',
@@ -50,7 +52,9 @@ function fulfillmentLine(overrides: Record<string, unknown> = {}): Record<string
   };
 }
 
-function foRow(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+function foRow(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
   return {
     id: 'fo-1',
     orderId: 'order-1',
@@ -119,7 +123,9 @@ function buildTx(): {
       create: jest.fn(),
     },
     orderItem: {
-      findMany: jest.fn().mockResolvedValue([{ id: 'oi-1', offerId: 'offer-1' }]),
+      findMany: jest
+        .fn()
+        .mockResolvedValue([{ id: 'oi-1', offerId: 'offer-1' }]),
     },
     shipment: {
       findUnique: jest.fn(),
@@ -130,7 +136,9 @@ function buildTx(): {
       create: jest.fn(),
     },
     user: {
-      findUnique: jest.fn().mockResolvedValue({ isActive: true, role: Role.STAFF }),
+      findUnique: jest
+        .fn()
+        .mockResolvedValue({ isActive: true, role: Role.STAFF }),
     },
     $queryRaw: jest.fn().mockResolvedValue([]),
   };
@@ -176,7 +184,9 @@ describe('FulfillmentsService', () => {
         .mockResolvedValue({ record: {}, movement: { id: 'mv-1' } }),
     };
     numberingService = {
-      nextFulfillmentDispatchNumber: jest.fn().mockResolvedValue('FD-2026-000001'),
+      nextFulfillmentDispatchNumber: jest
+        .fn()
+        .mockResolvedValue('FD-2026-000001'),
       nextShipmentNumber: jest.fn().mockResolvedValue('SH-2026-000001'),
     };
     auditService = { record: jest.fn().mockResolvedValue(undefined) };
@@ -199,7 +209,13 @@ describe('FulfillmentsService', () => {
   describe('startWork', () => {
     it('refuses a staff member who is not assigned to the work item', async () => {
       await expect(
-        service.startWork('fo-1', FulfillmentWorkItemType.PICK, 0, 'someone-else', Role.STAFF),
+        service.startWork(
+          'fo-1',
+          FulfillmentWorkItemType.PICK,
+          0,
+          'someone-else',
+          Role.STAFF,
+        ),
       ).rejects.toBeInstanceOf(ForbiddenException);
       expect(prisma.tx.fulfillmentWorkItem.updateMany).not.toHaveBeenCalled();
     });
@@ -207,23 +223,42 @@ describe('FulfillmentsService', () => {
     it('allows an admin to start unassigned work', async () => {
       prisma.tx.fulfillmentWorkItem.updateMany.mockResolvedValue({ count: 1 });
 
-      await service.startWork('fo-1', FulfillmentWorkItemType.PICK, 0, 'admin-1', Role.ADMIN);
+      await service.startWork(
+        'fo-1',
+        FulfillmentWorkItemType.PICK,
+        0,
+        'admin-1',
+        Role.ADMIN,
+      );
 
       expect(prisma.tx.fulfillmentWorkItem.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'wi-pick', version: 0 },
-          data: expect.objectContaining({ status: FulfillmentWorkItemStatus.IN_PROGRESS }) as object,
+          data: expect.objectContaining({
+            status: FulfillmentWorkItemStatus.IN_PROGRESS,
+          }) as object,
         }),
       );
     });
 
     it('rejects starting a work item that is not PENDING', async () => {
       prisma.tx.fulfillmentOrder.findUnique.mockResolvedValue(
-        foRow({ workItems: [{ ...PICK_ITEM, status: FulfillmentWorkItemStatus.IN_PROGRESS }, PACK_ITEM] }),
+        foRow({
+          workItems: [
+            { ...PICK_ITEM, status: FulfillmentWorkItemStatus.IN_PROGRESS },
+            PACK_ITEM,
+          ],
+        }),
       );
 
       await expect(
-        service.startWork('fo-1', FulfillmentWorkItemType.PICK, 0, 'staff-1', Role.STAFF),
+        service.startWork(
+          'fo-1',
+          FulfillmentWorkItemType.PICK,
+          0,
+          'staff-1',
+          Role.STAFF,
+        ),
       ).rejects.toBeInstanceOf(ConflictException);
     });
 
@@ -231,7 +266,13 @@ describe('FulfillmentsService', () => {
       prisma.tx.fulfillmentWorkItem.updateMany.mockResolvedValue({ count: 0 });
 
       await expect(
-        service.startWork('fo-1', FulfillmentWorkItemType.PICK, 0, 'staff-1', Role.STAFF),
+        service.startWork(
+          'fo-1',
+          FulfillmentWorkItemType.PICK,
+          0,
+          'staff-1',
+          Role.STAFF,
+        ),
       ).rejects.toBeInstanceOf(ConflictException);
     });
   });
@@ -239,7 +280,12 @@ describe('FulfillmentsService', () => {
   describe('recordQuantities', () => {
     beforeEach(() => {
       prisma.tx.fulfillmentOrder.findUnique.mockResolvedValue(
-        foRow({ workItems: [{ ...PICK_ITEM, status: FulfillmentWorkItemStatus.IN_PROGRESS }, PACK_ITEM] }),
+        foRow({
+          workItems: [
+            { ...PICK_ITEM, status: FulfillmentWorkItemStatus.IN_PROGRESS },
+            PACK_ITEM,
+          ],
+        }),
       );
     });
 
@@ -326,7 +372,10 @@ describe('FulfillmentsService', () => {
       });
       expect(prisma.tx.fulfillmentEvent.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ idempotencyKey: 'idem-1', type: 'picks.recorded' }) as object,
+          data: expect.objectContaining({
+            idempotencyKey: 'idem-1',
+            type: 'picks.recorded',
+          }) as object,
         }),
       );
     });
@@ -335,7 +384,10 @@ describe('FulfillmentsService', () => {
       prisma.tx.fulfillmentOrder.findUnique.mockResolvedValue(
         foRow({
           lines: [fulfillmentLine({ pickedQuantity: 5, packedQuantity: 0 })],
-          workItems: [PICK_ITEM, { ...PACK_ITEM, status: FulfillmentWorkItemStatus.IN_PROGRESS }],
+          workItems: [
+            PICK_ITEM,
+            { ...PACK_ITEM, status: FulfillmentWorkItemStatus.IN_PROGRESS },
+          ],
         }),
       );
 
@@ -355,12 +407,23 @@ describe('FulfillmentsService', () => {
   describe('completeWork', () => {
     it('refuses to complete while an exception is open', async () => {
       prisma.tx.fulfillmentOrder.findUnique.mockResolvedValue(
-        foRow({ workItems: [{ ...PICK_ITEM, status: FulfillmentWorkItemStatus.IN_PROGRESS }, PACK_ITEM] }),
+        foRow({
+          workItems: [
+            { ...PICK_ITEM, status: FulfillmentWorkItemStatus.IN_PROGRESS },
+            PACK_ITEM,
+          ],
+        }),
       );
       prisma.tx.fulfillmentException.count.mockResolvedValue(1);
 
       await expect(
-        service.completeWork('fo-1', FulfillmentWorkItemType.PICK, 0, 'staff-1', Role.STAFF),
+        service.completeWork(
+          'fo-1',
+          FulfillmentWorkItemType.PICK,
+          0,
+          'staff-1',
+          Role.STAFF,
+        ),
       ).rejects.toBeInstanceOf(ConflictException);
     });
 
@@ -368,12 +431,21 @@ describe('FulfillmentsService', () => {
       prisma.tx.fulfillmentOrder.findUnique.mockResolvedValue(
         foRow({
           lines: [fulfillmentLine({ pickedQuantity: 6 })],
-          workItems: [{ ...PICK_ITEM, status: FulfillmentWorkItemStatus.IN_PROGRESS }, PACK_ITEM],
+          workItems: [
+            { ...PICK_ITEM, status: FulfillmentWorkItemStatus.IN_PROGRESS },
+            PACK_ITEM,
+          ],
         }),
       );
 
       await expect(
-        service.completeWork('fo-1', FulfillmentWorkItemType.PICK, 0, 'staff-1', Role.STAFF),
+        service.completeWork(
+          'fo-1',
+          FulfillmentWorkItemType.PICK,
+          0,
+          'staff-1',
+          Role.STAFF,
+        ),
       ).rejects.toBeInstanceOf(ConflictException);
     });
 
@@ -381,16 +453,27 @@ describe('FulfillmentsService', () => {
       prisma.tx.fulfillmentOrder.findUnique.mockResolvedValue(
         foRow({
           lines: [fulfillmentLine({ pickedQuantity: 10 })],
-          workItems: [{ ...PICK_ITEM, status: FulfillmentWorkItemStatus.IN_PROGRESS }, PACK_ITEM],
+          workItems: [
+            { ...PICK_ITEM, status: FulfillmentWorkItemStatus.IN_PROGRESS },
+            PACK_ITEM,
+          ],
         }),
       );
       prisma.tx.fulfillmentWorkItem.updateMany.mockResolvedValue({ count: 1 });
 
-      await service.completeWork('fo-1', FulfillmentWorkItemType.PICK, 0, 'staff-1', Role.STAFF);
+      await service.completeWork(
+        'fo-1',
+        FulfillmentWorkItemType.PICK,
+        0,
+        'staff-1',
+        Role.STAFF,
+      );
 
       expect(prisma.tx.fulfillmentWorkItem.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ status: FulfillmentWorkItemStatus.COMPLETED }) as object,
+          data: expect.objectContaining({
+            status: FulfillmentWorkItemStatus.COMPLETED,
+          }) as object,
         }),
       );
     });
@@ -398,14 +481,29 @@ describe('FulfillmentsService', () => {
     it('an already-cancelled quantity does not count against completion', async () => {
       prisma.tx.fulfillmentOrder.findUnique.mockResolvedValue(
         foRow({
-          lines: [fulfillmentLine({ allocatedQuantity: 10, cancelledQuantity: 4, pickedQuantity: 6 })],
-          workItems: [{ ...PICK_ITEM, status: FulfillmentWorkItemStatus.IN_PROGRESS }, PACK_ITEM],
+          lines: [
+            fulfillmentLine({
+              allocatedQuantity: 10,
+              cancelledQuantity: 4,
+              pickedQuantity: 6,
+            }),
+          ],
+          workItems: [
+            { ...PICK_ITEM, status: FulfillmentWorkItemStatus.IN_PROGRESS },
+            PACK_ITEM,
+          ],
         }),
       );
       prisma.tx.fulfillmentWorkItem.updateMany.mockResolvedValue({ count: 1 });
 
       await expect(
-        service.completeWork('fo-1', FulfillmentWorkItemType.PICK, 0, 'staff-1', Role.STAFF),
+        service.completeWork(
+          'fo-1',
+          FulfillmentWorkItemType.PICK,
+          0,
+          'staff-1',
+          Role.STAFF,
+        ),
       ).resolves.toBeDefined();
     });
   });
@@ -415,7 +513,12 @@ describe('FulfillmentsService', () => {
       await expect(
         service.createException(
           'fo-1',
-          { fulfillmentLineId: 'not-a-line', type: 'SHORT_PICK', quantity: 1, reason: 'short' } as never,
+          {
+            fulfillmentLineId: 'not-a-line',
+            type: 'SHORT_PICK',
+            quantity: 1,
+            reason: 'short',
+          } as never,
           'staff-1',
         ),
       ).rejects.toBeInstanceOf(Error);
@@ -426,13 +529,21 @@ describe('FulfillmentsService', () => {
 
       await service.createException(
         'fo-1',
-        { fulfillmentLineId: 'fl-1', type: 'SHORT_PICK', quantity: 2, reason: 'short pick' } as never,
+        {
+          fulfillmentLineId: 'fl-1',
+          type: 'SHORT_PICK',
+          quantity: 2,
+          reason: 'short pick',
+        } as never,
         'staff-1',
       );
 
       expect(prisma.tx.fulfillmentException.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ fulfillmentLineId: 'fl-1', quantity: 2 }) as object,
+          data: expect.objectContaining({
+            fulfillmentLineId: 'fl-1',
+            quantity: 2,
+          }) as object,
         }),
       );
     });
@@ -458,7 +569,9 @@ describe('FulfillmentsService', () => {
         'wh-1',
         'v1',
         3,
-        expect.objectContaining({ referenceType: 'fulfillment_cancellation_line' }),
+        expect.objectContaining({
+          referenceType: 'fulfillment_cancellation_line',
+        }),
         'could not locate stock',
       );
       expect(outboxService.record).toHaveBeenCalledWith(
@@ -507,12 +620,18 @@ describe('FulfillmentsService', () => {
         lines: [],
       });
 
-      await expect(service.dispatch('fo-1', 'ship-1', 'staff-1', 'idem-3')).rejects.toThrow();
+      await expect(
+        service.dispatch('fo-1', 'ship-1', 'staff-1', 'idem-3'),
+      ).rejects.toThrow();
     });
 
     it('dispatches a booked shipment and increments dispatchedQuantity', async () => {
       prisma.tx.fulfillmentOrder.findUnique.mockResolvedValue(
-        foRow({ lines: [fulfillmentLine({ shipmentAssignedQuantity: 5, packedQuantity: 5 })] }),
+        foRow({
+          lines: [
+            fulfillmentLine({ shipmentAssignedQuantity: 5, packedQuantity: 5 }),
+          ],
+        }),
       );
       prisma.tx.shipment.findUnique.mockResolvedValue({
         id: 'ship-1',
@@ -520,7 +639,10 @@ describe('FulfillmentsService', () => {
         status: ShipmentStatus.BOOKED,
         lines: [{ fulfillmentLineId: 'fl-1', quantity: 5 }],
       });
-      prisma.tx.fulfillmentDispatch.create.mockResolvedValue({ id: 'disp-1', lines: [] });
+      prisma.tx.fulfillmentDispatch.create.mockResolvedValue({
+        id: 'disp-1',
+        lines: [],
+      });
 
       await service.dispatch('fo-1', 'ship-1', 'staff-1', 'idem-3');
 
@@ -531,7 +653,9 @@ describe('FulfillmentsService', () => {
       expect(prisma.tx.shipment.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'ship-1' },
-          data: expect.objectContaining({ status: ShipmentStatus.DISPATCHED }) as object,
+          data: expect.objectContaining({
+            status: ShipmentStatus.DISPATCHED,
+          }) as object,
         }),
       );
     });
@@ -540,13 +664,20 @@ describe('FulfillmentsService', () => {
   describe('cancel', () => {
     it('rejects cancelling more than the undispatched active quantity', async () => {
       prisma.tx.fulfillmentOrder.findUnique.mockResolvedValue(
-        foRow({ lines: [fulfillmentLine({ allocatedQuantity: 10, dispatchedQuantity: 8 })] }),
+        foRow({
+          lines: [
+            fulfillmentLine({ allocatedQuantity: 10, dispatchedQuantity: 8 }),
+          ],
+        }),
       );
 
       await expect(
         service.cancel(
           'fo-1',
-          { lines: [{ fulfillmentLineId: 'fl-1', quantity: 5 }], reason: 'customer cancelled' },
+          {
+            lines: [{ fulfillmentLineId: 'fl-1', quantity: 5 }],
+            reason: 'customer cancelled',
+          },
           'admin-1',
           'idem-4',
         ),
@@ -556,7 +687,10 @@ describe('FulfillmentsService', () => {
     it('cancels an eligible quantity and returns inventory', async () => {
       await service.cancel(
         'fo-1',
-        { lines: [{ fulfillmentLineId: 'fl-1', quantity: 3 }], reason: 'customer cancelled' },
+        {
+          lines: [{ fulfillmentLineId: 'fl-1', quantity: 3 }],
+          reason: 'customer cancelled',
+        },
         'admin-1',
         'idem-4',
       );
@@ -570,7 +704,9 @@ describe('FulfillmentsService', () => {
         'wh-1',
         'v1',
         3,
-        expect.objectContaining({ referenceType: 'fulfillment_cancellation_line' }),
+        expect.objectContaining({
+          referenceType: 'fulfillment_cancellation_line',
+        }),
         'customer cancelled',
       );
     });
@@ -592,7 +728,13 @@ describe('FulfillmentsService', () => {
     it('reassigns the work item', async () => {
       prisma.tx.fulfillmentWorkItem.updateMany.mockResolvedValue({ count: 1 });
 
-      await service.assignWorkItem('fo-1', FulfillmentWorkItemType.PICK, 'staff-2', 0, 'admin-1');
+      await service.assignWorkItem(
+        'fo-1',
+        FulfillmentWorkItemType.PICK,
+        'staff-2',
+        0,
+        'admin-1',
+      );
 
       expect(prisma.tx.fulfillmentWorkItem.updateMany).toHaveBeenCalledWith({
         where: { id: 'wi-pick', version: 0 },
@@ -601,10 +743,19 @@ describe('FulfillmentsService', () => {
     });
 
     it('rejects an assignee who is not an active STAFF user', async () => {
-      prisma.tx.user.findUnique.mockResolvedValue({ isActive: true, role: Role.ADMIN });
+      prisma.tx.user.findUnique.mockResolvedValue({
+        isActive: true,
+        role: Role.ADMIN,
+      });
 
       await expect(
-        service.assignWorkItem('fo-1', FulfillmentWorkItemType.PICK, 'admin-2', 0, 'admin-1'),
+        service.assignWorkItem(
+          'fo-1',
+          FulfillmentWorkItemType.PICK,
+          'admin-2',
+          0,
+          'admin-1',
+        ),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(prisma.tx.fulfillmentWorkItem.updateMany).not.toHaveBeenCalled();
     });
@@ -613,13 +764,21 @@ describe('FulfillmentsService', () => {
       prisma.tx.user.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.assignWorkItem('fo-1', FulfillmentWorkItemType.PICK, 'unknown', 0, 'admin-1'),
+        service.assignWorkItem(
+          'fo-1',
+          FulfillmentWorkItemType.PICK,
+          'unknown',
+          0,
+          'admin-1',
+        ),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 
   describe('seller fulfillment (#37)', () => {
-    function sellerFoRow(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    function sellerFoRow(
+      overrides: Record<string, unknown> = {},
+    ): Record<string, unknown> {
       return foRow({
         warehouseId: null,
         status: 'AWAITING_ACCEPTANCE',
@@ -635,14 +794,16 @@ describe('FulfillmentsService', () => {
 
     describe('ownership', () => {
       it('404s a platform-mode fulfillment order (warehouseId set)', async () => {
-        prisma.tx.fulfillmentOrder.findUnique.mockResolvedValue(foRow({ warehouseId: 'wh-1' }));
+        prisma.tx.fulfillmentOrder.findUnique.mockResolvedValue(
+          foRow({ warehouseId: 'wh-1' }),
+        );
 
         await expect(
           service.acceptSellerFulfillment('fo-1', 'user-1', 0),
         ).rejects.toBeInstanceOf(NotFoundException);
       });
 
-      it("404s a fulfillment order belonging to a different seller", async () => {
+      it('404s a fulfillment order belonging to a different seller', async () => {
         prisma.tx.fulfillmentOrder.findUnique.mockResolvedValue(
           sellerFoRow({ sellerOrder: { sellerId: 'someone-else' } }),
         );
@@ -654,7 +815,9 @@ describe('FulfillmentsService', () => {
 
       it('propagates a suspended/unapproved seller as ForbiddenException', async () => {
         prisma.tx.fulfillmentOrder.findUnique.mockResolvedValue(sellerFoRow());
-        sellersService.lockApproved.mockRejectedValue(new ForbiddenException('Seller approval is required'));
+        sellersService.lockApproved.mockRejectedValue(
+          new ForbiddenException('Seller approval is required'),
+        );
 
         await expect(
           service.acceptSellerFulfillment('fo-1', 'user-1', 0),
@@ -672,7 +835,9 @@ describe('FulfillmentsService', () => {
         expect(prisma.tx.fulfillmentOrder.updateMany).toHaveBeenCalledWith(
           expect.objectContaining({
             where: { id: 'fo-1', version: 0, status: 'AWAITING_ACCEPTANCE' },
-            data: expect.objectContaining({ acceptedByUserId: 'user-1' }) as object,
+            data: expect.objectContaining({
+              acceptedByUserId: 'user-1',
+            }) as object,
           }),
         );
         expect(prisma.tx.fulfillmentLine.update).toHaveBeenCalledWith({
@@ -705,13 +870,22 @@ describe('FulfillmentsService', () => {
       it('rejects (cancels every active line) before any dispatch', async () => {
         prisma.tx.fulfillmentOrder.findUnique.mockResolvedValue(sellerFoRow());
 
-        await service.rejectSellerFulfillment('fo-1', 'user-1', 0, 'out of stock', 'user-1', 'idem-r1');
+        await service.rejectSellerFulfillment(
+          'fo-1',
+          'user-1',
+          0,
+          'out of stock',
+          'user-1',
+          'idem-r1',
+        );
 
         expect(inventoryService.returnCancelledOfferStock).toHaveBeenCalledWith(
           prisma.tx,
           'offer-1',
           10,
-          expect.objectContaining({ referenceType: 'fulfillment_cancellation_line' }),
+          expect.objectContaining({
+            referenceType: 'fulfillment_cancellation_line',
+          }),
           'out of stock',
         );
         expect(backgroundJobsService.enqueue).toHaveBeenCalled();
@@ -723,7 +897,14 @@ describe('FulfillmentsService', () => {
         );
 
         await expect(
-          service.rejectSellerFulfillment('fo-1', 'user-1', 0, 'too late', 'user-1', 'idem-r2'),
+          service.rejectSellerFulfillment(
+            'fo-1',
+            'user-1',
+            0,
+            'too late',
+            'user-1',
+            'idem-r2',
+          ),
         ).rejects.toBeInstanceOf(ConflictException);
       });
 
@@ -731,15 +912,26 @@ describe('FulfillmentsService', () => {
         prisma.tx.fulfillmentOrder.findUnique.mockResolvedValue(sellerFoRow());
         prisma.tx.fulfillmentEvent.findUnique.mockResolvedValue({
           fulfillmentOrderId: 'fo-1',
-          requestHash: (service as unknown as { hashRequest: (v: unknown) => string }).hashRequest({
+          requestHash: (
+            service as unknown as { hashRequest: (v: unknown) => string }
+          ).hashRequest({
             fulfillmentOrderId: 'fo-1',
             reason: 'out of stock',
           }),
         });
 
-        await service.rejectSellerFulfillment('fo-1', 'user-1', 0, 'out of stock', 'user-1', 'idem-r3');
+        await service.rejectSellerFulfillment(
+          'fo-1',
+          'user-1',
+          0,
+          'out of stock',
+          'user-1',
+          'idem-r3',
+        );
 
-        expect(inventoryService.returnCancelledOfferStock).not.toHaveBeenCalled();
+        expect(
+          inventoryService.returnCancelledOfferStock,
+        ).not.toHaveBeenCalled();
       });
 
       it('rejects a reused idempotency key with a different payload', async () => {
@@ -750,7 +942,14 @@ describe('FulfillmentsService', () => {
         });
 
         await expect(
-          service.rejectSellerFulfillment('fo-1', 'user-1', 0, 'out of stock', 'user-1', 'idem-r4'),
+          service.rejectSellerFulfillment(
+            'fo-1',
+            'user-1',
+            0,
+            'out of stock',
+            'user-1',
+            'idem-r4',
+          ),
         ).rejects.toBeInstanceOf(ConflictException);
       });
     });
@@ -772,7 +971,10 @@ describe('FulfillmentsService', () => {
 
       it('packs within the active-unpacked ceiling once accepted', async () => {
         prisma.tx.fulfillmentOrder.findUnique.mockResolvedValue(
-          sellerFoRow({ status: 'READY_TO_PICK', lines: [fulfillmentLine({ pickedQuantity: 10 })] }),
+          sellerFoRow({
+            status: 'READY_TO_PICK',
+            lines: [fulfillmentLine({ pickedQuantity: 10 })],
+          }),
         );
 
         await service.recordSellerPack(
@@ -815,8 +1017,16 @@ describe('FulfillmentsService', () => {
           sellerFoRow({
             status: 'PACKED',
             lines: [
-              fulfillmentLine({ id: 'fl-1', pickedQuantity: 10, packedQuantity: 10 }),
-              fulfillmentLine({ id: 'fl-2', pickedQuantity: 10, packedQuantity: 10 }),
+              fulfillmentLine({
+                id: 'fl-1',
+                pickedQuantity: 10,
+                packedQuantity: 10,
+              }),
+              fulfillmentLine({
+                id: 'fl-2',
+                pickedQuantity: 10,
+                packedQuantity: 10,
+              }),
             ],
           }),
         );
@@ -845,7 +1055,12 @@ describe('FulfillmentsService', () => {
       it('rejects cancelling beyond the undispatched, unclaimed ceiling', async () => {
         prisma.tx.fulfillmentOrder.findUnique.mockResolvedValue(
           sellerFoRow({
-            lines: [fulfillmentLine({ allocatedQuantity: 10, shipmentAssignedQuantity: 9 })],
+            lines: [
+              fulfillmentLine({
+                allocatedQuantity: 10,
+                shipmentAssignedQuantity: 9,
+              }),
+            ],
           }),
         );
 
@@ -870,13 +1085,22 @@ describe('FulfillmentsService', () => {
             lines: [fulfillmentLine({ packedQuantity: 10 })],
           }),
         );
-        prisma.tx.shipment.create.mockResolvedValue({ id: 'ship-1', lines: [] });
-        prisma.tx.fulfillmentDispatch.create.mockResolvedValue({ id: 'disp-1', lines: [] });
+        prisma.tx.shipment.create.mockResolvedValue({
+          id: 'ship-1',
+          lines: [],
+        });
+        prisma.tx.fulfillmentDispatch.create.mockResolvedValue({
+          id: 'disp-1',
+          lines: [],
+        });
 
         await service.dispatchSellerFulfillment(
           'fo-1',
           'user-1',
-          { lines: [{ fulfillmentLineId: 'fl-1', quantity: 10 }], carrierCode: 'DHL' },
+          {
+            lines: [{ fulfillmentLineId: 'fl-1', quantity: 10 }],
+            carrierCode: 'DHL',
+          },
           'user-1',
           'idem-d1',
         );
@@ -905,20 +1129,29 @@ describe('FulfillmentsService', () => {
         );
       });
 
-      it('emits fulfillment.dispatched with the warehouse path\'s payload shape', async () => {
+      it("emits fulfillment.dispatched with the warehouse path's payload shape", async () => {
         prisma.tx.fulfillmentOrder.findUnique.mockResolvedValue(
           sellerFoRow({
             status: 'PACKED',
             lines: [fulfillmentLine({ packedQuantity: 10 })],
           }),
         );
-        prisma.tx.shipment.create.mockResolvedValue({ id: 'ship-1', lines: [] });
-        prisma.tx.fulfillmentDispatch.create.mockResolvedValue({ id: 'disp-1', lines: [] });
+        prisma.tx.shipment.create.mockResolvedValue({
+          id: 'ship-1',
+          lines: [],
+        });
+        prisma.tx.fulfillmentDispatch.create.mockResolvedValue({
+          id: 'disp-1',
+          lines: [],
+        });
 
         await service.dispatchSellerFulfillment(
           'fo-1',
           'user-1',
-          { lines: [{ fulfillmentLineId: 'fl-1', quantity: 4 }], carrierCode: 'DHL' },
+          {
+            lines: [{ fulfillmentLineId: 'fl-1', quantity: 4 }],
+            carrierCode: 'DHL',
+          },
           'user-1',
           'idem-d4',
         );
@@ -942,11 +1175,16 @@ describe('FulfillmentsService', () => {
 
       it('replays a dispatch idempotency key without re-dispatching', async () => {
         prisma.tx.fulfillmentOrder.findUnique.mockResolvedValue(
-          sellerFoRow({ status: 'PACKED', lines: [fulfillmentLine({ packedQuantity: 10 })] }),
+          sellerFoRow({
+            status: 'PACKED',
+            lines: [fulfillmentLine({ packedQuantity: 10 })],
+          }),
         );
         prisma.tx.fulfillmentDispatch.findUnique.mockResolvedValue({
           fulfillmentOrderId: 'fo-1',
-          requestHash: (service as unknown as { hashRequest: (v: unknown) => string }).hashRequest({
+          requestHash: (
+            service as unknown as { hashRequest: (v: unknown) => string }
+          ).hashRequest({
             fulfillmentOrderId: 'fo-1',
             carrierCode: 'DHL',
             trackingReference: null,
@@ -958,7 +1196,10 @@ describe('FulfillmentsService', () => {
         await service.dispatchSellerFulfillment(
           'fo-1',
           'user-1',
-          { lines: [{ fulfillmentLineId: 'fl-1', quantity: 10 }], carrierCode: 'DHL' },
+          {
+            lines: [{ fulfillmentLineId: 'fl-1', quantity: 10 }],
+            carrierCode: 'DHL',
+          },
           'user-1',
           'idem-d2',
         );
@@ -971,7 +1212,9 @@ describe('FulfillmentsService', () => {
         prisma.tx.fulfillmentOrder.findUnique.mockResolvedValue(
           sellerFoRow({
             status: 'PACKED',
-            lines: [fulfillmentLine({ packedQuantity: 5, dispatchedQuantity: 0 })],
+            lines: [
+              fulfillmentLine({ packedQuantity: 5, dispatchedQuantity: 0 }),
+            ],
           }),
         );
 
@@ -979,7 +1222,10 @@ describe('FulfillmentsService', () => {
           service.dispatchSellerFulfillment(
             'fo-1',
             'user-1',
-            { lines: [{ fulfillmentLineId: 'fl-1', quantity: 6 }], carrierCode: 'DHL' },
+            {
+              lines: [{ fulfillmentLineId: 'fl-1', quantity: 6 }],
+              carrierCode: 'DHL',
+            },
             'user-1',
             'idem-d3',
           ),

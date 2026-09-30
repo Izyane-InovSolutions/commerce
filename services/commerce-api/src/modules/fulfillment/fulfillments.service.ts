@@ -81,7 +81,10 @@ function stableStringify(value: unknown): string {
   if (value && typeof value === 'object') {
     const keys = Object.keys(value as Record<string, unknown>).sort();
     return `{${keys
-      .map((key) => `${JSON.stringify(key)}:${stableStringify((value as Record<string, unknown>)[key])}`)
+      .map(
+        (key) =>
+          `${JSON.stringify(key)}:${stableStringify((value as Record<string, unknown>)[key])}`,
+      )
       .join(',')}}`;
   }
   return JSON.stringify(value);
@@ -171,10 +174,16 @@ export class FulfillmentsService {
         throw new ConflictException('Work item changed; reload and try again');
       }
 
-      await this.recordEvent(tx, fulfillmentOrderId, 'work_item.assigned', actorUserId, {
-        type,
-        assigneeUserId,
-      });
+      await this.recordEvent(
+        tx,
+        fulfillmentOrderId,
+        'work_item.assigned',
+        actorUserId,
+        {
+          type,
+          assigneeUserId,
+        },
+      );
 
       return this.reload(tx, fulfillmentOrderId);
     });
@@ -193,7 +202,9 @@ export class FulfillmentsService {
       this.assertCanMutateWorkItem(workItem, actorUserId, actorRole);
 
       if (workItem.status !== FulfillmentWorkItemStatus.PENDING) {
-        throw new ConflictException(`${type} work item is already ${workItem.status}`);
+        throw new ConflictException(
+          `${type} work item is already ${workItem.status}`,
+        );
       }
 
       const result = await tx.fulfillmentWorkItem.updateMany({
@@ -252,11 +263,24 @@ export class FulfillmentsService {
         );
       }
 
-      const totalActive = sum(fo.lines, (l) => l.allocatedQuantity - l.cancelledQuantity);
+      const totalActive = sum(
+        fo.lines,
+        (l) => l.allocatedQuantity - l.cancelledQuantity,
+      );
       const totalDone =
         type === FulfillmentWorkItemType.PICK
-          ? sum(fo.lines, (l) => Math.min(l.pickedQuantity, l.allocatedQuantity - l.cancelledQuantity))
-          : sum(fo.lines, (l) => Math.min(l.packedQuantity, l.allocatedQuantity - l.cancelledQuantity));
+          ? sum(fo.lines, (l) =>
+              Math.min(
+                l.pickedQuantity,
+                l.allocatedQuantity - l.cancelledQuantity,
+              ),
+            )
+          : sum(fo.lines, (l) =>
+              Math.min(
+                l.packedQuantity,
+                l.allocatedQuantity - l.cancelledQuantity,
+              ),
+            );
 
       if (totalDone < totalActive) {
         throw new ConflictException(
@@ -303,10 +327,18 @@ export class FulfillmentsService {
     return this.prisma.$transaction(async (tx) => {
       const fo = await this.lockFulfillmentOrder(tx, fulfillmentOrderId);
 
-      const replay = await this.checkIdempotentReplay(tx, fulfillmentOrderId, idempotencyKey, {
-        type: type === FulfillmentWorkItemType.PICK ? 'picks.recorded' : 'packs.recorded',
-        payload: { lines },
-      });
+      const replay = await this.checkIdempotentReplay(
+        tx,
+        fulfillmentOrderId,
+        idempotencyKey,
+        {
+          type:
+            type === FulfillmentWorkItemType.PICK
+              ? 'picks.recorded'
+              : 'packs.recorded',
+          payload: { lines },
+        },
+      );
       if (replay) return replay;
 
       const workItem = this.requireWorkItem(fo, type);
@@ -356,7 +388,10 @@ export class FulfillmentsService {
         await tx.fulfillmentEvent.create({
           data: {
             fulfillmentOrderId,
-            type: type === FulfillmentWorkItemType.PICK ? 'picks.recorded' : 'packs.recorded',
+            type:
+              type === FulfillmentWorkItemType.PICK
+                ? 'picks.recorded'
+                : 'packs.recorded',
             actorUserId,
             idempotencyKey,
             metadata: { lines } as unknown as Prisma.InputJsonValue,
@@ -397,11 +432,17 @@ export class FulfillmentsService {
 
       // hasOpenException now true — recomputeStatus surfaces ON_HOLD.
       await this.recomputeStatus(tx, fulfillmentOrderId);
-      await this.recordEvent(tx, fulfillmentOrderId, 'exception.created', actorUserId, {
-        exceptionId: exception.id,
-        type: dto.type,
-        quantity: dto.quantity,
-      });
+      await this.recordEvent(
+        tx,
+        fulfillmentOrderId,
+        'exception.created',
+        actorUserId,
+        {
+          exceptionId: exception.id,
+          type: dto.type,
+          quantity: dto.quantity,
+        },
+      );
 
       return this.reload(tx, fulfillmentOrderId);
     });
@@ -452,10 +493,16 @@ export class FulfillmentsService {
       }
 
       await this.recomputeStatus(tx, fulfillmentOrderId);
-      await this.recordEvent(tx, fulfillmentOrderId, 'exception.resolved', actorUserId, {
-        exceptionId,
-        action: dto.action,
-      });
+      await this.recordEvent(
+        tx,
+        fulfillmentOrderId,
+        'exception.resolved',
+        actorUserId,
+        {
+          exceptionId,
+          action: dto.action,
+        },
+      );
 
       return this.reload(tx, fulfillmentOrderId);
     });
@@ -496,7 +543,9 @@ export class FulfillmentsService {
         where: { fulfillmentOrderId, status: FulfillmentExceptionStatus.OPEN },
       });
       if (openExceptions > 0) {
-        throw new ConflictException('Cannot dispatch while an exception is open');
+        throw new ConflictException(
+          'Cannot dispatch while an exception is open',
+        );
       }
 
       const shipment = await tx.shipment.findUnique({
@@ -523,7 +572,8 @@ export class FulfillmentsService {
             `Fulfillment line ${shipmentLine.fulfillmentLineId} no longer belongs to this fulfillment order`,
           );
         }
-        const dispatchable = line.shipmentAssignedQuantity - line.dispatchedQuantity;
+        const dispatchable =
+          line.shipmentAssignedQuantity - line.dispatchedQuantity;
         if (shipmentLine.quantity > dispatchable) {
           throw new ConflictException(
             `Shipment line quantity for line ${line.id} exceeds its assigned-but-undispatched quantity`,
@@ -536,7 +586,8 @@ export class FulfillmentsService {
         deltas.push({ lineId: line.id, quantity: shipmentLine.quantity });
       }
 
-      const dispatchNumber = await this.numberingService.nextFulfillmentDispatchNumber(tx);
+      const dispatchNumber =
+        await this.numberingService.nextFulfillmentDispatchNumber(tx);
       let dispatch: FulfillmentDispatchWithLines;
       try {
         dispatch = await tx.fulfillmentDispatch.create({
@@ -582,17 +633,29 @@ export class FulfillmentsService {
       });
 
       await this.recomputeStatus(tx, fulfillmentOrderId);
-      await this.recordEvent(tx, fulfillmentOrderId, 'dispatched', actorUserId, {
-        dispatchId: dispatch.id,
-        dispatchNumber,
-        shipmentId,
-      });
+      await this.recordEvent(
+        tx,
+        fulfillmentOrderId,
+        'dispatched',
+        actorUserId,
+        {
+          dispatchId: dispatch.id,
+          dispatchNumber,
+          shipmentId,
+        },
+      );
       await this.outboxService.record(
         {
           topic: 'fulfillment.dispatched',
           aggregateType: 'FulfillmentDispatch',
           aggregateId: dispatch.id,
-          payload: { fulfillmentOrderId, orderId: fo.orderId, dispatchNumber, shipmentId, lines: deltas },
+          payload: {
+            fulfillmentOrderId,
+            orderId: fo.orderId,
+            dispatchNumber,
+            shipmentId,
+            lines: deltas,
+          },
         },
         tx,
       );
@@ -660,10 +723,15 @@ export class FulfillmentsService {
     return this.prisma.$transaction(async (tx) => {
       const fo = await this.lockFulfillmentOrder(tx, fulfillmentOrderId);
 
-      const replay = await this.checkIdempotentReplay(tx, fulfillmentOrderId, idempotencyKey, {
-        type: 'lines.cancelled',
-        payload: { lines: dto.lines, reason: dto.reason },
-      });
+      const replay = await this.checkIdempotentReplay(
+        tx,
+        fulfillmentOrderId,
+        idempotencyKey,
+        {
+          type: 'lines.cancelled',
+          payload: { lines: dto.lines, reason: dto.reason },
+        },
+      );
       if (replay) return replay;
 
       const linesById = new Map(fo.lines.map((line) => [line.id, line]));
@@ -686,7 +754,10 @@ export class FulfillmentsService {
             type: 'lines.cancelled',
             actorUserId,
             idempotencyKey,
-            metadata: { lines: dto.lines, reason: dto.reason } as unknown as Prisma.InputJsonValue,
+            metadata: {
+              lines: dto.lines,
+              reason: dto.reason,
+            } as unknown as Prisma.InputJsonValue,
           },
         });
       } catch (error) {
@@ -715,7 +786,10 @@ export class FulfillmentsService {
   ): Promise<FulfillmentOrderWithDetail> {
     return this.prisma.$transaction(async (tx) => {
       const fo = await this.lockFulfillmentOrder(tx, fulfillmentOrderId);
-      const seller = await this.sellersService.lockApproved(sellerCallerUserId, tx);
+      const seller = await this.sellersService.lockApproved(
+        sellerCallerUserId,
+        tx,
+      );
       this.assertSellerOwnsFulfillmentOrder(fo, seller.id);
 
       if (fo.status !== FulfillmentStatus.AWAITING_ACCEPTANCE) {
@@ -728,7 +802,11 @@ export class FulfillmentsService {
       // call against an already-consumed version is a genuine client bug,
       // not a legitimate retry, so it must ConflictException, not no-op.
       const result = await tx.fulfillmentOrder.updateMany({
-        where: { id: fulfillmentOrderId, version, status: FulfillmentStatus.AWAITING_ACCEPTANCE },
+        where: {
+          id: fulfillmentOrderId,
+          version,
+          status: FulfillmentStatus.AWAITING_ACCEPTANCE,
+        },
         data: {
           acceptedAt: new Date(),
           acceptedByUserId: sellerCallerUserId,
@@ -736,7 +814,9 @@ export class FulfillmentsService {
         },
       });
       if (result.count !== 1) {
-        throw new ConflictException('Fulfillment order changed; reload and try again');
+        throw new ConflictException(
+          'Fulfillment order changed; reload and try again',
+        );
       }
 
       // Auto-completes the internal pick stage: there is no real pick step
@@ -754,7 +834,13 @@ export class FulfillmentsService {
       }
 
       await this.recomputeStatus(tx, fulfillmentOrderId);
-      await this.recordEvent(tx, fulfillmentOrderId, 'seller.accepted', sellerCallerUserId, {});
+      await this.recordEvent(
+        tx,
+        fulfillmentOrderId,
+        'seller.accepted',
+        sellerCallerUserId,
+        {},
+      );
 
       return this.reload(tx, fulfillmentOrderId);
     });
@@ -770,7 +856,10 @@ export class FulfillmentsService {
   ): Promise<FulfillmentOrderWithDetail> {
     return this.prisma.$transaction(async (tx) => {
       const fo = await this.lockFulfillmentOrder(tx, fulfillmentOrderId);
-      const seller = await this.sellersService.lockApproved(sellerCallerUserId, tx);
+      const seller = await this.sellersService.lockApproved(
+        sellerCallerUserId,
+        tx,
+      );
       this.assertSellerOwnsFulfillmentOrder(fo, seller.id);
 
       const requestHash = this.hashRequest({ fulfillmentOrderId, reason });
@@ -783,7 +872,9 @@ export class FulfillmentsService {
       if (replay) return replay;
 
       if (fo.version !== version) {
-        throw new ConflictException('Fulfillment order changed; reload and try again');
+        throw new ConflictException(
+          'Fulfillment order changed; reload and try again',
+        );
       }
 
       const totalDispatched = sum(fo.lines, (l) => l.dispatchedQuantity);
@@ -796,7 +887,10 @@ export class FulfillmentsService {
       const entries = fo.lines
         .map((line) => ({
           line,
-          quantity: line.allocatedQuantity - line.cancelledQuantity - line.dispatchedQuantity,
+          quantity:
+            line.allocatedQuantity -
+            line.cancelledQuantity -
+            line.dispatchedQuantity,
         }))
         .filter((entry) => entry.quantity > 0);
 
@@ -831,12 +925,17 @@ export class FulfillmentsService {
   ): Promise<FulfillmentOrderWithDetail> {
     return this.prisma.$transaction(async (tx) => {
       const fo = await this.lockFulfillmentOrder(tx, fulfillmentOrderId);
-      const seller = await this.sellersService.lockApproved(sellerCallerUserId, tx);
+      const seller = await this.sellersService.lockApproved(
+        sellerCallerUserId,
+        tx,
+      );
       this.assertSellerOwnsFulfillmentOrder(fo, seller.id);
 
       const requestHash = this.hashRequest({
         fulfillmentOrderId,
-        lines: [...lines].sort((a, b) => a.fulfillmentLineId.localeCompare(b.fulfillmentLineId)),
+        lines: [...lines].sort((a, b) =>
+          a.fulfillmentLineId.localeCompare(b.fulfillmentLineId),
+        ),
       });
       const replay = await this.checkSellerIdempotentReplay(
         tx,
@@ -847,7 +946,9 @@ export class FulfillmentsService {
       if (replay) return replay;
 
       if (fo.status === FulfillmentStatus.AWAITING_ACCEPTANCE) {
-        throw new ConflictException('Fulfillment order must be accepted before packing');
+        throw new ConflictException(
+          'Fulfillment order must be accepted before packing',
+        );
       }
 
       const linesById = new Map(fo.lines.map((line) => [line.id, line]));
@@ -860,7 +961,8 @@ export class FulfillmentsService {
         }
         // "active allocated quantity not yet packed" — mirrors
         // recordQuantities's pick-ceiling shape, scoped to packedQuantity.
-        const ceiling = line.allocatedQuantity - line.cancelledQuantity - line.packedQuantity;
+        const ceiling =
+          line.allocatedQuantity - line.cancelledQuantity - line.packedQuantity;
         if (delta.quantity > ceiling) {
           throw new ConflictException(
             `Packing line ${line.id} would exceed the remaining active, unpacked quantity`,
@@ -902,13 +1004,18 @@ export class FulfillmentsService {
   ): Promise<FulfillmentOrderWithDetail> {
     return this.prisma.$transaction(async (tx) => {
       const fo = await this.lockFulfillmentOrder(tx, fulfillmentOrderId);
-      const seller = await this.sellersService.lockApproved(sellerCallerUserId, tx);
+      const seller = await this.sellersService.lockApproved(
+        sellerCallerUserId,
+        tx,
+      );
       this.assertSellerOwnsFulfillmentOrder(fo, seller.id);
 
       const requestHash = this.hashRequest({
         fulfillmentOrderId,
         reason,
-        lines: [...lines].sort((a, b) => a.fulfillmentLineId.localeCompare(b.fulfillmentLineId)),
+        lines: [...lines].sort((a, b) =>
+          a.fulfillmentLineId.localeCompare(b.fulfillmentLineId),
+        ),
       });
       const replay = await this.checkSellerIdempotentReplay(
         tx,
@@ -931,7 +1038,9 @@ export class FulfillmentsService {
         // the 0<=dispatched<=shipmentAssigned<=packed<=... CHECK invariant,
         // so subtracting it alone covers both.
         const ceiling =
-          line.allocatedQuantity - line.cancelledQuantity - line.shipmentAssignedQuantity;
+          line.allocatedQuantity -
+          line.cancelledQuantity -
+          line.shipmentAssignedQuantity;
         if (requested.quantity > ceiling) {
           throw new ConflictException(
             `Cannot cancel more than the undispatched, unclaimed quantity for line ${line.id}`,
@@ -988,7 +1097,10 @@ export class FulfillmentsService {
   ): Promise<SellerFulfillmentOrderWithShipments> {
     return this.prisma.$transaction(async (tx) => {
       const fo = await this.lockFulfillmentOrder(tx, fulfillmentOrderId);
-      const seller = await this.sellersService.lockApproved(sellerCallerUserId, tx);
+      const seller = await this.sellersService.lockApproved(
+        sellerCallerUserId,
+        tx,
+      );
       this.assertSellerOwnsFulfillmentOrder(fo, seller.id);
 
       const requestHash = this.hashRequest({
@@ -1009,7 +1121,9 @@ export class FulfillmentsService {
           existingDispatch.fulfillmentOrderId !== fulfillmentOrderId ||
           existingDispatch.requestHash !== requestHash
         ) {
-          throw new ConflictException('Idempotency-Key already used for a different request');
+          throw new ConflictException(
+            'Idempotency-Key already used for a different request',
+          );
         }
         return this.reloadWithShipments(tx, fulfillmentOrderId);
       }
@@ -1053,7 +1167,8 @@ export class FulfillmentsService {
       }
 
       const shipmentNumber = await this.numberingService.nextShipmentNumber(tx);
-      const dispatchNumber = await this.numberingService.nextFulfillmentDispatchNumber(tx);
+      const dispatchNumber =
+        await this.numberingService.nextFulfillmentDispatchNumber(tx);
       // The bookingIdempotencyKey column is required + unique; derive it
       // deterministically from the caller's own Idempotency-Key rather than
       // asking the seller to mint a second one.
@@ -1129,16 +1244,25 @@ export class FulfillmentsService {
           actorUserId,
           isCorrection: false,
           idempotencyKey: `seller-dispatch-tracking:${idempotencyKey}`,
-          requestHash: this.hashRequest({ shipmentId: shipment.id, kind: 'initial-dispatch' }),
+          requestHash: this.hashRequest({
+            shipmentId: shipment.id,
+            kind: 'initial-dispatch',
+          }),
         },
       });
 
       await this.recomputeStatus(tx, fulfillmentOrderId);
-      await this.recordEvent(tx, fulfillmentOrderId, 'seller.dispatched', actorUserId, {
-        dispatchId: dispatch.id,
-        dispatchNumber,
-        shipmentId: shipment.id,
-      });
+      await this.recordEvent(
+        tx,
+        fulfillmentOrderId,
+        'seller.dispatched',
+        actorUserId,
+        {
+          dispatchId: dispatch.id,
+          dispatchNumber,
+          shipmentId: shipment.id,
+        },
+      );
       // Same topic and payload shape as the warehouse dispatch path, so the
       // customer gets the same "on its way" notice whoever ships the order.
       await this.outboxService.record(
@@ -1177,10 +1301,17 @@ export class FulfillmentsService {
     idempotencyKey: string,
     requestHash: string,
   ): Promise<FulfillmentOrderWithDetail | null> {
-    const existing = await tx.fulfillmentEvent.findUnique({ where: { idempotencyKey } });
+    const existing = await tx.fulfillmentEvent.findUnique({
+      where: { idempotencyKey },
+    });
     if (!existing) return null;
-    if (existing.fulfillmentOrderId !== fulfillmentOrderId || existing.requestHash !== requestHash) {
-      throw new ConflictException('Idempotency-Key already used for a different request');
+    if (
+      existing.fulfillmentOrderId !== fulfillmentOrderId ||
+      existing.requestHash !== requestHash
+    ) {
+      throw new ConflictException(
+        'Idempotency-Key already used for a different request',
+      );
     }
     return this.reload(tx, fulfillmentOrderId);
   }
@@ -1216,7 +1347,9 @@ export class FulfillmentsService {
       where: { id: { in: entries.map((entry) => entry.line.orderItemId) } },
       select: { id: true, offerId: true },
     });
-    const offerIdByOrderItemId = new Map(orderItems.map((item) => [item.id, item.offerId]));
+    const offerIdByOrderItemId = new Map(
+      orderItems.map((item) => [item.id, item.offerId]),
+    );
 
     for (const { line, quantity } of entries) {
       await tx.fulfillmentLine.update({
@@ -1226,13 +1359,18 @@ export class FulfillmentsService {
 
       const offerId = offerIdByOrderItemId.get(line.orderItemId);
       if (!offerId) {
-        throw new ConflictException(`Order item ${line.orderItemId} is missing its offer`);
+        throw new ConflictException(
+          `Order item ${line.orderItemId} is missing its offer`,
+        );
       }
       await this.inventoryService.returnCancelledOfferStock(
         tx,
         offerId,
         quantity,
-        { referenceType: 'fulfillment_cancellation_line', referenceId: line.id },
+        {
+          referenceType: 'fulfillment_cancellation_line',
+          referenceId: line.id,
+        },
         reason,
       );
     }
@@ -1290,7 +1428,9 @@ export class FulfillmentsService {
   ): Promise<void> {
     for (const { line, quantity } of entries) {
       const activeUndispatched =
-        line.allocatedQuantity - line.cancelledQuantity - line.dispatchedQuantity;
+        line.allocatedQuantity -
+        line.cancelledQuantity -
+        line.dispatchedQuantity;
       if (quantity > activeUndispatched) {
         throw new ConflictException(
           `Cannot cancel more than the undispatched active quantity for line ${line.id}`,
@@ -1311,7 +1451,10 @@ export class FulfillmentsService {
         fo.warehouseId!,
         line.variantId,
         quantity,
-        { referenceType: 'fulfillment_cancellation_line', referenceId: line.id },
+        {
+          referenceType: 'fulfillment_cancellation_line',
+          referenceId: line.id,
+        },
         reason,
       );
     }
@@ -1383,7 +1526,9 @@ export class FulfillmentsService {
     idempotencyKey: string,
     expected: { type: string; payload: unknown },
   ): Promise<FulfillmentOrderWithDetail | null> {
-    const existing = await tx.fulfillmentEvent.findUnique({ where: { idempotencyKey } });
+    const existing = await tx.fulfillmentEvent.findUnique({
+      where: { idempotencyKey },
+    });
     if (!existing) return null;
     const samePayload =
       stableStringify(existing.metadata) === stableStringify(expected.payload);
@@ -1424,18 +1569,28 @@ export class FulfillmentsService {
       where: { id: fulfillmentOrderId },
       select: { warehouseId: true, acceptedAt: true },
     });
-    const lines = await tx.fulfillmentLine.findMany({ where: { fulfillmentOrderId } });
-    const workItems = await tx.fulfillmentWorkItem.findMany({ where: { fulfillmentOrderId } });
+    const lines = await tx.fulfillmentLine.findMany({
+      where: { fulfillmentOrderId },
+    });
+    const workItems = await tx.fulfillmentWorkItem.findMany({
+      where: { fulfillmentOrderId },
+    });
     const openExceptionCount = await tx.fulfillmentException.count({
       where: { fulfillmentOrderId, status: FulfillmentExceptionStatus.OPEN },
     });
-    const pickWorkItem = workItems.find((w) => w.type === FulfillmentWorkItemType.PICK);
-    const packWorkItem = workItems.find((w) => w.type === FulfillmentWorkItemType.PACK);
+    const pickWorkItem = workItems.find(
+      (w) => w.type === FulfillmentWorkItemType.PICK,
+    );
+    const packWorkItem = workItems.find(
+      (w) => w.type === FulfillmentWorkItemType.PACK,
+    );
 
     const status = deriveFulfillmentStatus({
       lines,
-      pickWorkItemStatus: pickWorkItem?.status ?? FulfillmentWorkItemStatus.PENDING,
-      packWorkItemStatus: packWorkItem?.status ?? FulfillmentWorkItemStatus.PENDING,
+      pickWorkItemStatus:
+        pickWorkItem?.status ?? FulfillmentWorkItemStatus.PENDING,
+      packWorkItemStatus:
+        packWorkItem?.status ?? FulfillmentWorkItemStatus.PENDING,
       hasOpenException: openExceptionCount > 0,
       // Only a SELLER-mode order (warehouseId null) requires acceptance —
       // see deriveFulfillmentStatus's doc comment.

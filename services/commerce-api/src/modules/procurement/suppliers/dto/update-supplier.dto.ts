@@ -63,7 +63,9 @@ export class UpdateSupplierDto {
 
   @IsOptional()
   @IsString()
-  @Matches(/^[A-Z]{3}$/, { message: 'minimumOrderCurrency must be a 3-letter ISO code' })
+  @Matches(/^[A-Z]{3}$/, {
+    message: 'minimumOrderCurrency must be a 3-letter ISO code',
+  })
   minimumOrderCurrency?: string;
 
   @IsOptional()

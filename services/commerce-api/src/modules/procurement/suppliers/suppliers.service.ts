@@ -68,8 +68,12 @@ export class SuppliersService {
         data: {
           ...dto,
           defaultCurrency: dto.defaultCurrency ?? DEFAULT_CURRENCY,
-          billingAddress: dto.billingAddress as Prisma.InputJsonValue | undefined,
-          physicalAddress: dto.physicalAddress as Prisma.InputJsonValue | undefined,
+          billingAddress: dto.billingAddress as
+            | Prisma.InputJsonValue
+            | undefined,
+          physicalAddress: dto.physicalAddress as
+            | Prisma.InputJsonValue
+            | undefined,
         },
       });
     } catch (error) {
@@ -99,8 +103,12 @@ export class SuppliersService {
         where: { id, version },
         data: {
           ...data,
-          billingAddress: data.billingAddress as Prisma.InputJsonValue | undefined,
-          physicalAddress: data.physicalAddress as Prisma.InputJsonValue | undefined,
+          billingAddress: data.billingAddress as
+            | Prisma.InputJsonValue
+            | undefined,
+          physicalAddress: data.physicalAddress as
+            | Prisma.InputJsonValue
+            | undefined,
           version: { increment: 1 },
         },
       });

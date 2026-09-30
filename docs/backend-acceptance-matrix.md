@@ -2,21 +2,36 @@
 
 This is the implementation baseline, not a completion certificate. Source: README development phases and GitHub issues #1–#61. Frontend/mobile UI requirements are excluded from backend delivery. Existing code references are candidate evidence until each acceptance criterion has been verified. Tests must run against an isolated database.
 
-Statuses: implemented (verification pending), verified (record exact evidence), externally blocked, deferred. Later releases are deferred until their milestone starts, not declared complete. Password-reset delivery and payment hardening remain deliberately deferred. Live notification/carrier/payment/AI providers require separate activation evidence.
+Statuses: **source-confirmed**, **reproduced**, **fixed and verified**, **externally blocked**, **deferred**. Definitions and current source corrections are in the [gap register](backend/known-gaps.md#evidence-and-status-policy). A passing unit test is not proof of provider delivery, PostgreSQL behavior, performance or deployment readiness.
+
+## Current baseline (2026-09-30)
+
+| Acceptance criterion | Status | Evidence / next gate | Verification date |
+| --- | --- | --- | --- |
+| Distinguish source review from executable evidence | source-confirmed | [Gap register](backend/known-gaps.md), this matrix and [execution ledger](backend/baseline-verification.md) | 2026-09-30 |
+| Correct stale email, outbox, reconciliation, S3, media inspection, cancellation and audit claims | source-confirmed | [Correction table with source and test locations](backend/known-gaps.md#corrected-baseline-2026-09-30); historical reports retained | 2026-09-30 |
+| Isolated PostgreSQL 17, commerce_test, loopback 55432, separate volume/credentials | fixed and verified | [Compose](../deploy/docker-compose.test.yml) and [test env example](../services/commerce-api/.env.integration.example); the healthy Docker Compose service passed all migrations and integration tests | 2026-09-30 |
+| Node 24 CI with all requested backend checks and PostgreSQL 17 integration | source-confirmed | [Workflow](../.github/workflows/backend.yml); first GitHub run outstanding | 2026-09-30 |
+| Keep test-database safeguards and disable scheduled/external providers | fixed and verified | Isolation regression, all 14 target-guard tests and the real PostgreSQL integration run passed. See [execution ledger](backend/baseline-verification.md). | 2026-09-30 |
+| Local PostgreSQL integration execution | fixed and verified | 41 migrations, 15 suites and 71 tests passed against the dedicated Docker Compose PostgreSQL 17 service at 127.0.0.1:55432. CI provisions its own service. | 2026-09-30 |
+| All local backend checks pass on the current checkout | fixed and verified | Typecheck, lint, formatting, Swagger, unit, HTTP, integration and build passed; first remote CI run remains separate | 2026-09-30 |
+| Business hardening, frontend work, load/failover/restore certification | deferred | Outside Step 1; no acceptance claim | 2026-09-30 |
+
+The detailed issue criteria below retain candidate source references. Their **criterion-level verification is deferred**, reviewed 2026-09-30, unless the current baseline or a dated checkpoint records exact evidence. This does not mean every feature is missing or every source reference has been executed. Dated checkpoints at the end remain historical and do not override this baseline.
 
 ## README cross-cutting requirements
 
 | Requirement                                                              | Evidence                                                      | Status / remaining gate                                                 |
 | ------------------------------------------------------------------------ | ------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Modular monolith; PostgreSQL authority; shared API                       | services/commerce-api/src/app.module.ts; prisma/schema.prisma | Implemented; boundary and API acceptance audit pending                  |
-| Server prices, immutable order snapshots, atomic stock, verified payment | checkout, inventory, orders, payments modules                 | Implemented; financial integration/hardening deferred                   |
-| Auth, ownership, audit, PII, idempotency                                 | common/auth; auth/audit modules; infrastructure/logging       | Implemented; endpoint-by-endpoint negative-path audit pending           |
-| Background jobs and outbox                                               | infrastructure/jobs                                           | Implemented; crash/replay tests and operational evidence pending        |
-| Email/SMS/push/in-app notifications                                      | modules/notifications (outbox subscribers, in-app feed, log/SMTP email, log SMS) | Implemented (verification pending); SMS/push vendors not wired; password-reset delivery explicitly deferred |
-| Search and rebuildable projections                                       | products module; reviews aggregate script                     | Partial; advanced indexing/rebuild verification pending                 |
-| Logging, metrics, tracing, errors, health                                | infrastructure/logging; infrastructure/metrics; health        | Partial; tracing/error reporting and deployment verification pending    |
-| Environments, CI/CD, secrets, backup/restore, storage                    | docs/backend-development.md; infrastructure/storage           | Release operations and restore evidence pending; do not assume deployed |
-| No frontend/mobile screen work                                           | apps/\* excluded                                              | Scope boundary                                                          |
+| Modular monolith; PostgreSQL authority; shared API                       | services/commerce-api/src/app.module.ts; prisma/schema.prisma | source-confirmed; boundary and API acceptance audit pending                  |
+| Server prices, immutable order snapshots, atomic stock, verified payment | checkout, inventory, orders, payments modules                 | source-confirmed; financial integration/hardening deferred                   |
+| Auth, ownership, audit, PII, idempotency                                 | common/auth; auth/audit modules; infrastructure/logging       | source-confirmed; endpoint-by-endpoint negative-path audit pending           |
+| Background jobs and outbox                                               | infrastructure/jobs                                           | source-confirmed; crash/replay tests and operational evidence pending        |
+| Email/SMS/push/in-app notifications                                      | modules/notifications (outbox subscribers, in-app feed, log/SMTP email, log SMS) | source-confirmed; SMS/push vendors not wired; auth reset email implemented; live delivery evidence pending |
+| Search and rebuildable projections                                       | products module; reviews aggregate script                     | source-confirmed; partial scope; advanced indexing/rebuild verification pending                 |
+| Logging, metrics, tracing, errors, health                                | infrastructure/logging; infrastructure/metrics; health        | source-confirmed; partial scope; tracing/error reporting and deployment verification pending    |
+| Environments, CI/CD, secrets, backup/restore, storage                    | docs/backend-development.md; infrastructure/storage           | externally blocked — deployment/restore evidence pending; CI source exists |
+| No frontend/mobile screen work                                           | apps/\* excluded                                              | deferred — scope boundary                                                          |
 
 ## #9 — Establish repository and monorepo structure
 
@@ -28,20 +43,20 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                                                                                                | Status / remaining dependency                                          |
 | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Establish the monorepo structure using `apps/` and `services/`                                                             | Verification pending; existing module alone is not acceptance evidence |
-| Create application boundaries for web, admin, seller and mobile clients                                                    | Verification pending; existing module alone is not acceptance evidence |
-| Create `services/commerce-api` as the single deployable NestJS modular monolith                                            | Verification pending; existing module alone is not acceptance evidence |
-| Establish shared `packages/`, `docs/` and infrastructure locations as appropriate                                          | Verification pending; existing module alone is not acceptance evidence |
-| Add formatting, linting, editor and Git conventions                                                                        | Verification pending; existing module alone is not acceptance evidence |
-| Add `.env.example` files without secrets                                                                                   | Verification pending; existing module alone is not acceptance evidence |
-| Add contribution/development workflow documentation                                                                        | Verification pending; existing module alone is not acceptance evidence |
-| Define naming conventions for API routes, database migrations and shared contracts                                         | Verification pending; existing module alone is not acceptance evidence |
-| A new developer can clone the repository and understand where every application and service belongs                        | Verification pending; existing module alone is not acceptance evidence |
-| Web, admin, seller, mobile and Commerce API have independent build/test commands                                           | Verification pending; existing module alone is not acceptance evidence |
-| `services/commerce-api` clearly separates business modules from common, database, integrations and infrastructure concerns | Verification pending; existing module alone is not acceptance evidence |
-| Shared contracts can be versioned without importing backend implementation details into clients                            | Verification pending; existing module alone is not acceptance evidence |
-| No credentials or environment-specific secrets are committed                                                               | Verification pending; existing module alone is not acceptance evidence |
-| Repository conventions are documented                                                                                      | Verification pending; existing module alone is not acceptance evidence |
+| Establish the monorepo structure using `apps/` and `services/`                                                             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Create application boundaries for web, admin, seller and mobile clients                                                    | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Create `services/commerce-api` as the single deployable NestJS modular monolith                                            | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Establish shared `packages/`, `docs/` and infrastructure locations as appropriate                                          | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Add formatting, linting, editor and Git conventions                                                                        | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Add `.env.example` files without secrets                                                                                   | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Add contribution/development workflow documentation                                                                        | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Define naming conventions for API routes, database migrations and shared contracts                                         | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| A new developer can clone the repository and understand where every application and service belongs                        | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Web, admin, seller, mobile and Commerce API have independent build/test commands                                           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| `services/commerce-api` clearly separates business modules from common, database, integrations and infrastructure concerns | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Shared contracts can be versioned without importing backend implementation details into clients                            | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| No credentials or environment-specific secrets are committed                                                               | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Repository conventions are documented                                                                                      | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #10 — Bootstrap NestJS Commerce API
 
@@ -53,25 +68,25 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                                                            | Status / remaining dependency                                          |
 | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Bootstrap NestJS application under `services/commerce-api`                             | Verification pending; existing module alone is not acceptance evidence |
-| Establish `src/modules/` as the business-module boundary                               | Verification pending; existing module alone is not acceptance evidence |
-| Establish `/api/v1` routing                                                            | Verification pending; existing module alone is not acceptance evidence |
-| Health/readiness endpoints                                                             | Verification pending; existing module alone is not acceptance evidence |
-| Configuration loading and validation                                                   | Verification pending; existing module alone is not acceptance evidence |
-| Structured request/response models and DTOs                                            | Verification pending; existing module alone is not acceptance evidence |
-| Standard success/error envelope                                                        | Verification pending; existing module alone is not acceptance evidence |
-| Request ID and correlation ID middleware/interceptors                                  | Verification pending; existing module alone is not acceptance evidence |
-| Global validation and exception handling                                               | Verification pending; existing module alone is not acceptance evidence |
-| Graceful shutdown                                                                      | Verification pending; existing module alone is not acceptance evidence |
-| API documentation baseline                                                             | Verification pending; existing module alone is not acceptance evidence |
-| API starts cleanly from a documented command                                           | Verification pending; existing module alone is not acceptance evidence |
-| `/api/v1/health` and readiness checks work                                             | Verification pending; existing module alone is not acceptance evidence |
-| Invalid configuration fails fast with actionable errors                                | Verification pending; existing module alone is not acceptance evidence |
-| All client-facing errors use a consistent schema                                       | Verification pending; existing module alone is not acceptance evidence |
-| Global validation is enabled                                                           | Verification pending; existing module alone is not acceptance evidence |
-| Modules follow NestJS dependency-injection and module-boundary conventions             | Verification pending; existing module alone is not acceptance evidence |
-| Modules do not directly access another module's repositories                           | Verification pending; existing module alone is not acceptance evidence |
-| Middleware/interceptors/guards follow the established common/infrastructure boundaries | Verification pending; existing module alone is not acceptance evidence |
+| Bootstrap NestJS application under `services/commerce-api`                             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Establish `src/modules/` as the business-module boundary                               | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Establish `/api/v1` routing                                                            | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Health/readiness endpoints                                                             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Configuration loading and validation                                                   | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Structured request/response models and DTOs                                            | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Standard success/error envelope                                                        | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Request ID and correlation ID middleware/interceptors                                  | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Global validation and exception handling                                               | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Graceful shutdown                                                                      | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| API documentation baseline                                                             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| API starts cleanly from a documented command                                           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| `/api/v1/health` and readiness checks work                                             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Invalid configuration fails fast with actionable errors                                | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| All client-facing errors use a consistent schema                                       | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Global validation is enabled                                                           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Modules follow NestJS dependency-injection and module-boundary conventions             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Modules do not directly access another module's repositories                           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Middleware/interceptors/guards follow the established common/infrastructure boundaries | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #11 — Build PostgreSQL + Prisma schema and migration foundation
 
@@ -83,22 +98,22 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                                                                               | Status / remaining dependency                                          |
 | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| PostgreSQL connection and pooling through the NestJS data layer                                           | Verification pending; existing module alone is not acceptance evidence |
-| Prisma schema configuration and generated client                                                          | Verification pending; existing module alone is not acceptance evidence |
-| Prisma migration tooling and baseline migration                                                           | Verification pending; existing module alone is not acceptance evidence |
-| UUID/public identifier strategy                                                                           | Verification pending; existing module alone is not acceptance evidence |
-| Timestamp, soft-delete and audit conventions where appropriate                                            | Verification pending; existing module alone is not acceptance evidence |
-| Initial schemas for users, roles, products, SKUs/variants and core commerce references                    | Verification pending; existing module alone is not acceptance evidence |
-| Foreign-key, index and unique-constraint standards                                                        | Verification pending; existing module alone is not acceptance evidence |
-| Transaction boundaries and Prisma transaction guidance                                                    | Verification pending; existing module alone is not acceptance evidence |
-| Repository/data-access boundaries so modules do not directly couple to each other's persistence internals | Verification pending; existing module alone is not acceptance evidence |
-| Fresh database can be created from Prisma migrations only                                                 | Verification pending; existing module alone is not acceptance evidence |
-| Migrations are deterministic and tracked in source control                                                | Verification pending; existing module alone is not acceptance evidence |
-| Prisma client generation is documented and reproducible                                                   | Verification pending; existing module alone is not acceptance evidence |
-| Core tables have appropriate keys and indexes                                                             | Verification pending; existing module alone is not acceptance evidence |
-| Database conventions are documented                                                                       | Verification pending; existing module alone is not acceptance evidence |
-| NestJS integration tests can run against a clean database                                                 | Verification pending; existing module alone is not acceptance evidence |
-| Module persistence boundaries are explicit                                                                | Verification pending; existing module alone is not acceptance evidence |
+| PostgreSQL connection and pooling through the NestJS data layer                                           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Prisma schema configuration and generated client                                                          | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Prisma migration tooling and baseline migration                                                           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| UUID/public identifier strategy                                                                           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Timestamp, soft-delete and audit conventions where appropriate                                            | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Initial schemas for users, roles, products, SKUs/variants and core commerce references                    | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Foreign-key, index and unique-constraint standards                                                        | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Transaction boundaries and Prisma transaction guidance                                                    | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Repository/data-access boundaries so modules do not directly couple to each other's persistence internals | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Fresh database can be created from Prisma migrations only                                                 | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Migrations are deterministic and tracked in source control                                                | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Prisma client generation is documented and reproducible                                                   | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Core tables have appropriate keys and indexes                                                             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Database conventions are documented                                                                       | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| NestJS integration tests can run against a clean database                                                 | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Module persistence boundaries are explicit                                                                | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #12 — Implement authentication, sessions and RBAC
 
@@ -110,21 +125,21 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                                         | Status / remaining dependency                                          |
 | ------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Registration/login/logout flows                                     | Verification pending; existing module alone is not acceptance evidence |
-| Password hashing and reset                                          | Verification pending; existing module alone is not acceptance evidence |
-| Access/refresh token or secure session strategy                     | Verification pending; existing module alone is not acceptance evidence |
-| NestJS AuthModule and UsersModule boundaries                        | Verification pending; existing module alone is not acceptance evidence |
-| Role and permission model                                           | Verification pending; existing module alone is not acceptance evidence |
-| Customer, seller, staff and admin authorization boundaries          | Verification pending; existing module alone is not acceptance evidence |
-| Guards, decorators and ownership checks                             | Verification pending; existing module alone is not acceptance evidence |
-| Session/token revocation                                            | Verification pending; existing module alone is not acceptance evidence |
-| Rate limiting for sensitive auth endpoints                          | Verification pending; existing module alone is not acceptance evidence |
-| Protected endpoints reject unauthenticated requests                 | Verification pending; existing module alone is not acceptance evidence |
-| Users cannot access resources outside their role or ownership scope | Verification pending; existing module alone is not acceptance evidence |
-| Passwords are never stored in plaintext                             | Verification pending; existing module alone is not acceptance evidence |
-| Refresh/revocation behavior is tested                               | Verification pending; existing module alone is not acceptance evidence |
-| NestJS guards/decorators provide reusable authorization primitives  | Verification pending; existing module alone is not acceptance evidence |
-| Authorization rules are reusable by web and mobile clients          | Verification pending; existing module alone is not acceptance evidence |
+| Registration/login/logout flows                                     | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Password hashing and reset                                          | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Access/refresh token or secure session strategy                     | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| NestJS AuthModule and UsersModule boundaries                        | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Role and permission model                                           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Customer, seller, staff and admin authorization boundaries          | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Guards, decorators and ownership checks                             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Session/token revocation                                            | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Rate limiting for sensitive auth endpoints                          | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Protected endpoints reject unauthenticated requests                 | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Users cannot access resources outside their role or ownership scope | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Passwords are never stored in plaintext                             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Refresh/revocation behavior is tested                               | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| NestJS guards/decorators provide reusable authorization primitives  | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Authorization rules are reusable by web and mobile clients          | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #13 — Add Redis caching and background job foundation
 
@@ -136,18 +151,18 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                                                            | Status / remaining dependency                                          |
 | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Redis connection/configuration under `src/infrastructure`                              | Verification pending; existing module alone is not acceptance evidence |
-| Cache abstraction with TTL support                                                     | Verification pending; existing module alone is not acceptance evidence |
-| Rate-limit primitives for NestJS                                                       | Verification pending; existing module alone is not acceptance evidence |
-| Background job queue/worker foundation                                                 | Verification pending; existing module alone is not acceptance evidence |
-| Retry and dead-letter strategy                                                         | Verification pending; existing module alone is not acceptance evidence |
-| Job observability and failure logging                                                  | Verification pending; existing module alone is not acceptance evidence |
-| Dependency-injection interfaces so domain modules do not depend directly on Redis APIs | Verification pending; existing module alone is not acceptance evidence |
-| NestJS modules can use Redis through an application/infrastructure abstraction         | Verification pending; existing module alone is not acceptance evidence |
-| Jobs survive transient failures through controlled retries                             | Verification pending; existing module alone is not acceptance evidence |
-| Failed jobs are observable and do not loop indefinitely                                | Verification pending; existing module alone is not acceptance evidence |
-| Local development includes Redis and documented commands                               | Verification pending; existing module alone is not acceptance evidence |
-| Redis infrastructure can be changed without rewriting domain modules                   | Verification pending; existing module alone is not acceptance evidence |
+| Redis connection/configuration under `src/infrastructure`                              | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Cache abstraction with TTL support                                                     | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Rate-limit primitives for NestJS                                                       | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Background job queue/worker foundation                                                 | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Retry and dead-letter strategy                                                         | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Job observability and failure logging                                                  | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Dependency-injection interfaces so domain modules do not depend directly on Redis APIs | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| NestJS modules can use Redis through an application/infrastructure abstraction         | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Jobs survive transient failures through controlled retries                             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Failed jobs are observable and do not loop indefinitely                                | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Local development includes Redis and documented commands                               | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Redis infrastructure can be changed without rewriting domain modules                   | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #14 — Establish observability, audit logging and security baseline
 
@@ -159,20 +174,20 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                                                        | Status / remaining dependency                                          |
 | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Structured application logging for NestJS                                          | Verification pending; existing module alone is not acceptance evidence |
-| Error tracking and alerting hooks                                                  | Verification pending; existing module alone is not acceptance evidence |
-| Request correlation across API requests and background jobs                        | Verification pending; existing module alone is not acceptance evidence |
-| Audit event model for privileged/business-critical actions                         | Verification pending; existing module alone is not acceptance evidence |
-| Security headers and secure defaults                                               | Verification pending; existing module alone is not acceptance evidence |
-| Centralized validation and exception handling                                      | Verification pending; existing module alone is not acceptance evidence |
-| PII/log redaction policy                                                           | Verification pending; existing module alone is not acceptance evidence |
-| Basic metrics for API latency, errors and background jobs                          | Verification pending; existing module alone is not acceptance evidence |
-| Every API request has a traceable request ID                                       | Verification pending; existing module alone is not acceptance evidence |
-| Sensitive values are excluded from logs                                            | Verification pending; existing module alone is not acceptance evidence |
-| Admin/security-sensitive actions create audit events                               | Verification pending; existing module alone is not acceptance evidence |
-| Errors can be correlated to requests/jobs                                          | Verification pending; existing module alone is not acceptance evidence |
-| Operational runbooks document common failure modes                                 | Verification pending; existing module alone is not acceptance evidence |
-| Logging, interceptors, filters and metrics respect the modular monolith boundaries | Verification pending; existing module alone is not acceptance evidence |
+| Structured application logging for NestJS                                          | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Error tracking and alerting hooks                                                  | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Request correlation across API requests and background jobs                        | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Audit event model for privileged/business-critical actions                         | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Security headers and secure defaults                                               | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Centralized validation and exception handling                                      | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| PII/log redaction policy                                                           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Basic metrics for API latency, errors and background jobs                          | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Every API request has a traceable request ID                                       | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Sensitive values are excluded from logs                                            | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Admin/security-sensitive actions create audit events                               | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Errors can be correlated to requests/jobs                                          | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Operational runbooks document common failure modes                                 | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Logging, interceptors, filters and metrics respect the modular monolith boundaries | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #15 — Define object storage and media pipeline
 
@@ -184,18 +199,18 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                                                | Status / remaining dependency                                          |
 | -------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Object storage abstraction under `src/infrastructure` / `src/integrations` | Verification pending; existing module alone is not acceptance evidence |
-| Signed upload/download URLs                                                | Verification pending; existing module alone is not acceptance evidence |
-| Media metadata model and persistence through the appropriate domain module | Verification pending; existing module alone is not acceptance evidence |
-| Image validation and size limits                                           | Verification pending; existing module alone is not acceptance evidence |
-| Thumbnail/variant processing hook                                          | Verification pending; existing module alone is not acceptance evidence |
-| Orphan cleanup strategy                                                    | Verification pending; existing module alone is not acceptance evidence |
-| Dependency-injection interface for storage providers                       | Verification pending; existing module alone is not acceptance evidence |
-| Clients never receive storage credentials                                  | Verification pending; existing module alone is not acceptance evidence |
-| Uploads are validated and associated with authorized resources             | Verification pending; existing module alone is not acceptance evidence |
-| Storage provider can be changed behind an abstraction                      | Verification pending; existing module alone is not acceptance evidence |
-| Media lifecycle is auditable                                               | Verification pending; existing module alone is not acceptance evidence |
-| Domain modules do not directly depend on provider-specific SDK details     | Verification pending; existing module alone is not acceptance evidence |
+| Object storage abstraction under `src/infrastructure` / `src/integrations` | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Signed upload/download URLs                                                | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Media metadata model and persistence through the appropriate domain module | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Image validation and size limits                                           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Thumbnail/variant processing hook                                          | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Orphan cleanup strategy                                                    | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Dependency-injection interface for storage providers                       | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Clients never receive storage credentials                                  | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Uploads are validated and associated with authorized resources             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Storage provider can be changed behind an abstraction                      | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Media lifecycle is auditable                                               | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Domain modules do not directly depend on provider-specific SDK details     | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #16 — Define in-house payment gateway integration contract
 
@@ -207,21 +222,21 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                                                                           | Status / remaining dependency                                          |
 | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Payment provider interface under `src/modules/payments` and adapter boundary under `src/integrations` | Verification pending; existing module alone is not acceptance evidence |
-| Payment initialization/status/verification operations                                                 | Verification pending; existing module alone is not acceptance evidence |
-| Webhook/callback contract                                                                             | Verification pending; existing module alone is not acceptance evidence |
-| Idempotency requirements                                                                              | Verification pending; existing module alone is not acceptance evidence |
-| Refund interface                                                                                      | Verification pending; existing module alone is not acceptance evidence |
-| Payment state machine                                                                                 | Verification pending; existing module alone is not acceptance evidence |
-| Gateway event persistence model                                                                       | Verification pending; existing module alone is not acceptance evidence |
-| Failure, timeout and reconciliation rules                                                             | Verification pending; existing module alone is not acceptance evidence |
-| NestJS dependency-injection contract between PaymentsModule and the gateway adapter                   | Verification pending; existing module alone is not acceptance evidence |
-| Payments domain does not depend on gateway-specific payloads                                          | Verification pending; existing module alone is not acceptance evidence |
-| Duplicate callbacks cannot duplicate payment/order effects                                            | Verification pending; existing module alone is not acceptance evidence |
-| Payment states and transitions are documented                                                         | Verification pending; existing module alone is not acceptance evidence |
-| Refunds and failures have explicit states                                                             | Verification pending; existing module alone is not acceptance evidence |
-| A sandbox/mock provider can be used in automated tests                                                | Verification pending; existing module alone is not acceptance evidence |
-| Gateway-specific SDK/API code is isolated under the integration boundary                              | Verification pending; existing module alone is not acceptance evidence |
+| Payment provider interface under `src/modules/payments` and adapter boundary under `src/integrations` | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Payment initialization/status/verification operations                                                 | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Webhook/callback contract                                                                             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Idempotency requirements                                                                              | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Refund interface                                                                                      | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Payment state machine                                                                                 | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Gateway event persistence model                                                                       | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Failure, timeout and reconciliation rules                                                             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| NestJS dependency-injection contract between PaymentsModule and the gateway adapter                   | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Payments domain does not depend on gateway-specific payloads                                          | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Duplicate callbacks cannot duplicate payment/order effects                                            | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Payment states and transitions are documented                                                         | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Refunds and failures have explicit states                                                             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| A sandbox/mock provider can be used in automated tests                                                | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Gateway-specific SDK/API code is isolated under the integration boundary                              | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #17 — Implement catalog, categories and product data APIs
 
@@ -233,17 +248,17 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                               | Status / remaining dependency                                          |
 | --------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Categories and category hierarchy                         | Verification pending; existing module alone is not acceptance evidence |
-| Brands and attributes                                     | Verification pending; existing module alone is not acceptance evidence |
-| Products, variants/SKUs and media                         | Verification pending; existing module alone is not acceptance evidence |
-| Product status/publishing workflow                        | Verification pending; existing module alone is not acceptance evidence |
-| Pricing references                                        | Verification pending; existing module alone is not acceptance evidence |
-| Public catalog endpoints                                  | Verification pending; existing module alone is not acceptance evidence |
-| Pagination and basic caching                              | Verification pending; existing module alone is not acceptance evidence |
-| Published products are retrievable through versioned APIs | Verification pending; existing module alone is not acceptance evidence |
-| Variant/SKU data is explicit and consistent               | Verification pending; existing module alone is not acceptance evidence |
-| Unpublished products are hidden from public APIs          | Verification pending; existing module alone is not acceptance evidence |
-| Product model can later have multiple seller offers       | Verification pending; existing module alone is not acceptance evidence |
+| Categories and category hierarchy                         | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Brands and attributes                                     | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Products, variants/SKUs and media                         | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Product status/publishing workflow                        | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Pricing references                                        | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Public catalog endpoints                                  | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Pagination and basic caching                              | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Published products are retrievable through versioned APIs | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Variant/SKU data is explicit and consistent               | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Unpublished products are hidden from public APIs          | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Product model can later have multiple seller offers       | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #18 — Build Next.js storefront shell and navigation
 
@@ -273,16 +288,16 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                               | Status / remaining dependency                                          |
 | --------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Customer profile APIs/UI                                  | Verification pending; existing module alone is not acceptance evidence |
-| Address book                                              | Verification pending; existing module alone is not acceptance evidence |
-| Cart creation/update/remove                               | Verification pending; existing module alone is not acceptance evidence |
-| Cart validation against current prices and stock          | Verification pending; existing module alone is not acceptance evidence |
-| Wishlist                                                  | Verification pending; existing module alone is not acceptance evidence |
-| Guest-to-account cart merge                               | Verification pending; existing module alone is not acceptance evidence |
-| Cart is persisted server-side for authenticated customers | Verification pending; existing module alone is not acceptance evidence |
-| Invalid quantity/stock is rejected by the backend         | Verification pending; existing module alone is not acceptance evidence |
-| Price changes are revalidated before checkout             | Verification pending; existing module alone is not acceptance evidence |
-| Wishlist and addresses are protected by ownership rules   | Verification pending; existing module alone is not acceptance evidence |
+| Customer profile APIs/UI                                  | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Address book                                              | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Cart creation/update/remove                               | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Cart validation against current prices and stock          | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Wishlist                                                  | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Guest-to-account cart merge                               | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Cart is persisted server-side for authenticated customers | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Invalid quantity/stock is rejected by the backend         | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Price changes are revalidated before checkout             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Wishlist and addresses are protected by ownership rules   | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #22 — Implement checkout, order creation and in-house payment flow
 
@@ -294,19 +309,19 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                                 | Status / remaining dependency                                          |
 | ----------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Checkout validation and pricing snapshot                    | Verification pending; existing module alone is not acceptance evidence |
-| Customer address/shipping selection                         | Verification pending; existing module alone is not acceptance evidence |
-| Order creation with immutable line-item snapshots           | Verification pending; existing module alone is not acceptance evidence |
-| Payment attempt creation                                    | Verification pending; existing module alone is not acceptance evidence |
-| In-house gateway initialization                             | Verification pending; existing module alone is not acceptance evidence |
-| Callback/webhook verification                               | Verification pending; existing module alone is not acceptance evidence |
-| Idempotent payment handling                                 | Verification pending; existing module alone is not acceptance evidence |
-| Order confirmation after verified payment                   | Verification pending; existing module alone is not acceptance evidence |
-| Client cannot mark an order as paid                         | Verification pending; existing module alone is not acceptance evidence |
-| Payment is confirmed only by trusted backend verification   | Verification pending; existing module alone is not acceptance evidence |
-| Duplicate callbacks are harmless                            | Verification pending; existing module alone is not acceptance evidence |
-| Failed/expired payments leave clear order/payment states    | Verification pending; existing module alone is not acceptance evidence |
-| Successful payment produces a customer-visible confirmation | Verification pending; existing module alone is not acceptance evidence |
+| Checkout validation and pricing snapshot                    | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Customer address/shipping selection                         | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Order creation with immutable line-item snapshots           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Payment attempt creation                                    | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| In-house gateway initialization                             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Callback/webhook verification                               | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Idempotent payment handling                                 | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Order confirmation after verified payment                   | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Client cannot mark an order as paid                         | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Payment is confirmed only by trusted backend verification   | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Duplicate callbacks are harmless                            | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Failed/expired payments leave clear order/payment states    | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Successful payment produces a customer-visible confirmation | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #23 — Build customer orders, history and status UI
 
@@ -324,17 +339,17 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                          | Status / remaining dependency                                          |
 | ---------------------------------------------------- | ---------------------------------------------------------------------- |
-| Unit tests for pricing/cart/checkout rules           | Verification pending; existing module alone is not acceptance evidence |
-| API integration tests                                | Verification pending; existing module alone is not acceptance evidence |
-| Payment callback/idempotency tests                   | Verification pending; existing module alone is not acceptance evidence |
-| End-to-end customer purchase flow                    | Verification pending; existing module alone is not acceptance evidence |
-| Responsive/accessibility checks                      | Verification pending; existing module alone is not acceptance evidence |
-| Performance checks for key public pages              | Verification pending; existing module alone is not acceptance evidence |
-| Production configuration checklist                   | Verification pending; existing module alone is not acceptance evidence |
-| Critical purchase paths are automated                | Verification pending; existing module alone is not acceptance evidence |
-| Payment failures and duplicate callbacks are covered | Verification pending; existing module alone is not acceptance evidence |
-| No critical responsive/accessibility issues remain   | Verification pending; existing module alone is not acceptance evidence |
-| Production release checklist is documented           | Verification pending; existing module alone is not acceptance evidence |
+| Unit tests for pricing/cart/checkout rules           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| API integration tests                                | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Payment callback/idempotency tests                   | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| End-to-end customer purchase flow                    | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Responsive/accessibility checks                      | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Performance checks for key public pages              | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Production configuration checklist                   | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Critical purchase paths are automated                | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Payment failures and duplicate callbacks are covered | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| No critical responsive/accessibility issues remain   | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Production release checklist is documented           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #25 — Implement warehouses and inventory model
 
@@ -346,16 +361,16 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                                       | Status / remaining dependency                                          |
 | ----------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Warehouses and locations                                          | Verification pending; existing module alone is not acceptance evidence |
-| SKUs and stock records                                            | Verification pending; existing module alone is not acceptance evidence |
-| Available/reserved/committed quantities                           | Verification pending; existing module alone is not acceptance evidence |
-| Stock adjustments                                                 | Verification pending; existing module alone is not acceptance evidence |
-| Inventory API and admin views                                     | Verification pending; existing module alone is not acceptance evidence |
-| Low-stock thresholds                                              | Verification pending; existing module alone is not acceptance evidence |
-| Stock cannot become negative through normal order flows           | Verification pending; existing module alone is not acceptance evidence |
-| Inventory quantities are separated by state                       | Verification pending; existing module alone is not acceptance evidence |
-| Every adjustment records actor, reason and timestamp              | Verification pending; existing module alone is not acceptance evidence |
-| APIs expose availability without exposing internal mutation rules | Verification pending; existing module alone is not acceptance evidence |
+| Warehouses and locations                                          | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| SKUs and stock records                                            | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Available/reserved/committed quantities                           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Stock adjustments                                                 | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Inventory API and admin views                                     | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Low-stock thresholds                                              | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Stock cannot become negative through normal order flows           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Inventory quantities are separated by state                       | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Every adjustment records actor, reason and timestamp              | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| APIs expose availability without exposing internal mutation rules | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #26 — Implement stock reservations and order inventory lifecycle
 
@@ -367,16 +382,16 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                              | Status / remaining dependency                                          |
 | -------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Reserve stock at the defined order/payment boundary      | Verification pending; existing module alone is not acceptance evidence |
-| Reservation expiry/release rules                         | Verification pending; existing module alone is not acceptance evidence |
-| Commit stock for fulfilled orders                        | Verification pending; existing module alone is not acceptance evidence |
-| Release stock for cancellations/failures                 | Verification pending; existing module alone is not acceptance evidence |
-| Concurrency protection/transactions                      | Verification pending; existing module alone is not acceptance evidence |
-| Inventory movement audit trail                           | Verification pending; existing module alone is not acceptance evidence |
-| Concurrent checkout cannot oversell a SKU                | Verification pending; existing module alone is not acceptance evidence |
-| Failed/cancelled orders release reservations correctly   | Verification pending; existing module alone is not acceptance evidence |
-| Fulfillment commits stock exactly once                   | Verification pending; existing module alone is not acceptance evidence |
-| Inventory lifecycle is recoverable from movement history | Verification pending; existing module alone is not acceptance evidence |
+| Reserve stock at the defined order/payment boundary      | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Reservation expiry/release rules                         | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Commit stock for fulfilled orders                        | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Release stock for cancellations/failures                 | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Concurrency protection/transactions                      | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Inventory movement audit trail                           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Concurrent checkout cannot oversell a SKU                | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Failed/cancelled orders release reservations correctly   | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Fulfillment commits stock exactly once                   | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Inventory lifecycle is recoverable from movement history | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #27 — Build suppliers, purchase orders and goods receiving
 
@@ -388,17 +403,17 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                              | Status / remaining dependency                                          |
 | -------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Supplier records                                         | Verification pending; existing module alone is not acceptance evidence |
-| Purchase orders and line items                           | Verification pending; existing module alone is not acceptance evidence |
-| PO status workflow                                       | Verification pending; existing module alone is not acceptance evidence |
-| Goods receiving                                          | Verification pending; existing module alone is not acceptance evidence |
-| Partial receipts and discrepancies                       | Verification pending; existing module alone is not acceptance evidence |
-| Inventory updates from receipts                          | Verification pending; existing module alone is not acceptance evidence |
-| Supplier/order audit history                             | Verification pending; existing module alone is not acceptance evidence |
-| Receiving increases the correct warehouse/SKU stock      | Verification pending; existing module alone is not acceptance evidence |
-| Partial and over/under deliveries are handled explicitly | Verification pending; existing module alone is not acceptance evidence |
-| Purchase orders have controlled status transitions       | Verification pending; existing module alone is not acceptance evidence |
-| Inventory changes are traceable to receiving events      | Verification pending; existing module alone is not acceptance evidence |
+| Supplier records                                         | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Purchase orders and line items                           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| PO status workflow                                       | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Goods receiving                                          | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Partial receipts and discrepancies                       | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Inventory updates from receipts                          | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Supplier/order audit history                             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Receiving increases the correct warehouse/SKU stock      | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Partial and over/under deliveries are handled explicitly | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Purchase orders have controlled status transitions       | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Inventory changes are traceable to receiving events      | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #28 — Implement fulfillment workflows and warehouse picking
 
@@ -410,16 +425,16 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                                      | Status / remaining dependency                                          |
 | ---------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Fulfillment orders/work items                                    | Verification pending; existing module alone is not acceptance evidence |
-| Picking and packing statuses                                     | Verification pending; existing module alone is not acceptance evidence |
-| Warehouse assignment                                             | Verification pending; existing module alone is not acceptance evidence |
-| Partial fulfillment                                              | Verification pending; existing module alone is not acceptance evidence |
-| Packing and dispatch events                                      | Verification pending; existing module alone is not acceptance evidence |
-| Cancellation handling after fulfillment begins                   | Verification pending; existing module alone is not acceptance evidence |
-| Every fulfillable order line has a clear fulfillment state       | Verification pending; existing module alone is not acceptance evidence |
-| Picking/packing actions are authorized and audited               | Verification pending; existing module alone is not acceptance evidence |
-| Partial fulfillment is supported without corrupting order totals | Verification pending; existing module alone is not acceptance evidence |
-| Dispatch can only occur from a valid packed state                | Verification pending; existing module alone is not acceptance evidence |
+| Fulfillment orders/work items                                    | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Picking and packing statuses                                     | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Warehouse assignment                                             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Partial fulfillment                                              | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Packing and dispatch events                                      | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Cancellation handling after fulfillment begins                   | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Every fulfillable order line has a clear fulfillment state       | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Picking/packing actions are authorized and audited               | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Partial fulfillment is supported without corrupting order totals | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Dispatch can only occur from a valid packed state                | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #29 — Implement shipping, tracking and delivery states
 
@@ -431,17 +446,17 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                                    | Status / remaining dependency                                          |
 | -------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Shipping methods/rates                                         | Verification pending; existing module alone is not acceptance evidence |
-| Shipment records                                               | Verification pending; existing module alone is not acceptance evidence |
-| Tracking references                                            | Verification pending; existing module alone is not acceptance evidence |
-| Carrier abstraction                                            | Verification pending; existing module alone is not acceptance evidence |
-| In-transit/out-for-delivery/delivered states                   | Verification pending; existing module alone is not acceptance evidence |
-| Customer tracking view                                         | Verification pending; existing module alone is not acceptance evidence |
-| Delivery event history                                         | Verification pending; existing module alone is not acceptance evidence |
-| Shipments are linked to fulfillments and orders                | Verification pending; existing module alone is not acceptance evidence |
-| Tracking updates are idempotent and auditable                  | Verification pending; existing module alone is not acceptance evidence |
-| Customer-facing status is derived from trusted shipment events | Verification pending; existing module alone is not acceptance evidence |
-| Carrier implementation is provider-agnostic                    | Verification pending; existing module alone is not acceptance evidence |
+| Shipping methods/rates                                         | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Shipment records                                               | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Tracking references                                            | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Carrier abstraction                                            | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| In-transit/out-for-delivery/delivered states                   | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Customer tracking view                                         | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Delivery event history                                         | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Shipments are linked to fulfillments and orders                | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Tracking updates are idempotent and auditable                  | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Customer-facing status is derived from trusted shipment events | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Carrier implementation is provider-agnostic                    | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #30 — Build returns, refunds and retail operations dashboard
 
@@ -453,17 +468,17 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                                         | Status / remaining dependency                                          |
 | ------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Return request workflow                                             | Verification pending; existing module alone is not acceptance evidence |
-| Return eligibility and reasons                                      | Verification pending; existing module alone is not acceptance evidence |
-| Inspection/receipt state                                            | Verification pending; existing module alone is not acceptance evidence |
-| Refund creation through payment abstraction                         | Verification pending; existing module alone is not acceptance evidence |
-| Refund event/audit model                                            | Verification pending; existing module alone is not acceptance evidence |
-| Operations dashboard for orders, inventory, fulfillment and returns | Verification pending; existing module alone is not acceptance evidence |
-| Basic retail reporting                                              | Verification pending; existing module alone is not acceptance evidence |
-| Refunds are tied to verified payment transactions                   | Verification pending; existing module alone is not acceptance evidence |
-| Returns and refunds have explicit status transitions                | Verification pending; existing module alone is not acceptance evidence |
-| Staff permissions are enforced                                      | Verification pending; existing module alone is not acceptance evidence |
-| Operational metrics can be filtered by date/status/warehouse        | Verification pending; existing module alone is not acceptance evidence |
+| Return request workflow                                             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Return eligibility and reasons                                      | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Inspection/receipt state                                            | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Refund creation through payment abstraction                         | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Refund event/audit model                                            | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Operations dashboard for orders, inventory, fulfillment and returns | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Basic retail reporting                                              | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Refunds are tied to verified payment transactions                   | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Returns and refunds have explicit status transitions                | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Staff permissions are enforced                                      | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Operational metrics can be filtered by date/status/warehouse        | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #31 — Implement seller registration and onboarding
 
@@ -475,17 +490,17 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                      | Status / remaining dependency                                          |
 | ------------------------------------------------ | ---------------------------------------------------------------------- |
-| Seller account/profile                           | Verification pending; existing module alone is not acceptance evidence |
-| Business details                                 | Verification pending; existing module alone is not acceptance evidence |
-| Verification/KYB data model                      | Verification pending; existing module alone is not acceptance evidence |
-| Required documents/media                         | Verification pending; existing module alone is not acceptance evidence |
-| Onboarding states                                | Verification pending; existing module alone is not acceptance evidence |
-| Admin review queue                               | Verification pending; existing module alone is not acceptance evidence |
-| Approval, rejection and suspension actions       | Verification pending; existing module alone is not acceptance evidence |
-| Seller cannot publish offers before approval     | Verification pending; existing module alone is not acceptance evidence |
-| Onboarding status is explicit and auditable      | Verification pending; existing module alone is not acceptance evidence |
-| Admin actions are permission-controlled          | Verification pending; existing module alone is not acceptance evidence |
-| Sensitive verification data is access-restricted | Verification pending; existing module alone is not acceptance evidence |
+| Seller account/profile                           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Business details                                 | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Verification/KYB data model                      | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Required documents/media                         | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Onboarding states                                | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Admin review queue                               | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Approval, rejection and suspension actions       | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Seller cannot publish offers before approval     | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Onboarding status is explicit and auditable      | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Admin actions are permission-controlled          | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Sensitive verification data is access-restricted | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #32 — Implement seller storefronts and marketplace offer model
 
@@ -497,16 +512,16 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                               | Status / remaining dependency                                          |
 | --------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Seller storefront profile                                 | Verification pending; existing module alone is not acceptance evidence |
-| Product-to-seller Offer relation                          | Verification pending; existing module alone is not acceptance evidence |
-| Offer price, stock source, condition and fulfillment mode | Verification pending; existing module alone is not acceptance evidence |
-| Seller-specific SKU/listing metadata                      | Verification pending; existing module alone is not acceptance evidence |
-| Offer publishing/unpublishing                             | Verification pending; existing module alone is not acceptance evidence |
-| Customer offer selection API                              | Verification pending; existing module alone is not acceptance evidence |
-| One Product can have multiple Offers                      | Verification pending; existing module alone is not acceptance evidence |
-| Retail is represented as a first-party offer              | Verification pending; existing module alone is not acceptance evidence |
-| Suspended/unapproved sellers cannot publish offers        | Verification pending; existing module alone is not acceptance evidence |
-| Customers can compare/select eligible offers              | Verification pending; existing module alone is not acceptance evidence |
+| Seller storefront profile                                 | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Product-to-seller Offer relation                          | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Offer price, stock source, condition and fulfillment mode | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Seller-specific SKU/listing metadata                      | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Offer publishing/unpublishing                             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Customer offer selection API                              | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| One Product can have multiple Offers                      | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Retail is represented as a first-party offer              | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Suspended/unapproved sellers cannot publish offers        | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Customers can compare/select eligible offers              | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #33 — Build seller inventory and catalog management portal
 
@@ -518,16 +533,16 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                                                      | Status / remaining dependency                                          |
 | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Seller dashboard shell                                                           | Verification pending; existing module alone is not acceptance evidence |
-| Offer/listing create/edit/archive                                                | Verification pending; existing module alone is not acceptance evidence |
-| Seller SKU/inventory quantities                                                  | Verification pending; existing module alone is not acceptance evidence |
-| Bulk inventory update foundation                                                 | Verification pending; existing module alone is not acceptance evidence |
-| Media upload                                                                     | Verification pending; existing module alone is not acceptance evidence |
-| Listing validation and publish workflow                                          | Verification pending; existing module alone is not acceptance evidence |
-| Sellers can manage only their own offers/inventory                               | Verification pending; existing module alone is not acceptance evidence |
-| Listing validation prevents incomplete/invalid offers from publication           | Verification pending; existing module alone is not acceptance evidence |
-| Inventory updates are auditable                                                  | Verification pending; existing module alone is not acceptance evidence |
-| Canonical product data cannot be modified by sellers without explicit permission | Verification pending; existing module alone is not acceptance evidence |
+| Seller dashboard shell                                                           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Offer/listing create/edit/archive                                                | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Seller SKU/inventory quantities                                                  | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Bulk inventory update foundation                                                 | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Media upload                                                                     | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Listing validation and publish workflow                                          | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Sellers can manage only their own offers/inventory                               | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Listing validation prevents incomplete/invalid offers from publication           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Inventory updates are auditable                                                  | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Canonical product data cannot be modified by sellers without explicit permission | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #34 — Implement unified cart and multi-seller order splitting
 
@@ -539,16 +554,16 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                              | Status / remaining dependency                                          |
 | -------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Cart lines tied to Offer IDs                             | Verification pending; existing module alone is not acceptance evidence |
-| Seller/fulfillment grouping                              | Verification pending; existing module alone is not acceptance evidence |
-| Order + child seller/fulfillment records                 | Verification pending; existing module alone is not acceptance evidence |
-| Price/stock validation across sellers                    | Verification pending; existing module alone is not acceptance evidence |
-| Shipping grouping and totals                             | Verification pending; existing module alone is not acceptance evidence |
-| Seller order visibility                                  | Verification pending; existing module alone is not acceptance evidence |
-| One customer checkout can contain multiple sellers       | Verification pending; existing module alone is not acceptance evidence |
-| Backend calculates seller splits deterministically       | Verification pending; existing module alone is not acceptance evidence |
-| Each seller sees only its own order lines                | Verification pending; existing module alone is not acceptance evidence |
-| Customer sees one coherent order with fulfillment groups | Verification pending; existing module alone is not acceptance evidence |
+| Cart lines tied to Offer IDs                             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Seller/fulfillment grouping                              | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Order + child seller/fulfillment records                 | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Price/stock validation across sellers                    | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Shipping grouping and totals                             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Seller order visibility                                  | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| One customer checkout can contain multiple sellers       | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Backend calculates seller splits deterministically       | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Each seller sees only its own order lines                | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Customer sees one coherent order with fulfillment groups | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #35 — Implement marketplace commissions, balances and ledger
 
@@ -560,17 +575,17 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                                  | Status / remaining dependency                                          |
 | ------------------------------------------------------------ | ---------------------------------------------------------------------- |
-| Platform/seller financial accounts                           | Verification pending; existing module alone is not acceptance evidence |
-| Commission configuration                                     | Verification pending; existing module alone is not acceptance evidence |
-| Per-order commission transactions                            | Verification pending; existing module alone is not acceptance evidence |
-| Seller payable balance                                       | Verification pending; existing module alone is not acceptance evidence |
-| Immutable ledger entries                                     | Verification pending; existing module alone is not acceptance evidence |
-| Adjustments/reversals                                        | Verification pending; existing module alone is not acceptance evidence |
-| Reconciliation references                                    | Verification pending; existing module alone is not acceptance evidence |
-| Seller earnings can be derived from ledger entries           | Verification pending; existing module alone is not acceptance evidence |
-| Commission calculations are auditable per order line/seller  | Verification pending; existing module alone is not acceptance evidence |
-| Refunds/cancellations reverse financial effects correctly    | Verification pending; existing module alone is not acceptance evidence |
-| No balance changes occur without corresponding ledger events | Verification pending; existing module alone is not acceptance evidence |
+| Platform/seller financial accounts                           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Commission configuration                                     | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Per-order commission transactions                            | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Seller payable balance                                       | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Immutable ledger entries                                     | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Adjustments/reversals                                        | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Reconciliation references                                    | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Seller earnings can be derived from ledger entries           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Commission calculations are auditable per order line/seller  | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Refunds/cancellations reverse financial effects correctly    | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| No balance changes occur without corresponding ledger events | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #36 — Implement seller payouts and reconciliation
 
@@ -582,17 +597,17 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                    | Status / remaining dependency                                          |
 | ---------------------------------------------- | ---------------------------------------------------------------------- |
-| Payout account/profile model                   | Verification pending; existing module alone is not acceptance evidence |
-| Payout request workflow                        | Verification pending; existing module alone is not acceptance evidence |
-| Minimum/hold rules                             | Verification pending; existing module alone is not acceptance evidence |
-| Payout batches/transactions                    | Verification pending; existing module alone is not acceptance evidence |
-| Idempotency and duplicate prevention           | Verification pending; existing module alone is not acceptance evidence |
-| Reconciliation status                          | Verification pending; existing module alone is not acceptance evidence |
-| Payout history                                 | Verification pending; existing module alone is not acceptance evidence |
-| Sellers cannot withdraw unavailable/held funds | Verification pending; existing module alone is not acceptance evidence |
-| Payouts reference ledger balances              | Verification pending; existing module alone is not acceptance evidence |
-| Duplicate payout attempts are prevented        | Verification pending; existing module alone is not acceptance evidence |
-| Failed payouts remain traceable and retryable  | Verification pending; existing module alone is not acceptance evidence |
+| Payout account/profile model                   | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Payout request workflow                        | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Minimum/hold rules                             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Payout batches/transactions                    | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Idempotency and duplicate prevention           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Reconciliation status                          | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Payout history                                 | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Sellers cannot withdraw unavailable/held funds | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Payouts reference ledger balances              | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Duplicate payout attempts are prevented        | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Failed payouts remain traceable and retryable  | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #37 — Build seller order and fulfillment portal
 
@@ -604,17 +619,17 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                             | Status / remaining dependency                                          |
 | ------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Seller order queue                                      | Verification pending; existing module alone is not acceptance evidence |
-| Order detail by seller lines                            | Verification pending; existing module alone is not acceptance evidence |
-| Accept/reject rules where applicable                    | Verification pending; existing module alone is not acceptance evidence |
-| Seller fulfillment statuses                             | Verification pending; existing module alone is not acceptance evidence |
-| Dispatch/tracking entry                                 | Verification pending; existing module alone is not acceptance evidence |
-| Cancellation handling                                   | Verification pending; existing module alone is not acceptance evidence |
-| Returns visibility                                      | Verification pending; existing module alone is not acceptance evidence |
-| Seller sees only authorized orders                      | Verification pending; existing module alone is not acceptance evidence |
-| Seller actions update only its fulfillment scope        | Verification pending; existing module alone is not acceptance evidence |
-| Customer order remains coherent across multiple sellers | Verification pending; existing module alone is not acceptance evidence |
-| Status transitions are validated server-side            | Verification pending; existing module alone is not acceptance evidence |
+| Seller order queue                                      | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Order detail by seller lines                            | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Accept/reject rules where applicable                    | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Seller fulfillment statuses                             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Dispatch/tracking entry                                 | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Cancellation handling                                   | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Returns visibility                                      | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Seller sees only authorized orders                      | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Seller actions update only its fulfillment scope        | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Customer order remains coherent across multiple sellers | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Status transitions are validated server-side            | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #38 — Add marketplace reviews, ratings and moderation
 
@@ -626,17 +641,17 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 
 | Requirement                                                   | Status / remaining dependency                                          |
 | ------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Product reviews                                               | Verification pending; existing module alone is not acceptance evidence |
-| Seller ratings                                                | Verification pending; existing module alone is not acceptance evidence |
-| Verified-purchase marker                                      | Verification pending; existing module alone is not acceptance evidence |
-| Review submission/edit policy                                 | Verification pending; existing module alone is not acceptance evidence |
-| Moderation queue                                              | Verification pending; existing module alone is not acceptance evidence |
-| Abuse/report action                                           | Verification pending; existing module alone is not acceptance evidence |
-| Rating aggregates                                             | Verification pending; existing module alone is not acceptance evidence |
-| Only eligible customers can review purchased items            | Verification pending; existing module alone is not acceptance evidence |
-| Seller/product aggregates are recalculated consistently       | Verification pending; existing module alone is not acceptance evidence |
-| Moderated/removed reviews are excluded from public aggregates | Verification pending; existing module alone is not acceptance evidence |
-| Admin moderation is audited                                   | Verification pending; existing module alone is not acceptance evidence |
+| Product reviews                                               | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Seller ratings                                                | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Verified-purchase marker                                      | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Review submission/edit policy                                 | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Moderation queue                                              | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Abuse/report action                                           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Rating aggregates                                             | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Only eligible customers can review purchased items            | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Seller/product aggregates are recalculated consistently       | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Moderated/removed reviews are excluded from public aggregates | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Admin moderation is audited                                   | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #39 — Establish mobile app architecture and shared API client
 
@@ -678,17 +693,17 @@ Test evidence: none yet; add unit, PostgreSQL and HTTP acceptance tests with imp
 
 | Requirement                                                  | Status / remaining dependency                                               |
 | ------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| Device token registration                                    | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Push notification service integration                        | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Order/payment/shipment notification events                   | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Deep links from notifications                                | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| App update/error handling                                    | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Crash/error reporting                                        | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Android/iOS release configuration                            | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Notification events originate from backend business events   | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Deep links open the correct authenticated/public destination | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Device tokens can be revoked/rotated                         | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Production builds are reproducible                           | Deferred to roadmap milestone; configuration/live adapters separately gated |
+| Device token registration                                    | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Push notification service integration                        | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Order/payment/shipment notification events                   | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Deep links from notifications                                | deferred — roadmap milestone; configuration/live adapters separately gated |
+| App update/error handling                                    | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Crash/error reporting                                        | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Android/iOS release configuration                            | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Notification events originate from backend business events   | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Deep links open the correct authenticated/public destination | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Device tokens can be revoked/rotated                         | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Production builds are reproducible                           | deferred — roadmap milestone; configuration/live adapters separately gated |
 
 ## #45 — Build promotions, coupons and pricing rules engine
 
@@ -700,18 +715,18 @@ Test evidence: none yet; add unit, PostgreSQL and HTTP acceptance tests with imp
 
 | Requirement                                                     | Status / remaining dependency                                               |
 | --------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Promotion campaigns                                             | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Coupon codes                                                    | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Eligibility rules                                               | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Product/category/offer targeting                                | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Usage limits                                                    | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Start/end dates                                                 | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Discount calculation service                                    | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Audit/history                                                   | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Promotion calculations occur server-side                        | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Rules are deterministic and tested                              | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Stacking/exclusion behavior is explicit                         | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Checkout shows applied discounts from backend-calculated totals | Deferred to roadmap milestone; configuration/live adapters separately gated |
+| Promotion campaigns                                             | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Coupon codes                                                    | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Eligibility rules                                               | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Product/category/offer targeting                                | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Usage limits                                                    | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Start/end dates                                                 | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Discount calculation service                                    | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Audit/history                                                   | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Promotion calculations occur server-side                        | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Rules are deterministic and tested                              | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Stacking/exclusion behavior is explicit                         | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Checkout shows applied discounts from backend-calculated totals | deferred — roadmap milestone; configuration/live adapters separately gated |
 
 ## #46 — Implement collections, merchandising and advanced search
 
@@ -723,17 +738,17 @@ Test evidence: none yet; add unit, PostgreSQL and HTTP acceptance tests with imp
 
 | Requirement                                                       | Status / remaining dependency                                               |
 | ----------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Curated collections                                               | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Featured products                                                 | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Search autocomplete/suggestions                                   | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Faceted search                                                    | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Synonyms and typo-tolerant search foundation                      | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Sort/ranking controls                                             | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Search indexing pipeline                                          | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Merchandising can feature products without changing catalog truth | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Search remains backed by authoritative product/offer data         | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Index updates are resilient and observable                        | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Filters and autocomplete are fast and consistent                  | Deferred to roadmap milestone; configuration/live adapters separately gated |
+| Curated collections                                               | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Featured products                                                 | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Search autocomplete/suggestions                                   | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Faceted search                                                    | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Synonyms and typo-tolerant search foundation                      | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Sort/ranking controls                                             | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Search indexing pipeline                                          | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Merchandising can feature products without changing catalog truth | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Search remains backed by authoritative product/offer data         | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Index updates are resilient and observable                        | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Filters and autocomplete are fast and consistent                  | deferred — roadmap milestone; configuration/live adapters separately gated |
 
 ## #47 — Add loyalty, gift cards and customer retention foundations
 
@@ -745,16 +760,16 @@ Test evidence: none yet; add unit, PostgreSQL and HTTP acceptance tests with imp
 
 | Requirement                                          | Status / remaining dependency                                               |
 | ---------------------------------------------------- | --------------------------------------------------------------------------- |
-| Loyalty account model                                | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Points earning/redemption rules                      | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Gift card issuance/activation/redemption             | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Balance ledger                                       | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Customer eligibility rules                           | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Order integration                                    | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Loyalty/gift card balances are ledger-backed         | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Redemption cannot exceed available balance           | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Refunds/reversals correctly restore or reverse value | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Transactions are auditable                           | Deferred to roadmap milestone; configuration/live adapters separately gated |
+| Loyalty account model                                | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Points earning/redemption rules                      | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Gift card issuance/activation/redemption             | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Balance ledger                                       | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Customer eligibility rules                           | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Order integration                                    | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Loyalty/gift card balances are ledger-backed         | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Redemption cannot exceed available balance           | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Refunds/reversals correctly restore or reverse value | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Transactions are auditable                           | deferred — roadmap milestone; configuration/live adapters separately gated |
 
 ## #48 — Build customer support and case management
 
@@ -766,16 +781,16 @@ Test evidence: none yet; add unit, PostgreSQL and HTTP acceptance tests with imp
 
 | Requirement                                                                  | Status / remaining dependency                                               |
 | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Support tickets/cases                                                        | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Customer/order/product references                                            | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Status, priority and assignment                                              | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Internal/admin notes                                                         | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Customer-facing ticket history                                               | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Notification hooks                                                           | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Support agents can find orders and customers without exposing unrelated data | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Cases have clear lifecycle states                                            | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Customer and staff views are permission-separated                            | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Important actions are auditable                                              | Deferred to roadmap milestone; configuration/live adapters separately gated |
+| Support tickets/cases                                                        | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Customer/order/product references                                            | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Status, priority and assignment                                              | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Internal/admin notes                                                         | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Customer-facing ticket history                                               | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Notification hooks                                                           | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Support agents can find orders and customers without exposing unrelated data | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Cases have clear lifecycle states                                            | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Customer and staff views are permission-separated                            | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Important actions are auditable                                              | deferred — roadmap milestone; configuration/live adapters separately gated |
 
 ## #49 — Add recommendations, recently viewed and commerce analytics
 
@@ -787,17 +802,17 @@ Test evidence: none yet; add unit, PostgreSQL and HTTP acceptance tests with imp
 
 | Requirement                                             | Status / remaining dependency                                               |
 | ------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Recently viewed events                                  | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Recommendation service abstraction                      | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Frequently bought together foundation                   | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Product/customer event tracking                         | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Retail vs marketplace analytics                         | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Funnel, conversion and order metrics                    | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Dashboard APIs                                          | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Recommendation failures never block checkout            | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Analytics distinguish retail and marketplace activity   | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Event ingestion is asynchronous where appropriate       | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Dashboards use reproducible definitions for key metrics | Deferred to roadmap milestone; configuration/live adapters separately gated |
+| Recently viewed events                                  | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Recommendation service abstraction                      | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Frequently bought together foundation                   | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Product/customer event tracking                         | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Retail vs marketplace analytics                         | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Funnel, conversion and order metrics                    | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Dashboard APIs                                          | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Recommendation failures never block checkout            | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Analytics distinguish retail and marketplace activity   | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Event ingestion is asynchronous where appropriate       | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Dashboards use reproducible definitions for key metrics | deferred — roadmap milestone; configuration/live adapters separately gated |
 
 ## #50 — Build provider-agnostic courier and 3PL integration layer
 
@@ -809,17 +824,17 @@ Test evidence: none yet; add unit, PostgreSQL and HTTP acceptance tests with imp
 
 | Requirement                                           | Status / remaining dependency                                               |
 | ----------------------------------------------------- | --------------------------------------------------------------------------- |
-| Carrier/3PL interface                                 | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Shipment booking                                      | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Tracking synchronization                              | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Delivery event ingestion                              | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Label/reference handling                              | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Provider credentials/configuration boundaries         | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Retry/reconciliation jobs                             | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Providers are replaceable behind an adapter interface | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Webhook/event handling is idempotent                  | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Provider failures do not corrupt order states         | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Operations can reconcile shipment discrepancies       | Deferred to roadmap milestone; configuration/live adapters separately gated |
+| Carrier/3PL interface                                 | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Shipment booking                                      | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Tracking synchronization                              | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Delivery event ingestion                              | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Label/reference handling                              | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Provider credentials/configuration boundaries         | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Retry/reconciliation jobs                             | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Providers are replaceable behind an adapter interface | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Webhook/event handling is idempotent                  | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Provider failures do not corrupt order states         | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Operations can reconcile shipment discrepancies       | deferred — roadmap milestone; configuration/live adapters separately gated |
 
 ## #51 — Implement seller fulfillment programs and service levels
 
@@ -831,16 +846,16 @@ Test evidence: none yet; add unit, PostgreSQL and HTTP acceptance tests with imp
 
 | Requirement                                                   | Status / remaining dependency                                               |
 | ------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Seller fulfillment configurations                             | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Platform-fulfilled vs seller-fulfilled modes                  | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Handling/dispatch SLAs                                        | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Cut-off times                                                 | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Fulfillment eligibility rules                                 | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Seller compliance monitoring                                  | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Fulfillment mode is explicit per offer/order line             | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| SLA breaches are measurable                                   | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Customer delivery estimates reflect fulfillment configuration | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Seller performance can be acted on by admins                  | Deferred to roadmap milestone; configuration/live adapters separately gated |
+| Seller fulfillment configurations                             | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Platform-fulfilled vs seller-fulfilled modes                  | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Handling/dispatch SLAs                                        | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Cut-off times                                                 | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Fulfillment eligibility rules                                 | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Seller compliance monitoring                                  | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Fulfillment mode is explicit per offer/order line             | deferred — roadmap milestone; configuration/live adapters separately gated |
+| SLA breaches are measurable                                   | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Customer delivery estimates reflect fulfillment configuration | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Seller performance can be acted on by admins                  | deferred — roadmap milestone; configuration/live adapters separately gated |
 
 ## #52 — Add seller messaging, promotions and merchandising tools
 
@@ -852,16 +867,16 @@ Test evidence: none yet; add unit, PostgreSQL and HTTP acceptance tests with imp
 
 | Requirement                                            | Status / remaining dependency                                               |
 | ------------------------------------------------------ | --------------------------------------------------------------------------- |
-| Seller/customer messaging foundation                   | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Seller-specific promotions                             | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Offer discounts                                        | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Promotion approval rules                               | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Seller campaign management                             | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Moderation/reporting                                   | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Messaging respects customer privacy and seller scope   | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Seller promotions cannot bypass platform pricing rules | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Admin can suspend campaigns or messaging privileges    | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Promotional activity is auditable                      | Deferred to roadmap milestone; configuration/live adapters separately gated |
+| Seller/customer messaging foundation                   | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Seller-specific promotions                             | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Offer discounts                                        | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Promotion approval rules                               | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Seller campaign management                             | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Moderation/reporting                                   | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Messaging respects customer privacy and seller scope   | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Seller promotions cannot bypass platform pricing rules | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Admin can suspend campaigns or messaging privileges    | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Promotional activity is auditable                      | deferred — roadmap milestone; configuration/live adapters separately gated |
 
 ## #53 — Establish sponsored products and advertising foundations
 
@@ -873,16 +888,16 @@ Test evidence: none yet; add unit, PostgreSQL and HTTP acceptance tests with imp
 
 | Requirement                                                       | Status / remaining dependency                                               |
 | ----------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Advertising campaign model                                        | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Sponsored offer/product placements                                | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Budget and schedule primitives                                    | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Ad eligibility                                                    | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Impression/click/conversion event model                           | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Admin controls and reporting                                      | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Sponsored content is clearly distinguishable from organic results | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Budget/schedule constraints are enforced server-side              | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Advertising events do not alter transactional totals              | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Organic ranking remains independently testable                    | Deferred to roadmap milestone; configuration/live adapters separately gated |
+| Advertising campaign model                                        | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Sponsored offer/product placements                                | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Budget and schedule primitives                                    | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Ad eligibility                                                    | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Impression/click/conversion event model                           | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Admin controls and reporting                                      | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Sponsored content is clearly distinguishable from organic results | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Budget/schedule constraints are enforced server-side              | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Advertising events do not alter transactional totals              | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Organic ranking remains independently testable                    | deferred — roadmap milestone; configuration/live adapters separately gated |
 
 ## #54 — Build advanced seller analytics and performance controls
 
@@ -894,17 +909,17 @@ Test evidence: none yet; add unit, PostgreSQL and HTTP acceptance tests with imp
 
 | Requirement                                           | Status / remaining dependency                                               |
 | ----------------------------------------------------- | --------------------------------------------------------------------------- |
-| Sales/revenue analytics                               | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Order/fulfillment metrics                             | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Cancellation/return rates                             | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Customer rating metrics                               | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| SLA/performance scorecards                            | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Seller warnings, holds and suspension thresholds      | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Exportable reports                                    | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Metrics are scoped correctly to each seller           | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Performance calculations have documented definitions  | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Admin actions can be triggered from policy thresholds | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Analytics do not alter transactional records          | Deferred to roadmap milestone; configuration/live adapters separately gated |
+| Sales/revenue analytics                               | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Order/fulfillment metrics                             | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Cancellation/return rates                             | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Customer rating metrics                               | deferred — roadmap milestone; configuration/live adapters separately gated |
+| SLA/performance scorecards                            | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Seller warnings, holds and suspension thresholds      | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Exportable reports                                    | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Metrics are scoped correctly to each seller           | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Performance calculations have documented definitions  | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Admin actions can be triggered from policy thresholds | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Analytics do not alter transactional records          | deferred — roadmap milestone; configuration/live adapters separately gated |
 
 ## #55 — Implement offer ranking and Buy Box engine
 
@@ -916,16 +931,16 @@ Test evidence: none yet; add unit, PostgreSQL and HTTP acceptance tests with imp
 
 | Requirement                                  | Status / remaining dependency                                               |
 | -------------------------------------------- | --------------------------------------------------------------------------- |
-| Offer eligibility checks                     | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Price/shipping/stock/rating signals          | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Buy Box selection service                    | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Explainable ranking breakdown                | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Manual/admin overrides where needed          | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Ranking audit history                        | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Ineligible offers never win the Buy Box      | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Ranking is deterministic for the same inputs | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Ranking factors are observable and auditable | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Product pages can show alternative offers    | Deferred to roadmap milestone; configuration/live adapters separately gated |
+| Offer eligibility checks                     | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Price/shipping/stock/rating signals          | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Buy Box selection service                    | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Explainable ranking breakdown                | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Manual/admin overrides where needed          | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Ranking audit history                        | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Ineligible offers never win the Buy Box      | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Ranking is deterministic for the same inputs | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Ranking factors are observable and auditable | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Product pages can show alternative offers    | deferred — roadmap milestone; configuration/live adapters separately gated |
 
 ## #56 — Implement Make an Offer and counter-offer workflows
 
@@ -937,16 +952,16 @@ Test evidence: none yet; add unit, PostgreSQL and HTTP acceptance tests with imp
 
 | Requirement                                                   | Status / remaining dependency                                               |
 | ------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Offer negotiation entities                                    | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Buyer offer submission                                        | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Seller accept/reject/counter                                  | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Expiry and timeout rules                                      | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Price locking on acceptance                                   | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Conversion to standard checkout/order                         | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Only valid active offers can be negotiated                    | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Negotiated price is immutable once accepted                   | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Expired/rejected offers cannot be fulfilled                   | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Accepted negotiations enter the normal order/payment workflow | Deferred to roadmap milestone; configuration/live adapters separately gated |
+| Offer negotiation entities                                    | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Buyer offer submission                                        | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Seller accept/reject/counter                                  | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Expiry and timeout rules                                      | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Price locking on acceptance                                   | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Conversion to standard checkout/order                         | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Only valid active offers can be negotiated                    | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Negotiated price is immutable once accepted                   | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Expired/rejected offers cannot be fulfilled                   | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Accepted negotiations enter the normal order/payment workflow | deferred — roadmap milestone; configuration/live adapters separately gated |
 
 ## #57 — Build auction listings, bidding and settlement
 
@@ -958,18 +973,18 @@ Test evidence: none yet; add unit, PostgreSQL and HTTP acceptance tests with imp
 
 | Requirement                                                      | Status / remaining dependency                                               |
 | ---------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Auction listing model                                            | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Start/end times                                                  | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Minimum bid/reserve price                                        | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Bid placement and validation                                     | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Bid history                                                      | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Winner selection                                                 | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Auction settlement and order creation                            | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Bid notifications                                                | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Bids are validated atomically and cannot bypass auction rules    | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Closed auctions have one authoritative winner or no-sale outcome | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Winning bids convert to standard order/payment workflows         | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Bid history is immutable and auditable                           | Deferred to roadmap milestone; configuration/live adapters separately gated |
+| Auction listing model                                            | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Start/end times                                                  | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Minimum bid/reserve price                                        | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Bid placement and validation                                     | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Bid history                                                      | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Winner selection                                                 | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Auction settlement and order creation                            | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Bid notifications                                                | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Bids are validated atomically and cannot bypass auction rules    | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Closed auctions have one authoritative winner or no-sale outcome | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Winning bids convert to standard order/payment workflows         | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Bid history is immutable and auditable                           | deferred — roadmap milestone; configuration/live adapters separately gated |
 
 ## #58 — Establish dynamic pricing and price experimentation foundations
 
@@ -981,16 +996,16 @@ Test evidence: none yet; add unit, PostgreSQL and HTTP acceptance tests with imp
 
 | Requirement                                               | Status / remaining dependency                                               |
 | --------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Dynamic pricing rules                                     | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Price schedules                                           | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Customer/segment eligibility hooks                        | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Price snapshots at checkout                               | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Approval/audit controls                                   | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Pricing simulation API                                    | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Final transaction price is always snapshotted server-side | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Pricing rules are deterministic and auditable             | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Expired pricing cannot be applied                         | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Simulation does not mutate live prices                    | Deferred to roadmap milestone; configuration/live adapters separately gated |
+| Dynamic pricing rules                                     | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Price schedules                                           | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Customer/segment eligibility hooks                        | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Price snapshots at checkout                               | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Approval/audit controls                                   | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Pricing simulation API                                    | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Final transaction price is always snapshotted server-side | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Pricing rules are deterministic and auditable             | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Expired pricing cannot be applied                         | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Simulation does not mutate live prices                    | deferred — roadmap milestone; configuration/live adapters separately gated |
 
 ## #59 — Integrate advanced recommendations, AI and personalization services
 
@@ -1002,16 +1017,16 @@ Test evidence: none yet; add unit, PostgreSQL and HTTP acceptance tests with imp
 
 | Requirement                                                  | Status / remaining dependency                                               |
 | ------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| Recommendation service adapters                              | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Personalized home/product feeds                              | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Ranking feature pipeline                                     | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Embedding/vector-search integration point                    | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Explainability/feature logging                               | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Fallback strategies                                          | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| AI/recommendation failures never block shopping or checkout  | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Recommendation inputs/outputs are observable                 | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Transactional systems remain authoritative                   | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Personalization can be disabled or rolled back independently | Deferred to roadmap milestone; configuration/live adapters separately gated |
+| Recommendation service adapters                              | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Personalized home/product feeds                              | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Ranking feature pipeline                                     | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Embedding/vector-search integration point                    | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Explainability/feature logging                               | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Fallback strategies                                          | deferred — roadmap milestone; configuration/live adapters separately gated |
+| AI/recommendation failures never block shopping or checkout  | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Recommendation inputs/outputs are observable                 | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Transactional systems remain authoritative                   | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Personalization can be disabled or rolled back independently | deferred — roadmap milestone; configuration/live adapters separately gated |
 
 ## #60 — Implement advanced fraud controls and experimentation
 
@@ -1023,18 +1038,18 @@ Test evidence: none yet; add unit, PostgreSQL and HTTP acceptance tests with imp
 
 | Requirement                                                     | Status / remaining dependency                                               |
 | --------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Risk scoring service interface                                  | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Transaction/seller/customer risk signals                        | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Holds/manual review                                             | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Suspicious bid/payment/order detection hooks                    | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Feature flags and A/B experiments                               | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Experiment assignment and exposure tracking                     | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Rollback controls                                               | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| High-risk activity can be held before fulfillment/payout        | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Risk decisions are explainable and auditable                    | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Experiments can be enabled for scoped cohorts                   | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Experiment failures can be disabled without redeployment        | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Risk/experiment services cannot directly mutate financial truth | Deferred to roadmap milestone; configuration/live adapters separately gated |
+| Risk scoring service interface                                  | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Transaction/seller/customer risk signals                        | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Holds/manual review                                             | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Suspicious bid/payment/order detection hooks                    | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Feature flags and A/B experiments                               | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Experiment assignment and exposure tracking                     | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Rollback controls                                               | deferred — roadmap milestone; configuration/live adapters separately gated |
+| High-risk activity can be held before fulfillment/payout        | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Risk decisions are explainable and auditable                    | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Experiments can be enabled for scoped cohorts                   | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Experiment failures can be disabled without redeployment        | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Risk/experiment services cannot directly mutate financial truth | deferred — roadmap milestone; configuration/live adapters separately gated |
 
 ## #61 — Automate seller payouts and strengthen marketplace risk controls
 
@@ -1046,19 +1061,21 @@ Test evidence: none yet; add unit, PostgreSQL and HTTP acceptance tests with imp
 
 | Requirement                                                      | Status / remaining dependency                                               |
 | ---------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Scheduled payout jobs                                            | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Payout eligibility checks                                        | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Holds/reserve periods                                            | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Retry and reconciliation workflow                                | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Marketplace risk checks before payout                            | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Manual review/override controls                                  | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Payout operational dashboard                                     | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Automated payouts are idempotent and reconciliation-safe         | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Risk/hold rules can prevent payout without altering ledger truth | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Every payout has a complete audit trail                          | Deferred to roadmap milestone; configuration/live adapters separately gated |
-| Failed batches can be resumed without duplicate settlement       | Deferred to roadmap milestone; configuration/live adapters separately gated |
+| Scheduled payout jobs                                            | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Payout eligibility checks                                        | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Holds/reserve periods                                            | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Retry and reconciliation workflow                                | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Marketplace risk checks before payout                            | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Manual review/override controls                                  | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Payout operational dashboard                                     | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Automated payouts are idempotent and reconciliation-safe         | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Risk/hold rules can prevent payout without altering ledger truth | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Every payout has a complete audit trail                          | deferred — roadmap milestone; configuration/live adapters separately gated |
+| Failed batches can be resumed without duplicate settlement       | deferred — roadmap milestone; configuration/live adapters separately gated |
 
 ## Execution log
+
+Historical checkpoints below preserve their original terminology, claims and dates. They do not override the current baseline above; in particular, auth reset delivery is now implemented in source.
 
 - Baseline audit: seven confirmed current-scope gaps (test isolation, uncertain payout outcomes, reconciliation races, batch recovery, paid-balance backfill, fulfillment version, deferred reset delivery).
 - Previously observed unit baseline: 70 suites / 661 tests. Not proof of integration or deployment acceptance.

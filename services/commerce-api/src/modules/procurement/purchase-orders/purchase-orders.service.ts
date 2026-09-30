@@ -28,7 +28,10 @@ import { ListPurchaseOrdersDto } from './dto/list-purchase-orders.dto';
 import { UpdatePurchaseOrderDto } from './dto/update-purchase-order.dto';
 import { computeLineAmounts, computeOrderTotals } from './purchase-order-math';
 import { assertPurchaseOrderTransition } from './purchase-order-status';
-import { PurchaseOrderPage, PurchaseOrderWithLines } from './purchase-orders.types';
+import {
+  PurchaseOrderPage,
+  PurchaseOrderWithLines,
+} from './purchase-orders.types';
 
 const OPEN_STATUSES: PurchaseOrderStatus[] = [
   PurchaseOrderStatus.DRAFT,
@@ -177,7 +180,8 @@ export class PurchaseOrdersService {
       throw new ConflictException('Only a draft purchase order can be edited');
     }
 
-    if (dto.supplierId) await this.suppliersService.requireActive(dto.supplierId);
+    if (dto.supplierId)
+      await this.suppliersService.requireActive(dto.supplierId);
     if (dto.warehouseId) {
       const warehouse = await this.warehousesService.findById(dto.warehouseId);
       if (!warehouse.isActive) {
@@ -198,12 +202,17 @@ export class PurchaseOrdersService {
       }),
     }));
     const totals = lineAmounts
-      ? computeOrderTotals(lineAmounts.map((l) => l.amounts), shippingAmount)
+      ? computeOrderTotals(
+          lineAmounts.map((l) => l.amounts),
+          shippingAmount,
+        )
       : undefined;
 
     const updated = await this.prisma.$transaction(async (tx) => {
       if (lineAmounts) {
-        await tx.purchaseOrderLine.deleteMany({ where: { purchaseOrderId: id } });
+        await tx.purchaseOrderLine.deleteMany({
+          where: { purchaseOrderId: id },
+        });
       }
 
       const result = await tx.purchaseOrder.updateMany({
@@ -438,9 +447,7 @@ export class PurchaseOrdersService {
     if (!existing) throw new NotFoundException('Purchase order not found');
 
     if (
-      existing.goodsReceipts.some(
-        (r) => r.status === GoodsReceiptStatus.POSTED,
-      )
+      existing.goodsReceipts.some((r) => r.status === GoodsReceiptStatus.POSTED)
     ) {
       throw new ConflictException(
         'A purchase order with posted receipts cannot be cancelled; use close-short instead',
@@ -594,7 +601,10 @@ export class PurchaseOrdersService {
           action: 'procurement.purchase_order.revised',
           targetType: 'PurchaseOrder',
           targetId: revision.id,
-          metadata: { supersedesId: existing.id, supersedesPoNumber: existing.poNumber },
+          metadata: {
+            supersedesId: existing.id,
+            supersedesPoNumber: existing.poNumber,
+          },
         },
         tx,
       );
@@ -696,7 +706,8 @@ export class PurchaseOrdersService {
       where: { id: poId },
       data: {
         status: newStatus,
-        completedAt: newStatus === PurchaseOrderStatus.RECEIVED ? new Date() : null,
+        completedAt:
+          newStatus === PurchaseOrderStatus.RECEIVED ? new Date() : null,
         version: { increment: 1 },
       },
     });

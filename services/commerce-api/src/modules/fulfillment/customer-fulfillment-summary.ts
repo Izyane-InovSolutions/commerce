@@ -42,7 +42,9 @@ export function deriveCustomerFulfillmentSummary(
   )
     return 'CANCELLED';
 
-  if (fulfillmentOrderStatuses.every((status) => DISPATCHED_LIKE.includes(status)))
+  if (
+    fulfillmentOrderStatuses.every((status) => DISPATCHED_LIKE.includes(status))
+  )
     return 'DISPATCHED';
 
   if (

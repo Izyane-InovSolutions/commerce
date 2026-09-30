@@ -35,7 +35,10 @@ describe('Shipments (integration, real Postgres)', () => {
   const backgroundJobsServiceStub = {
     enqueue: jest.fn().mockResolvedValue(undefined),
   } as unknown as BackgroundJobsService;
-  const inventoryService = new InventoryService(prisma, backgroundJobsServiceStub);
+  const inventoryService = new InventoryService(
+    prisma,
+    backgroundJobsServiceStub,
+  );
   const provisioningService = new FulfillmentProvisioningService(
     prisma,
     numberingService,
@@ -45,7 +48,9 @@ describe('Shipments (integration, real Postgres)', () => {
   // This suite is admin/platform-path only (#37 seller commands have their
   // own dedicated suite) — a minimal stub is enough to satisfy the
   // constructor.
-  const sellersServiceStub = { lockApproved: jest.fn() } as unknown as SellersService;
+  const sellersServiceStub = {
+    lockApproved: jest.fn(),
+  } as unknown as SellersService;
   const fulfillmentsService = new FulfillmentsService(
     prisma,
     inventoryService,
@@ -55,7 +60,9 @@ describe('Shipments (integration, real Postgres)', () => {
     backgroundJobsServiceStub,
     sellersServiceStub,
   );
-  const carrierProviderRegistry = new CarrierProviderRegistry([new ManualCarrierProvider()]);
+  const carrierProviderRegistry = new CarrierProviderRegistry([
+    new ManualCarrierProvider(),
+  ]);
   const shipmentsService = new ShipmentsService(
     prisma,
     fulfillmentsService,
@@ -86,31 +93,47 @@ describe('Shipments (integration, real Postgres)', () => {
       const fulfillmentOrderIds = fulfillmentOrders.map((fo) => fo.id);
       if (fulfillmentOrderIds.length) {
         await prisma.trackingEvent.deleteMany({
-          where: { shipment: { fulfillmentOrderId: { in: fulfillmentOrderIds } } },
+          where: {
+            shipment: { fulfillmentOrderId: { in: fulfillmentOrderIds } },
+          },
         });
         await prisma.fulfillmentDispatch.deleteMany({
           where: { fulfillmentOrderId: { in: fulfillmentOrderIds } },
         });
-        await prisma.shipment.deleteMany({ where: { fulfillmentOrderId: { in: fulfillmentOrderIds } } });
+        await prisma.shipment.deleteMany({
+          where: { fulfillmentOrderId: { in: fulfillmentOrderIds } },
+        });
       }
-      await prisma.fulfillmentOrder.deleteMany({ where: { orderId: { in: createdOrderIds } } });
+      await prisma.fulfillmentOrder.deleteMany({
+        where: { orderId: { in: createdOrderIds } },
+      });
       await prisma.order.deleteMany({ where: { id: { in: createdOrderIds } } });
     }
-    await prisma.auditEvent.deleteMany({ where: { actorUserId: { in: createdUserIds } } });
-    if (createdUserIds.length) await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+    await prisma.auditEvent.deleteMany({
+      where: { actorUserId: { in: createdUserIds } },
+    });
+    if (createdUserIds.length)
+      await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
     if (createdWarehouseIds.length) {
-      await prisma.warehouse.deleteMany({ where: { id: { in: createdWarehouseIds } } });
+      await prisma.warehouse.deleteMany({
+        where: { id: { in: createdWarehouseIds } },
+      });
     }
-    if (createdProductIds.length) await prisma.product.deleteMany({ where: { id: { in: createdProductIds } } });
+    if (createdProductIds.length)
+      await prisma.product.deleteMany({
+        where: { id: { in: createdProductIds } },
+      });
 
     await prisma.$disconnect();
   });
 
   /** Builds a paid, single-line PLATFORM order through to fully-packed
    * fulfillment — the state a shipment can be booked against. */
-  async function createPackedFulfillment(
-    quantity: number,
-  ): Promise<{ fulfillmentOrderId: string; fulfillmentLineId: string; orderId: string }> {
+  async function createPackedFulfillment(quantity: number): Promise<{
+    fulfillmentOrderId: string;
+    fulfillmentLineId: string;
+    orderId: string;
+  }> {
     const rowSuffix = `${suffix}-${randomUUID().slice(0, 8)}`;
 
     const user = await prisma.user.create({
@@ -119,21 +142,34 @@ describe('Shipments (integration, real Postgres)', () => {
     createdUserIds.push(user.id);
 
     const product = await prisma.product.create({
-      data: { name: `Shipments Product ${rowSuffix}`, slug: `shipments-product-${rowSuffix}` },
+      data: {
+        name: `Shipments Product ${rowSuffix}`,
+        slug: `shipments-product-${rowSuffix}`,
+      },
     });
     createdProductIds.push(product.id);
     const variant = await prisma.productVariant.create({
       data: { productId: product.id, skuCode: `SHIP-SKU-${rowSuffix}` },
     });
-    const offer = await prisma.offer.create({ data: { variantId: variant.id } });
+    const offer = await prisma.offer.create({
+      data: { variantId: variant.id },
+    });
 
     const warehouse = await prisma.warehouse.create({
-      data: { name: `Shipments Warehouse ${rowSuffix}`, code: `SHIP-WH-${rowSuffix}` },
+      data: {
+        name: `Shipments Warehouse ${rowSuffix}`,
+        code: `SHIP-WH-${rowSuffix}`,
+      },
     });
     createdWarehouseIds.push(warehouse.id);
 
     const record = await prisma.inventoryRecord.create({
-      data: { warehouseId: warehouse.id, variantId: variant.id, onHand: quantity + 100, reserved: quantity },
+      data: {
+        warehouseId: warehouse.id,
+        variantId: variant.id,
+        onHand: quantity + 100,
+        reserved: quantity,
+      },
     });
     const reservation = await prisma.reservation.create({
       data: {
@@ -201,13 +237,24 @@ describe('Shipments (integration, real Postgres)', () => {
     await provisioningService.provisionForOrder(order.id);
 
     const fulfillmentOrder = await prisma.fulfillmentOrder.findUniqueOrThrow({
-      where: { shippingGroupId_warehouseId: { shippingGroupId: shippingGroup.id, warehouseId: warehouse.id } },
+      where: {
+        shippingGroupId_warehouseId: {
+          shippingGroupId: shippingGroup.id,
+          warehouseId: warehouse.id,
+        },
+      },
       include: { lines: true },
     });
     const [line] = fulfillmentOrder.lines;
     if (!line) throw new Error('expected a provisioned fulfillment line');
 
-    await fulfillmentsService.startWork(fulfillmentOrder.id, FulfillmentWorkItemType.PICK, 0, ADMIN_USER_ID, Role.ADMIN);
+    await fulfillmentsService.startWork(
+      fulfillmentOrder.id,
+      FulfillmentWorkItemType.PICK,
+      0,
+      ADMIN_USER_ID,
+      Role.ADMIN,
+    );
     await fulfillmentsService.recordQuantities(
       fulfillmentOrder.id,
       FulfillmentWorkItemType.PICK,
@@ -216,7 +263,13 @@ describe('Shipments (integration, real Postgres)', () => {
       Role.ADMIN,
       randomUUID(),
     );
-    await fulfillmentsService.startWork(fulfillmentOrder.id, FulfillmentWorkItemType.PACK, 0, ADMIN_USER_ID, Role.ADMIN);
+    await fulfillmentsService.startWork(
+      fulfillmentOrder.id,
+      FulfillmentWorkItemType.PACK,
+      0,
+      ADMIN_USER_ID,
+      Role.ADMIN,
+    );
     await fulfillmentsService.recordQuantities(
       fulfillmentOrder.id,
       FulfillmentWorkItemType.PACK,
@@ -226,11 +279,16 @@ describe('Shipments (integration, real Postgres)', () => {
       randomUUID(),
     );
 
-    return { fulfillmentOrderId: fulfillmentOrder.id, fulfillmentLineId: line.id, orderId: order.id };
+    return {
+      fulfillmentOrderId: fulfillmentOrder.id,
+      fulfillmentLineId: line.id,
+      orderId: order.id,
+    };
   }
 
   it('books a shipment through the manual carrier and projects tracking status forward', async () => {
-    const { fulfillmentOrderId, fulfillmentLineId } = await createPackedFulfillment(5);
+    const { fulfillmentOrderId, fulfillmentLineId } =
+      await createPackedFulfillment(5);
 
     const shipment = await shipmentsService.create(
       {
@@ -242,7 +300,9 @@ describe('Shipments (integration, real Postgres)', () => {
     );
     expect(shipment.status).toBe(ShipmentStatus.PENDING_BOOKING);
 
-    const line = await prisma.fulfillmentLine.findUniqueOrThrow({ where: { id: fulfillmentLineId } });
+    const line = await prisma.fulfillmentLine.findUniqueOrThrow({
+      where: { id: fulfillmentLineId },
+    });
     expect(line.shipmentAssignedQuantity).toBe(5);
 
     const booked = await shipmentsService.book(shipment.id, ADMIN_USER_ID);
@@ -251,17 +311,25 @@ describe('Shipments (integration, real Postgres)', () => {
 
     await shipmentsService.addManualTrackingEvent(
       shipment.id,
-      { normalizedStatus: ShipmentStatus.IN_TRANSIT, occurredAt: new Date().toISOString() },
+      {
+        normalizedStatus: ShipmentStatus.IN_TRANSIT,
+        occurredAt: new Date().toISOString(),
+      },
       ADMIN_USER_ID,
       Role.ADMIN,
     );
-    const afterTransit = await prisma.shipment.findUniqueOrThrow({ where: { id: shipment.id } });
+    const afterTransit = await prisma.shipment.findUniqueOrThrow({
+      where: { id: shipment.id },
+    });
     expect(afterTransit.status).toBe(ShipmentStatus.IN_TRANSIT);
 
     // Delivered is terminal; an older event must not regress it.
     await shipmentsService.addManualTrackingEvent(
       shipment.id,
-      { normalizedStatus: ShipmentStatus.DELIVERED, occurredAt: new Date().toISOString() },
+      {
+        normalizedStatus: ShipmentStatus.DELIVERED,
+        occurredAt: new Date().toISOString(),
+      },
       ADMIN_USER_ID,
       Role.ADMIN,
     );
@@ -274,12 +342,15 @@ describe('Shipments (integration, real Postgres)', () => {
       ADMIN_USER_ID,
       Role.ADMIN,
     );
-    const final = await prisma.shipment.findUniqueOrThrow({ where: { id: shipment.id } });
+    const final = await prisma.shipment.findUniqueOrThrow({
+      where: { id: shipment.id },
+    });
     expect(final.status).toBe(ShipmentStatus.DELIVERED);
   });
 
   it('is idempotent: creating with the same key twice never double-allocates', async () => {
-    const { fulfillmentOrderId, fulfillmentLineId } = await createPackedFulfillment(4);
+    const { fulfillmentOrderId, fulfillmentLineId } =
+      await createPackedFulfillment(4);
     const key = randomUUID();
     const dto = {
       fulfillmentOrderId,
@@ -292,12 +363,15 @@ describe('Shipments (integration, real Postgres)', () => {
     ]);
     expect(second.id).toBe(first.id);
 
-    const line = await prisma.fulfillmentLine.findUniqueOrThrow({ where: { id: fulfillmentLineId } });
+    const line = await prisma.fulfillmentLine.findUniqueOrThrow({
+      where: { id: fulfillmentLineId },
+    });
     expect(line.shipmentAssignedQuantity).toBe(4);
   });
 
   it('releases the allocation when a booked shipment is cancelled', async () => {
-    const { fulfillmentOrderId, fulfillmentLineId } = await createPackedFulfillment(3);
+    const { fulfillmentOrderId, fulfillmentLineId } =
+      await createPackedFulfillment(3);
     const shipment = await shipmentsService.create(
       {
         fulfillmentOrderId,
@@ -308,17 +382,26 @@ describe('Shipments (integration, real Postgres)', () => {
     );
     await shipmentsService.book(shipment.id, ADMIN_USER_ID);
 
-    await shipmentsService.cancel(shipment.id, 'customer changed their mind', ADMIN_USER_ID);
+    await shipmentsService.cancel(
+      shipment.id,
+      'customer changed their mind',
+      ADMIN_USER_ID,
+    );
 
-    const line = await prisma.fulfillmentLine.findUniqueOrThrow({ where: { id: fulfillmentLineId } });
+    const line = await prisma.fulfillmentLine.findUniqueOrThrow({
+      where: { id: fulfillmentLineId },
+    });
     expect(line.shipmentAssignedQuantity).toBe(0);
 
-    const cancelledShipment = await prisma.shipment.findUniqueOrThrow({ where: { id: shipment.id } });
+    const cancelledShipment = await prisma.shipment.findUniqueOrThrow({
+      where: { id: shipment.id },
+    });
     expect(cancelledShipment.status).toBe(ShipmentStatus.CANCELLED);
   });
 
   it('serializes concurrent booking attempts through the fulfillment-order row lock', async () => {
-    const { fulfillmentOrderId, fulfillmentLineId } = await createPackedFulfillment(5);
+    const { fulfillmentOrderId, fulfillmentLineId } =
+      await createPackedFulfillment(5);
 
     const results = await Promise.allSettled([
       shipmentsService.create(
@@ -344,14 +427,19 @@ describe('Shipments (integration, real Postgres)', () => {
     // 3 + 3 = 6 exceeds the 5 packed; exactly one must be rejected.
     expect(fulfilled).toHaveLength(1);
     expect(rejected).toHaveLength(1);
-    expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(ConflictException);
+    expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(
+      ConflictException,
+    );
 
-    const line = await prisma.fulfillmentLine.findUniqueOrThrow({ where: { id: fulfillmentLineId } });
+    const line = await prisma.fulfillmentLine.findUniqueOrThrow({
+      where: { id: fulfillmentLineId },
+    });
     expect(line.shipmentAssignedQuantity).toBe(3);
   });
 
   it('dedupes a retried webhook delivery for the same payload', async () => {
-    const { fulfillmentOrderId, fulfillmentLineId } = await createPackedFulfillment(2);
+    const { fulfillmentOrderId, fulfillmentLineId } =
+      await createPackedFulfillment(2);
     const shipment = await shipmentsService.create(
       {
         fulfillmentOrderId,
@@ -405,15 +493,28 @@ describe('Shipments (integration, real Postgres)', () => {
       sellersServiceStub,
     );
 
-    await stubService.ingestWebhook(stubProviderCode, { event: 'out_for_delivery' }, {});
-    await stubService.ingestWebhook(stubProviderCode, { event: 'out_for_delivery' }, {});
+    await stubService.ingestWebhook(
+      stubProviderCode,
+      { event: 'out_for_delivery' },
+      {},
+    );
+    await stubService.ingestWebhook(
+      stubProviderCode,
+      { event: 'out_for_delivery' },
+      {},
+    );
 
     const events = await prisma.trackingEvent.findMany({
-      where: { shipmentId: shipment.id, source: TrackingEventSource.CARRIER_WEBHOOK },
+      where: {
+        shipmentId: shipment.id,
+        source: TrackingEventSource.CARRIER_WEBHOOK,
+      },
     });
     expect(events).toHaveLength(1);
 
-    const afterWebhook = await prisma.shipment.findUniqueOrThrow({ where: { id: shipment.id } });
+    const afterWebhook = await prisma.shipment.findUniqueOrThrow({
+      where: { id: shipment.id },
+    });
     expect(afterWebhook.status).toBe(ShipmentStatus.OUT_FOR_DELIVERY);
   });
 

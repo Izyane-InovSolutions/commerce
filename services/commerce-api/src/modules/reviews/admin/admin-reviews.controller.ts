@@ -15,7 +15,10 @@ import { isUUID } from 'class-validator';
 import type { AuthenticatedUser } from '../../../common/auth/authenticated-user';
 import { CurrentUser } from '../../../common/auth/current-user.decorator';
 import { Roles } from '../../../common/auth/roles.decorator';
-import { AdminReviewsService, assertAdminReviewType } from './admin-reviews.service';
+import {
+  AdminReviewsService,
+  assertAdminReviewType,
+} from './admin-reviews.service';
 import { ApproveModerationDto } from './dto/approve-moderation.dto';
 import { DismissReportDto } from './dto/dismiss-report.dto';
 import { ListAdminReviewsDto } from './dto/list-admin-reviews.dto';

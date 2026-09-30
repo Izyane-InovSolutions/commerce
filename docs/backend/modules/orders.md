@@ -12,6 +12,8 @@
 
 ## Routes
 
+Cancellation also exposes owner `POST /api/v1/orders/:id/cancel` and staff/admin `POST /api/v1/admin/orders/:id/cancel` through [cancellation controllers](../../../services/commerce-api/src/modules/orders/cancellation/order-cancellation.controller.ts). These cancel pending orders; paid orders follow fulfillment/refund flows. `test/orders.integration-spec.ts` contains database scenarios, whose current execution status is in the [baseline ledger](../baseline-verification.md).
+
 Conventions (prefix, guards, envelope, pagination): see [../architecture.md](../architecture.md), [../auth-and-access.md](../auth-and-access.md). All routes are reads; the write paths are reached only through checkout, payments and returns.
 
 | Method | Path                          | Access                                             | Idempotency | Description                                                                                                                                                                                                             |
@@ -112,7 +114,7 @@ None specific to this module (commission/hold settings belong to financials; shi
 
 ## Known gaps
 
-- Abandoned `PENDING_PAYMENT` orders are never cancelled. Reservations expire after 15 min, but the order stays pending, and a late payment success then fails in `confirmPayment` because `commit` rejects an EXPIRED reservation ([orders.service.ts:597](../../../services/commerce-api/src/modules/orders/orders.service.ts#L597), [inventory.service.ts:694](../../../services/commerce-api/src/modules/inventory/inventory.service.ts#L694)).
+- Owner `POST /api/v1/orders/:id/cancel` and admin cancellation are implemented in `OrderCancellationController`. The reconciliation worker can cancel eligible expired referenced unified payments. Neither establishes safe late-success recovery after stock expiry; see [current gaps](../known-gaps.md).
 - `GET /admin/orders?status=...` is probably rejected with 400: `status` is read with a separate `@Query('status')`, but the `@Query()` `PaginationQueryDto` is validated with `forbidNonWhitelisted`. There is also no enum validation of `status` ([admin-orders.controller.ts:15](../../../services/commerce-api/src/modules/orders/admin-orders.controller.ts#L15)).
 - `GET /orders` is unpaginated ([orders.service.ts:728](../../../services/commerce-api/src/modules/orders/orders.service.ts#L728)).
 - `unitAmount` falls back to `0` when a line has no `unitPrice` ([orders.service.ts:508](../../../services/commerce-api/src/modules/orders/orders.service.ts#L508)). It relies on `isAvailable` guaranteeing a price.

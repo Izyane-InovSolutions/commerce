@@ -1,6 +1,6 @@
 # Media
 
-> Owner-scoped file uploads via reserve-then-upload with HMAC-signed URLs, local-disk storage behind a `StorageProvider` seam, and the asset checks products and seller verification rely on.
+> Owner-scoped file uploads via reserve-then-upload with HMAC-signed URLs, local or S3-compatible storage behind a `StorageProvider` seam, and the asset checks products and seller verification rely on.
 
 ## Purpose and features
 
@@ -8,7 +8,7 @@
 - **Anyone holding a valid signed URL** can download the content. No bearer token is needed.
 - **Products** attach `AVAILABLE` assets as product images and embed long-lived signed URLs in catalog responses (`createProductDownloadUrl`).
 - **Sellers** lock their uploaded assets as verification documents (`lockVerificationDocuments`). A locked asset cannot be deleted, re-uploaded or attached to a product. See [sellers.md](sellers.md).
-- Storage is local disk today (`LocalStorageProvider`). The seam is the `STORAGE_PROVIDER` token ([storage-provider.ts:1](../../../services/commerce-api/src/infrastructure/storage/storage-provider.ts#L1)); see [../integrations.md](../integrations.md).
+- Storage selects `LocalStorageProvider` or `S3StorageProvider` using `MEDIA_STORAGE_DRIVER`. The seam is the `STORAGE_PROVIDER` token ([storage-provider.ts:1](../../../services/commerce-api/src/infrastructure/storage/storage-provider.ts#L1)); see [../integrations.md](../integrations.md).
 
 ## Routes
 
@@ -59,7 +59,7 @@ stateDiagram-v2
 **Upload**
 
 - Order of checks: owner (404 if missing/deleted, **403** if someone else's) ([media.service.ts:190](../../../services/commerce-api/src/modules/media/media.service.ts#L190)), signature, then status must be `PENDING_UPLOAD` and not locked (409) ([media.service.ts:123](../../../services/commerce-api/src/modules/media/media.service.ts#L123)).
-- The uploaded part's `mimetype` and `size` must equal the reservation exactly, else 400 ([media.service.ts:131](../../../services/commerce-api/src/modules/media/media.service.ts#L131)). The MIME type is the client-declared one; content is not sniffed.
+- The uploaded part's `mimetype` and `size` must equal the reservation exactly, else 400. `contentMatchesMediaType(file.buffer, asset.mimeType)` also checks the content signature against the reserved type; this is not malware scanning ([media.service.ts](../../../services/commerce-api/src/modules/media/media.service.ts)).
 - The status flip is a conditional `updateMany` and the file write happens inside the same transaction, so a failed write rolls the status back ([media.service.ts:140](../../../services/commerce-api/src/modules/media/media.service.ts#L140)).
 
 **Download**
@@ -105,19 +105,19 @@ None. No audit rows, outbox topics or cleanup jobs.
 
 ## Tests
 
-- No `media.service.spec.ts` and no spec for `LocalStorageProvider`.
+- `media.service.spec.ts` and `media-signature.spec.ts` cover service checks and content signatures. Storage selection and S3 operations have mocked unit specs; no dedicated `LocalStorageProvider` spec exists.
 - [test/app.e2e-spec.ts](../../../services/commerce-api/test/app.e2e-spec.ts): OpenAPI shape only (multipart `file` on upload; download has empty security and a binary response).
 - Consumers mock `MediaService` in [products.service.spec.ts](../../../services/commerce-api/src/modules/products/products.service.spec.ts), [marketplace-offers.service.spec.ts](../../../services/commerce-api/src/modules/offers/marketplace-offers.service.spec.ts) and [sellers.service.spec.ts](../../../services/commerce-api/src/modules/sellers/sellers.service.spec.ts).
-- Untested: signature verification, expiry, size/type mismatch, locked-asset delete, path traversal guard.
+- Real object-store behavior, upload transport limits and crash cleanup require separate verification; see the [baseline](../baseline-verification.md).
 
 ## Known gaps
 
 - `FileInterceptor('file')` has no `limits`, so multer buffers any size of upload in memory before the service compares it to the reservation; `MEDIA_MAX_FILE_SIZE_BYTES` only limits the declared size ([media.controller.ts:56](../../../services/commerce-api/src/modules/media/media.controller.ts#L56)).
-- MIME type is trusted from the client (`file.mimetype`), not sniffed from content ([media.service.ts:133](../../../services/commerce-api/src/modules/media/media.service.ts#L133)).
+- Byte signatures are checked against the reserved MIME type by `contentMatchesMediaType`; this does not provide malware scanning or an early multipart size limit.
 - Someone else's asset returns 403 instead of the usual 404, revealing that the id exists ([media.service.ts:197](../../../services/commerce-api/src/modules/media/media.service.ts#L197)).
 - Deleting an asset does not check `ProductMedia`; the product keeps the link and public reads silently drop the image ([media.service.ts:177](../../../services/commerce-api/src/modules/media/media.service.ts#L177)).
 - `requireProductAsset` has no owner check, so the admin attach path can attach any user's unlocked asset ([media.service.ts:38](../../../services/commerce-api/src/modules/media/media.service.ts#L38)).
 - `PENDING_UPLOAD` reservations and soft-deleted rows are never cleaned up.
 - The file write runs inside the DB transaction; if the commit then fails, the file is orphaned on disk ([media.service.ts:151](../../../services/commerce-api/src/modules/media/media.service.ts#L151)).
 - Signed download URLs cannot be revoked before expiry; product image URLs stay valid for 24 h by default after the product is unpublished.
-- Local disk only: multiple API replicas need a shared volume.
+- The local adapter needs shared storage across replicas; the S3 adapter exists, but real bucket and multi-replica operation still need verification.

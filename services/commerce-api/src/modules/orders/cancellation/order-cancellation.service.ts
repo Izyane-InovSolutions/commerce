@@ -1,9 +1,4 @@
-import {
-  ConflictException,
-  Inject,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger } from '@nestjs/common';
 import { OrderStatus, PaymentStatus, type Payment } from '@prisma/client';
 
 import { PrismaService } from '../../../database/prisma.service';

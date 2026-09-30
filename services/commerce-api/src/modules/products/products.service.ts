@@ -242,7 +242,9 @@ export class ProductsService {
    * time, until `limit` products qualify — so an ineligible top seller
    * never leaves the list short.
    */
-  async findBestSellers(query: BestSellersQueryDto): Promise<BestSellersResult> {
+  async findBestSellers(
+    query: BestSellersQueryDto,
+  ): Promise<BestSellersResult> {
     const since = new Date(Date.now() - query.days * 24 * 60 * 60 * 1000);
     const ranked = await this.prisma.$queryRaw<{ productId: string }[]>`
       SELECT v.product_id AS "productId"
@@ -811,14 +813,10 @@ export class ProductsService {
    */
   async removeSellerProduct(userId: string, productId: string): Promise<void> {
     const sellerId = await this.requireOwnedProduct(userId, productId);
-    await this.deleteUnlessUsed(
-      { productId },
-      'This product',
-      async (tx) => {
-        await this.claimForSellerEdit(tx, sellerId, productId);
-        await tx.product.delete({ where: { id: productId } });
-      },
-    );
+    await this.deleteUnlessUsed({ productId }, 'This product', async (tx) => {
+      await this.claimForSellerEdit(tx, sellerId, productId);
+      await tx.product.delete({ where: { id: productId } });
+    });
   }
 
   /** Removing a variant is an edit: a rejected submission is resubmitted. */
@@ -941,9 +939,7 @@ export class ProductsService {
     if (!product || product.createdBySellerId !== seller.id)
       throw new NotFoundException('Product not found');
     if (product.submissionStatus !== ProductSubmissionStatus.PENDING)
-      throw new ConflictException(
-        'This submission has already been reviewed',
-      );
+      throw new ConflictException('This submission has already been reviewed');
   }
 
   /** An approved seller's own submission, or 404 — never a 403 that would
@@ -1030,7 +1026,9 @@ export class ProductsService {
       },
     });
     if (values.length !== ids.length) {
-      throw new BadRequestException('One of the attribute values does not exist');
+      throw new BadRequestException(
+        'One of the attribute values does not exist',
+      );
     }
 
     const category = product.category.name;
@@ -1343,24 +1341,29 @@ export class ProductsService {
     const products = await this.prisma.product.findMany({
       where: {
         status: ProductStatus.PUBLISHED,
-        OR: [{ id: { in: contestedIds } }, { variants: {
-          some: {
-            status: ProductStatus.PUBLISHED,
-            offers: {
+        OR: [
+          { id: { in: contestedIds } },
+          {
+            variants: {
               some: {
                 status: ProductStatus.PUBLISHED,
-                ...PUBLICLY_ELIGIBLE_OFFER,
-                prices: {
+                offers: {
                   some: {
-                    currency: query.currency,
-                    startsAt: { lte: now },
-                    endsAt: { gt: now },
+                    status: ProductStatus.PUBLISHED,
+                    ...PUBLICLY_ELIGIBLE_OFFER,
+                    prices: {
+                      some: {
+                        currency: query.currency,
+                        startsAt: { lte: now },
+                        endsAt: { gt: now },
+                      },
+                    },
                   },
                 },
               },
             },
           },
-        } }],
+        ],
       },
       include: PUBLIC_PRODUCT_INCLUDE,
       take: DEAL_CANDIDATES,
@@ -1518,10 +1521,16 @@ export class ProductsService {
               seller: offer.seller ?? null,
               isFirstParty: offer.sellerId === null,
               currentPrice: currentPrice
-                ? { amount: currentPrice.amount, currency: currentPrice.currency }
+                ? {
+                    amount: currentPrice.amount,
+                    currency: currentPrice.currency,
+                  }
                 : null,
               compareAtPrice: sale
-                ? { amount: sale.regular.amount, currency: sale.regular.currency }
+                ? {
+                    amount: sale.regular.amount,
+                    currency: sale.regular.currency,
+                  }
                 : null,
               saleEndsAt: sale ? sale.endsAt.toISOString() : null,
               // What the offer *is* priced in, so a client can tell "we don't
@@ -1532,7 +1541,10 @@ export class ProductsService {
               inStock: available > 0,
               shippingCost:
                 offer.shippingAmount !== null && offer.shippingCurrency !== null
-                  ? { amount: offer.shippingAmount, currency: offer.shippingCurrency }
+                  ? {
+                      amount: offer.shippingAmount,
+                      currency: offer.shippingCurrency,
+                    }
                   : null,
               priceLead: null,
             };

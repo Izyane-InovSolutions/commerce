@@ -1,4 +1,8 @@
-import { ReviewModerationState, ReviewReportStatus, ReviewVisibility } from '@prisma/client';
+import {
+  ReviewModerationState,
+  ReviewReportStatus,
+  ReviewVisibility,
+} from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { SellerReviewsService } from './seller-reviews.service';

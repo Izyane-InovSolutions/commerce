@@ -50,7 +50,9 @@ export class CreateSupplierDto {
 
   @IsOptional()
   @IsString()
-  @Matches(/^[A-Z]{3}$/, { message: 'defaultCurrency must be a 3-letter ISO code' })
+  @Matches(/^[A-Z]{3}$/, {
+    message: 'defaultCurrency must be a 3-letter ISO code',
+  })
   defaultCurrency?: string;
 
   @IsOptional()
@@ -70,7 +72,9 @@ export class CreateSupplierDto {
 
   @IsOptional()
   @IsString()
-  @Matches(/^[A-Z]{3}$/, { message: 'minimumOrderCurrency must be a 3-letter ISO code' })
+  @Matches(/^[A-Z]{3}$/, {
+    message: 'minimumOrderCurrency must be a 3-letter ISO code',
+  })
   minimumOrderCurrency?: string;
 
   @IsOptional()

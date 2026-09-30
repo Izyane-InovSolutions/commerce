@@ -34,7 +34,10 @@ export type CheckoutHarness = {
   createCustomer(): Promise<Customer>;
   /** A published first-party offer priced in ZMW with `onHand` units in a
    * fresh warehouse. */
-  createStockedOffer(onHand: number, unitAmount?: number): Promise<StockedOffer>;
+  createStockedOffer(
+    onHand: number,
+    unitAmount?: number,
+  ): Promise<StockedOffer>;
   /** Adds `quantity` of the offer to the customer's cart and checks out. */
   checkout(
     customer: Customer,
@@ -179,7 +182,10 @@ export async function createCheckoutHarness(
       data: { offerId: offer.id, amount: unitAmount, currency: 'ZMW' },
     });
     const warehouse = await prisma.warehouse.create({
-      data: { name: `${label} warehouse ${suffix}`, code: `${label}-${suffix}` },
+      data: {
+        name: `${label} warehouse ${suffix}`,
+        code: `${label}-${suffix}`,
+      },
     });
     warehouseIds.push(warehouse.id);
     const record = await prisma.inventoryRecord.create({

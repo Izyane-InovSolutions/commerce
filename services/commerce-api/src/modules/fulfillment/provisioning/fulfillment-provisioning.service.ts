@@ -72,7 +72,12 @@ export class FulfillmentProvisioningService {
             group.items,
           );
         } else {
-          await this.provisionShippingGroup(order.id, sellerOrder.id, group.id, group.items);
+          await this.provisionShippingGroup(
+            order.id,
+            sellerOrder.id,
+            group.id,
+            group.items,
+          );
         }
       }
     }
@@ -86,14 +91,21 @@ export class FulfillmentProvisioningService {
    * run any number of times. Invoked via
    * `npx ts-node scripts/backfill-seller-fulfillments.ts` (see that script).
    */
-  async backfillSellerFulfillments(): Promise<{ scanned: number; provisioned: number }> {
+  async backfillSellerFulfillments(): Promise<{
+    scanned: number;
+    provisioned: number;
+  }> {
     const groups = await this.prisma.shippingGroup.findMany({
       where: {
         fulfillmentMode: OfferFulfillmentMode.SELLER,
         fulfillmentOrders: { none: {} },
         order: {
           status: {
-            in: [OrderStatus.PAID, OrderStatus.PARTIALLY_REFUNDED, OrderStatus.REFUNDED],
+            in: [
+              OrderStatus.PAID,
+              OrderStatus.PARTIALLY_REFUNDED,
+              OrderStatus.REFUNDED,
+            ],
           },
         },
       },
@@ -106,7 +118,12 @@ export class FulfillmentProvisioningService {
         where: { shippingGroupId: group.id },
         include: { offer: { select: { variantId: true } } },
       });
-      await this.provisionSellerShippingGroup(group.orderId, group.sellerOrderId, group.id, items);
+      await this.provisionSellerShippingGroup(
+        group.orderId,
+        group.sellerOrderId,
+        group.id,
+        items,
+      );
       const created = await this.prisma.fulfillmentOrder.findFirst({
         where: { shippingGroupId: group.id, warehouseId: null },
         select: { id: true },
@@ -210,7 +227,12 @@ export class FulfillmentProvisioningService {
 
     if (entries.length === 0) return;
 
-    await this.createSellerFulfillmentOrder(orderId, sellerOrderId, shippingGroupId, entries);
+    await this.createSellerFulfillmentOrder(
+      orderId,
+      sellerOrderId,
+      shippingGroupId,
+      entries,
+    );
   }
 
   private async createFulfillmentOrder(
@@ -222,7 +244,8 @@ export class FulfillmentProvisioningService {
   ): Promise<void> {
     try {
       await this.prisma.$transaction(async (tx) => {
-        const fulfillmentNumber = await this.numberingService.nextFulfillmentNumber(tx);
+        const fulfillmentNumber =
+          await this.numberingService.nextFulfillmentNumber(tx);
 
         const fulfillmentOrder = await tx.fulfillmentOrder.create({
           data: {
@@ -302,7 +325,8 @@ export class FulfillmentProvisioningService {
   ): Promise<void> {
     try {
       await this.prisma.$transaction(async (tx) => {
-        const fulfillmentNumber = await this.numberingService.nextFulfillmentNumber(tx);
+        const fulfillmentNumber =
+          await this.numberingService.nextFulfillmentNumber(tx);
 
         const fulfillmentOrder = await tx.fulfillmentOrder.create({
           data: {
@@ -328,7 +352,12 @@ export class FulfillmentProvisioningService {
           data: {
             fulfillmentOrderId: fulfillmentOrder.id,
             type: 'fulfillment.created',
-            metadata: { orderId, sellerOrderId, shippingGroupId, warehouseId: null },
+            metadata: {
+              orderId,
+              sellerOrderId,
+              shippingGroupId,
+              warehouseId: null,
+            },
           },
         });
 

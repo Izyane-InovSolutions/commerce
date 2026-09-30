@@ -70,7 +70,9 @@ export class ZoneShippingRateProvider implements ShippingRateProvider {
       3_000,
     );
     const free = subtotal >= freeThreshold;
-    const rateCode = free ? 'DOMESTIC_STANDARD_FREE_V1' : 'DOMESTIC_STANDARD_V1';
+    const rateCode = free
+      ? 'DOMESTIC_STANDARD_FREE_V1'
+      : 'DOMESTIC_STANDARD_V1';
 
     return {
       serviceLevel: 'STANDARD',

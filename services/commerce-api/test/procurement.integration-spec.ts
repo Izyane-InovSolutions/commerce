@@ -36,7 +36,10 @@ describe('Procurement (integration, real Postgres)', () => {
   const backgroundJobsServiceStub = {
     enqueue: jest.fn().mockResolvedValue(undefined),
   } as unknown as BackgroundJobsService;
-  const inventoryService = new InventoryService(prisma, backgroundJobsServiceStub);
+  const inventoryService = new InventoryService(
+    prisma,
+    backgroundJobsServiceStub,
+  );
   const purchaseOrdersService = new PurchaseOrdersService(
     prisma,
     suppliersService,
@@ -66,7 +69,10 @@ describe('Procurement (integration, real Postgres)', () => {
     await prisma.$connect();
 
     const product = await prisma.product.create({
-      data: { name: `Integration Product ${suffix}`, slug: `integration-product-${suffix}` },
+      data: {
+        name: `Integration Product ${suffix}`,
+        slug: `integration-product-${suffix}`,
+      },
     });
     productId = product.id;
 
@@ -76,7 +82,10 @@ describe('Procurement (integration, real Postgres)', () => {
     variantId = variant.id;
 
     const warehouse = await prisma.warehouse.create({
-      data: { name: `Integration Warehouse ${suffix}`, code: `INTEG-WH-${suffix}` },
+      data: {
+        name: `Integration Warehouse ${suffix}`,
+        code: `INTEG-WH-${suffix}`,
+      },
     });
     warehouseId = warehouse.id;
 
@@ -132,7 +141,8 @@ describe('Procurement (integration, real Postgres)', () => {
     await purchaseOrdersService.approve(po.id, 1, approverId);
     const placed = await purchaseOrdersService.place(po.id, 2, actorUserId);
     const [line] = placed.lines;
-    if (!line) throw new Error('expected the created purchase order to have a line');
+    if (!line)
+      throw new Error('expected the created purchase order to have a line');
     return { poId: placed.id, poLineId: line.id };
   }
 
@@ -177,7 +187,13 @@ describe('Procurement (integration, real Postgres)', () => {
       poId,
       {
         warehouseId,
-        lines: [{ purchaseOrderLineId: poLineId, deliveredQuantity: 5, acceptedQuantity: 5 }],
+        lines: [
+          {
+            purchaseOrderLineId: poLineId,
+            deliveredQuantity: 5,
+            acceptedQuantity: 5,
+          },
+        ],
       } as never,
       actorUserId,
       Role.STAFF,
@@ -195,7 +211,9 @@ describe('Procurement (integration, real Postgres)', () => {
     });
     expect(poLine.receivedQuantity).toBe(5);
 
-    const po = await prisma.purchaseOrder.findUniqueOrThrow({ where: { id: poId } });
+    const po = await prisma.purchaseOrder.findUniqueOrThrow({
+      where: { id: poId },
+    });
     expect(po.status).toBe('RECEIVED');
 
     const movement = await prisma.inventoryMovement.findFirst({
@@ -213,7 +231,13 @@ describe('Procurement (integration, real Postgres)', () => {
       {
         warehouseId,
         post: false,
-        lines: [{ purchaseOrderLineId: poLineId, deliveredQuantity: 4, acceptedQuantity: 4 }],
+        lines: [
+          {
+            purchaseOrderLineId: poLineId,
+            deliveredQuantity: 4,
+            acceptedQuantity: 4,
+          },
+        ],
       } as never,
       actorUserId,
       Role.STAFF,
@@ -227,7 +251,12 @@ describe('Procurement (integration, real Postgres)', () => {
 
     // Replaying the exact same receipt id (as a client retry after a lost
     // response would) must be a no-op, not a second increment.
-    const replay = await goodsReceiptsService.post(draft.id, actorUserId, Role.STAFF, key);
+    const replay = await goodsReceiptsService.post(
+      draft.id,
+      actorUserId,
+      Role.STAFF,
+      key,
+    );
     const afterReplay = await prisma.inventoryRecord.findUniqueOrThrow({
       where: { warehouseId_variantId: { warehouseId, variantId } },
     });
@@ -244,7 +273,13 @@ describe('Procurement (integration, real Postgres)', () => {
       {
         warehouseId,
         post: false,
-        lines: [{ purchaseOrderLineId: poLineId, deliveredQuantity: 10, acceptedQuantity: 10 }],
+        lines: [
+          {
+            purchaseOrderLineId: poLineId,
+            deliveredQuantity: 10,
+            acceptedQuantity: 10,
+          },
+        ],
       } as never,
       actorUserId,
       Role.STAFF,
@@ -254,7 +289,13 @@ describe('Procurement (integration, real Postgres)', () => {
       {
         warehouseId,
         post: false,
-        lines: [{ purchaseOrderLineId: poLineId, deliveredQuantity: 10, acceptedQuantity: 10 }],
+        lines: [
+          {
+            purchaseOrderLineId: poLineId,
+            deliveredQuantity: 10,
+            acceptedQuantity: 10,
+          },
+        ],
       } as never,
       actorUserId,
       Role.STAFF,
@@ -273,9 +314,9 @@ describe('Procurement (integration, real Postgres)', () => {
     const rejected = results.filter((r) => r.status === 'rejected');
     expect(fulfilled).toHaveLength(1);
     expect(rejected).toHaveLength(1);
-    expect(
-      (rejected[0] as PromiseRejectedResult).reason,
-    ).toBeInstanceOf(ConflictException);
+    expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(
+      ConflictException,
+    );
 
     const record = await prisma.inventoryRecord.findUniqueOrThrow({
       where: { warehouseId_variantId: { warehouseId, variantId } },

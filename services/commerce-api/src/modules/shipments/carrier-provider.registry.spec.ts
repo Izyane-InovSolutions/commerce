@@ -27,8 +27,16 @@ describe('CarrierProviderRegistry', () => {
   });
 
   it('lists every registered provider', () => {
-    const registry = new CarrierProviderRegistry([fakeProvider('ZONE'), fakeProvider('DHL')]);
+    const registry = new CarrierProviderRegistry([
+      fakeProvider('ZONE'),
+      fakeProvider('DHL'),
+    ]);
 
-    expect(registry.list().map((p) => p.providerCode).sort()).toEqual(['DHL', 'ZONE']);
+    expect(
+      registry
+        .list()
+        .map((p) => p.providerCode)
+        .sort(),
+    ).toEqual(['DHL', 'ZONE']);
   });
 });

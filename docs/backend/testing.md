@@ -1,96 +1,76 @@
 # Testing
 
-> The API's test layers, how to run each one, and the safety rules around test databases.
+Use Node 24 and the root lockfile. Current outcomes and dates are in the [verification ledger](baseline-verification.md); source findings are in the [gap register](known-gaps.md).
 
-## Layers
+## Test layers
 
-| Layer           | Pattern                      | Count | Config                                                                                                                                                                       | Database                                          |
-| --------------- | ---------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| Unit            | `src/**/*.spec.ts`           | 79    | `jest` block in [package.json](../../services/commerce-api/package.json) (rootDir `src`)                                                                                     | None. Services are built with hand-written stubs  |
-| E2E (HTTP)      | `test/*.e2e-spec.ts`         | 8     | [test/jest-e2e.json](../../services/commerce-api/test/jest-e2e.json) + [setup-env.ts](../../services/commerce-api/test/setup-env.ts)                                         | None. Uses `FakePrismaService` in memory          |
-| Integration     | `test/*.integration-spec.ts` | 12    | [test/jest-integration.json](../../services/commerce-api/test/jest-integration.json) + [setup-integration-env.ts](../../services/commerce-api/test/setup-integration-env.ts) | **Real PostgreSQL**, a dedicated `_test` database |
-| Database checks | `test/*.database-check.cjs`  | 3     | Run by hand with `node`                                                                                                                                                      | Real PostgreSQL, run against the built `dist/`    |
+| Layer | Pattern / configuration | Database and limits |
+| --- | --- | --- |
+| Unit | `src/**/*.spec.ts`; API `package.json` Jest block | Mocked collaborators; not proof of PostgreSQL locking or provider delivery. |
+| HTTP | `test/*.e2e-spec.ts`; `test/jest-e2e.json` | Fake Prisma for application suites; also includes test-provider isolation. |
+| Integration | `test/*.integration-spec.ts`; `test/jest-integration.json` | Real PostgreSQL; guarded target, migrations before tests, scoped fixture cleanup. |
+| Legacy database checks | `test/*.database-check.cjs` | Compiled services and a real DB; these scripts do not use Jest database safeguards and are outside the new CI gate. |
 
-- **E2E suites:** `app`, `auth`, `cart`, `catalog`, `checkout`, `inventory`, `security`, `users`.
-- **Integration suites:** `admin-review-moderation`, `auth-concurrency`, `fulfillment`, `payouts`, `payouts-http`, `procurement`, `returns`, `reviews`, `reviews-http`, `seller-fulfillment`, `seller-fulfillment-http`, `shipments`.
-- **Database checks:** `financial-integrity`, `marketplace`, `sellers`.
+`test/support/fake-prisma.service.ts` must follow model changes used by HTTP tests. `fake-payment-provider.ts` exercises payment events without gateway calls. `issue-test-token.ts` supplies sessions required by authentication guards.
 
-## Commands
+## Isolated local PostgreSQL 17
 
-Run these from `services/commerce-api`, or add `--workspace @commerce/commerce-api` when running from the repo root.
+Install Docker with Compose support first. Run from the repository root:
 
-```bash
-npm test                  # unit, --runInBand
-npm run test:watch
-npm run test:e2e          # runs swagger:check first (pretest:e2e)
-npm run test:integration  # needs a _test database; see below
-npm run typecheck
-npm run lint
-npm run format:check      # prettier over src/ and test/ .ts files
-npm run swagger:check     # fails if contracts.generated.json is stale
+```powershell
+docker compose -f deploy/docker-compose.test.yml up -d --wait
+Copy-Item services/commerce-api/.env.integration.example services/commerce-api/.env.integration
+npm ci --workspace=@commerce/commerce-api --include-workspace-root
+npm run prisma:generate --workspace=@commerce/commerce-api
+npm run test:integration --workspace=@commerce/commerce-api
 ```
 
-There is no CI workflow in the repository (`.github/workflows` does not exist), so all of these run locally. A reasonable order before pushing is: `typecheck` → `lint` → `format:check` → `test` → `test:e2e`, then `test:integration` if you changed anything that touches the database.
+Copy the example only on first setup; inspect an existing `.env.integration` instead of overwriting it. It is ignored by Git. The example contains public disposable test credentials, not application secrets. Complete dependency installation before running checks that use `node_modules`.
 
-## Test support
+The Compose project `commerce-tests` uses PostgreSQL 17, database/user `commerce_test`, a dedicated `test-pgdata` volume and **127.0.0.1:55432**. It does not reference deployment volumes, `env_file` or application credentials. Do not combine it with deployment Compose files. Tests sharing one database must run serially; CI gets its own service instance per job.
 
-Helpers in [test/support/](../../services/commerce-api/test/support/):
+Stop the test service without removing its data:
 
-| File                       | Purpose                                                                                                                                                                                                                                                                     |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `fake-prisma.service.ts`   | An in-memory stand-in for `PrismaService`, covering the models the e2e suites use. **Update it whenever you add a column that those flows read or write** (users, sessions, tokens and so on). Otherwise the e2e tests drift from the real schema.                          |
-| `fake-payment-provider.ts` | `FakePaymentProvider`, a `PaymentProvider` that initialises every payment as `PENDING` and lets a test queue the event that the next `verifyWebhook()` returns. It is the only way to exercise the webhook settlement path, since the real gateway has no verified webhooks |
-| `issue-test-token.ts`      | `issueTestToken(jwt, prisma, userId, role)` creates a real `Session` row and signs an access token for it. A made-up `sid` would be rejected by `JwtAuthGuard`                                                                                                              |
-
-`setup-env.ts` gives the e2e tests a complete, valid environment with no `.env` file. The app ignores `.env` when `NODE_ENV=test`.
-
-## Integration test database: safety rules
-
-Integration tests migrate and then write to a real database. So [integration-test.config.ts](../../services/commerce-api/src/infrastructure/config/integration-test.config.ts) checks the target before anything connects, and refuses to run unless:
-
-- `TEST_DATABASE_URL` and `TEST_DATABASE_NAME` are set, and the name **ends in `_test`**.
-- The database in the URL is exactly that name, uses the `postgres:` or `postgresql:` scheme, and has no `schema` parameter other than `public`.
-
-There is one opt-in exception. `INTEGRATION_DATABASE_MODE=disposable-development` tests against `DATABASE_URL` from `.env`, but only if:
-
-- `INTEGRATION_DATABASE_NAME` matches the database name,
-- the host is loopback, and
-- `NODE_ENV` is not `production`.
-
-What `setup-integration-env.ts` does:
-
-- Loads `.env.integration`.
-- Sets `NODE_ENV=test` and `SCHEDULED_WORKERS_ENABLED=false`, so no intervals run and tests drive jobs themselves.
-- Points `SHADOW_DATABASE_URL` at an unreachable placeholder.
-- Fills in test-only secrets and keyrings.
-
-Global setup ([prepare-integration-database.ts](../../services/commerce-api/test/prepare-integration-database.ts)) runs `prisma migrate deploy`. **It never creates, drops or resets a database**: create the `_test` database yourself.
-
-```bash
-createdb commerce_test
-cat > services/commerce-api/.env.integration <<'EOF'
-TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/commerce_test
-TEST_DATABASE_NAME=commerce_test
-EOF
-npm run test:integration --workspace @commerce/commerce-api
+```powershell
+docker compose -f deploy/docker-compose.test.yml down
 ```
 
-For more detail see [backend-release-1-verification.md](../backend-release-1-verification.md).
+The 2026-09-30 baseline verified Docker Desktop's WSL 2 Linux engine and the commands above. The dedicated Compose service became healthy on `127.0.0.1:55432`; all 41 migrations, 15 suites and 71 integration tests passed. An earlier fresh native PostgreSQL 17 run with equivalent isolation produced the same result. GitHub Actions provisions an independent PostgreSQL 17 service and does not require developer database credentials or secrets.
 
-## Database checks
+## Database and provider safeguards
 
-Each `test/*.database-check.cjs` script creates fixtures scoped to fresh UUIDs, runs real transactions (including concurrent connections) against the **compiled** services in `dist/`, and then deletes only those fixtures:
+[integration-test.config.ts](../../services/commerce-api/src/infrastructure/config/integration-test.config.ts) and its existing unit tests retain these safeguards:
 
-```bash
-npm run build --workspace @commerce/commerce-api
-node --env-file=.env test/financial-integrity.database-check.cjs
+- `TEST_DATABASE_NAME` must end in `_test` and exactly match `TEST_DATABASE_URL`.
+- The URL must use PostgreSQL and only the `public` schema.
+- Missing test configuration never silently falls back to the application database.
+- The existing `disposable-development` exception requires an explicit matching local database name and rejects production configuration. New Compose and CI configuration do not use this exception.
+
+[setup-integration-env.ts](../../services/commerce-api/test/setup-integration-env.ts) checks the original environment before forcing test mode. [prepare-integration-database.ts](../../services/commerce-api/test/prepare-integration-database.ts) then runs `prisma migrate deploy`; it does not create, reset or drop databases. The container/service creates the database.
+
+All Jest layers use [test-provider-env.ts](../../services/commerce-api/test/test-provider-env.ts): scheduling is disabled, payments use `pending`, storage is local, FX/gateway credentials are removed, SMTP credentials are cleared and SMTP points to unreachable loopback port 1. Provider unit tests inject mocks. The application ignores `.env` in test mode. Unit/HTTP database URLs are unreachable placeholders; integration uses only the validated target. Tests can invoke worker methods explicitly; automatic workers stay off.
+
+The [isolation regression test](../../services/commerce-api/test/test-provider-env.e2e-spec.ts) checks inherited live settings are overridden while the chosen database is preserved. This is provider configuration isolation, not an OS network sandbox.
+
+## Commands and CI
+
+Run from the repository root:
+
+```powershell
+npm run typecheck --workspace=@commerce/commerce-api
+npm run lint --workspace=@commerce/commerce-api
+npm run format:check --workspace=@commerce/commerce-api
+npm run swagger:check --workspace=@commerce/commerce-api
+npm test --workspace=@commerce/commerce-api
+npm run test:e2e --workspace=@commerce/commerce-api
+npm run test:integration --workspace=@commerce/commerce-api
+npm run build --workspace=@commerce/commerce-api
 ```
 
-**Warning:** these scripts use whatever `DATABASE_URL` is in the env file, and they do not apply the `_test` safety rules. Point them at a disposable database, never at production.
+The [backend workflow](../../.github/workflows/backend.yml) runs on pull requests, pushes to `main` and manual dispatch. Every job uses Node 24, installs backend dependencies from the root lockfile and generates Prisma. Independent checks cover types, lint, formatting, Swagger, unit tests, HTTP tests and build. The integration job uses PostgreSQL 17 and the guarded Jest setup. Failures are strict; no check is allowed to fail. Build also rejects changes to committed generated Swagger contracts. The first remote workflow run remains required evidence.
 
-## What is not covered
+`test:e2e` first checks Swagger consistency. `build` regenerates contracts; review any resulting diff rather than treating generation as verification.
 
-- **No specs at all:** the media module, `refund-cases.service.ts`, `jobs/fulfillment-cancellation-refund.handler.ts`, `supplier-products.service.ts`, `EmailSendHandler` and `SmtpEmailSender`.
-- **Controllers:** mostly tested through the e2e and integration suites rather than their own specs.
-- **Integrations:** payments against the real Unified gateway and FX refresh against exchangerate-api.com are only unit-tested with a mocked `fetch`.
-- **Module gaps:** each module doc's **Tests** section lists that module's coverage and gaps.
+## Remaining verification
+
+These checks do not certify real SMTP/S3/gateway activation, production migrations, restore durability, load/response time, multi-replica failover or every acceptance criterion. Existing media, storage, outbox and notification specs supersede older claims that these areas had no tests. Use actual spec files and the dated ledger, not old suite counts. Legacy database-check scripts must only be pointed at a disposable database; they do not enforce the `_test` guard.

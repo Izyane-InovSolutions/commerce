@@ -8,7 +8,9 @@ describe('ManualCarrierProvider', () => {
   });
 
   it('books a shipment with a generated tracking reference and no webhook support', () => {
-    expect((provider as { parseWebhook?: unknown }).parseWebhook).toBeUndefined();
+    expect(
+      (provider as { parseWebhook?: unknown }).parseWebhook,
+    ).toBeUndefined();
 
     return provider
       .book({

@@ -57,15 +57,20 @@ that causes them, so an event is never recorded for a change that rolled back.
 ## Notifications and email
 
 Notifications are stored per user and listed through `GET /api/v1/notifications`.
-Each one is also emailed. Configure outgoing mail with `SMTP_URL`, or with
+The notification pipeline also queues email. Configure its outgoing mail with `SMTP_URL`, or with
 `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER` and `SMTP_PASS`, and set
-the sender with `MAIL_FROM`. With no SMTP settings, mail is written to the API
+the sender with `EMAIL_FROM` (`MAIL_FROM` is a legacy fallback). With no SMTP settings, notification mail is written to the API
 log in development and test, and is not sent in production.
 
 Links in emails are built from `WEB_APP_URL` (the storefront) and
 `SELLER_APP_URL` (the seller app). The seller app is served under `/seller`, so
-include that base path, for example `http://localhost:3003/seller`. Password
-reset requests are emailed as a link to `WEB_APP_URL/reset-password`.
+include that base path, for example `http://localhost:3003/seller`.
+
+Authentication mail uses a separate encrypted delivery pipeline: `SMTP_HOST`,
+`SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` and `EMAIL_FROM`. Reset and
+verification links use `CUSTOMER_WEB_URL`. Required auth mail configuration is
+validated at startup; raw reset links are not logged as a fallback. Tests disable
+external delivery; see [backend testing](backend/testing.md).
 
 ## Media storage
 

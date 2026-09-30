@@ -842,7 +842,10 @@ export class OrdersService {
         },
       },
     });
-    const statusesByOrderId = new Map<string, (typeof fulfillmentOrders)[number]['status'][]>();
+    const statusesByOrderId = new Map<
+      string,
+      (typeof fulfillmentOrders)[number]['status'][]
+    >();
     const packedAtByOrderId = new Map<string, Date>();
     for (const fo of fulfillmentOrders) {
       const list = statusesByOrderId.get(fo.orderId) ?? [];

@@ -146,7 +146,7 @@ REMOVED and WITHDRAWN are terminal: no edit, withdraw, approve or visibility cha
 
 ## Jobs and events
 
-- Outbox topics, written in the command's transaction: `product_review.submitted`, `.edited`, `.withdrawn`; `seller_rating.submitted`, `.edited`, `.withdrawn` ([reviews.service.ts:152](../../../services/commerce-api/src/modules/reviews/reviews.service.ts#L152)). Nothing consumes them yet; see [../background-processing.md](../background-processing.md#outbox). Reports and admin actions write no outbox events.
+- Outbox topics, written in the command's transaction: `product_review.submitted`, `.edited`, `.withdrawn`; `seller_rating.submitted`, `.edited`, `.withdrawn` ([reviews.service.ts:152](../../../services/commerce-api/src/modules/reviews/reviews.service.ts#L152)). The generic dispatcher drains outbox events, but no review-specific subscriber is registered; see [../background-processing.md](../background-processing.md#outbox). Reports and admin actions write no outbox events.
 - **Script** `scripts/rebuild-review-summaries.ts`: `npx ts-node scripts/rebuild-review-summaries.ts` rebuilds every summary; `--check` only compares and sets exit code 1 on any mismatch ([rebuild-review-summaries.ts:7](../../../services/commerce-api/scripts/rebuild-review-summaries.ts#L7)). Intended as a post-deploy repair step; no npm script wraps it.
 - No background jobs or schedulers.
 

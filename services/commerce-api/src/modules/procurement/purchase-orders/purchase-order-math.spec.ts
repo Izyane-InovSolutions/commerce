@@ -10,7 +10,11 @@ describe('computeLineAmounts', () => {
     });
 
     // net = 10*500 - 200 = 4800; tax = 4800 * 0.16 = 768; gross = 5568
-    expect(amounts).toEqual({ netAmount: 4_800, taxAmount: 768, grossAmount: 5_568 });
+    expect(amounts).toEqual({
+      netAmount: 4_800,
+      taxAmount: 768,
+      grossAmount: 5_568,
+    });
   });
 
   it('rounds tax to the nearest minor unit rather than truncating', () => {

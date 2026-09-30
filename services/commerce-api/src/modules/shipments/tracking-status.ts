@@ -28,7 +28,9 @@ export type ProjectStatusInput = {
  * (an older `occurredAt` than what's already been projected) is recorded as
  * history but never rewinds the projection.
  */
-export function projectShipmentStatus(input: ProjectStatusInput): ShipmentStatus {
+export function projectShipmentStatus(
+  input: ProjectStatusInput,
+): ShipmentStatus {
   const { currentStatus, latestEventOccurredAt, newEvent } = input;
 
   if (newEvent.isCorrection) return newEvent.normalizedStatus;

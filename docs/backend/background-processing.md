@@ -7,7 +7,7 @@
 | Mechanism       | Storage               | Who drives it                                      | Used for                                                                                                                      |
 | --------------- | --------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | Job queue       | `BackgroundJob` table | `JobWorkerService` polls every 5 s                 | Work that must eventually happen after a commit (fulfillment provisioning, refunds, emails, reservation expiry, cart cleanup) |
-| Outbox          | `OutboxEvent` table   | **Nothing consumes it yet**; see [Outbox](#outbox) | Domain event log written in the same transaction as the change                                                                |
+| Outbox          | `OutboxEvent` table   | `OutboxDispatcherService`; see [Outbox](#outbox) | Domain event log written in the same transaction as the change                                                                |
 | Scheduled tasks | –                     | `@nestjs/schedule` `@Interval`                     | Periodic sweeps: payouts, FX, tracking, expiry cleanups                                                                       |
 
 `ScheduleModule` is set up in [jobs.module.ts](../../services/commerce-api/src/infrastructure/jobs/jobs.module.ts). Setting `SCHEDULED_WORKERS_ENABLED=false` turns off **all** intervals, crons and timeouts. That includes the job worker poll itself, so jobs pile up unprocessed. Integration tests use this setting so the tests control timing.
@@ -62,7 +62,7 @@ sequenceDiagram
 
 ## Outbox
 
-`OutboxService.record({ topic, aggregateType, aggregateId, payload }, tx)` writes an `OutboxEvent` in the caller's transaction ([outbox.service.ts](../../services/commerce-api/src/infrastructure/jobs/outbox.service.ts)). The service also has `listPending`, `markPublished` and `markFailed` (backoff up to 60 s, `DEAD_LETTER` after 10 attempts). **However, no code calls them yet.** There is no relay and no subscriber, so today the outbox is an append-only log of domain events, ready for a future publisher.
+`OutboxService.record(..., tx)` writes an event in the caller's transaction. [OutboxDispatcherService](../../services/commerce-api/src/infrastructure/jobs/outbox-dispatcher.service.ts) claims and delivers events to registered subscribers with leases, retries and dead-letter handling. [NotificationsOutboxSubscriber](../../services/commerce-api/src/modules/notifications/notifications-outbox.subscriber.ts) is registered by `WorkersModule` and creates notification work. The dispatcher and subscriber have unit specs; real crash/replay and multi-replica behavior remain verification gates. See the [current baseline](baseline-verification.md).
 
 Topics written today:
 
@@ -80,6 +80,8 @@ Topics written today:
 
 ## Scheduled tasks
 
+The source also includes the outbox dispatcher (default 5 seconds), notification delivery, and `PaymentReconciliationScheduler` (30 seconds, unified payments only). Reconciliation takes a database advisory lock and queues `payments.reconcile` jobs; its handler refreshes gateway state and expires eligible referenced attempts. The current manual/provider configuration and source wiring are not live-delivery verification.
+
 | Task                     | Interval                                     | Source                                                                                                                         | Does                                                                                                                                                                                                                                            |
 | ------------------------ | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Job worker poll          | 5 s                                          | [job-worker.service.ts:22](../../services/commerce-api/src/infrastructure/jobs/job-worker.service.ts#L22)                      | Drains the job queue                                                                                                                                                                                                                            |
@@ -93,7 +95,7 @@ Topics written today:
 
 Every API replica runs every task above. What prevents double work:
 
-- **Jobs are safe.** Claims use an atomic conditional update and a lock token.
+- **Jobs and outbox events** use conditional claims and lease tokens. Crash/replay and multiple-replica execution still require explicit verification; source mechanisms alone are not a safety certificate.
 - **Payouts** rely on row locks and conditional status transitions inside `PayoutsService`. The in-memory `running` flag only protects a single process.
 - **Sweeps are idempotent** (FX refresh, recovery and email cleanup, tracking polls) but do redundant work on every replica.
 - **Tip:** to limit schedulers to one node, set `SCHEDULED_WORKERS_ENABLED=false` on the other replicas. But then those replicas also stop draining jobs. Work that is only enqueued, not handled inline, still runs as long as at least one replica has workers on.

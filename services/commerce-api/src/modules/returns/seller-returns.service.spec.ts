@@ -1,4 +1,8 @@
-import { RefundCaseSource, RefundCaseStatus, ReturnStatus } from '@prisma/client';
+import {
+  RefundCaseSource,
+  RefundCaseStatus,
+  ReturnStatus,
+} from '@prisma/client';
 
 import { SellerReturnsService } from './seller-returns.service';
 
@@ -13,12 +17,14 @@ function buildPrisma(): {
   return prisma;
 }
 
-function buildSellersService(sellerId = 'seller-1'): { requireApproved: jest.Mock } {
+function buildSellersService(sellerId = 'seller-1'): {
+  requireApproved: jest.Mock;
+} {
   return { requireApproved: jest.fn().mockResolvedValue({ id: sellerId }) };
 }
 
 describe('SellerReturnsService.listOwn', () => {
-  it('scopes the query to only this seller\'s own ReturnItem rows, even within a multi-seller ReturnRequest', async () => {
+  it("scopes the query to only this seller's own ReturnItem rows, even within a multi-seller ReturnRequest", async () => {
     const prisma = buildPrisma();
     const sellers = buildSellersService('seller-1');
     // A ReturnRequest can span sellers (#30); the service must never return
@@ -51,7 +57,10 @@ describe('SellerReturnsService.listOwn', () => {
     prisma.returnItem.count.mockResolvedValue(1);
     const service = new SellerReturnsService(prisma as never, sellers as never);
 
-    const page = await service.listOwn('user-1', { page: 1, limit: 20 } as never);
+    const page = await service.listOwn('user-1', {
+      page: 1,
+      limit: 20,
+    } as never);
 
     expect(prisma.returnItem.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -72,7 +81,12 @@ describe('SellerReturnsService.listOwn', () => {
       acceptedQuantity: 0,
       rejectedQuantity: 0,
       refunds: [
-        { refundCaseId: 'rc-1', status: RefundCaseStatus.PENDING, amount: 500, currency: 'USD' },
+        {
+          refundCaseId: 'rc-1',
+          status: RefundCaseStatus.PENDING,
+          amount: 500,
+          currency: 'USD',
+        },
       ],
       createdAt: new Date('2026-01-01'),
     });

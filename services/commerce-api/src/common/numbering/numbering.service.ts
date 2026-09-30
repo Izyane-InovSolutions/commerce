@@ -24,7 +24,9 @@ export class NumberingService {
     return this.nextNumber(tx, 'fulfillment_order', 'FF');
   }
 
-  async nextFulfillmentDispatchNumber(tx: Prisma.TransactionClient): Promise<string> {
+  async nextFulfillmentDispatchNumber(
+    tx: Prisma.TransactionClient,
+  ): Promise<string> {
     return this.nextNumber(tx, 'fulfillment_dispatch', 'FD');
   }
 

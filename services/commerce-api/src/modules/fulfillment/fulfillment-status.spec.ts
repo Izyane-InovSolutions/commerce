@@ -5,13 +5,15 @@ import { deriveFulfillmentStatus } from './fulfillment-status';
 const PENDING = FulfillmentWorkItemStatus.PENDING;
 const IN_PROGRESS = FulfillmentWorkItemStatus.IN_PROGRESS;
 
-function line(overrides: Partial<{
-  allocatedQuantity: number;
-  pickedQuantity: number;
-  packedQuantity: number;
-  dispatchedQuantity: number;
-  cancelledQuantity: number;
-}> = {}): {
+function line(
+  overrides: Partial<{
+    allocatedQuantity: number;
+    pickedQuantity: number;
+    packedQuantity: number;
+    dispatchedQuantity: number;
+    cancelledQuantity: number;
+  }> = {},
+): {
   allocatedQuantity: number;
   pickedQuantity: number;
   packedQuantity: number;
@@ -110,7 +112,11 @@ describe('deriveFulfillmentStatus', () => {
     expect(
       deriveFulfillmentStatus({
         lines: [
-          line({ pickedQuantity: 10, packedQuantity: 10, dispatchedQuantity: 4 }),
+          line({
+            pickedQuantity: 10,
+            packedQuantity: 10,
+            dispatchedQuantity: 4,
+          }),
         ],
         pickWorkItemStatus: PENDING,
         packWorkItemStatus: PENDING,
@@ -123,7 +129,11 @@ describe('deriveFulfillmentStatus', () => {
     expect(
       deriveFulfillmentStatus({
         lines: [
-          line({ pickedQuantity: 10, packedQuantity: 10, dispatchedQuantity: 10 }),
+          line({
+            pickedQuantity: 10,
+            packedQuantity: 10,
+            dispatchedQuantity: 10,
+          }),
         ],
         pickWorkItemStatus: PENDING,
         packWorkItemStatus: PENDING,

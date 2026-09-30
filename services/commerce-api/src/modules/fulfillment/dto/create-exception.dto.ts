@@ -1,5 +1,12 @@
 import { FulfillmentExceptionType } from '@prisma/client';
-import { IsEnum, IsInt, IsString, IsUUID, Min, MinLength } from 'class-validator';
+import {
+  IsEnum,
+  IsInt,
+  IsString,
+  IsUUID,
+  Min,
+  MinLength,
+} from 'class-validator';
 
 export class CreateExceptionDto {
   @IsUUID()

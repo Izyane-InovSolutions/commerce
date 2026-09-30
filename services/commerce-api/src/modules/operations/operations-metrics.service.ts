@@ -71,10 +71,14 @@ export class OperationsMetricsService {
     const range: Prisma.DateTimeFilter = { gte: from, lte: to };
 
     const sales = await this.getSales(range, query.warehouseId);
-    const [ordersByStatus, fulfillment, inventory, returns] =
-      await Promise.all([
+    const [ordersByStatus, fulfillment, inventory, returns] = await Promise.all(
+      [
         this.getOrdersByStatus(range, query.orderStatuses),
-        this.getFulfillment(range, query.warehouseId, query.fulfillmentStatuses),
+        this.getFulfillment(
+          range,
+          query.warehouseId,
+          query.fulfillmentStatuses,
+        ),
         this.getInventory(query.warehouseId),
         this.getReturns(
           range,
@@ -82,7 +86,8 @@ export class OperationsMetricsService {
           query.returnStatuses,
           sales.paidOrderCount,
         ),
-      ]);
+      ],
+    );
 
     return {
       range: { from: from.toISOString(), to: to.toISOString() },
@@ -94,7 +99,10 @@ export class OperationsMetricsService {
     };
   }
 
-  private resolveRange(fromInput?: string, toInput?: string): { from: Date; to: Date } {
+  private resolveRange(
+    fromInput?: string,
+    toInput?: string,
+  ): { from: Date; to: Date } {
     const to = toInput ? new Date(toInput) : new Date();
     const from = fromInput
       ? new Date(fromInput)
@@ -104,9 +112,7 @@ export class OperationsMetricsService {
       throw new BadRequestException('`to` must be after `from`.');
     }
     if (to.getTime() - from.getTime() > MAX_RANGE_MS) {
-      throw new BadRequestException(
-        'The date range must not exceed 366 days.',
-      );
+      throw new BadRequestException('The date range must not exceed 366 days.');
     }
     return { from, to };
   }
@@ -120,13 +126,21 @@ export class OperationsMetricsService {
     // Orders/gross-sales are never warehouse-filtered here: an Order can
     // span multiple warehouses via its fulfillment orders.
     const orderAgg = await this.prisma.order.aggregate({
-      where: { currency: "ZMW", createdAt: range, status: { in: PAID_ORDER_STATUSES } },
+      where: {
+        currency: 'ZMW',
+        createdAt: range,
+        status: { in: PAID_ORDER_STATUSES },
+      },
       _count: { _all: true },
       _sum: { total: true },
     });
 
     const refundCases = await this.prisma.refundCase.findMany({
-      where: { currency: "ZMW", status: RefundCaseStatus.SUCCEEDED, createdAt: range },
+      where: {
+        currency: 'ZMW',
+        status: RefundCaseStatus.SUCCEEDED,
+        createdAt: range,
+      },
       select: {
         amount: true,
         shippingAmount: true,
@@ -144,7 +158,7 @@ export class OperationsMetricsService {
       if (warehouseId) {
         const caseWarehouseId =
           refundCase.source === RefundCaseSource.RETURN
-            ? refundCase.returnRequest?.warehouseId ?? null
+            ? (refundCase.returnRequest?.warehouseId ?? null)
             : null;
         if (caseWarehouseId !== warehouseId) {
           continue;
@@ -274,39 +288,44 @@ export class OperationsMetricsService {
       ...(returnStatuses?.length ? { status: { in: returnStatuses } } : {}),
     };
 
-    const [statusGroups, reasonGroups, inspectionAgg, refundAgg, returnRequestCount] =
-      await Promise.all([
-        this.prisma.returnRequest.groupBy({
-          by: ['status'],
-          where: returnRequestWhere,
-          _count: { _all: true },
-        }),
-        this.prisma.returnItem.groupBy({
-          by: ['reasonCode'],
-          where: { returnRequest: returnRequestWhere },
-          _count: { _all: true },
-        }),
-        this.prisma.returnInspectionLine.aggregate({
-          where: {
-            disposition: { not: null },
-            inspection: { returnRequest: returnRequestWhere },
-          },
-          _sum: { acceptedQuantity: true },
-        }),
-        this.prisma.refundCase.aggregate({
-          where: {
-            currency: "ZMW",
-            source: RefundCaseSource.RETURN,
-            status: RefundCaseStatus.SUCCEEDED,
-            createdAt: range,
-            ...(warehouseId || returnStatuses?.length
-              ? { returnRequest: returnRequestWhere }
-              : {}),
-          },
-          _sum: { amount: true },
-        }),
-        this.prisma.returnRequest.count({ where: returnRequestWhere }),
-      ]);
+    const [
+      statusGroups,
+      reasonGroups,
+      inspectionAgg,
+      refundAgg,
+      returnRequestCount,
+    ] = await Promise.all([
+      this.prisma.returnRequest.groupBy({
+        by: ['status'],
+        where: returnRequestWhere,
+        _count: { _all: true },
+      }),
+      this.prisma.returnItem.groupBy({
+        by: ['reasonCode'],
+        where: { returnRequest: returnRequestWhere },
+        _count: { _all: true },
+      }),
+      this.prisma.returnInspectionLine.aggregate({
+        where: {
+          disposition: { not: null },
+          inspection: { returnRequest: returnRequestWhere },
+        },
+        _sum: { acceptedQuantity: true },
+      }),
+      this.prisma.refundCase.aggregate({
+        where: {
+          currency: 'ZMW',
+          source: RefundCaseSource.RETURN,
+          status: RefundCaseStatus.SUCCEEDED,
+          createdAt: range,
+          ...(warehouseId || returnStatuses?.length
+            ? { returnRequest: returnRequestWhere }
+            : {}),
+        },
+        _sum: { amount: true },
+      }),
+      this.prisma.returnRequest.count({ where: returnRequestWhere }),
+    ]);
 
     const openRows = await this.prisma.returnRequest.findMany({
       where: {
@@ -316,12 +335,17 @@ export class OperationsMetricsService {
       select: { createdAt: true },
     });
     const closedRows = await this.prisma.returnRequest.findMany({
-      where: { ...returnRequestWhere, status: { in: TERMINAL_RETURN_STATUSES } },
+      where: {
+        ...returnRequestWhere,
+        status: { in: TERMINAL_RETURN_STATUSES },
+      },
       select: { createdAt: true, updatedAt: true },
     });
 
     const now = new Date();
-    const openAgeHours = openRows.map((row) => hoursBetween(row.createdAt, now));
+    const openAgeHours = openRows.map((row) =>
+      hoursBetween(row.createdAt, now),
+    );
     // updatedAt is used as a proxy for "closed at" — the schema has no
     // dedicated closedAt column, and the last update to a terminal-status
     // row is, in practice, the transition into that terminal status.
@@ -344,7 +368,8 @@ export class OperationsMetricsService {
       // in the same range — one of several defensible "return rate"
       // readings (vs. item-quantity-based); this one is simplest to reason
       // about across warehouse/status filters.
-      returnRate: paidOrderCount > 0 ? returnRequestCount / paidOrderCount : null,
+      returnRate:
+        paidOrderCount > 0 ? returnRequestCount / paidOrderCount : null,
       processingAgeHours: {
         openAverageAgeHours: average(openAgeHours),
         closedAverageAgeHours: average(closedAgeHours),

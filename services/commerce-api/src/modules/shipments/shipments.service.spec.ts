@@ -1,4 +1,8 @@
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Role, ShipmentStatus, TrackingEventSource } from '@prisma/client';
 
 import { NumberingService } from '../../common/numbering/numbering.service';
@@ -21,7 +25,11 @@ function buildTx(): {
   order: { findUniqueOrThrow: jest.Mock };
   sellerOrder: { findUniqueOrThrow: jest.Mock };
   shippingGroup: { findUniqueOrThrow: jest.Mock };
-  trackingEvent: { findFirst: jest.Mock; findUnique: jest.Mock; create: jest.Mock };
+  trackingEvent: {
+    findFirst: jest.Mock;
+    findUnique: jest.Mock;
+    create: jest.Mock;
+  };
   carrierWebhookDelivery: { create: jest.Mock; update: jest.Mock };
   $queryRaw: jest.Mock;
 } {
@@ -109,14 +117,18 @@ describe('ShipmentsService', () => {
       assignShipmentQuantity: jest.fn().mockResolvedValue(FO),
       releaseShipmentQuantity: jest.fn().mockResolvedValue(undefined),
     };
-    numberingService = { nextShipmentNumber: jest.fn().mockResolvedValue('SH-2026-000001') };
+    numberingService = {
+      nextShipmentNumber: jest.fn().mockResolvedValue('SH-2026-000001'),
+    };
     manualProvider = {
       providerCode: 'ZONE',
       book: jest.fn().mockResolvedValue({ trackingReference: 'MANUAL-1' }),
       cancel: jest.fn().mockResolvedValue(undefined),
       poll: jest.fn().mockResolvedValue([]),
     };
-    carrierProviderRegistry = { get: jest.fn().mockReturnValue(manualProvider) };
+    carrierProviderRegistry = {
+      get: jest.fn().mockReturnValue(manualProvider),
+    };
     auditService = { record: jest.fn().mockResolvedValue(undefined) };
     outboxService = { record: jest.fn().mockResolvedValue(undefined) };
     sellersService = {
@@ -137,9 +149,9 @@ describe('ShipmentsService', () => {
     it('returns not found instead of leaking another customer order', async () => {
       prisma.order.findUnique.mockResolvedValue({ userId: 'other-user' });
 
-      await expect(service.getCustomerShipments('user-1', 'order-1')).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
+      await expect(
+        service.getCustomerShipments('user-1', 'order-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
       expect(prisma.shipment.findMany).not.toHaveBeenCalled();
     });
 
@@ -166,7 +178,9 @@ describe('ShipmentsService', () => {
         },
       ]);
 
-      await expect(service.getCustomerShipments('user-1', 'order-1')).resolves.toEqual([
+      await expect(
+        service.getCustomerShipments('user-1', 'order-1'),
+      ).resolves.toEqual([
         expect.objectContaining({
           id: 'ship-1',
           methodName: 'Standard',
@@ -197,7 +211,11 @@ describe('ShipmentsService', () => {
         'idem-1',
       );
 
-      expect(result).toEqual({ id: 'ship-1', fulfillmentOrderId: 'fo-1', lines: [] });
+      expect(result).toEqual({
+        id: 'ship-1',
+        fulfillmentOrderId: 'fo-1',
+        lines: [],
+      });
       expect(fulfillmentsService.assignShipmentQuantity).not.toHaveBeenCalled();
     });
 
@@ -254,7 +272,9 @@ describe('ShipmentsService', () => {
 
     it('propagates an over-allocation error from FulfillmentsService', async () => {
       prisma.shipment.findUnique.mockResolvedValue(null);
-      fulfillmentsService.assignShipmentQuantity.mockRejectedValue(new ConflictException('nope'));
+      fulfillmentsService.assignShipmentQuantity.mockRejectedValue(
+        new ConflictException('nope'),
+      );
 
       await expect(
         service.create(
@@ -271,19 +291,35 @@ describe('ShipmentsService', () => {
 
   describe('book', () => {
     it('is idempotent when already booked', async () => {
-      prisma.tx.shipment.findUnique.mockResolvedValue({ id: 'ship-1', status: ShipmentStatus.BOOKED });
-      prisma.tx.shipment.findUniqueOrThrow.mockResolvedValue({ id: 'ship-1', status: ShipmentStatus.BOOKED, lines: [] });
+      prisma.tx.shipment.findUnique.mockResolvedValue({
+        id: 'ship-1',
+        status: ShipmentStatus.BOOKED,
+      });
+      prisma.tx.shipment.findUniqueOrThrow.mockResolvedValue({
+        id: 'ship-1',
+        status: ShipmentStatus.BOOKED,
+        lines: [],
+      });
 
       const result = await service.book('ship-1', 'user-1');
 
-      expect(result).toEqual({ id: 'ship-1', status: ShipmentStatus.BOOKED, lines: [] });
+      expect(result).toEqual({
+        id: 'ship-1',
+        status: ShipmentStatus.BOOKED,
+        lines: [],
+      });
       expect(manualProvider.book).not.toHaveBeenCalled();
     });
 
     it('rejects booking a shipment that is not PENDING_BOOKING', async () => {
-      prisma.tx.shipment.findUnique.mockResolvedValue({ id: 'ship-1', status: ShipmentStatus.CANCELLED });
+      prisma.tx.shipment.findUnique.mockResolvedValue({
+        id: 'ship-1',
+        status: ShipmentStatus.CANCELLED,
+      });
 
-      await expect(service.book('ship-1', 'user-1')).rejects.toBeInstanceOf(ConflictException);
+      await expect(service.book('ship-1', 'user-1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
     });
 
     it('books via the carrier provider and records tracking reference', async () => {
@@ -299,7 +335,11 @@ describe('ShipmentsService', () => {
       prisma.tx.order.findUniqueOrThrow.mockResolvedValue({
         shippingAddress: { country: 'ZM' },
       });
-      prisma.tx.shipment.update.mockResolvedValue({ id: 'ship-1', status: ShipmentStatus.BOOKED, lines: [] });
+      prisma.tx.shipment.update.mockResolvedValue({
+        id: 'ship-1',
+        status: ShipmentStatus.BOOKED,
+        lines: [],
+      });
 
       await service.book('ship-1', 'user-1');
 
@@ -308,7 +348,10 @@ describe('ShipmentsService', () => {
       );
       expect(prisma.tx.shipment.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ status: ShipmentStatus.BOOKED, trackingReference: 'MANUAL-1' }) as object,
+          data: expect.objectContaining({
+            status: ShipmentStatus.BOOKED,
+            trackingReference: 'MANUAL-1',
+          }) as object,
         }),
       );
     });
@@ -324,14 +367,20 @@ describe('ShipmentsService', () => {
         fulfillmentOrderId: 'fo-1',
         lines: [{ fulfillmentLineId: 'fl-1', quantity: 3 }],
       });
-      prisma.tx.shipment.update.mockResolvedValue({ id: 'ship-1', status: ShipmentStatus.CANCELLED, lines: [] });
+      prisma.tx.shipment.update.mockResolvedValue({
+        id: 'ship-1',
+        status: ShipmentStatus.CANCELLED,
+        lines: [],
+      });
 
       await service.cancel('ship-1', 'customer changed mind', 'user-1');
 
       expect(manualProvider.cancel).toHaveBeenCalledWith('MANUAL-1');
-      expect(fulfillmentsService.releaseShipmentQuantity).toHaveBeenCalledWith(prisma.tx, 'fo-1', [
-        { fulfillmentLineId: 'fl-1', quantity: 3 },
-      ]);
+      expect(fulfillmentsService.releaseShipmentQuantity).toHaveBeenCalledWith(
+        prisma.tx,
+        'fo-1',
+        [{ fulfillmentLineId: 'fl-1', quantity: 3 }],
+      );
     });
 
     it('rejects cancelling a dispatched shipment', async () => {
@@ -341,9 +390,9 @@ describe('ShipmentsService', () => {
         lines: [],
       });
 
-      await expect(service.cancel('ship-1', 'too late', 'user-1')).rejects.toBeInstanceOf(
-        ConflictException,
-      );
+      await expect(
+        service.cancel('ship-1', 'too late', 'user-1'),
+      ).rejects.toBeInstanceOf(ConflictException);
     });
   });
 
@@ -357,14 +406,19 @@ describe('ShipmentsService', () => {
 
       await service.addManualTrackingEvent(
         'ship-1',
-        { normalizedStatus: ShipmentStatus.IN_TRANSIT, occurredAt: new Date().toISOString() },
+        {
+          normalizedStatus: ShipmentStatus.IN_TRANSIT,
+          occurredAt: new Date().toISOString(),
+        },
         'admin-1',
         Role.ADMIN,
       );
 
       expect(prisma.tx.shipment.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ status: ShipmentStatus.IN_TRANSIT }) as object,
+          data: expect.objectContaining({
+            status: ShipmentStatus.IN_TRANSIT,
+          }) as object,
         }),
       );
       expect(outboxService.record).not.toHaveBeenCalled();
@@ -381,7 +435,10 @@ describe('ShipmentsService', () => {
 
       await service.addManualTrackingEvent(
         'ship-1',
-        { normalizedStatus: ShipmentStatus.DELIVERED, occurredAt: occurredAt.toISOString() },
+        {
+          normalizedStatus: ShipmentStatus.DELIVERED,
+          occurredAt: occurredAt.toISOString(),
+        },
         'admin-1',
         Role.ADMIN,
       );
@@ -412,7 +469,10 @@ describe('ShipmentsService', () => {
 
       await service.addManualTrackingEvent(
         'ship-1',
-        { normalizedStatus: ShipmentStatus.DELIVERED, occurredAt: new Date().toISOString() },
+        {
+          normalizedStatus: ShipmentStatus.DELIVERED,
+          occurredAt: new Date().toISOString(),
+        },
         'admin-1',
         Role.ADMIN,
       );
@@ -430,7 +490,10 @@ describe('ShipmentsService', () => {
 
       await service.addManualTrackingEvent(
         'ship-1',
-        { normalizedStatus: ShipmentStatus.IN_TRANSIT, occurredAt: new Date().toISOString() },
+        {
+          normalizedStatus: ShipmentStatus.IN_TRANSIT,
+          occurredAt: new Date().toISOString(),
+        },
         'admin-1',
         Role.ADMIN,
       );
@@ -459,12 +522,16 @@ describe('ShipmentsService', () => {
 
       expect(prisma.tx.shipment.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ status: ShipmentStatus.RETURN_TO_SENDER }) as object,
+          data: expect.objectContaining({
+            status: ShipmentStatus.RETURN_TO_SENDER,
+          }) as object,
         }),
       );
       expect(prisma.tx.trackingEvent.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ source: TrackingEventSource.ADMIN_CORRECTION }) as object,
+          data: expect.objectContaining({
+            source: TrackingEventSource.ADMIN_CORRECTION,
+          }) as object,
         }),
       );
     });
@@ -492,7 +559,10 @@ describe('ShipmentsService', () => {
         service.addSellerTrackingEvent(
           'ship-1',
           'user-1',
-          { normalizedStatus: ShipmentStatus.DISPATCHED, occurredAt: new Date() },
+          {
+            normalizedStatus: ShipmentStatus.DISPATCHED,
+            occurredAt: new Date(),
+          },
           'user-1',
           'idem-1',
         ),
@@ -507,13 +577,18 @@ describe('ShipmentsService', () => {
         sellerOrderId: 'so-1',
         status: ShipmentStatus.DISPATCHED,
       });
-      prisma.tx.sellerOrder.findUniqueOrThrow.mockResolvedValue({ sellerId: 'someone-else' });
+      prisma.tx.sellerOrder.findUniqueOrThrow.mockResolvedValue({
+        sellerId: 'someone-else',
+      });
 
       await expect(
         service.addSellerTrackingEvent(
           'ship-1',
           'user-1',
-          { normalizedStatus: ShipmentStatus.IN_TRANSIT, occurredAt: new Date() },
+          {
+            normalizedStatus: ShipmentStatus.IN_TRANSIT,
+            occurredAt: new Date(),
+          },
           'user-1',
           'idem-2',
         ),
@@ -532,7 +607,10 @@ describe('ShipmentsService', () => {
         service.addSellerTrackingEvent(
           'ship-1',
           'user-1',
-          { normalizedStatus: ShipmentStatus.IN_TRANSIT, occurredAt: new Date() },
+          {
+            normalizedStatus: ShipmentStatus.IN_TRANSIT,
+            occurredAt: new Date(),
+          },
           'user-1',
           'idem-3',
         ),
@@ -567,7 +645,9 @@ describe('ShipmentsService', () => {
       );
       expect(prisma.tx.shipment.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ status: ShipmentStatus.IN_TRANSIT }) as object,
+          data: expect.objectContaining({
+            status: ShipmentStatus.IN_TRANSIT,
+          }) as object,
         }),
       );
     });
@@ -616,12 +696,16 @@ describe('ShipmentsService', () => {
         ],
       });
       carrierProviderRegistry.get.mockReturnValue(manualProvider as never);
-      prisma.carrierWebhookDelivery.create.mockResolvedValue({ id: 'delivery-1' });
-      prisma.tx.shipment.findFirst.mockRejectedValue(new Error('database failed'));
-
-      await expect(service.ingestWebhook('ZONE', { foo: 'bar' }, {})).rejects.toThrow(
-        'database failed',
+      prisma.carrierWebhookDelivery.create.mockResolvedValue({
+        id: 'delivery-1',
+      });
+      prisma.tx.shipment.findFirst.mockRejectedValue(
+        new Error('database failed'),
       );
+
+      await expect(
+        service.ingestWebhook('ZONE', { foo: 'bar' }, {}),
+      ).rejects.toThrow('database failed');
       expect(prisma.carrierWebhookDelivery.update).toHaveBeenCalledWith({
         where: { id: 'delivery-1' },
         data: { status: 'FAILED', failureReason: 'database failed' },
@@ -629,7 +713,9 @@ describe('ShipmentsService', () => {
     });
 
     it('rejects a provider with no webhook support', async () => {
-      await expect(service.ingestWebhook('ZONE', {}, {})).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        service.ingestWebhook('ZONE', {}, {}),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 });

@@ -19,7 +19,7 @@ Everything you need to exercise every endpoint in `commerce-api` via Swagger UI.
 4. Open Swagger UI: **`http://localhost:3000/api/docs`**
 
 Optional settings worth knowing while testing (see `.env.example`):
-- **Email** — with no `SMTP_URL`/`SMTP_HOST` set, emails (password reset, order notifications) are written to the API log instead of being sent. Links in them are built from `WEB_APP_URL` and `SELLER_APP_URL` (include the seller app's `/seller` base path).
+- **Email** — auth reset/verification uses encrypted queued SMTP delivery (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`) and `CUSTOMER_WEB_URL` links. It does not log raw tokens when SMTP is absent. Notification email has its own SMTP/log adapter; its fallback does not replace required auth mail configuration.
 - **Media** — `MEDIA_STORAGE_DRIVER=local` (default) stores uploads under `MEDIA_STORAGE_PATH`; `s3` uses the `S3_*` settings.
 - **Background workers** run in the API process: the outbox dispatcher and notifications subscriber, notification email delivery, payment reconciliation (unified gateway only), FX refresh, shipment tracking polls and payout processing. So a notification appears a few seconds after the action that caused it.
 
@@ -66,7 +66,7 @@ Legend: `[Public]` no auth · `[Optional]` auth optional · unmarked = any logge
 | POST `/auth/logout` | auth | `{ "refreshToken": "<...>" }` |
 | GET `/auth/me` | auth | — |
 | PATCH `/auth/me/password` | auth | `{ "currentPassword": "...", "newPassword": "NewPassw0rd!" }` |
-| POST `/auth/password-reset/request` | [Public] | `{ "email": "user@test.com" }` — emails a `WEB_APP_URL/reset-password?token=...` link; without SMTP configured, the email (and token) is written to the API log |
+| POST `/auth/password-reset/request` | [Public] | `{ "email": "user@test.com" }` — queues an encrypted delivery with a `CUSTOMER_WEB_URL/reset-password?token=...` link; retrieve the link from your configured test mailbox |
 | POST `/auth/password-reset/confirm` | [Public] | `{ "token": "<from the email link>", "newPassword": "NewPassw0rd!" }` |
 | POST `/auth/handoff` | auth | — returns a one-time code for signing the same user into another app (web → seller) |
 | POST `/auth/handoff/exchange` | [Public] | `{ "code": "<from /auth/handoff>" }` → token pair |

@@ -205,8 +205,12 @@ describe('OrdersService', () => {
       ledgerService as unknown as LedgerService,
       new OfferReadService(prisma as unknown as PrismaService),
       shippingService as unknown as ShippingService,
-      { enqueue: jest.fn().mockResolvedValue(undefined) } as unknown as BackgroundJobsService,
-      { record: jest.fn().mockResolvedValue(undefined) } as unknown as OutboxService,
+      {
+        enqueue: jest.fn().mockResolvedValue(undefined),
+      } as unknown as BackgroundJobsService,
+      {
+        record: jest.fn().mockResolvedValue(undefined),
+      } as unknown as OutboxService,
     );
   });
 
@@ -693,7 +697,7 @@ describe('OrdersService', () => {
       expect(inventoryService.reserve).not.toHaveBeenCalled();
     });
 
-    it('quotes only the selected lines, matching createFromCart\'s partial checkout', async () => {
+    it("quotes only the selected lines, matching createFromCart's partial checkout", async () => {
       cartService.getCartView.mockResolvedValue({
         items: [
           cartLine({ id: 'item-1', offerId: 'offer-1' }),

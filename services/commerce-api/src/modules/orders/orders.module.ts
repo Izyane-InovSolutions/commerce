@@ -23,7 +23,11 @@ import { SellerOrdersService } from './seller-orders.service';
     ShippingModule,
     FinancialsModule,
   ],
-  controllers: [OrdersController, AdminOrdersController, SellerOrdersController],
+  controllers: [
+    OrdersController,
+    AdminOrdersController,
+    SellerOrdersController,
+  ],
   providers: [OrdersService, SellerOrdersService],
   exports: [OrdersService],
 })

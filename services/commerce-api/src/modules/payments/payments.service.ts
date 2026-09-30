@@ -437,7 +437,9 @@ export class PaymentsService {
   }
 
   async reconcileRefund(refundId: string): Promise<Refund> {
-    const refund = await this.prisma.refund.findUnique({ where: { id: refundId } });
+    const refund = await this.prisma.refund.findUnique({
+      where: { id: refundId },
+    });
     if (!refund) throw new NotFoundException('Refund not found');
     if (!refund.refundCaseId) return refund;
     await this.refundCasesService.reconcile(refund.refundCaseId);

@@ -185,9 +185,7 @@ describe('ProductsService', () => {
         },
       ]);
       prisma.product.count.mockResolvedValue(1);
-      inventory.getAvailableQuantities.mockResolvedValue(
-        new Map([['v1', 3]]),
-      );
+      inventory.getAvailableQuantities.mockResolvedValue(new Map([['v1', 3]]));
 
       const result = await service.findPublished({
         page: 1,
@@ -211,7 +209,7 @@ describe('ProductsService', () => {
       expect(inventory.getAvailableQuantities).toHaveBeenCalledWith(['v1']);
     });
 
-    it("marks an offer out of stock once available quantity runs out", async () => {
+    it('marks an offer out of stock once available quantity runs out', async () => {
       prisma.product.findMany.mockResolvedValue([
         {
           id: 'p1',
@@ -717,21 +715,24 @@ describe('ProductsService', () => {
       ['oldest', [{ createdAt: 'asc' }]],
       ['highest', [{ rating: 'desc' }, { createdAt: 'desc' }]],
       ['lowest', [{ rating: 'asc' }, { createdAt: 'desc' }]],
-    ] as const)('maps sort=%s to the expected orderBy', async (sort, expected) => {
-      prisma.product.findFirst.mockResolvedValue({
-        id: 'p1',
-        name: 'Widget',
-        slug: 'widget',
-      });
-      prisma.productReview.findMany.mockResolvedValue([]);
-      prisma.productReview.count.mockResolvedValue(0);
+    ] as const)(
+      'maps sort=%s to the expected orderBy',
+      async (sort, expected) => {
+        prisma.product.findFirst.mockResolvedValue({
+          id: 'p1',
+          name: 'Widget',
+          slug: 'widget',
+        });
+        prisma.productReview.findMany.mockResolvedValue([]);
+        prisma.productReview.count.mockResolvedValue(0);
 
-      await service.findPublicReviews('widget', { page: 1, limit: 20, sort });
+        await service.findPublicReviews('widget', { page: 1, limit: 20, sort });
 
-      expect(prisma.productReview.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ orderBy: expected }),
-      );
-    });
+        expect(prisma.productReview.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ orderBy: expected }),
+        );
+      },
+    );
 
     it('paginates using page/limit for skip/take', async () => {
       prisma.product.findFirst.mockResolvedValue({
@@ -1259,7 +1260,10 @@ describe('ProductsService', () => {
         currency: 'ZMW',
       });
 
-      expect(result.items.map((item) => item.id)).toEqual(['p-top', 'p-second']);
+      expect(result.items.map((item) => item.id)).toEqual([
+        'p-top',
+        'p-second',
+      ]);
       expect(result.items[0]?.variants[0]?.offers[0]?.currentPrice).toEqual({
         amount: 1500,
         currency: 'ZMW',
@@ -1373,9 +1377,11 @@ describe('ProductsService', () => {
         where: { id: 'v1' },
         data: { skuCode: 'NEW-SKU', name: undefined },
       });
-      expect(prisma.productVariantAttributeValue.createMany).toHaveBeenCalledWith(
-        { data: [{ variantId: 'v1', attributeValueId: 'av-1' }] },
-      );
+      expect(
+        prisma.productVariantAttributeValue.createMany,
+      ).toHaveBeenCalledWith({
+        data: [{ variantId: 'v1', attributeValueId: 'av-1' }],
+      });
     });
 
     it('404s for a variant that belongs to a different product', async () => {
@@ -1456,7 +1462,9 @@ describe('ProductsService', () => {
 
       expect(prisma.product.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ submissionStatus: 'PENDING' }) as object,
+          data: expect.objectContaining({
+            submissionStatus: 'PENDING',
+          }) as object,
         }),
       );
       expect(prisma.productVariant.delete).toHaveBeenCalledWith({
@@ -1465,7 +1473,9 @@ describe('ProductsService', () => {
     });
 
     it('requires an approved seller', async () => {
-      sellers.requireApproved.mockRejectedValue(new Error('Seller approval is required'));
+      sellers.requireApproved.mockRejectedValue(
+        new Error('Seller approval is required'),
+      );
 
       await expect(
         service.removeSellerVariant('user-1', 'p1', 'v1'),

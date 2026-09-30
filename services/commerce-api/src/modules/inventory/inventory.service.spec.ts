@@ -611,13 +611,10 @@ describe('InventoryService', () => {
   describe('returnCancelledStock', () => {
     it('rejects a non-positive quantity', async () => {
       await expect(
-        service.returnCancelledStock(
-          prisma as never,
-          'wh-1',
-          'v1',
-          0,
-          { referenceType: 'fulfillment_cancellation', referenceId: 'fe-1' },
-        ),
+        service.returnCancelledStock(prisma as never, 'wh-1', 'v1', 0, {
+          referenceType: 'fulfillment_cancellation',
+          referenceId: 'fe-1',
+        }),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
@@ -662,13 +659,10 @@ describe('InventoryService', () => {
   describe('receiveStockForReference', () => {
     it('rejects a non-positive quantity', async () => {
       await expect(
-        service.receiveStockForReference(
-          prisma as never,
-          'wh-1',
-          'v1',
-          0,
-          { referenceType: 'goods_receipt_line', referenceId: 'grl-1' },
-        ),
+        service.receiveStockForReference(prisma as never, 'wh-1', 'v1', 0, {
+          referenceType: 'goods_receipt_line',
+          referenceId: 'grl-1',
+        }),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
@@ -714,13 +708,10 @@ describe('InventoryService', () => {
   describe('reverseReceiptStock', () => {
     it('rejects a non-positive quantity', async () => {
       await expect(
-        service.reverseReceiptStock(
-          prisma as never,
-          'wh-1',
-          'v1',
-          0,
-          { referenceType: 'goods_receipt_reversal_line', referenceId: 'grl-1' },
-        ),
+        service.reverseReceiptStock(prisma as never, 'wh-1', 'v1', 0, {
+          referenceType: 'goods_receipt_reversal_line',
+          referenceId: 'grl-1',
+        }),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
@@ -733,13 +724,10 @@ describe('InventoryService', () => {
       prisma.$executeRaw.mockResolvedValue(0);
 
       await expect(
-        service.reverseReceiptStock(
-          prisma as never,
-          'wh-1',
-          'v1',
-          5,
-          { referenceType: 'goods_receipt_reversal_line', referenceId: 'grl-1' },
-        ),
+        service.reverseReceiptStock(prisma as never, 'wh-1', 'v1', 5, {
+          referenceType: 'goods_receipt_reversal_line',
+          referenceId: 'grl-1',
+        }),
       ).rejects.toBeInstanceOf(ConflictException);
     });
 

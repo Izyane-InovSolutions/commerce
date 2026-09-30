@@ -34,7 +34,10 @@ describe('Fulfillment (integration, real Postgres)', () => {
   const backgroundJobsServiceStub = {
     enqueue: jest.fn().mockResolvedValue(undefined),
   } as unknown as BackgroundJobsService;
-  const inventoryService = new InventoryService(prisma, backgroundJobsServiceStub);
+  const inventoryService = new InventoryService(
+    prisma,
+    backgroundJobsServiceStub,
+  );
   const provisioningService = new FulfillmentProvisioningService(
     prisma,
     numberingService,
@@ -80,19 +83,29 @@ describe('Fulfillment (integration, real Postgres)', () => {
           where: { fulfillmentOrderId: { in: fulfillmentOrderIds } },
         });
       }
-      await prisma.shipment.deleteMany({ where: { orderId: { in: createdOrderIds } } });
-      await prisma.fulfillmentOrder.deleteMany({ where: { orderId: { in: createdOrderIds } } });
+      await prisma.shipment.deleteMany({
+        where: { orderId: { in: createdOrderIds } },
+      });
+      await prisma.fulfillmentOrder.deleteMany({
+        where: { orderId: { in: createdOrderIds } },
+      });
       await prisma.order.deleteMany({ where: { id: { in: createdOrderIds } } });
     }
-    await prisma.auditEvent.deleteMany({ where: { actorUserId: { in: createdUserIds } } });
+    await prisma.auditEvent.deleteMany({
+      where: { actorUserId: { in: createdUserIds } },
+    });
     if (createdUserIds.length) {
       await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
     }
     if (createdWarehouseIds.length) {
-      await prisma.warehouse.deleteMany({ where: { id: { in: createdWarehouseIds } } });
+      await prisma.warehouse.deleteMany({
+        where: { id: { in: createdWarehouseIds } },
+      });
     }
     if (createdProductIds.length) {
-      await prisma.product.deleteMany({ where: { id: { in: createdProductIds } } });
+      await prisma.product.deleteMany({
+        where: { id: { in: createdProductIds } },
+      });
     }
     await prisma.$disconnect();
   });
@@ -121,21 +134,34 @@ describe('Fulfillment (integration, real Postgres)', () => {
     createdUserIds.push(user.id);
 
     const product = await prisma.product.create({
-      data: { name: `Fulfillment Product ${rowSuffix}`, slug: `fulfillment-product-${rowSuffix}` },
+      data: {
+        name: `Fulfillment Product ${rowSuffix}`,
+        slug: `fulfillment-product-${rowSuffix}`,
+      },
     });
     createdProductIds.push(product.id);
     const variant = await prisma.productVariant.create({
       data: { productId: product.id, skuCode: `FUL-SKU-${rowSuffix}` },
     });
-    const offer = await prisma.offer.create({ data: { variantId: variant.id } });
+    const offer = await prisma.offer.create({
+      data: { variantId: variant.id },
+    });
 
     const warehouse = await prisma.warehouse.create({
-      data: { name: `Fulfillment Warehouse ${rowSuffix}`, code: `FUL-WH-${rowSuffix}` },
+      data: {
+        name: `Fulfillment Warehouse ${rowSuffix}`,
+        code: `FUL-WH-${rowSuffix}`,
+      },
     });
     createdWarehouseIds.push(warehouse.id);
 
     const record = await prisma.inventoryRecord.create({
-      data: { warehouseId: warehouse.id, variantId: variant.id, onHand, reserved: quantity },
+      data: {
+        warehouseId: warehouse.id,
+        variantId: variant.id,
+        onHand,
+        reserved: quantity,
+      },
     });
     const reservation = await prisma.reservation.create({
       data: {
@@ -203,7 +229,12 @@ describe('Fulfillment (integration, real Postgres)', () => {
     await provisioningService.provisionForOrder(order.id);
 
     const fulfillmentOrder = await prisma.fulfillmentOrder.findUniqueOrThrow({
-      where: { shippingGroupId_warehouseId: { shippingGroupId: shippingGroup.id, warehouseId: warehouse.id } },
+      where: {
+        shippingGroupId_warehouseId: {
+          shippingGroupId: shippingGroup.id,
+          warehouseId: warehouse.id,
+        },
+      },
       include: { lines: true },
     });
     const [line] = fulfillmentOrder.lines;
@@ -246,8 +277,12 @@ describe('Fulfillment (integration, real Postgres)', () => {
     orderId: string,
     quantity: number,
   ): Promise<string> {
-    const fo = await prisma.fulfillmentOrder.findUniqueOrThrow({ where: { id: fulfillmentOrderId } });
-    const line = await prisma.fulfillmentLine.findUniqueOrThrow({ where: { id: fulfillmentLineId } });
+    const fo = await prisma.fulfillmentOrder.findUniqueOrThrow({
+      where: { id: fulfillmentOrderId },
+    });
+    const line = await prisma.fulfillmentLine.findUniqueOrThrow({
+      where: { id: fulfillmentLineId },
+    });
     const shipment = await prisma.shipment.create({
       data: {
         shipmentNumber: `SHIP-TEST-${randomUUID()}`,
@@ -263,7 +298,9 @@ describe('Fulfillment (integration, real Postgres)', () => {
         bookingIdempotencyKey: randomUUID(),
         bookedAt: new Date(),
         lines: {
-          create: [{ fulfillmentLineId, orderItemId: line.orderItemId, quantity }],
+          create: [
+            { fulfillmentLineId, orderItemId: line.orderItemId, quantity },
+          ],
         },
       },
     });
@@ -275,7 +312,8 @@ describe('Fulfillment (integration, real Postgres)', () => {
   }
 
   it('provisions idempotently and resolves the warehouse from the committed reservation', async () => {
-    const { fulfillmentOrderId, warehouseId } = await createProvisionedFulfillment(5);
+    const { fulfillmentOrderId, warehouseId } =
+      await createProvisionedFulfillment(5);
 
     const before = await prisma.fulfillmentOrder.findUniqueOrThrow({
       where: { id: fulfillmentOrderId },
@@ -284,13 +322,20 @@ describe('Fulfillment (integration, real Postgres)', () => {
 
     // Replaying provisioning for the same order must not create a duplicate.
     await provisioningService.provisionForOrder(before.orderId);
-    const count = await prisma.fulfillmentOrder.count({ where: { orderId: before.orderId } });
+    const count = await prisma.fulfillmentOrder.count({
+      where: { orderId: before.orderId },
+    });
     expect(count).toBe(1);
   });
 
   it('supports partial picking, partial packing, and multiple partial dispatches', async () => {
-    const { fulfillmentOrderId, fulfillmentLineId, warehouseId, variantId, orderId } =
-      await createProvisionedFulfillment(10);
+    const {
+      fulfillmentOrderId,
+      fulfillmentLineId,
+      warehouseId,
+      variantId,
+      orderId,
+    } = await createProvisionedFulfillment(10);
 
     await startPicking(fulfillmentOrderId);
     await fulfillmentsService.recordQuantities(
@@ -301,7 +346,9 @@ describe('Fulfillment (integration, real Postgres)', () => {
       Role.ADMIN,
       randomUUID(),
     );
-    let line = await prisma.fulfillmentLine.findUniqueOrThrow({ where: { id: fulfillmentLineId } });
+    let line = await prisma.fulfillmentLine.findUniqueOrThrow({
+      where: { id: fulfillmentLineId },
+    });
     expect(line.pickedQuantity).toBe(6);
 
     await fulfillmentsService.recordQuantities(
@@ -322,17 +369,43 @@ describe('Fulfillment (integration, real Postgres)', () => {
       Role.ADMIN,
       randomUUID(),
     );
-    line = await prisma.fulfillmentLine.findUniqueOrThrow({ where: { id: fulfillmentLineId } });
+    line = await prisma.fulfillmentLine.findUniqueOrThrow({
+      where: { id: fulfillmentLineId },
+    });
     expect(line.packedQuantity).toBe(10);
 
-    const shipmentA = await bookShipment(fulfillmentOrderId, fulfillmentLineId, orderId, 7);
-    await fulfillmentsService.dispatch(fulfillmentOrderId, shipmentA, ADMIN_USER_ID, randomUUID());
-    const shipmentB = await bookShipment(fulfillmentOrderId, fulfillmentLineId, orderId, 3);
-    await fulfillmentsService.dispatch(fulfillmentOrderId, shipmentB, ADMIN_USER_ID, randomUUID());
+    const shipmentA = await bookShipment(
+      fulfillmentOrderId,
+      fulfillmentLineId,
+      orderId,
+      7,
+    );
+    await fulfillmentsService.dispatch(
+      fulfillmentOrderId,
+      shipmentA,
+      ADMIN_USER_ID,
+      randomUUID(),
+    );
+    const shipmentB = await bookShipment(
+      fulfillmentOrderId,
+      fulfillmentLineId,
+      orderId,
+      3,
+    );
+    await fulfillmentsService.dispatch(
+      fulfillmentOrderId,
+      shipmentB,
+      ADMIN_USER_ID,
+      randomUUID(),
+    );
 
-    line = await prisma.fulfillmentLine.findUniqueOrThrow({ where: { id: fulfillmentLineId } });
+    line = await prisma.fulfillmentLine.findUniqueOrThrow({
+      where: { id: fulfillmentLineId },
+    });
     expect(line.dispatchedQuantity).toBe(10);
-    const fo = await prisma.fulfillmentOrder.findUniqueOrThrow({ where: { id: fulfillmentOrderId } });
+    const fo = await prisma.fulfillmentOrder.findUniqueOrThrow({
+      where: { id: fulfillmentOrderId },
+    });
     expect(fo.status).toBe('DISPATCHED');
 
     const record = await prisma.inventoryRecord.findUniqueOrThrow({
@@ -345,7 +418,8 @@ describe('Fulfillment (integration, real Postgres)', () => {
   });
 
   it('rejects a dispatch quantity that exceeds what was assigned to the shipment', async () => {
-    const { fulfillmentOrderId, fulfillmentLineId, orderId } = await createProvisionedFulfillment(5);
+    const { fulfillmentOrderId, fulfillmentLineId, orderId } =
+      await createProvisionedFulfillment(5);
     await startPicking(fulfillmentOrderId);
     await fulfillmentsService.recordQuantities(
       fulfillmentOrderId,
@@ -367,8 +441,12 @@ describe('Fulfillment (integration, real Postgres)', () => {
 
     // Book only 2, but the ShipmentLine below (created directly, bypassing
     // the assignment bookkeeping) claims to carry all 5.
-    const fo = await prisma.fulfillmentOrder.findUniqueOrThrow({ where: { id: fulfillmentOrderId } });
-    const line = await prisma.fulfillmentLine.findUniqueOrThrow({ where: { id: fulfillmentLineId } });
+    const fo = await prisma.fulfillmentOrder.findUniqueOrThrow({
+      where: { id: fulfillmentOrderId },
+    });
+    const line = await prisma.fulfillmentLine.findUniqueOrThrow({
+      where: { id: fulfillmentLineId },
+    });
     const shipment = await prisma.shipment.create({
       data: {
         shipmentNumber: `SHIP-TEST-${randomUUID()}`,
@@ -384,7 +462,9 @@ describe('Fulfillment (integration, real Postgres)', () => {
         bookingIdempotencyKey: randomUUID(),
         bookedAt: new Date(),
         lines: {
-          create: [{ fulfillmentLineId, orderItemId: line.orderItemId, quantity: 5 }],
+          create: [
+            { fulfillmentLineId, orderItemId: line.orderItemId, quantity: 5 },
+          ],
         },
       },
     });
@@ -394,12 +474,18 @@ describe('Fulfillment (integration, real Postgres)', () => {
     });
 
     await expect(
-      fulfillmentsService.dispatch(fulfillmentOrderId, shipment.id, ADMIN_USER_ID, randomUUID()),
+      fulfillmentsService.dispatch(
+        fulfillmentOrderId,
+        shipment.id,
+        ADMIN_USER_ID,
+        randomUUID(),
+      ),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('serializes concurrent picking through the fulfillment-order row lock', async () => {
-    const { fulfillmentOrderId, fulfillmentLineId } = await createProvisionedFulfillment(10);
+    const { fulfillmentOrderId, fulfillmentLineId } =
+      await createProvisionedFulfillment(10);
     await startPicking(fulfillmentOrderId);
 
     const results = await Promise.allSettled([
@@ -426,12 +512,15 @@ describe('Fulfillment (integration, real Postgres)', () => {
     expect(fulfilled).toHaveLength(1);
     expect(rejected).toHaveLength(1);
 
-    const line = await prisma.fulfillmentLine.findUniqueOrThrow({ where: { id: fulfillmentLineId } });
+    const line = await prisma.fulfillmentLine.findUniqueOrThrow({
+      where: { id: fulfillmentLineId },
+    });
     expect(line.pickedQuantity).toBe(6);
   });
 
   it('rolls back the whole request when one of several lines fails validation', async () => {
-    const { fulfillmentOrderId, fulfillmentLineId } = await createProvisionedFulfillment(5);
+    const { fulfillmentOrderId, fulfillmentLineId } =
+      await createProvisionedFulfillment(5);
     await startPicking(fulfillmentOrderId);
 
     await expect(
@@ -448,7 +537,9 @@ describe('Fulfillment (integration, real Postgres)', () => {
       ),
     ).rejects.toThrow();
 
-    const line = await prisma.fulfillmentLine.findUniqueOrThrow({ where: { id: fulfillmentLineId } });
+    const line = await prisma.fulfillmentLine.findUniqueOrThrow({
+      where: { id: fulfillmentLineId },
+    });
     expect(line.pickedQuantity).toBe(0);
   });
 
@@ -462,7 +553,10 @@ describe('Fulfillment (integration, real Postgres)', () => {
     const key = randomUUID();
     await fulfillmentsService.cancel(
       fulfillmentOrderId,
-      { lines: [{ fulfillmentLineId, quantity: 5 }], reason: 'customer requested cancellation' },
+      {
+        lines: [{ fulfillmentLineId, quantity: 5 }],
+        reason: 'customer requested cancellation',
+      },
       ADMIN_USER_ID,
       key,
     );
@@ -473,7 +567,10 @@ describe('Fulfillment (integration, real Postgres)', () => {
 
     await fulfillmentsService.cancel(
       fulfillmentOrderId,
-      { lines: [{ fulfillmentLineId, quantity: 5 }], reason: 'customer requested cancellation' },
+      {
+        lines: [{ fulfillmentLineId, quantity: 5 }],
+        reason: 'customer requested cancellation',
+      },
       ADMIN_USER_ID,
       key,
     );
@@ -482,7 +579,9 @@ describe('Fulfillment (integration, real Postgres)', () => {
     });
     expect(afterReplay.onHand).toBe(afterFirst.onHand);
 
-    const fo = await prisma.fulfillmentOrder.findUniqueOrThrow({ where: { id: fulfillmentOrderId } });
+    const fo = await prisma.fulfillmentOrder.findUniqueOrThrow({
+      where: { id: fulfillmentOrderId },
+    });
     expect(fo.status).toBe('CANCELLED');
   });
 

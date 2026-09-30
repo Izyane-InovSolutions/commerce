@@ -77,7 +77,12 @@ describe('FulfillmentProvisioningService', () => {
   it('skips an item with no reservation instead of failing the whole group', async () => {
     prisma.order.findUnique.mockResolvedValue(
       orderWithGroup([
-        { id: 'oi-1', quantity: 2, reservationId: null, offer: { variantId: 'v1' } },
+        {
+          id: 'oi-1',
+          quantity: 2,
+          reservationId: null,
+          offer: { variantId: 'v1' },
+        },
       ]),
     );
 
@@ -144,15 +149,30 @@ describe('FulfillmentProvisioningService', () => {
   it('groups items across two warehouses into two fulfillment orders', async () => {
     prisma.order.findUnique.mockResolvedValue(
       orderWithGroup([
-        { id: 'oi-1', quantity: 1, reservationId: 'res-1', offer: { variantId: 'v1' } },
-        { id: 'oi-2', quantity: 1, reservationId: 'res-2', offer: { variantId: 'v2' } },
+        {
+          id: 'oi-1',
+          quantity: 1,
+          reservationId: 'res-1',
+          offer: { variantId: 'v1' },
+        },
+        {
+          id: 'oi-2',
+          quantity: 1,
+          reservationId: 'res-2',
+          offer: { variantId: 'v2' },
+        },
       ]),
     );
-    prisma.reservation.findUnique.mockImplementation(({ where: { id } }: { where: { id: string } }) =>
-      Promise.resolve({ id, inventoryRecordId: id === 'res-1' ? 'rec-1' : 'rec-2' }),
+    prisma.reservation.findUnique.mockImplementation(
+      ({ where: { id } }: { where: { id: string } }) =>
+        Promise.resolve({
+          id,
+          inventoryRecordId: id === 'res-1' ? 'rec-1' : 'rec-2',
+        }),
     );
-    prisma.inventoryRecord.findUnique.mockImplementation(({ where: { id } }: { where: { id: string } }) =>
-      Promise.resolve({ id, warehouseId: id === 'rec-1' ? 'wh-1' : 'wh-2' }),
+    prisma.inventoryRecord.findUnique.mockImplementation(
+      ({ where: { id } }: { where: { id: string } }) =>
+        Promise.resolve({ id, warehouseId: id === 'rec-1' ? 'wh-1' : 'wh-2' }),
     );
     prisma.tx.fulfillmentOrder.create.mockResolvedValue({ id: 'fo-x' });
 
@@ -168,11 +188,22 @@ describe('FulfillmentProvisioningService', () => {
   it('treats a duplicate (shippingGroupId, warehouseId) as a successful replay, not an error', async () => {
     prisma.order.findUnique.mockResolvedValue(
       orderWithGroup([
-        { id: 'oi-1', quantity: 1, reservationId: 'res-1', offer: { variantId: 'v1' } },
+        {
+          id: 'oi-1',
+          quantity: 1,
+          reservationId: 'res-1',
+          offer: { variantId: 'v1' },
+        },
       ]),
     );
-    prisma.reservation.findUnique.mockResolvedValue({ id: 'res-1', inventoryRecordId: 'rec-1' });
-    prisma.inventoryRecord.findUnique.mockResolvedValue({ id: 'rec-1', warehouseId: 'wh-1' });
+    prisma.reservation.findUnique.mockResolvedValue({
+      id: 'res-1',
+      inventoryRecordId: 'rec-1',
+    });
+    prisma.inventoryRecord.findUnique.mockResolvedValue({
+      id: 'rec-1',
+      warehouseId: 'wh-1',
+    });
     prisma.tx.fulfillmentOrder.create.mockRejectedValue({ code: 'P2002' });
 
     await expect(service.provisionForOrder('order-1')).resolves.toBeUndefined();

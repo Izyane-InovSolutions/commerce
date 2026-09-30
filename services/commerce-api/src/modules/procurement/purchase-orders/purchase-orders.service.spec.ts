@@ -80,7 +80,9 @@ describe('PurchaseOrdersService', () => {
 
   beforeEach(() => {
     prisma = buildPrisma();
-    suppliersService = { requireActive: jest.fn().mockResolvedValue({ id: 'sup-1' }) };
+    suppliersService = {
+      requireActive: jest.fn().mockResolvedValue({ id: 'sup-1' }),
+    };
     warehousesService = {
       findById: jest.fn().mockResolvedValue({ id: 'wh-1', isActive: true }),
     };
@@ -168,9 +170,9 @@ describe('PurchaseOrdersService', () => {
         lines: [],
       });
 
-      await expect(
-        service.approve('po-1', 0, 'user-1'),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(service.approve('po-1', 0, 'user-1')).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
       expect(prisma.tx.purchaseOrder.updateMany).not.toHaveBeenCalled();
     });
 
@@ -182,9 +184,9 @@ describe('PurchaseOrdersService', () => {
         lines: [],
       });
 
-      await expect(
-        service.approve('po-1', 0, 'user-1'),
-      ).rejects.toBeInstanceOf(ConflictException);
+      await expect(service.approve('po-1', 0, 'user-1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
     });
 
     it('approves when the actor differs from the creator', async () => {
@@ -214,7 +216,9 @@ describe('PurchaseOrdersService', () => {
 
       expect(result.status).toBe(PurchaseOrderStatus.APPROVED);
       expect(auditService.record).toHaveBeenCalledWith(
-        expect.objectContaining({ action: 'procurement.purchase_order.approved' }),
+        expect.objectContaining({
+          action: 'procurement.purchase_order.approved',
+        }),
         prisma.tx,
       );
     });

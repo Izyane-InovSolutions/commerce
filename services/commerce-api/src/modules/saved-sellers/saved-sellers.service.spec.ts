@@ -44,9 +44,7 @@ describe('SavedSellersService', () => {
       prisma.seller.findUnique.mockResolvedValue({ id: 'seller-1' });
       prisma.savedSeller.create.mockRejectedValue({ code: 'P2002' });
 
-      await expect(
-        service.add('user-1', 'seller-1'),
-      ).resolves.toBeUndefined();
+      await expect(service.add('user-1', 'seller-1')).resolves.toBeUndefined();
     });
 
     it('creates the saved-seller row for a valid seller', async () => {

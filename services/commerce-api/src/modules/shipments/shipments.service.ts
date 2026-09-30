@@ -29,8 +29,15 @@ import { CarrierProviderRegistry } from './carrier-provider.registry';
 import { AddTrackingEventDto } from './dto/add-tracking-event.dto';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { ListShipmentsDto } from './dto/list-shipments.dto';
-import { isTerminalShipmentStatus, projectShipmentStatus } from './tracking-status';
-import { CustomerShipmentView, ShipmentPage, ShipmentWithLines } from './shipments.types';
+import {
+  isTerminalShipmentStatus,
+  projectShipmentStatus,
+} from './tracking-status';
+import {
+  CustomerShipmentView,
+  ShipmentPage,
+  ShipmentWithLines,
+} from './shipments.types';
 
 type RecordEventInput = {
   source: TrackingEventSource;
@@ -85,7 +92,9 @@ export class ShipmentsService {
     const where: Prisma.ShipmentWhereInput = {
       ...(query.status ? { status: query.status } : {}),
       ...(query.warehouseId ? { warehouseId: query.warehouseId } : {}),
-      ...(query.fulfillmentOrderId ? { fulfillmentOrderId: query.fulfillmentOrderId } : {}),
+      ...(query.fulfillmentOrderId
+        ? { fulfillmentOrderId: query.fulfillmentOrderId }
+        : {}),
     };
 
     const [items, total] = await this.prisma.$transaction([
@@ -168,8 +177,13 @@ export class ShipmentsService {
     actorUserId: string,
     idempotencyKey: string,
   ): Promise<ShipmentWithLines> {
-    if (new Set(dto.lines.map((line) => line.fulfillmentLineId)).size !== dto.lines.length) {
-      throw new BadRequestException('Each fulfillment line may appear only once per shipment');
+    if (
+      new Set(dto.lines.map((line) => line.fulfillmentLineId)).size !==
+      dto.lines.length
+    ) {
+      throw new BadRequestException(
+        'Each fulfillment line may appear only once per shipment',
+      );
     }
 
     const existing = await this.prisma.shipment.findUnique({
@@ -200,7 +214,9 @@ export class ShipmentsService {
       // Fail before persisting a shipment if checkout selected a provider
       // that is not actually installed in this deployment.
       this.carrierProviderRegistry.get(shippingGroup.providerCode);
-      const orderItemByLineId = new Map(fo.lines.map((line) => [line.id, line.orderItemId]));
+      const orderItemByLineId = new Map(
+        fo.lines.map((line) => [line.id, line.orderItemId]),
+      );
       const shipmentNumber = await this.numberingService.nextShipmentNumber(tx);
 
       let shipment: ShipmentWithLines;
@@ -219,7 +235,9 @@ export class ShipmentsService {
             bookingIdempotencyKey: idempotencyKey,
             lines: {
               create: dto.lines.map((line) => {
-                const orderItemId = orderItemByLineId.get(line.fulfillmentLineId);
+                const orderItemId = orderItemByLineId.get(
+                  line.fulfillmentLineId,
+                );
                 if (!orderItemId) {
                   throw new NotFoundException(
                     `Fulfillment line ${line.fulfillmentLineId} not found`,
@@ -245,7 +263,10 @@ export class ShipmentsService {
           action: 'shipment.created',
           targetType: 'Shipment',
           targetId: shipment.id,
-          metadata: { fulfillmentOrderId: dto.fulfillmentOrderId, shipmentNumber },
+          metadata: {
+            fulfillmentOrderId: dto.fulfillmentOrderId,
+            shipmentNumber,
+          },
         },
         tx,
       );
@@ -254,14 +275,22 @@ export class ShipmentsService {
     });
   }
 
-  async book(shipmentId: string, actorUserId: string): Promise<ShipmentWithLines> {
+  async book(
+    shipmentId: string,
+    actorUserId: string,
+  ): Promise<ShipmentWithLines> {
     return this.prisma.$transaction(async (tx) => {
       const shipment = await this.lockShipment(tx, shipmentId);
       if (shipment.status === ShipmentStatus.BOOKED) {
-        return tx.shipment.findUniqueOrThrow({ where: { id: shipmentId }, include: { lines: true } });
+        return tx.shipment.findUniqueOrThrow({
+          where: { id: shipmentId },
+          include: { lines: true },
+        });
       }
       if (shipment.status !== ShipmentStatus.PENDING_BOOKING) {
-        throw new ConflictException(`Cannot book a shipment with status ${shipment.status}`);
+        throw new ConflictException(
+          `Cannot book a shipment with status ${shipment.status}`,
+        );
       }
 
       const order = await tx.order.findUniqueOrThrow({
@@ -321,7 +350,10 @@ export class ShipmentsService {
           topic: 'shipment.booked',
           aggregateType: 'Shipment',
           aggregateId: shipment.id,
-          payload: { orderId: shipment.orderId, trackingReference: result.trackingReference },
+          payload: {
+            orderId: shipment.orderId,
+            trackingReference: result.trackingReference,
+          },
         },
         tx,
       );
@@ -344,7 +376,9 @@ export class ShipmentsService {
         shipment.status !== ShipmentStatus.PENDING_BOOKING &&
         shipment.status !== ShipmentStatus.BOOKED
       ) {
-        throw new ConflictException(`Cannot cancel a shipment with status ${shipment.status}`);
+        throw new ConflictException(
+          `Cannot cancel a shipment with status ${shipment.status}`,
+        );
       }
 
       const provider = this.carrierProviderRegistry.get(shipment.providerCode);
@@ -361,7 +395,11 @@ export class ShipmentsService {
 
       const cancelled = await tx.shipment.update({
         where: { id: shipmentId },
-        data: { status: ShipmentStatus.CANCELLED, cancelledAt: new Date(), version: { increment: 1 } },
+        data: {
+          status: ShipmentStatus.CANCELLED,
+          cancelledAt: new Date(),
+          version: { increment: 1 },
+        },
         include: { lines: true },
       });
 
@@ -387,7 +425,9 @@ export class ShipmentsService {
     actorRole: Role,
   ): Promise<TrackingEvent> {
     if (dto.isCorrection && actorRole !== Role.ADMIN) {
-      throw new ForbiddenException('Only an administrator may correct tracking history');
+      throw new ForbiddenException(
+        'Only an administrator may correct tracking history',
+      );
     }
     return this.prisma.$transaction((tx) =>
       this.recordTrackingEvent(tx, shipmentId, {
@@ -455,15 +495,25 @@ export class ShipmentsService {
         where: { id: shipment.sellerOrderId },
         select: { sellerId: true },
       });
-      const seller = await this.sellersService.lockApproved(sellerCallerUserId, tx);
+      const seller = await this.sellersService.lockApproved(
+        sellerCallerUserId,
+        tx,
+      );
       if (shipment.warehouseId !== null || sellerOrder.sellerId !== seller.id) {
         throw new NotFoundException('Shipment not found');
       }
 
-      const existing = await tx.trackingEvent.findUnique({ where: { idempotencyKey } });
+      const existing = await tx.trackingEvent.findUnique({
+        where: { idempotencyKey },
+      });
       if (existing) {
-        if (existing.shipmentId !== shipmentId || existing.requestHash !== requestHash) {
-          throw new ConflictException('Idempotency-Key already used for a different request');
+        if (
+          existing.shipmentId !== shipmentId ||
+          existing.requestHash !== requestHash
+        ) {
+          throw new ConflictException(
+            'Idempotency-Key already used for a different request',
+          );
         }
         return tx.shipment.findUniqueOrThrow({ where: { id: shipmentId } });
       }
@@ -497,10 +547,14 @@ export class ShipmentsService {
   ): Promise<void> {
     const provider = this.carrierProviderRegistry.get(providerCode);
     if (!provider.parseWebhook) {
-      throw new NotFoundException(`Carrier "${providerCode}" does not accept webhooks`);
+      throw new NotFoundException(
+        `Carrier "${providerCode}" does not accept webhooks`,
+      );
     }
     const parsed = provider.parseWebhook(payload, headers);
-    const payloadHash = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+    const payloadHash = createHash('sha256')
+      .update(JSON.stringify(payload))
+      .digest('hex');
 
     let delivery;
     try {
@@ -562,7 +616,10 @@ export class ShipmentsService {
       // A #37 seller-fulfilled shipment (warehouseId null) has no real
       // carrier integration to poll — excluded here rather than relying on
       // some future provider being registered as a safe no-op.
-      where: { status: { in: NON_TERMINAL_STATUSES }, warehouseId: { not: null } },
+      where: {
+        status: { in: NON_TERMINAL_STATUSES },
+        warehouseId: { not: null },
+      },
     });
 
     for (const shipment of shipments) {
@@ -639,8 +696,14 @@ export class ShipmentsService {
         where: { id: shipmentId },
         data: {
           status: newStatus,
-          deliveredAt: newStatus === ShipmentStatus.DELIVERED ? input.occurredAt : shipment.deliveredAt,
-          cancelledAt: newStatus === ShipmentStatus.CANCELLED ? input.occurredAt : shipment.cancelledAt,
+          deliveredAt:
+            newStatus === ShipmentStatus.DELIVERED
+              ? input.occurredAt
+              : shipment.deliveredAt,
+          cancelledAt:
+            newStatus === ShipmentStatus.CANCELLED
+              ? input.occurredAt
+              : shipment.cancelledAt,
           version: { increment: 1 },
         },
       });
@@ -717,7 +780,9 @@ export class ShipmentsService {
       existingLines.length !== requestedLines.length ||
       existingLines.some((line, index) => line !== requestedLines[index])
     ) {
-      throw new ConflictException('Idempotency-Key already used for a different request');
+      throw new ConflictException(
+        'Idempotency-Key already used for a different request',
+      );
     }
     return existing;
   }
