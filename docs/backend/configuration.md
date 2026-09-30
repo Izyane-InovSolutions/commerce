@@ -22,28 +22,28 @@ Template: [services/commerce-api/.env.example](../../services/commerce-api/.env.
 
 ## Auth and sessions
 
-| Variable                                    | Default             | Required | Notes                                                                                                                      |
-| ------------------------------------------- | ------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `JWT_SECRET`                                | –                   | ✔       | At least 32 characters. Signs access tokens (`auth.module.ts`).                                                            |
-| `ACCESS_TOKEN_TTL_SECONDS`                  | `900` (15 min)      | –        | Minimum 60.                                                                                                                |
-| `REFRESH_TOKEN_TTL_SECONDS`                 | `2592000` (30 days) | –        | Minimum 60. Refresh families are also capped at 30 days in code. See [auth-and-access.md](auth-and-access.md).             |
-| `REFRESH_RECOVERY_ENCRYPTION_ACTIVE_KEY_ID` | –                   | ✔       | Id of the key used to encrypt the 30-second refresh-recovery payload stored on `Session.recoveryData`.                     |
-| `REFRESH_RECOVERY_ENCRYPTION_KEYS`          | –                   | ✔       | JSON keyring `{"<keyId>":"<base64 32 bytes>"}`. Keep old keys in it after rotating, so existing ciphertext still decrypts. |
-| `CUSTOMER_WEB_URL`                          | –                   | ✔       | `http(s)` base URL of the storefront. Used to build password-reset and email-verification links (`auth.service.ts`).       |
+| Variable                                    | Default             | Required | Notes                                                                                                                                                                                                                                                  |
+| ------------------------------------------- | ------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `JWT_SECRET`                                | –                   | ✔       | At least 32 characters. Signs access tokens (`auth.module.ts`).                                                                                                                                                                                        |
+| `ACCESS_TOKEN_TTL_SECONDS`                  | `900` (15 min)      | –        | Minimum 60.                                                                                                                                                                                                                                            |
+| `REFRESH_TOKEN_TTL_SECONDS`                 | `2592000` (30 days) | –        | Minimum 60. Refresh families are also capped at 30 days in code. See [auth-and-access.md](auth-and-access.md).                                                                                                                                         |
+| `REFRESH_RECOVERY_ENCRYPTION_ACTIVE_KEY_ID` | –                   | ✔       | Id of the key used to encrypt the 30-second refresh-recovery payload stored on `Session.recoveryData`.                                                                                                                                                 |
+| `REFRESH_RECOVERY_ENCRYPTION_KEYS`          | –                   | ✔       | JSON keyring `{"<keyId>":"<base64 32 bytes>"}`. Keep old keys in it after rotating, so existing ciphertext still decrypts.                                                                                                                             |
+| `CUSTOMER_WEB_URL`                          | –                   | ✔       | `http(s)` base URL of the storefront. Used to build password-reset and email-verification links (`auth.service.ts`). If it is missing, the API refuses to start; while it was optional, register, resend verification and password reset returned 500. |
 
 ## Email
 
-| Variable                                  | Default | Required | Notes                                                                                                               |
-| ----------------------------------------- | ------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
-| `SMTP_HOST`                               | –       | ✔       | Use mailpit (`deploy/docker-compose.yml`) in dev and testing.                                                       |
-| `SMTP_PORT`                               | `1025`  | –        |                                                                                                                     |
-| `SMTP_SECURE`                             | `false` | –        | The string `true` or `false`. `true` means implicit TLS.                                                            |
-| `SMTP_USER` / `SMTP_PASS`                 | empty   | –        | Both or neither. With neither set, no SMTP auth is attempted.                                                       |
-| `EMAIL_FROM`                              | –       | ✔       | Sender address ([smtp-email.sender.ts](../../services/commerce-api/src/infrastructure/email/smtp-email.sender.ts)). |
-| `SMTP_CONNECTION_TIMEOUT_MS`              | `10000` | –        | 1000–60000. Also used as the greeting timeout.                                                                      |
-| `SMTP_SEND_TIMEOUT_MS`                    | `30000` | –        | 1000–120000. Socket timeout.                                                                                        |
-| `EMAIL_DELIVERY_ENCRYPTION_ACTIVE_KEY_ID` | –       | ✔       | Key for the template variables stored on `EmailDelivery` rows until they are sent.                                  |
-| `EMAIL_DELIVERY_ENCRYPTION_KEYS`          | –       | ✔       | JSON keyring, same format as above.                                                                                 |
+| Variable                                  | Default                             | Required | Notes                                                                                                                                                                 |
+| ----------------------------------------- | ----------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SMTP_HOST`                               | –                                   | ✔       | Use mailpit (`deploy/docker-compose.yml`) in dev and testing.                                                                                                         |
+| `SMTP_PORT`                               | 465 if `SMTP_SECURE=true`, else 587 | –        | Blank counts as unset. Both mail transports use `smtpPort()` in `env.validation.ts`. The API refuses to start on `587` with `SMTP_SECURE=true`, which never connects. |
+| `SMTP_SECURE`                             | `false`                             | –        | The string `true` or `false`. `true` means implicit TLS (port 465); use `false` for STARTTLS on 587.                                                                  |
+| `SMTP_USER` / `SMTP_PASS`                 | empty                               | –        | Both or neither. With neither set, no SMTP auth is attempted.                                                                                                         |
+| `EMAIL_FROM`                              | –                                   | ✔       | Sender address ([smtp-email.sender.ts](../../services/commerce-api/src/infrastructure/email/smtp-email.sender.ts)).                                                   |
+| `SMTP_CONNECTION_TIMEOUT_MS`              | `10000`                             | –        | 1000–60000. Also used as the greeting timeout.                                                                                                                        |
+| `SMTP_SEND_TIMEOUT_MS`                    | `30000`                             | –        | 1000–120000. Socket timeout.                                                                                                                                          |
+| `EMAIL_DELIVERY_ENCRYPTION_ACTIVE_KEY_ID` | –                                   | ✔       | Key for the template variables stored on `EmailDelivery` rows until they are sent.                                                                                    |
+| `EMAIL_DELIVERY_ENCRYPTION_KEYS`          | –                                   | ✔       | JSON keyring, same format as above.                                                                                                                                   |
 
 ## Media storage
 

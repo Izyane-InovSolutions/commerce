@@ -6,6 +6,8 @@ import {
   type Transporter,
 } from 'nodemailer';
 
+import { smtpPort } from '../../../infrastructure/config/env.validation';
+
 export const DEFAULT_MAIL_FROM = 'Commerce <no-reply@localhost>';
 
 // Well under nodemailer's defaults (2 min to connect, 10 min idle): a hung
@@ -95,7 +97,7 @@ function smtpOptions(config: ConfigService): SMTPTransportOptions | null {
   const user = config.get<string>('SMTP_USER');
   return {
     host,
-    port: Number(config.get('SMTP_PORT') || (secure ? 465 : 587)),
+    port: smtpPort(config.get('SMTP_PORT'), secure),
     secure,
     auth: user
       ? { user, pass: config.get<string>('SMTP_PASS') ?? '' }
