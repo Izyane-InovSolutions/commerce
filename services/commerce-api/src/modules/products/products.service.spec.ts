@@ -57,9 +57,11 @@ function buildPrisma(): {
   productRatingSummary: { findMany: jest.Mock };
   productReview: { findMany: jest.Mock; count: jest.Mock };
   orderItem: { count: jest.Mock };
+  inventoryRecord: { count: jest.Mock };
   attributeValue: { findMany: jest.Mock };
   category: { findMany: jest.Mock };
   inventoryMovement: { count: jest.Mock };
+  reservation: { count: jest.Mock };
   $transaction: jest.Mock;
   $queryRaw: jest.Mock;
 } {
@@ -105,11 +107,13 @@ function buildPrisma(): {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     orderItem: { count: jest.fn().mockResolvedValue(0) },
+    inventoryRecord: { count: jest.fn().mockResolvedValue(0) },
     attributeValue: { findMany: jest.fn().mockResolvedValue([]) },
     category: { findMany: jest.fn().mockResolvedValue([]) },
     inventoryMovement: { count: jest.fn().mockResolvedValue(0) },
+    reservation: { count: jest.fn().mockResolvedValue(0) },
     $transaction: jest.fn(),
-    $queryRaw: jest.fn().mockResolvedValue([]),
+    $queryRaw: jest.fn().mockResolvedValue([{ id: 'locked' }]),
   };
   // Runs the callback with `prisma` standing in for the transaction client.
   prisma.$transaction.mockImplementation(
@@ -840,11 +844,37 @@ describe('ProductsService', () => {
       expect(prisma.productVariant.delete).not.toHaveBeenCalled();
     });
 
+    it('refuses to delete a variant with a reservation', async () => {
+      prisma.reservation.count.mockResolvedValue(1);
+
+      await expect(service.removeVariant('p1', 'v1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(prisma.productVariant.delete).not.toHaveBeenCalled();
+    });
+
+    it('refuses to delete a variant with nonzero stock', async () => {
+      prisma.inventoryRecord.count.mockResolvedValue(1);
+
+      await expect(service.removeVariant('p1', 'v1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(prisma.productVariant.delete).not.toHaveBeenCalled();
+    });
+
     it('maps a restricting foreign key to the same conflict', async () => {
       prisma.productVariant.delete.mockRejectedValue({ code: 'P2003' });
 
       await expect(service.removeVariant('p1', 'v1')).rejects.toBeInstanceOf(
         ConflictException,
+      );
+    });
+
+    it('maps a concurrent disappearance to not found', async () => {
+      prisma.productVariant.delete.mockRejectedValue({ code: 'P2025' });
+
+      await expect(service.removeVariant('p1', 'v1')).rejects.toBeInstanceOf(
+        NotFoundException,
       );
     });
   });

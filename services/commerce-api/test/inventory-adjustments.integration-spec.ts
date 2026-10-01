@@ -96,6 +96,12 @@ describe('Admin inventory adjustments (integration, real Postgres)', () => {
     await prisma.auditEvent.deleteMany({
       where: { actorUserId, action: 'inventory.stock.adjusted' },
     });
+    await prisma.inventoryMovement.deleteMany({
+      where: { inventoryRecord: { warehouseId, variantId } },
+    });
+    await prisma.reservation.deleteMany({
+      where: { inventoryRecord: { warehouseId, variantId } },
+    });
     await prisma.inventoryRecord.deleteMany({
       where: { warehouseId, variantId },
     });
@@ -110,6 +116,12 @@ describe('Admin inventory adjustments (integration, real Postgres)', () => {
       where: { actorUserId },
     });
     await prisma.auditEvent.deleteMany({ where: { actorUserId } });
+    await prisma.inventoryMovement.deleteMany({
+      where: { inventoryRecord: { warehouseId, variantId } },
+    });
+    await prisma.reservation.deleteMany({
+      where: { inventoryRecord: { warehouseId, variantId } },
+    });
     await prisma.inventoryRecord.deleteMany({
       where: { warehouseId, variantId },
     });

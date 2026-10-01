@@ -269,9 +269,19 @@ export async function createCheckoutHarness(
     await prisma.auditEvent.deleteMany({
       where: { actorUserId: { in: userIds } },
     });
-    // Orders (and their items, payments and payment events) cascade from
-    // the user; stock rows, movements and reservations from the warehouse.
+    // Orders (and their items, payments and payment events) cascade from the
+    // user. Stock journals are historical and therefore require explicit
+    // cleanup before their inventory records and warehouse.
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+    await prisma.reservation.deleteMany({
+      where: { inventoryRecord: { warehouseId: { in: warehouseIds } } },
+    });
+    await prisma.inventoryMovement.deleteMany({
+      where: { inventoryRecord: { warehouseId: { in: warehouseIds } } },
+    });
+    await prisma.inventoryRecord.deleteMany({
+      where: { warehouseId: { in: warehouseIds } },
+    });
     await prisma.warehouse.deleteMany({ where: { id: { in: warehouseIds } } });
     await prisma.offer.deleteMany({ where: { id: { in: offerIds } } });
     await prisma.product.deleteMany({ where: { id: { in: productIds } } });

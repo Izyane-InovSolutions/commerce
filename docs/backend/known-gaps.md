@@ -1,6 +1,6 @@
 # Known gaps
 
-Current register, reviewed **2026-09-30**. This is the authority for current status; the [September 25 audit](../github-issues-backend-audit-2026-09-25.md) and [release verification report](../backend-release-1-verification.md) remain historical snapshots.
+Current register, reviewed **2026-10-01**. This is the authority for current status; the [September 25 audit](../github-issues-backend-audit-2026-09-25.md) and [release verification report](../backend-release-1-verification.md) remain historical snapshots.
 
 ## Evidence and status policy
 
@@ -16,7 +16,7 @@ The remaining H/S/R findings below retain their **2026-09-29 source review** unl
 
 ### Corrected baseline (2026-09-30)
 
-All rows here are **source-confirmed**. Existing tests are evidence locations, not a claim they passed today. Fresh execution results and blockers are recorded in [baseline verification](baseline-verification.md).
+Rows here record source corrections unless a dated verification link states that the corrected behavior was executed. Fresh Step 1 results and blockers are recorded in [baseline verification](baseline-verification.md); later hardening steps have their own verification records.
 
 | Area / old finding | Current implementation and remaining gate | Supporting source and tests (relative to `services/commerce-api`) |
 | --- | --- | --- |
@@ -27,11 +27,11 @@ All rows here are **source-confirmed**. Existing tests are evidence locations, n
 | S3: no byte inspection | Media checks byte signatures against the reserved type. Multipart buffering still lacks a transport size limit. Signature detection is not malware scanning. | `src/modules/media/media.service.ts`, `media.service.spec.ts`, `media-signature.spec.ts` |
 | Missing customer cancellation | Owner `POST /api/v1/orders/:id/cancel` and admin cancellation exist; paid orders need refund/fulfillment flows. PostgreSQL tests need the isolated environment. | `src/modules/orders/cancellation/order-cancellation.controller.ts`, `test/orders.integration-spec.ts` |
 | Missing audit reader | ADMIN-only `GET /api/v1/admin/audit-events` and `/actions` exist. Audit coverage/redaction remain separate concerns. | `src/modules/audit/audit-events.controller.ts`, `audit.service.spec.ts` |
-| H15: every product delete is unguarded | Product deletion has `deleteUnlessUsed` and conflict mapping. Direct offer deletion and cascading foreign keys still require review and race tests. | `src/modules/products/products.service.ts`, `src/modules/offers/offers.service.ts`, `prisma/schema.prisma` |
+| H15: every product delete is unguarded | Product, variant and direct offer deletion now lock the affected catalog/stock rows and reject purchase history, stock movements, reservations and nonzero stock. Restrictive history FKs are the concurrency backstop. | `src/modules/products/products.service.ts`, `src/modules/offers/offers.service.ts`, `prisma/migrations/20261001090000_preserve_order_and_stock_history`, `test/catalog-deletion.integration-spec.ts` |
 
 ## Step 1 acceptance
 
-See the [acceptance matrix](../backend-acceptance-matrix.md#current-baseline-2026-09-30) for the bounded scope and [test instructions](testing.md) for local/CI isolation. No business defect or frontend feature is changed by this step. Performance, load, failover and backup/restore certification are deferred; unit coverage cannot establish them.
+See the [acceptance matrix](../backend-acceptance-matrix.md#current-baseline-2026-10-01) for the bounded scope and [test instructions](testing.md) for local/CI isolation. No business defect or frontend feature is changed by this step. Performance, load, failover and backup/restore certification are deferred; unit coverage cannot establish them.
 
 ### Current verification gates
 
@@ -67,7 +67,7 @@ These can lose money, lose or corrupt stock, or leave customers stuck.
 | H12    | **Returns that silently never refund.** Accepted items with no seller order are skipped, so the return sits in `REFUND_PENDING` with no refund case. Seller-mode items are also restocked into the platform warehouse                                                                                                                                                                                                                                                                                                                                             | [returns](modules/returns.md#known-gaps)                                             | source-confirmed / 2026-09-29 |
 | H13    | **Checkout idempotency is weak.** The key is optional. A replay with a different body returns the old order instead of 409. After a definite failure, a retry with the same key replays that failure                                                                                                                                                                                                                                                                                                                                                              | [checkout](modules/checkout.md#known-gaps)                                           | source-confirmed / 2026-09-29 |
 | H14    | **Fulfillment provisioning can drop lines.** Every P2002 is treated as a harmless replay, and items it cannot resolve are skipped without a log, so a paid line can end up with no fulfillment                                                                                                                                                                                                                                                                                                                                                                    | [fulfillment](modules/fulfillment.md#known-gaps)                                     | source-confirmed / 2026-09-29 |
-| H15 | **Cascading order-history deletion remains a risk.** Product deletion has a usage guard; direct offer deletion and `OrderItem.offer` cascade still need database-level verification and protection. | [products](modules/products.md#known-gaps), [offers](modules/offers.md#known-gaps) | source-confirmed / 2026-09-30 |
+| H15 | **Catalog deletion history protection.** Product, variant and first-party offer hard deletion is limited to unused records. Purchase history, stock movements, reservations and nonzero stock return 409 with archive guidance. Restrictive order-item, movement and reservation FKs preserve history during concurrent writes. | [Step 3 verification](catalog-history-verification.md), [products](modules/products.md), [offers](modules/offers.md) | fixed and verified / 2026-10-01 |
 | H16 | **`reserve` can block on its own caller's lock.** `sweepExpired` and `expireReservation` run on their own connection, outside the caller's `tx` ([inventory.service.ts:487-489](../../services/commerce-api/src/modules/inventory/inventory.service.ts#L487-L489), [:755](../../services/commerce-api/src/modules/inventory/inventory.service.ts#L755)). Take an order with two lines on the same variant, where an expired reservation still exists: the second sweep waits on the row lock the order transaction already holds, until the transaction times out | [inventory](modules/inventory.md#known-gaps)                                         | source-confirmed / 2026-09-29 |
 
 ## Security and privacy

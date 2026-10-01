@@ -116,6 +116,13 @@ describe('Procurement (integration, real Postgres)', () => {
     }
     await prisma.auditEvent.deleteMany({ where: { actorUserId } });
     await prisma.supplier.deleteMany({ where: { id: supplierId } });
+    await prisma.reservation.deleteMany({
+      where: { inventoryRecord: { warehouseId } },
+    });
+    await prisma.inventoryMovement.deleteMany({
+      where: { inventoryRecord: { warehouseId } },
+    });
+    await prisma.inventoryRecord.deleteMany({ where: { warehouseId } });
     await prisma.warehouse.deleteMany({ where: { id: warehouseId } });
     await prisma.productVariant.deleteMany({ where: { id: variantId } });
     await prisma.product.deleteMany({ where: { id: productId } });

@@ -2,7 +2,7 @@
 
 Scope: documentation accuracy, isolated testing and backend CI only. Source checkpoint: `e386b94`, plus the uncommitted Step 1 configuration/documentation changes. No business logic or frontend changes are included. This is not a production-readiness certificate.
 
-Status definitions are in the [current gap register](known-gaps.md#evidence-and-status-policy). The [acceptance matrix](../backend-acceptance-matrix.md#current-baseline-2026-09-30) links to this ledger. Every entry below is dated **2026-09-30**; source locations and tests are deliberately separate from execution results.
+Status definitions are in the [current gap register](known-gaps.md#evidence-and-status-policy). The [acceptance matrix](../backend-acceptance-matrix.md#current-baseline-2026-10-01) links to this ledger. Every entry below is dated **2026-09-30**; source locations and tests are deliberately separate from execution results.
 
 ## Execution ledger
 

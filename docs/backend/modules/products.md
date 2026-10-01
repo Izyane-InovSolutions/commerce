@@ -125,11 +125,12 @@ None directly. Image URL TTL is `MEDIA_PUBLIC_URL_TTL_SECONDS` (see [media.md](m
 - [products.service.spec.ts](../../../services/commerce-api/src/modules/products/products.service.spec.ts): price resolution and pagination, out-of-stock, public offer eligibility, seller storefront on offers, filters and seller-name search, not-found, rating defaults/histogram, review projection/visibility/rating filter/pagination, slug and SKU conflicts, variant transaction, unavailable media, submission gate/ownership/pending, foreign media, review CAS, approve publishes variants, reject leaves variants.
 - [product-references.service.spec.ts](../../../services/commerce-api/src/modules/products/product-references.service.spec.ts): published variant and product required; media ids deduplicated.
 - [test/catalog.e2e-spec.ts](../../../services/commerce-api/test/catalog.e2e-spec.ts): draft hidden (404), then variant + offer + price + publish makes it publicly visible with the ZMW price.
-- Untested: delete cascades, admin media update/detach, seller routes over HTTP.
+- [test/catalog-deletion.integration-spec.ts](../../../services/commerce-api/test/catalog-deletion.integration-spec.ts): unused product/variant chains, order and stock-history retention, and a concurrent order insertion against deletion.
+- Untested: admin media update/detach and seller routes over HTTP.
 
 ## Known gaps
 
-- Deleting a product or variant cascades `ProductVariant -> Offer -> OrderItem/CartItem/InventoryRecord` ([schema.prisma:564](../../../services/commerce-api/prisma/schema.prisma#L564), [:964](../../../services/commerce-api/prisma/schema.prisma#L964)). Unpaid order lines can be silently deleted; when a `Restrict` FK blocks it (fulfillment line, PO line, review), `remove` does not map P2003 and returns 500 ([products.service.ts:382](../../../services/commerce-api/src/modules/products/products.service.ts#L382), [:471](../../../services/commerce-api/src/modules/products/products.service.ts#L471)). Archiving via status is the safe path.
+- Hard deletion is intentionally limited to unused products and variants. Purchase history, stock movements, reservations and nonzero stock return 409 with archive guidance; restrictive history FKs protect concurrent writes. See [Step 3 verification](../catalog-history-verification.md).
 - `updateStatus` ignores `submissionStatus`, so staff can publish a `PENDING` or `REJECTED` seller submission directly ([products.service.ts:370](../../../services/commerce-api/src/modules/products/products.service.ts#L370)).
 - `reviewSubmission` does not re-check the admin in the DB, block self-review, or audit the decision, unlike seller review ([products.service.ts:688](../../../services/commerce-api/src/modules/products/products.service.ts#L688)).
 - No resubmission path after `REJECTED`, and no seller edit route.

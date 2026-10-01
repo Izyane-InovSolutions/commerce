@@ -711,7 +711,7 @@ model InventoryRecord {
 model InventoryMovement {
   id                String                @id @default(uuid()) @db.Uuid
   inventoryRecordId String                @map("inventory_record_id") @db.Uuid
-  inventoryRecord   InventoryRecord       @relation(fields: [inventoryRecordId], references: [id], onDelete: Cascade)
+  inventoryRecord   InventoryRecord       @relation(fields: [inventoryRecordId], references: [id], onDelete: Restrict)
   type              InventoryMovementType
   quantity          Int
   referenceType     String?               @map("reference_type")
@@ -746,7 +746,7 @@ model StockAdjustmentReceipt {
 model Reservation {
   id                String            @id @default(uuid()) @db.Uuid
   inventoryRecordId String            @map("inventory_record_id") @db.Uuid
-  inventoryRecord   InventoryRecord   @relation(fields: [inventoryRecordId], references: [id], onDelete: Cascade)
+  inventoryRecord   InventoryRecord   @relation(fields: [inventoryRecordId], references: [id], onDelete: Restrict)
   quantity          Int
   status            ReservationStatus @default(ACTIVE)
   holderType        String?           @map("holder_type")
@@ -1017,7 +1017,7 @@ model OrderItem {
   shippingGroupId String?          @map("shipping_group_id") @db.Uuid
   shippingGroup   ShippingGroup?   @relation(fields: [shippingGroupId], references: [id], onDelete: SetNull)
   offerId         String           @map("offer_id") @db.Uuid
-  offer           Offer            @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  offer           Offer            @relation(fields: [offerId], references: [id], onDelete: Restrict)
   quantity        Int
   unitAmount      Int              @map("unit_amount")
   currency        String           @db.VarChar(3)

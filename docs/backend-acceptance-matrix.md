@@ -4,7 +4,7 @@ This is the implementation baseline, not a completion certificate. Source: READM
 
 Statuses: **source-confirmed**, **reproduced**, **fixed and verified**, **externally blocked**, **deferred**. Definitions and current source corrections are in the [gap register](backend/known-gaps.md#evidence-and-status-policy). A passing unit test is not proof of provider delivery, PostgreSQL behavior, performance or deployment readiness.
 
-## Current baseline (2026-09-30)
+## Current baseline (2026-10-01)
 
 | Acceptance criterion | Status | Evidence / next gate | Verification date |
 | --- | --- | --- | --- |
@@ -13,9 +13,10 @@ Statuses: **source-confirmed**, **reproduced**, **fixed and verified**, **extern
 | Isolated PostgreSQL 17, commerce_test, loopback 55432, separate volume/credentials | fixed and verified | [Compose](../deploy/docker-compose.test.yml) and [test env example](../services/commerce-api/.env.integration.example); the healthy Docker Compose service passed all migrations and integration tests | 2026-09-30 |
 | Node 24 CI with all requested backend checks and PostgreSQL 17 integration | source-confirmed | [Workflow](../.github/workflows/backend.yml); first GitHub run outstanding | 2026-09-30 |
 | Keep test-database safeguards and disable scheduled/external providers | fixed and verified | Isolation regression, all 14 target-guard tests and the real PostgreSQL integration run passed. See [execution ledger](backend/baseline-verification.md). | 2026-09-30 |
-| Local PostgreSQL integration execution | fixed and verified | 42 migrations, 16 suites and 79 tests passed from a fresh dedicated Docker Compose PostgreSQL 17 volume at 127.0.0.1:55432. CI provisions its own service. | 2026-09-30 |
+| Local PostgreSQL integration execution | fixed and verified | 43 migrations, 17 suites and 85 tests passed from a fresh dedicated Docker Compose PostgreSQL 17 volume at 127.0.0.1:55432. CI provisions its own service. | 2026-10-01 |
 | Safe, auditable admin stock adjustment | fixed and verified | [Step 2 verification](backend/stock-adjustment-verification.md): fresh PostgreSQL run applied 42 migrations; 16 suites and 79 integration tests passed, including database constraints, concurrency, replay and rollback cases | 2026-09-30 |
-| All local backend checks pass on the current checkout | fixed and verified | Typecheck, lint, formatting, Swagger, unit, HTTP, integration and build passed; first remote CI run remains separate | 2026-09-30 |
+| Preserve order and stock history during catalog deletion | fixed and verified | [Step 3 verification](backend/catalog-history-verification.md): restrictive history FKs, locked service checks and a fresh PostgreSQL race run; 43 migrations, 17 suites and 85 integration tests passed | 2026-10-01 |
+| All local backend checks pass on the current checkout | fixed and verified | Typecheck, lint, formatting, Swagger, build, 98 unit suites/995 tests, 9 HTTP suites/32 tests and 17 integration suites/85 tests passed; first remote CI run remains separate | 2026-10-01 |
 | Business hardening, frontend work, load/failover/restore certification | deferred | Outside Step 1; no acceptance claim | 2026-09-30 |
 
 The detailed issue criteria below retain candidate source references. Their **criterion-level verification is deferred**, reviewed 2026-09-30, unless the current baseline or a dated checkpoint records exact evidence. This does not mean every feature is missing or every source reference has been executed. Dated checkpoints at the end remain historical and do not override this baseline.

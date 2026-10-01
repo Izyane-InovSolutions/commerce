@@ -1,5 +1,9 @@
 import { ProductReferencesService } from '../products/product-references.service';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { PrismaService } from '../../database/prisma.service';
 import { OffersService } from './offers.service';
@@ -14,6 +18,12 @@ describe('OffersService', () => {
     };
     productVariant: { findUnique: jest.Mock };
     price: { create: jest.Mock };
+    orderItem: { count: jest.Mock };
+    inventoryMovement: { count: jest.Mock };
+    reservation: { count: jest.Mock };
+    inventoryRecord: { count: jest.Mock };
+    $queryRaw: jest.Mock;
+    $transaction: jest.Mock;
   };
   let service: OffersService;
 
@@ -27,7 +37,19 @@ describe('OffersService', () => {
       },
       productVariant: { findUnique: jest.fn() },
       price: { create: jest.fn() },
+      orderItem: { count: jest.fn().mockResolvedValue(0) },
+      inventoryMovement: { count: jest.fn().mockResolvedValue(0) },
+      reservation: { count: jest.fn().mockResolvedValue(0) },
+      inventoryRecord: { count: jest.fn().mockResolvedValue(0) },
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([{ id: 'o1', seller_id: null }])
+        .mockResolvedValue([]),
+      $transaction: jest.fn(),
     };
+    prisma.$transaction.mockImplementation(
+      (callback: (tx: typeof prisma) => unknown) => callback(prisma),
+    );
     service = new OffersService(
       prisma as unknown as PrismaService,
       new ProductReferencesService(prisma as unknown as PrismaService),
@@ -106,6 +128,56 @@ describe('OffersService', () => {
         expect.objectContaining({
           data: expect.objectContaining({ currency: 'USD' }) as object,
         }),
+      );
+    });
+  });
+
+  describe('remove', () => {
+    beforeEach(() => {
+      prisma.offer.findUnique.mockResolvedValue({
+        id: 'o1',
+        sellerId: null,
+        prices: [],
+      });
+    });
+
+    it('deletes an unused first-party offer', async () => {
+      await service.remove('o1');
+
+      expect(prisma.offer.delete).toHaveBeenCalledWith({
+        where: { id: 'o1' },
+      });
+    });
+
+    it.each([
+      ['purchase history', 'orderItem'],
+      ['stock movements', 'inventoryMovement'],
+      ['reservations', 'reservation'],
+      ['nonzero stock', 'inventoryRecord'],
+    ])('refuses deletion with %s', async (_label, delegate) => {
+      (
+        prisma[delegate as keyof typeof prisma] as { count: jest.Mock }
+      ).count.mockResolvedValue(1);
+
+      await expect(service.remove('o1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(prisma.offer.delete).not.toHaveBeenCalled();
+    });
+
+    it('maps a restricting foreign key to conflict', async () => {
+      prisma.offer.delete.mockRejectedValue({ code: 'P2003' });
+
+      await expect(service.remove('o1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+    });
+
+    it('maps concurrent disappearance to not found', async () => {
+      prisma.offer.delete.mockRejectedValue({ code: 'P2025' });
+
+      await expect(service.remove('o1')).rejects.toBeInstanceOf(
+        NotFoundException,
       );
     });
   });

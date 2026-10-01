@@ -91,7 +91,7 @@ stateDiagram-v2
 **Warehouses**
 
 - `code` `^[A-Z0-9_-]+$`, unique (P2002 -> 409) ([create-warehouse.dto.ts:9](../../../services/commerce-api/src/modules/inventory/warehouses/dto/create-warehouse.dto.ts#L9)). `isActive` is only settable on update.
-- Delete cascades to the warehouse's inventory records, and through them to movements and reservations ([schema.prisma:649](../../../services/commerce-api/prisma/schema.prisma#L649)). POs, receipts, fulfillment orders, shipments and return receipts `Restrict` it; that FK error is not mapped ([warehouses.service.ts:48](../../../services/commerce-api/src/modules/inventory/warehouses/warehouses.service.ts#L48)).
+- Delete locks the warehouse and rejects any inventory record with 409. Other purchasing, fulfillment and return references are restrictive and also map to 409. Inventory movements and reservations cannot be erased through an inventory-record cascade.
 
 ## Data
 
@@ -124,7 +124,7 @@ None. The 15-minute TTL is a constant.
 - [inventory.service.spec.ts](../../../services/commerce-api/src/modules/inventory/inventory.service.spec.ts): availability sums and batching, seller/platform separation, `setOfferQuantity` concurrency and signed movement, expiry deadline, restock idempotency, receive/adjust validation and floor, reserve not-found/insufficient/sweep/job enqueue, release/expire/commit idempotency and counters, `returnCancelledStock`, `receiveStockForReference`, `reverseReceiptStock`.
 - [seller-inventory.service.spec.ts](../../../services/commerce-api/src/modules/inventory/seller-inventory.service.spec.ts): zero defaults, other seller's offer, duplicate ids, single transaction with sorted lock order.
 - [inventory-expire-reservation.handler.spec.ts](../../../services/commerce-api/src/modules/inventory/jobs/inventory-expire-reservation.handler.spec.ts): job type and payload parsing.
-- [warehouses.service.spec.ts](../../../services/commerce-api/src/modules/inventory/warehouses/warehouses.service.spec.ts): P2002 -> 409, other errors preserved, unknown update.
+- [warehouses.service.spec.ts](../../../services/commerce-api/src/modules/inventory/warehouses/warehouses.service.spec.ts): P2002 -> 409, locked deletion, stock/reference conflicts and unknown targets.
 - [test/inventory.e2e-spec.ts](../../../services/commerce-api/test/inventory.e2e-spec.ts): receive/reserve/release with accurate availability, over-reserve rejected, expiry through the job worker, commit.
 - [test/inventory-adjustments.integration-spec.ts](../../../services/commerce-api/test/inventory-adjustments.integration-spec.ts) (real PostgreSQL): reserved floor, signed history, actor audit, identical/conflicting retries, concurrent requests, keyless calls, integer overflow and transactional rollback.
 
@@ -136,7 +136,6 @@ None. The 15-minute TTL is a constant.
 - Admin receive still has no `Idempotency-Key` or actor audit; a retried receive request can double-count stock.
 - `receiveStock` creates the record outside its transaction, and receive/adjust do not check that the warehouse or variant is active; a bad id surfaces as an unmapped P2003 (500).
 - `GET /admin/inventory` passes `warehouseId`/`variantId` unvalidated into Prisma; a non-UUID gives 500 ([admin-inventory.controller.ts:27](../../../services/commerce-api/src/modules/inventory/admin-inventory.controller.ts#L27)).
-- Deleting a warehouse silently deletes its stock, movements and reservations when nothing else references it ([schema.prisma:649](../../../services/commerce-api/prisma/schema.prisma#L649)).
 - `restock` and `getAvailableQuantity` have no callers outside tests ([inventory.service.ts:723](../../../services/commerce-api/src/modules/inventory/inventory.service.ts#L723), [:45](../../../services/commerce-api/src/modules/inventory/inventory.service.ts#L45)).
 - Platform `InventoryRecord.version` is never incremented by admin paths, so it is not a usable concurrency token there.
 - `reorderPoint` is stored but nothing reports or alerts on low stock.

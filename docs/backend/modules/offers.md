@@ -112,7 +112,8 @@ None.
 ## Tests
 
 - [marketplace-offers.service.spec.ts](../../../services/commerce-api/src/modules/offers/marketplace-offers.service.spec.ts): suspended seller rejected before any change, lookup scoped to the seller, stale version retires no prices, currency change rejected, storefront required to publish.
-- [offers.service.spec.ts](../../../services/commerce-api/src/modules/offers/offers.service.spec.ts): admin create always first-party, unknown variant, `endsAt` after `startsAt`, currency uppercased, not-found.
+- [offers.service.spec.ts](../../../services/commerce-api/src/modules/offers/offers.service.spec.ts): admin create always first-party, unknown variant, price validation, and protected hard deletion.
+- [test/catalog-deletion.integration-spec.ts](../../../services/commerce-api/test/catalog-deletion.integration-spec.ts): unused deletion, history retention and concurrent order insertion.
 - [offer-read.service.spec.ts](../../../services/commerce-api/src/modules/offers/offer-read.service.spec.ts): id dedupe, no query for empty ids, seller reads scoped to `SELLER` stock.
 - [test/catalog.e2e-spec.ts](../../../services/commerce-api/test/catalog.e2e-spec.ts): admin offer + price + publish over HTTP.
 - Untested: public comparison/storefront views, publish price rule, archived terminal state.
@@ -121,7 +122,7 @@ None.
 
 - A seller can create an offer with `stockSource: PLATFORM`; orders then reserve from the platform's shared variant stock for that seller's offer ([seller-offer.dto.ts:37](../../../services/commerce-api/src/modules/offers/dto/seller-offer.dto.ts#L37), [orders.service.ts:527](../../../services/commerce-api/src/modules/orders/orders.service.ts#L527)). Nothing restricts the combination of `stockSource` and `fulfillmentMode` either.
 - Admin `updateStatus` publishes a first-party offer without any checks (no price, unpublished variant allowed) ([offers.service.ts:48](../../../services/commerce-api/src/modules/offers/offers.service.ts#L48)); admin offer changes are not audited.
-- Admin `remove` hard-deletes, which cascades to `Price`, `CartItem`, `WishlistItem` and `OrderItem` rows ([schema.prisma:964](../../../services/commerce-api/prisma/schema.prisma#L964)); a restricting FK (review) surfaces as 500 ([offers.service.ts:62](../../../services/commerce-api/src/modules/offers/offers.service.ts#L62)).
+- Admin `remove` only hard-deletes unused first-party offers. Purchase history, stock movements, reservations, nonzero stock and restricting references return 409 with archive guidance; concurrent disappearance returns 404. Seller offers still have no hard-delete endpoint.
 - Admin prices accept `amount: 0` and an `endsAt` in the past when `startsAt` is omitted ([offers.service.ts:71](../../../services/commerce-api/src/modules/offers/offers.service.ts#L71)).
 - There is no admin route to list offers, or to archive/unpublish a seller offer; the only lever is suspending the seller.
 - Audit rows bypass `AuditService.record` and its redaction ([marketplace-offers.service.ts:464](../../../services/commerce-api/src/modules/offers/marketplace-offers.service.ts#L464)).

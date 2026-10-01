@@ -115,6 +115,19 @@ describe('Shipments (integration, real Postgres)', () => {
     if (createdUserIds.length)
       await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
     if (createdWarehouseIds.length) {
+      await prisma.reservation.deleteMany({
+        where: {
+          inventoryRecord: { warehouseId: { in: createdWarehouseIds } },
+        },
+      });
+      await prisma.inventoryMovement.deleteMany({
+        where: {
+          inventoryRecord: { warehouseId: { in: createdWarehouseIds } },
+        },
+      });
+      await prisma.inventoryRecord.deleteMany({
+        where: { warehouseId: { in: createdWarehouseIds } },
+      });
       await prisma.warehouse.deleteMany({
         where: { id: { in: createdWarehouseIds } },
       });
