@@ -7473,7 +7473,24 @@
       "tags": [
         "admin/inventory"
       ],
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "idempotency-key",
+          "in": "header",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "user-agent",
+          "in": "header",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
       "security": [
         {
           "bearer": []
@@ -25696,6 +25713,8 @@
         },
         "delta": {
           "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
           "not": {
             "enum": [
               0

@@ -185,6 +185,7 @@ model User {
   sellerRatings           SellerRating[]
   reviewReports           ReviewReport[]
   notifications           Notification[]
+  stockAdjustmentReceipts StockAdjustmentReceipt[]
 
   @@map("users")
 }
@@ -720,6 +721,24 @@ model InventoryMovement {
 
   @@index([inventoryRecordId])
   @@map("inventory_movements")
+}
+
+// Stores the result of an optional retry-safe admin stock adjustment. The
+// key is scoped to the authenticated actor so two administrators can use the
+// same client-generated UUID independently. The response is the immutable
+// snapshot returned by the first successful request.
+model StockAdjustmentReceipt {
+  id             String   @id @default(uuid()) @db.Uuid
+  actorUserId    String   @map("actor_user_id") @db.Uuid
+  actor          User     @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  idempotencyKey String   @map("idempotency_key") @db.Uuid
+  requestHash    String   @map("request_hash") @db.VarChar(64)
+  response       Json
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@unique([actorUserId, idempotencyKey])
+  @@index([createdAt])
+  @@map("inventory_adjustment_receipts")
 }
 
 // holderType/holderId are nullable now — Cart/Checkout (Phase 1.4/1.5)

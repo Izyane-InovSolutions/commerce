@@ -159,7 +159,7 @@ Legend: `[Public]` no auth · `[Optional]` auth optional · unmarked = any logge
 |---|---|---|
 | GET `/admin/inventory?warehouseId=&variantId=` | [Roles: STAFF, ADMIN] | — |
 | POST `/admin/inventory/receive` | [Roles: STAFF, ADMIN] | `{ "warehouseId": "<uuid>", "variantId": "<uuid>", "quantity": 100, "note": "restock" }` |
-| POST `/admin/inventory/adjust` | [Roles: STAFF, ADMIN] | `{ "warehouseId": "<uuid>", "variantId": "<uuid>", "delta": -5, "note": "damage" }` |
+| POST `/admin/inventory/adjust` | [Roles: STAFF, ADMIN]; optional UUID-v4 `Idempotency-Key` | `{ "warehouseId": "<uuid>", "variantId": "<uuid>", "delta": -5, "note": "damage" }` |
 | GET `/admin/inventory/:id/movements` \| `/reservations` | [Roles: STAFF, ADMIN] | — |
 | PATCH `/admin/inventory/:id/reorder-point` | [Roles: STAFF, ADMIN] | `{ "reorderPoint": 10 }` |
 | GET `/sellers/me/inventory` | [Roles: SELLER] | — |

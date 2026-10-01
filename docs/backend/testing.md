@@ -35,7 +35,7 @@ Stop the test service without removing its data:
 docker compose -f deploy/docker-compose.test.yml down
 ```
 
-The 2026-09-30 baseline verified Docker Desktop's WSL 2 Linux engine and the commands above. The dedicated Compose service became healthy on `127.0.0.1:55432`; all 41 migrations, 15 suites and 71 integration tests passed. An earlier fresh native PostgreSQL 17 run with equivalent isolation produced the same result. GitHub Actions provisions an independent PostgreSQL 17 service and does not require developer database credentials or secrets.
+The 2026-09-30 Step 2 run verified Docker Desktop's WSL 2 Linux engine and the commands above from a newly created test volume. The dedicated Compose service became healthy on `127.0.0.1:55432`; all 42 migrations, 16 suites and 79 integration tests passed. GitHub Actions provisions an independent PostgreSQL 17 service and does not require developer database credentials or secrets.
 
 ## Database and provider safeguards
 

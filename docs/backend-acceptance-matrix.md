@@ -13,7 +13,8 @@ Statuses: **source-confirmed**, **reproduced**, **fixed and verified**, **extern
 | Isolated PostgreSQL 17, commerce_test, loopback 55432, separate volume/credentials | fixed and verified | [Compose](../deploy/docker-compose.test.yml) and [test env example](../services/commerce-api/.env.integration.example); the healthy Docker Compose service passed all migrations and integration tests | 2026-09-30 |
 | Node 24 CI with all requested backend checks and PostgreSQL 17 integration | source-confirmed | [Workflow](../.github/workflows/backend.yml); first GitHub run outstanding | 2026-09-30 |
 | Keep test-database safeguards and disable scheduled/external providers | fixed and verified | Isolation regression, all 14 target-guard tests and the real PostgreSQL integration run passed. See [execution ledger](backend/baseline-verification.md). | 2026-09-30 |
-| Local PostgreSQL integration execution | fixed and verified | 41 migrations, 15 suites and 71 tests passed against the dedicated Docker Compose PostgreSQL 17 service at 127.0.0.1:55432. CI provisions its own service. | 2026-09-30 |
+| Local PostgreSQL integration execution | fixed and verified | 42 migrations, 16 suites and 79 tests passed from a fresh dedicated Docker Compose PostgreSQL 17 volume at 127.0.0.1:55432. CI provisions its own service. | 2026-09-30 |
+| Safe, auditable admin stock adjustment | fixed and verified | [Step 2 verification](backend/stock-adjustment-verification.md): fresh PostgreSQL run applied 42 migrations; 16 suites and 79 integration tests passed, including database constraints, concurrency, replay and rollback cases | 2026-09-30 |
 | All local backend checks pass on the current checkout | fixed and verified | Typecheck, lint, formatting, Swagger, unit, HTTP, integration and build passed; first remote CI run remains separate | 2026-09-30 |
 | Business hardening, frontend work, load/failover/restore certification | deferred | Outside Step 1; no acceptance claim | 2026-09-30 |
 
@@ -364,12 +365,12 @@ Test evidence: co-located unit tests and services/commerce-api/test; criterion-l
 | Warehouses and locations                                          | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 | SKUs and stock records                                            | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 | Available/reserved/committed quantities                           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
-| Stock adjustments                                                 | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Stock adjustments                                                 | fixed and verified — transactional floor/range checks, signed movement and optional actor-scoped retry receipt; see [Step 2 verification](backend/stock-adjustment-verification.md) |
 | Inventory API and admin views                                     | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 | Low-stock thresholds                                              | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 | Stock cannot become negative through normal order flows           | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 | Inventory quantities are separated by state                       | deferred — criterion-level verification; module presence alone is not acceptance evidence |
-| Every adjustment records actor, reason and timestamp              | deferred — criterion-level verification; module presence alone is not acceptance evidence |
+| Every adjustment records actor, supplied reason and timestamp     | fixed and verified — actor audit, movement ID and before/after counters commit with the adjustment; an omitted optional reason remains absent |
 | APIs expose availability without exposing internal mutation rules | deferred — criterion-level verification; module presence alone is not acceptance evidence |
 
 ## #26 — Implement stock reservations and order inventory lifecycle

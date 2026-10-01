@@ -182,5 +182,5 @@ None.
 - `requireActiveMapping` is documented as feeding PO unit costs, but nothing calls it; `lastUnitCost` is never updated after create ([supplier-products.service.ts:88](../../../services/commerce-api/src/modules/procurement/suppliers/supplier-products.service.ts#L88)).
 - Self-approval is checked against the PO creator only; the user who submitted it (not recorded) or who created a revision is not considered ([purchase-orders.service.ts:335](../../../services/commerce-api/src/modules/procurement/purchase-orders/purchase-orders.service.ts#L335)).
 - Supplier audit rows are written after the write, outside a transaction ([suppliers.service.ts:79](../../../services/commerce-api/src/modules/procurement/suppliers/suppliers.service.ts#L79)); the supplier list `status` query is not validated; there is no supplier reactivation.
-- Outbox has no events for reject, cancel, close short or revise. The schema comment says reversals post "negative movements", but the code writes a positive `ADJUSTMENT` quantity ([schema.prisma:1439](../../../services/commerce-api/prisma/schema.prisma#L1439)).
+- Outbox has no events for reject, cancel, close short or revise. Receipt reversals now write a negative `ADJUSTMENT`; historical unsigned adjustment rows remain unchanged.
 - `ProcurementDocument` is modelled but has no API.

@@ -7,6 +7,7 @@ import { ReservationStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { BackgroundJobsService } from '../../infrastructure/jobs/background-jobs.service';
+import { AuditService } from '../audit/audit.service';
 import { InventoryService } from './inventory.service';
 
 function buildPrisma(): {
@@ -17,6 +18,7 @@ function buildPrisma(): {
     create: jest.Mock;
     update: jest.Mock;
     updateMany: jest.Mock;
+    upsert: jest.Mock;
   };
   inventoryMovement: {
     create: jest.Mock;
@@ -28,6 +30,10 @@ function buildPrisma(): {
     findMany: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
+  };
+  stockAdjustmentReceipt: {
+    findUnique: jest.Mock;
+    create: jest.Mock;
   };
   $queryRaw: jest.Mock;
   $executeRaw: jest.Mock;
@@ -41,6 +47,7 @@ function buildPrisma(): {
       create: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
+      upsert: jest.fn(),
     },
     inventoryMovement: {
       create: jest.fn(),
@@ -52,6 +59,10 @@ function buildPrisma(): {
       findMany: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+    },
+    stockAdjustmentReceipt: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      create: jest.fn(),
     },
     $queryRaw: jest.fn().mockResolvedValue([]),
     $executeRaw: jest.fn().mockResolvedValue(1),
@@ -66,14 +77,17 @@ function buildPrisma(): {
 describe('InventoryService', () => {
   let prisma: ReturnType<typeof buildPrisma>;
   let backgroundJobsService: { enqueue: jest.Mock };
+  let auditService: { record: jest.Mock };
   let service: InventoryService;
 
   beforeEach(() => {
     prisma = buildPrisma();
     backgroundJobsService = { enqueue: jest.fn().mockResolvedValue(undefined) };
+    auditService = { record: jest.fn().mockResolvedValue(undefined) };
     service = new InventoryService(
       prisma as unknown as PrismaService,
       backgroundJobsService as unknown as BackgroundJobsService,
+      auditService as unknown as AuditService,
     );
   });
 
@@ -275,8 +289,77 @@ describe('InventoryService', () => {
       });
       prisma.$executeRaw.mockResolvedValue(0);
 
-      await expect(service.adjustStock('w1', 'v1', -5)).rejects.toBeInstanceOf(
-        ConflictException,
+      prisma.inventoryRecord.upsert.mockResolvedValue({ id: 'rec-1' });
+      prisma.inventoryRecord.findUniqueOrThrow.mockResolvedValue({
+        id: 'rec-1',
+        warehouseId: 'w1',
+        offerId: null,
+        variantId: 'v1',
+        onHand: 2,
+        reserved: 0,
+        reorderPoint: 0,
+        version: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      await expect(
+        service.adjustStock('w1', 'v1', -5, undefined, {
+          actorUserId: 'actor-1',
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.inventoryRecord.update).not.toHaveBeenCalled();
+      expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
+      expect(auditService.record).not.toHaveBeenCalled();
+    });
+
+    it('stores the signed movement and an actor audit in the transaction', async () => {
+      const createdAt = new Date('2026-09-30T12:00:00.000Z');
+      const before = {
+        id: 'rec-1',
+        warehouseId: 'w1',
+        offerId: null,
+        variantId: 'v1',
+        onHand: 10,
+        reserved: 8,
+        reorderPoint: 0,
+        version: 0,
+        createdAt,
+        updatedAt: createdAt,
+      };
+      const after = { ...before, onHand: 9, updatedAt: new Date() };
+      prisma.inventoryRecord.upsert.mockResolvedValue(before);
+      prisma.inventoryRecord.findUniqueOrThrow.mockResolvedValue(before);
+      prisma.inventoryRecord.update.mockResolvedValue(after);
+      prisma.inventoryMovement.create.mockResolvedValue({ id: 'movement-1' });
+
+      await expect(
+        service.adjustStock('w1', 'v1', -1, 'cycle count', {
+          actorUserId: 'actor-1',
+          ipAddress: '127.0.0.1',
+        }),
+      ).resolves.toEqual({ ...after, available: 1 });
+
+      expect(prisma.inventoryMovement.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          inventoryRecordId: 'rec-1',
+          type: 'ADJUSTMENT',
+          quantity: -1,
+          note: 'cycle count',
+        }) as object,
+      });
+      expect(auditService.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorUserId: 'actor-1',
+          action: 'inventory.stock.adjusted',
+          targetId: 'rec-1',
+          metadata: expect.objectContaining({
+            movementId: 'movement-1',
+            before: { onHand: 10, reserved: 8, available: 2 },
+            after: { onHand: 9, reserved: 8, available: 1 },
+          }) as object,
+        }),
+        prisma,
       );
     });
   });
@@ -757,7 +840,7 @@ describe('InventoryService', () => {
         expect.objectContaining({
           data: expect.objectContaining({
             type: 'ADJUSTMENT',
-            quantity: 3,
+            quantity: -3,
             referenceType: 'goods_receipt_reversal_line',
             referenceId: 'grl-1',
           }) as object,

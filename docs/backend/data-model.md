@@ -83,6 +83,7 @@ erDiagram
 | `Warehouse`         | Platform warehouse                                                                                                                                          |
 | `InventoryRecord`   | Stock level (`onHand`, `reserved`, `reorderPoint`, `version`). It is kept either per (warehouse, variant) for platform stock, or per offer for seller stock |
 | `InventoryMovement` | Append-only change log (`InventoryMovementType`: RECEIPT, ADJUSTMENT, RESERVATION, RELEASE, COMMITMENT, RETURN)                                             |
+| `StockAdjustmentReceipt` | Optional actor-scoped idempotency receipt containing the canonical request hash and original admin-adjustment response                         |
 | `Reservation`       | A stock hold for an order item (`ReservationStatus`: ACTIVE, COMMITTED, RELEASED, EXPIRED)                                                                  |
 
 ### Cart and wishlist

@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import {
   BadRequestException,
   ConflictException,
@@ -15,9 +17,27 @@ import {
 
 import { PrismaService } from '../../database/prisma.service';
 import { BackgroundJobsService } from '../../infrastructure/jobs/background-jobs.service';
+import { AuditService } from '../audit/audit.service';
 import { InventoryRecordView, ReserveOptions } from './inventory.types';
 
 const DEFAULT_RESERVATION_TTL_SECONDS = 15 * 60;
+const POSTGRES_INTEGER_MIN = -2_147_483_648;
+const POSTGRES_INTEGER_MAX = 2_147_483_647;
+
+export type AdjustStockOptions = {
+  actorUserId: string;
+  idempotencyKey?: string;
+  ipAddress?: string;
+  userAgent?: string;
+};
+
+type StoredInventoryAdjustmentResponse = Omit<
+  InventoryRecordView,
+  'createdAt' | 'updatedAt'
+> & {
+  createdAt: string;
+  updatedAt: string;
+};
 
 type InventoryClient = Pick<
   Prisma.TransactionClient,
@@ -29,6 +49,7 @@ export class InventoryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly backgroundJobsService: BackgroundJobsService,
+    private readonly auditService: AuditService = new AuditService(prisma),
   ) {}
 
   async listRecords(
@@ -407,7 +428,7 @@ export class InventoryService {
       tx,
       record.id,
       InventoryMovementType.ADJUSTMENT,
-      quantity,
+      -quantity,
       note,
       reference,
     );
@@ -420,37 +441,170 @@ export class InventoryService {
     variantId: string,
     delta: number,
     note?: string,
+    options?: AdjustStockOptions,
   ): Promise<InventoryRecordView> {
-    if (delta === 0) {
-      throw new BadRequestException('delta must be non-zero');
+    if (
+      !Number.isInteger(delta) ||
+      delta === 0 ||
+      delta < POSTGRES_INTEGER_MIN ||
+      delta > POSTGRES_INTEGER_MAX
+    ) {
+      throw new BadRequestException(
+        'delta must be a non-zero PostgreSQL integer',
+      );
+    }
+    if (!options?.actorUserId) {
+      throw new BadRequestException('An authenticated actor is required');
     }
 
-    const record = await this.getOrCreateRecord(warehouseId, variantId);
-
-    const updated = await this.prisma.$transaction(async (tx) => {
-      const affected = await tx.$executeRaw`
-        UPDATE inventory_records
-        SET on_hand = on_hand + ${delta}, updated_at = now()
-        WHERE id = ${record.id}::uuid AND on_hand + ${delta} >= 0
-      `;
-
-      if (affected === 0) {
-        throw new ConflictException(
-          'This adjustment would make on-hand stock negative',
-        );
-      }
-
-      await this.recordMovement(
-        tx,
-        record.id,
-        InventoryMovementType.ADJUSTMENT,
-        Math.abs(delta),
-        note,
-      );
-      return tx.inventoryRecord.findUniqueOrThrow({ where: { id: record.id } });
+    const requestHash = this.hashAdjustmentRequest({
+      warehouseId,
+      variantId,
+      delta,
+      ...(note === undefined ? {} : { note }),
     });
 
-    return this.toView(updated);
+    if (options.idempotencyKey) {
+      const replay = await this.findAdjustmentReplay(
+        options.actorUserId,
+        options.idempotencyKey,
+        requestHash,
+      );
+      if (replay) return replay;
+    }
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const candidate = await tx.inventoryRecord.upsert({
+          where: { warehouseId_variantId: { warehouseId, variantId } },
+          create: { warehouseId, variantId },
+          update: {},
+        });
+        await tx.$queryRaw`SELECT id FROM inventory_records WHERE id = ${candidate.id}::uuid FOR UPDATE`;
+        const before = await tx.inventoryRecord.findUniqueOrThrow({
+          where: { id: candidate.id },
+        });
+        const nextOnHand = BigInt(before.onHand) + BigInt(delta);
+        if (
+          before.onHand < 0 ||
+          before.reserved < 0 ||
+          nextOnHand < BigInt(before.reserved) ||
+          nextOnHand < 0n ||
+          nextOnHand > BigInt(POSTGRES_INTEGER_MAX)
+        ) {
+          throw new ConflictException(
+            'Adjustment would violate available-stock or integer-range limits',
+          );
+        }
+
+        const updated = await tx.inventoryRecord.update({
+          where: { id: before.id },
+          data: { onHand: Number(nextOnHand) },
+        });
+        const movement = await this.recordMovement(
+          tx,
+          before.id,
+          InventoryMovementType.ADJUSTMENT,
+          delta,
+          note,
+        );
+        const response = this.toView(updated);
+
+        await this.auditService.record(
+          {
+            actorUserId: options.actorUserId,
+            action: 'inventory.stock.adjusted',
+            targetType: 'InventoryRecord',
+            targetId: before.id,
+            metadata: {
+              warehouseId,
+              variantId,
+              delta,
+              ...(note === undefined ? {} : { note }),
+              movementId: movement.id,
+              before: {
+                onHand: before.onHand,
+                reserved: before.reserved,
+                available: before.onHand - before.reserved,
+              },
+              after: {
+                onHand: updated.onHand,
+                reserved: updated.reserved,
+                available: updated.onHand - updated.reserved,
+              },
+            },
+            ipAddress: options.ipAddress,
+            userAgent: options.userAgent,
+          },
+          tx,
+        );
+
+        if (options.idempotencyKey) {
+          await tx.stockAdjustmentReceipt.create({
+            data: {
+              actorUserId: options.actorUserId,
+              idempotencyKey: options.idempotencyKey,
+              requestHash,
+              response: this.serializeAdjustmentResponse(response),
+            },
+          });
+        }
+
+        return response;
+      });
+    } catch (error) {
+      if (options.idempotencyKey && this.isPrismaError(error, 'P2002')) {
+        const replay = await this.findAdjustmentReplay(
+          options.actorUserId,
+          options.idempotencyKey,
+          requestHash,
+        );
+        if (replay) return replay;
+      }
+      throw error;
+    }
+  }
+
+  private async findAdjustmentReplay(
+    actorUserId: string,
+    idempotencyKey: string,
+    requestHash: string,
+  ): Promise<InventoryRecordView | null> {
+    const receipt = await this.prisma.stockAdjustmentReceipt.findUnique({
+      where: { actorUserId_idempotencyKey: { actorUserId, idempotencyKey } },
+    });
+    if (!receipt) return null;
+    if (receipt.requestHash !== requestHash) {
+      throw new ConflictException(
+        'Idempotency-Key already used for a different request',
+      );
+    }
+    return this.deserializeAdjustmentResponse(receipt.response);
+  }
+
+  private hashAdjustmentRequest(value: Record<string, unknown>): string {
+    return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  }
+
+  private serializeAdjustmentResponse(
+    response: InventoryRecordView,
+  ): Prisma.InputJsonObject {
+    return {
+      ...response,
+      createdAt: response.createdAt.toISOString(),
+      updatedAt: response.updatedAt.toISOString(),
+    };
+  }
+
+  private deserializeAdjustmentResponse(
+    response: Prisma.JsonValue,
+  ): InventoryRecordView {
+    const stored = response as unknown as StoredInventoryAdjustmentResponse;
+    return {
+      ...stored,
+      createdAt: new Date(stored.createdAt),
+      updatedAt: new Date(stored.updatedAt),
+    };
   }
 
   /**

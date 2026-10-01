@@ -4,7 +4,7 @@
 
 ## Purpose and features
 
-- **Staff and admins** manage warehouses, list platform inventory records, receive and adjust stock, set a reorder point, and read a record's movements and reservations.
+- **Staff and admins** manage warehouses, list platform inventory records, receive and adjust stock, set a reorder point, and read a record's movements and reservations. Adjustments are audited and accept an optional retry key.
 - **Approved sellers** (role `SELLER`, verified email) set absolute on-hand quantities for their `SELLER`-stock offers, singly or in bulk (<=100), with optimistic concurrency, and read their movements.
 - **Other modules** use `InventoryService`: availability reads (products, cart, wishlist), `reserve`/`reserveOffer`/`commit`/`release` (orders), `receiveStockForReference`/`reverseReceiptStock` (procurement), `returnCancelledStock`/`returnCancelledOfferStock` (fulfillment), `receiveReturnedStock` (returns).
 - **Background:** each reservation enqueues an `inventory.expire_reservation` job at its expiry time.
@@ -26,7 +26,7 @@ Conventions (prefix, guards, envelope): see [../architecture.md](../architecture
 | ------ | ----------------------------------------------- | ----------------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | GET    | /api/v1/admin/inventory                         | Roles(STAFF, ADMIN)                             | n/a                                  | Platform records, optional `warehouseId`/`variantId` query (not validated) ([admin-inventory.controller.ts:25](../../../services/commerce-api/src/modules/inventory/admin-inventory.controller.ts#L25))  |
 | POST   | /api/v1/admin/inventory/receive                 | Roles(STAFF, ADMIN)                             | **None**: every call adds stock      | Increment on-hand, `RECEIPT` movement ([admin-inventory.controller.ts:33](../../../services/commerce-api/src/modules/inventory/admin-inventory.controller.ts#L33))                                       |
-| POST   | /api/v1/admin/inventory/adjust                  | Roles(STAFF, ADMIN)                             | **None**: every call applies `delta` | Signed delta, floor 0, `ADJUSTMENT` movement ([admin-inventory.controller.ts:43](../../../services/commerce-api/src/modules/inventory/admin-inventory.controller.ts#L43))                                |
+| POST   | /api/v1/admin/inventory/adjust                  | Roles(STAFF, ADMIN)                             | Optional UUID-v4 `Idempotency-Key`, scoped to actor | Signed delta, reserved-stock floor, actor audit and original-response replay ([admin-inventory.controller.ts](../../../services/commerce-api/src/modules/inventory/admin-inventory.controller.ts)) |
 | GET    | /api/v1/admin/inventory/:id/movements           | Roles(STAFF, ADMIN)                             | n/a                                  | Movements of any record, newest first ([admin-inventory.controller.ts:53](../../../services/commerce-api/src/modules/inventory/admin-inventory.controller.ts#L53))                                       |
 | PATCH  | /api/v1/admin/inventory/:id/reorder-point       | Roles(STAFF, ADMIN)                             | Naturally idempotent                 | Set `reorderPoint` (platform records only) ([admin-inventory.controller.ts:60](../../../services/commerce-api/src/modules/inventory/admin-inventory.controller.ts#L60))                                  |
 | GET    | /api/v1/admin/inventory/:id/reservations        | Roles(STAFF, ADMIN)                             | n/a                                  | Reservations of any record, newest first ([admin-inventory.controller.ts:68](../../../services/commerce-api/src/modules/inventory/admin-inventory.controller.ts#L68))                                    |
@@ -62,10 +62,10 @@ stateDiagram-v2
     COMMITTED --> COMMITTED: restock (onHand += q, RETURN movement once)
 ```
 
-**Counters** (every counter change is a conditional SQL `UPDATE`, so it cannot race below its floor)
+**Counters** (conditional SQL updates or a locked adjustment transaction prevent races below each floor)
 
 - Reserve claims with `WHERE on_hand - reserved >= q` ([inventory.service.ts:516](../../../services/commerce-api/src/modules/inventory/inventory.service.ts#L516)); commit with `on_hand >= q AND reserved >= q` ([:699](../../../services/commerce-api/src/modules/inventory/inventory.service.ts#L699)); release/expire with `reserved >= q`, else 409 "require reconciliation" ([:775](../../../services/commerce-api/src/modules/inventory/inventory.service.ts#L775)).
-- Admin adjust floors on-hand at **0** ([inventory.service.ts:431](../../../services/commerce-api/src/modules/inventory/inventory.service.ts#L431)); receipt reversal floors it at `reserved` ([:391](../../../services/commerce-api/src/modules/inventory/inventory.service.ts#L391)); seller set requires `reserved <= quantity` ([:633](../../../services/commerce-api/src/modules/inventory/inventory.service.ts#L633)).
+- Admin adjustment locks the record and requires the resulting `onHand` to remain within the PostgreSQL integer range and at least `reserved`; receipt reversal and seller set use the same reserved-stock floor. Database checks enforce `onHand >= 0`, `reserved >= 0` and `reserved <= onHand`.
 - All quantity inputs must be > 0 (400) except `adjustStock` (non-zero) and seller set (>= 0).
 - Platform records are created lazily by `getOrCreateRecord`; a lost create race (P2002) re-reads the winner ([inventory.service.ts:147](../../../services/commerce-api/src/modules/inventory/inventory.service.ts#L147)).
 
@@ -99,6 +99,7 @@ stateDiagram-v2
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `InventoryRecord`   | Read/write, raw SQL for counters; `version` only bumped by seller set ([schema.prisma:646](../../../services/commerce-api/prisma/schema.prisma#L646))                                                                 |
 | `InventoryMovement` | Append-only ledger: `RECEIPT`, `ADJUSTMENT`, `RESERVATION`, `RELEASE`, `COMMITMENT`, `RETURN`; `referenceType/referenceId` without FK ([schema.prisma:673](../../../services/commerce-api/prisma/schema.prisma#L673)) |
+| `StockAdjustmentReceipt` | Actor-scoped optional retry key, canonical request hash and immutable original response for admin adjustments |
 | `Reservation`       | Create, status updates, row locks ([schema.prisma:690](../../../services/commerce-api/prisma/schema.prisma#L690))                                                                                                     |
 | `Warehouse`         | Read/write ([schema.prisma:626](../../../services/commerce-api/prisma/schema.prisma#L626))                                                                                                                            |
 | `BackgroundJob`     | Enqueue via `BackgroundJobsService`                                                                                                                                                                                   |
@@ -125,14 +126,15 @@ None. The 15-minute TTL is a constant.
 - [inventory-expire-reservation.handler.spec.ts](../../../services/commerce-api/src/modules/inventory/jobs/inventory-expire-reservation.handler.spec.ts): job type and payload parsing.
 - [warehouses.service.spec.ts](../../../services/commerce-api/src/modules/inventory/warehouses/warehouses.service.spec.ts): P2002 -> 409, other errors preserved, unknown update.
 - [test/inventory.e2e-spec.ts](../../../services/commerce-api/test/inventory.e2e-spec.ts): receive/reserve/release with accurate availability, over-reserve rejected, expiry through the job worker, commit.
+- [test/inventory-adjustments.integration-spec.ts](../../../services/commerce-api/test/inventory-adjustments.integration-spec.ts) (real PostgreSQL): reserved floor, signed history, actor audit, identical/conflicting retries, concurrent requests, keyless calls, integer overflow and transactional rollback.
 
 ## Known gaps
 
 - `sweepExpired` always uses `this.prisma` and `expireReservation` opens its own transaction, even when `reserve` runs inside the caller's `tx` ([inventory.service.ts:488](../../../services/commerce-api/src/modules/inventory/inventory.service.ts#L488), [:756](../../../services/commerce-api/src/modules/inventory/inventory.service.ts#L756)). If the caller's transaction already updated that record (two order lines on the same variant), the sweep's `UPDATE` waits on the caller's row lock until the interactive transaction times out.
 - `reserve` does not skip inactive warehouses, and picks the first candidate with enough stock without a deterministic order ([inventory.service.ts:473](../../../services/commerce-api/src/modules/inventory/inventory.service.ts#L473)).
-- Admin `adjustStock` floors at 0, not at `reserved`, so it can make `available` negative ([inventory.service.ts:434](../../../services/commerce-api/src/modules/inventory/inventory.service.ts#L434)). It also stores `Math.abs(delta)`, so the movement loses its direction ([:447](../../../services/commerce-api/src/modules/inventory/inventory.service.ts#L447)); `reverseReceiptStock` likewise logs a positive `ADJUSTMENT` for a decrement ([:409](../../../services/commerce-api/src/modules/inventory/inventory.service.ts#L409)), while seller sets log a signed delta.
-- Admin receive/adjust have no `Idempotency-Key` and are not audited; a retried request double-counts stock.
-- `receiveStock`/`adjustStock` create the record outside their transaction and do not check that the warehouse or variant exists or is active; a bad id surfaces as an unmapped P2003 (500) ([inventory.service.ts:173](../../../services/commerce-api/src/modules/inventory/inventory.service.ts#L173)).
+- Historical `ADJUSTMENT` rows written before migration `20260930170000_inventory_adjustment_safety` are not rewritten, so an old positive quantity may represent either direction. New admin adjustments and receipt reversals are signed.
+- Admin receive still has no `Idempotency-Key` or actor audit; a retried receive request can double-count stock.
+- `receiveStock` creates the record outside its transaction, and receive/adjust do not check that the warehouse or variant is active; a bad id surfaces as an unmapped P2003 (500).
 - `GET /admin/inventory` passes `warehouseId`/`variantId` unvalidated into Prisma; a non-UUID gives 500 ([admin-inventory.controller.ts:27](../../../services/commerce-api/src/modules/inventory/admin-inventory.controller.ts#L27)).
 - Deleting a warehouse silently deletes its stock, movements and reservations when nothing else references it ([schema.prisma:649](../../../services/commerce-api/prisma/schema.prisma#L649)).
 - `restock` and `getAvailableQuantity` have no callers outside tests ([inventory.service.ts:723](../../../services/commerce-api/src/modules/inventory/inventory.service.ts#L723), [:45](../../../services/commerce-api/src/modules/inventory/inventory.service.ts#L45)).
