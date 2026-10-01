@@ -272,6 +272,263 @@ describe('Procurement (integration, real Postgres)', () => {
     expect(afterReplay.onHand).toBe(afterFirst.onHand);
   });
 
+  it('reverses once, replays the same reversal, and rejects reversal of the reversal', async () => {
+    const { poId, poLineId } = await createOrderedPo(3);
+    const before = await prisma.inventoryRecord.findUnique({
+      where: { warehouseId_variantId: { warehouseId, variantId } },
+    });
+    const posted = await goodsReceiptsService.createAndMaybePost(
+      poId,
+      {
+        warehouseId,
+        lines: [
+          {
+            purchaseOrderLineId: poLineId,
+            deliveredQuantity: 3,
+            acceptedQuantity: 3,
+          },
+        ],
+      } as never,
+      actorUserId,
+      Role.STAFF,
+    );
+
+    const first = await goodsReceiptsService.reverse(
+      posted.id,
+      'wrong delivery',
+      actorUserId,
+    );
+    const replay = await goodsReceiptsService.reverse(
+      posted.id,
+      'retry after lost response',
+      actorUserId,
+    );
+
+    expect(first.id).toBe(replay.id);
+    expect(first.reversalOfId).toBe(posted.id);
+    await expect(
+      goodsReceiptsService.reverse(first.id, 'reverse twice', actorUserId),
+    ).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      prisma.goodsReceipt.update({
+        where: { id: first.id },
+        data: { status: 'REVERSED' },
+      }),
+    ).rejects.toThrow();
+    const stock = await prisma.inventoryRecord.findUniqueOrThrow({
+      where: { warehouseId_variantId: { warehouseId, variantId } },
+    });
+    expect(stock.onHand).toBe(before?.onHand ?? 0);
+    const poLine = await prisma.purchaseOrderLine.findUniqueOrThrow({
+      where: { id: poLineId },
+    });
+    expect(poLine.receivedQuantity).toBe(0);
+    await expect(
+      prisma.purchaseOrderLine.update({
+        where: { id: poLineId },
+        data: { receivedQuantity: -1 },
+      }),
+    ).rejects.toThrow();
+    expect(
+      await prisma.inventoryMovement.count({
+        where: {
+          referenceType: 'goods_receipt_reversal_line',
+          referenceId: { in: first.lines.map((line) => line.id) },
+        },
+      }),
+    ).toBe(1);
+  });
+
+  it('serializes concurrent reversal requests to one stock and PO decrement', async () => {
+    const { poId, poLineId } = await createOrderedPo(2);
+    const before = await prisma.inventoryRecord.findUnique({
+      where: { warehouseId_variantId: { warehouseId, variantId } },
+    });
+    const posted = await goodsReceiptsService.createAndMaybePost(
+      poId,
+      {
+        warehouseId,
+        lines: [
+          {
+            purchaseOrderLineId: poLineId,
+            deliveredQuantity: 2,
+            acceptedQuantity: 2,
+          },
+        ],
+      } as never,
+      actorUserId,
+      Role.STAFF,
+    );
+
+    const [first, second] = await Promise.all([
+      goodsReceiptsService.reverse(posted.id, 'duplicate request', actorUserId),
+      goodsReceiptsService.reverse(posted.id, 'duplicate request', actorUserId),
+    ]);
+
+    expect(first.id).toBe(second.id);
+    expect(
+      await prisma.goodsReceipt.count({ where: { reversalOfId: posted.id } }),
+    ).toBe(1);
+    expect(
+      (
+        await prisma.inventoryRecord.findUniqueOrThrow({
+          where: { warehouseId_variantId: { warehouseId, variantId } },
+        })
+      ).onHand,
+    ).toBe(before?.onHand ?? 0);
+    expect(
+      (
+        await prisma.purchaseOrderLine.findUniqueOrThrow({
+          where: { id: poLineId },
+        })
+      ).receivedQuantity,
+    ).toBe(0);
+  });
+
+  it('rolls back a reversal when stock is no longer available', async () => {
+    const { poId, poLineId } = await createOrderedPo(3);
+    const posted = await goodsReceiptsService.createAndMaybePost(
+      poId,
+      {
+        warehouseId,
+        lines: [
+          {
+            purchaseOrderLineId: poLineId,
+            deliveredQuantity: 3,
+            acceptedQuantity: 3,
+          },
+        ],
+      } as never,
+      actorUserId,
+      Role.STAFF,
+    );
+    const stock = await prisma.inventoryRecord.findUniqueOrThrow({
+      where: { warehouseId_variantId: { warehouseId, variantId } },
+    });
+    await prisma.inventoryRecord.update({
+      where: { id: stock.id },
+      data: { reserved: stock.onHand - 2 },
+    });
+
+    await expect(
+      goodsReceiptsService.reverse(posted.id, 'unavailable stock', actorUserId),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(
+      await prisma.goodsReceipt.count({ where: { reversalOfId: posted.id } }),
+    ).toBe(0);
+    expect(
+      (
+        await prisma.purchaseOrderLine.findUniqueOrThrow({
+          where: { id: poLineId },
+        })
+      ).receivedQuantity,
+    ).toBe(3);
+    expect(
+      (
+        await prisma.goodsReceipt.findUniqueOrThrow({
+          where: { id: posted.id },
+        })
+      ).status,
+    ).toBe('POSTED');
+    await prisma.inventoryRecord.update({
+      where: { id: stock.id },
+      data: { reserved: 0 },
+    });
+  });
+
+  it('rolls back a reversal if its PO line no longer has enough received quantity', async () => {
+    const { poId, poLineId } = await createOrderedPo(2);
+    const posted = await goodsReceiptsService.createAndMaybePost(
+      poId,
+      {
+        warehouseId,
+        lines: [
+          {
+            purchaseOrderLineId: poLineId,
+            deliveredQuantity: 2,
+            acceptedQuantity: 2,
+          },
+        ],
+      } as never,
+      actorUserId,
+      Role.STAFF,
+    );
+    const stock = await prisma.inventoryRecord.findUniqueOrThrow({
+      where: { warehouseId_variantId: { warehouseId, variantId } },
+    });
+    await prisma.purchaseOrderLine.update({
+      where: { id: poLineId },
+      data: { receivedQuantity: 1 },
+    });
+
+    await expect(
+      goodsReceiptsService.reverse(posted.id, 'quantity drift', actorUserId),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(
+      (
+        await prisma.inventoryRecord.findUniqueOrThrow({
+          where: { id: stock.id },
+        })
+      ).onHand,
+    ).toBe(stock.onHand);
+    expect(
+      await prisma.goodsReceipt.count({ where: { reversalOfId: posted.id } }),
+    ).toBe(0);
+    expect(
+      (
+        await prisma.purchaseOrderLine.findUniqueOrThrow({
+          where: { id: poLineId },
+        })
+      ).receivedQuantity,
+    ).toBe(1);
+  });
+
+  it('keeps a deliberately closed-short purchase order closed after reversal', async () => {
+    const { poId, poLineId } = await createOrderedPo(5);
+    const posted = await goodsReceiptsService.createAndMaybePost(
+      poId,
+      {
+        warehouseId,
+        lines: [
+          {
+            purchaseOrderLineId: poLineId,
+            deliveredQuantity: 2,
+            acceptedQuantity: 2,
+          },
+        ],
+      } as never,
+      actorUserId,
+      Role.STAFF,
+    );
+    const po = await prisma.purchaseOrder.findUniqueOrThrow({
+      where: { id: poId },
+    });
+    const closed = await purchaseOrdersService.closeShort(
+      poId,
+      po.version,
+      'remaining units unavailable',
+      actorUserId,
+    );
+
+    await goodsReceiptsService.reverse(
+      posted.id,
+      'wrong delivery',
+      actorUserId,
+    );
+
+    const after = await prisma.purchaseOrder.findUniqueOrThrow({
+      where: { id: poId },
+      include: { lines: true },
+    });
+    expect(after.status).toBe('CLOSED_SHORT');
+    expect(after.completedAt).toEqual(closed.completedAt);
+    expect(after.shortCloseReason).toBe(closed.shortCloseReason);
+    expect(after.lines[0]).toMatchObject({
+      receivedQuantity: 0,
+      cancelledQuantity: 3,
+    });
+  });
+
   it('serializes concurrent receiving through the PO row lock: only one of two full-outstanding receipts can win', async () => {
     const { poId, poLineId } = await createOrderedPo(10);
 

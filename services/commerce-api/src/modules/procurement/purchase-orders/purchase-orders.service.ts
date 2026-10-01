@@ -691,10 +691,33 @@ export class PurchaseOrdersService {
   ): Promise<PurchaseOrderStatus> {
     for (const delta of deltas) {
       if (delta.acceptedQuantity <= 0) continue;
-      await tx.purchaseOrderLine.update({
-        where: { id: delta.purchaseOrderLineId },
+      const changed = await tx.purchaseOrderLine.updateMany({
+        where: {
+          id: delta.purchaseOrderLineId,
+          purchaseOrderId: poId,
+          receivedQuantity: { gte: delta.acceptedQuantity },
+        },
         data: { receivedQuantity: { decrement: delta.acceptedQuantity } },
       });
+      if (changed.count !== 1) {
+        throw new ConflictException(
+          'Receipt reversal exceeds the purchase order line received quantity',
+        );
+      }
+    }
+
+    const currentPo = await tx.purchaseOrder.findUniqueOrThrow({
+      where: { id: poId },
+      select: { status: true },
+    });
+    // Closing short is an explicit terminal decision. A later correction of
+    // received stock does not silently reopen purchasing on that order.
+    if (currentPo.status === PurchaseOrderStatus.CLOSED_SHORT) {
+      await tx.purchaseOrder.update({
+        where: { id: poId },
+        data: { version: { increment: 1 } },
+      });
+      return PurchaseOrderStatus.CLOSED_SHORT;
     }
 
     const refreshedLines = await tx.purchaseOrderLine.findMany({

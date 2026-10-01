@@ -4,7 +4,7 @@
 
 It describes the backend source (September 2026). Where these docs and the code disagree, **the code wins**. Please fix the doc in the same PR.
 
-Current evidence and verification dates are maintained in the [gap register](known-gaps.md), [acceptance matrix](../backend-acceptance-matrix.md#current-baseline-2026-10-01), [baseline ledger](baseline-verification.md), [stock-adjustment verification](stock-adjustment-verification.md) and [catalog-history verification](catalog-history-verification.md).
+Current evidence and verification dates are maintained in the [gap register](known-gaps.md), [acceptance matrix](../backend-acceptance-matrix.md#current-baseline-2026-10-01), [baseline ledger](baseline-verification.md), [stock-adjustment verification](stock-adjustment-verification.md), [catalog-history verification](catalog-history-verification.md) and [receipt-reversal verification](receipt-reversal-verification.md).
 
 ## At a glance
 

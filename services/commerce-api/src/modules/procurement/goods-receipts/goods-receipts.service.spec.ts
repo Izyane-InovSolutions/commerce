@@ -492,6 +492,44 @@ describe('GoodsReceiptsService', () => {
   });
 
   describe('reverse', () => {
+    it('rejects reversing a reversal receipt before touching the purchase order or stock', async () => {
+      prisma.tx.goodsReceipt.findUnique.mockResolvedValue({
+        id: 'gr-reversal',
+        status: GoodsReceiptStatus.POSTED,
+        reversalOfId: 'gr-original',
+        lines: [],
+      });
+
+      await expect(
+        service.reverse('gr-reversal', 'try again', 'user-1'),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.tx.goodsReceipt.findFirst).not.toHaveBeenCalled();
+      expect(purchaseOrdersService.lockRow).not.toHaveBeenCalled();
+      expect(inventoryService.reverseReceiptStock).not.toHaveBeenCalled();
+    });
+
+    it('returns the original reversal on retry without applying stock again', async () => {
+      prisma.tx.goodsReceipt.findUnique.mockResolvedValue({
+        id: 'gr-original',
+        status: GoodsReceiptStatus.REVERSED,
+        reversalOfId: null,
+        lines: [],
+      });
+      prisma.tx.goodsReceipt.findFirst.mockResolvedValue({
+        id: 'gr-reversal',
+        status: GoodsReceiptStatus.POSTED,
+        reversalOfId: 'gr-original',
+        lines: [],
+      });
+
+      await expect(
+        service.reverse('gr-original', 'retry', 'user-1'),
+      ).resolves.toMatchObject({ id: 'gr-reversal' });
+      expect(purchaseOrdersService.lockRow).not.toHaveBeenCalled();
+      expect(inventoryService.reverseReceiptStock).not.toHaveBeenCalled();
+      expect(auditService.record).not.toHaveBeenCalled();
+    });
+
     it('marks the original receipt REVERSED and creates a posted reversal receipt', async () => {
       prisma.tx.goodsReceipt.findUnique.mockResolvedValue({
         id: 'gr-1',

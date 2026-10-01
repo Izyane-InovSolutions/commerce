@@ -1493,9 +1493,9 @@ model PurchaseOrderLine {
 }
 
 // DRAFT lets staff key in or scan a delivery before committing it — only
-// POSTED affects inventory. A posted receipt is immutable; correcting one
-// means posting a REVERSED receipt (reversalOfId) with negative movements,
-// never editing the original rows.
+// POSTED affects inventory. Correcting one marks the original REVERSED and
+// creates a POSTED reversal receipt (reversalOfId) with negative movements;
+// the original lines remain immutable.
 model GoodsReceipt {
   id                      String                @id @default(uuid()) @db.Uuid
   receiptNumber           String                @unique @map("receipt_number")

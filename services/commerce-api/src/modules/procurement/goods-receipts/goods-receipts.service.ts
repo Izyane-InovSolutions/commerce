@@ -508,7 +508,10 @@ export class GoodsReceiptsService {
         include: { lines: true },
       });
       if (!receipt) throw new NotFoundException('Goods receipt not found');
-      if (receipt.status !== GoodsReceiptStatus.POSTED) {
+      if (receipt.reversalOfId) {
+        throw new ConflictException('A reversal receipt cannot be reversed');
+      }
+      if (receipt.status === GoodsReceiptStatus.DRAFT) {
         throw new ConflictException(
           'Only a posted goods receipt can be reversed',
         );
@@ -519,6 +522,11 @@ export class GoodsReceiptsService {
         include: { lines: true },
       });
       if (existingReversal) return existingReversal;
+      if (receipt.status !== GoodsReceiptStatus.POSTED) {
+        throw new ConflictException(
+          'Only a posted goods receipt can be reversed',
+        );
+      }
 
       const po: PurchaseOrderWithLines =
         await this.purchaseOrdersService.lockRow(tx, receipt.purchaseOrderId);
