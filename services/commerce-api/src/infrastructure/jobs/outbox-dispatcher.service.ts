@@ -1,8 +1,14 @@
-import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  Optional,
+  type OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import type { OutboxEvent } from '@prisma/client';
 
+import { MetricsService } from '../metrics/metrics.service';
 import { OutboxService } from './outbox.service';
 import type { OutboxSubscriber } from './outbox-subscriber.interface';
 import { registerRecurringTask } from './recurring-task';
@@ -32,6 +38,7 @@ export class OutboxDispatcherService implements OnModuleInit {
     private readonly outboxService: OutboxService,
     private readonly config: ConfigService,
     private readonly schedulerRegistry: SchedulerRegistry,
+    @Optional() private readonly metrics?: MetricsService,
   ) {}
 
   onModuleInit(): void {
@@ -79,6 +86,12 @@ export class OutboxDispatcherService implements OnModuleInit {
   }
 
   private async dispatch(event: OutboxEvent): Promise<boolean> {
+    // Only a first attempt measures recording-to-dispatch lag; retries wait
+    // out a deliberate backoff.
+    const lagMs =
+      event.attempts === 0 && event.createdAt instanceof Date
+        ? Math.max(0, Date.now() - event.createdAt.getTime())
+        : null;
     try {
       for (const subscriber of this.subscribers.get(event.topic) ?? []) {
         try {
@@ -90,12 +103,18 @@ export class OutboxDispatcherService implements OnModuleInit {
         }
       }
       await this.outboxService.markPublished(event.id);
+      this.metrics?.recordOutboxEvent(event.topic, 'published', lagMs);
       return true;
     } catch (error) {
       this.logger.warn(
         `Outbox event ${event.id} (${event.topic}) failed on attempt ${event.attempts + 1}: ${error instanceof Error ? error.message : String(error)}`,
       );
       await this.outboxService.markFailed(event, error);
+      this.metrics?.recordOutboxEvent(
+        event.topic,
+        event.attempts + 1 >= event.maxAttempts ? 'dead_letter' : 'failed',
+        lagMs,
+      );
       return false;
     }
   }

@@ -20,8 +20,9 @@ npm run api:dev
 ```
 
 The health endpoint is available at `GET /api/v1/health`.
-Readiness is available at `GET /api/v1/health/ready`, process metrics at
-`GET /api/v1/metrics`, and Swagger UI at `http://localhost:3000/api/docs`.
+Readiness is available at `GET /api/v1/health/ready`, metrics at
+`GET /api/v1/metrics` (ADMIN session) or `GET /api/v1/metrics/prometheus`
+(`METRICS_SCRAPE_TOKEN`), and Swagger UI at `http://localhost:3000/api/docs`.
 
 Apply schema changes locally with a descriptive migration name:
 

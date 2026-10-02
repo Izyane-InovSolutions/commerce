@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 
+import { routeTemplate } from '../../infrastructure/metrics/metrics.middleware';
 import { errorCodeForStatus } from './error-codes';
 import { RequestWithId } from './request-with-id';
 import { ErrorDetail, ErrorEnvelope } from './response-envelope';
@@ -36,9 +37,20 @@ export class AllExceptionsFilter implements ExceptionFilter {
       status,
     );
 
-    if (status >= (HttpStatus.INTERNAL_SERVER_ERROR as number)) {
+    // An intentional 503 (provider unavailable, draining, or admission
+    // control) is already counted in metrics. Logging a stack for every one
+    // can itself worsen overload and hide unexpected server failures.
+    if (
+      status >= (HttpStatus.INTERNAL_SERVER_ERROR as number) &&
+      !(
+        exception instanceof HttpException &&
+        status === (HttpStatus.SERVICE_UNAVAILABLE as number)
+      )
+    ) {
+      // The route template, not request.url: query strings can carry
+      // verification, reset or signed-media tokens.
       this.logger.error(
-        `Unhandled exception for ${request.method} ${request.url} [${request.id}]`,
+        `Unhandled exception for ${request.method} ${routeTemplate(request) ?? request.path} [${request.id}]`,
         exception instanceof Error ? exception.stack : undefined,
       );
     }

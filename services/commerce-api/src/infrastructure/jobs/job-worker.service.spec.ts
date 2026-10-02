@@ -1,3 +1,4 @@
+import { MetricsService } from '../metrics/metrics.service';
 import { BackgroundJobsService } from './background-jobs.service';
 import { JobHandler } from './job-handler.interface';
 import { JobWorkerService } from './job-worker.service';
@@ -152,5 +153,81 @@ describe('JobWorkerService', () => {
 
     resolveHandle();
     await Promise.all([firstPoll, secondPoll]);
+  });
+
+  it('on shutdown finishes the current job, claims no more, and ignores later polls', async () => {
+    let resolveHandle!: () => void;
+    service.registerHandler({
+      type: 'some.type',
+      handle: jest.fn(
+        () => new Promise<void>((resolve) => (resolveHandle = resolve)),
+      ),
+    });
+    backgroundJobsService.claimNext
+      .mockResolvedValueOnce(buildJob({ id: 'job-1' }))
+      .mockResolvedValueOnce(buildJob({ id: 'job-2' }));
+
+    const poll = service.poll();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    let shutdownDone = false;
+    const shutdown = service
+      .beforeApplicationShutdown()
+      .then(() => (shutdownDone = true));
+    await Promise.resolve();
+    expect(shutdownDone).toBe(false);
+
+    resolveHandle();
+    await Promise.all([poll, shutdown]);
+
+    expect(backgroundJobsService.complete).toHaveBeenCalledWith(
+      'job-1',
+      'lock-1',
+    );
+    expect(backgroundJobsService.claimNext).toHaveBeenCalledTimes(1);
+
+    await service.poll();
+    expect(backgroundJobsService.claimNext).toHaveBeenCalledTimes(1);
+  });
+
+  it('records outcome, duration and eligible-to-start lag', async () => {
+    const metrics = {
+      recordJob: jest.fn<void, Parameters<MetricsService['recordJob']>>(),
+    };
+    service = new JobWorkerService(
+      backgroundJobsService as unknown as BackgroundJobsService,
+      metrics as unknown as MetricsService,
+    );
+    service.registerHandler({
+      type: 'some.type',
+      handle: jest
+        .fn()
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error('boom')),
+    });
+    const runAt = new Date(Date.now() - 2_000);
+    backgroundJobsService.claimNext
+      .mockResolvedValueOnce(buildJob({ runAt }))
+      .mockResolvedValueOnce(buildJob({ runAt, attempts: 5, maxAttempts: 5 }))
+      .mockResolvedValueOnce(null);
+
+    await service.poll();
+
+    expect(metrics.recordJob).toHaveBeenNthCalledWith(
+      1,
+      'some.type',
+      'succeeded',
+      expect.any(Number),
+      expect.any(Number),
+    );
+    expect(metrics.recordJob.mock.calls[0]?.[3]).toBeGreaterThanOrEqual(2_000);
+    expect(metrics.recordJob).toHaveBeenNthCalledWith(
+      2,
+      'some.type',
+      'dead_letter',
+      expect.any(Number),
+      expect.any(Number),
+    );
   });
 });

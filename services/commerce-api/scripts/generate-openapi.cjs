@@ -396,6 +396,15 @@ for (const source of program
           content: json({ $ref: '#/components/schemas/ErrorEnvelope' }),
         };
       }
+      if (id === 'MetricsController_getPrometheusMetrics') {
+        operation.security = [{ metricsScrapeToken: [] }];
+        operation.description =
+          'For the configured internal scraper: send Authorization: Bearer <METRICS_SCRAPE_TOKEN>. Returns 404 when METRICS_SCRAPE_TOKEN is unset. Labels are bounded (method, route template, status, job type, topic); no user IDs, tokens or raw URLs.';
+        operation.responses[status] = {
+          description: 'Prometheus text exposition format 0.0.4',
+          content: { 'text/plain': { schema: { type: 'string' } } },
+        };
+      }
       operations[id] = operation;
     }
   }

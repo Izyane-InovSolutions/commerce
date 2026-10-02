@@ -328,6 +328,37 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   SMTP_URL?: string;
+
+  // Bearer secret for the internal Prometheus scraper at
+  // GET /api/v1/metrics/prometheus. Unset disables that route (404); admins
+  // still read GET /api/v1/metrics with their session. Empty counts as unset.
+  @ValidateIf((env: EnvironmentVariables) => Boolean(env.METRICS_SCRAPE_TOKEN))
+  @IsString()
+  @MinLength(32)
+  METRICS_SCRAPE_TOKEN?: string;
+
+  // How long database-derived gauges (queue depth, unresolved payments,
+  // lock pressure) are reused between scrapes.
+  @Type(() => Number)
+  @IsInt()
+  @Min(1000)
+  @Max(300000)
+  METRICS_DB_CACHE_MS = 15_000;
+
+  // On SIGTERM/SIGINT, readiness reports 503 for this long before the server
+  // stops accepting connections, so a load balancer can stop routing here.
+  // Set it to at least the balancer's readiness probe interval.
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(120000)
+  SHUTDOWN_DRAIN_DELAY_MS = 0;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(10000)
+  MAX_IN_FLIGHT_REQUESTS = 16;
 }
 
 export function validate(

@@ -91,6 +91,11 @@ The source also includes the outbox dispatcher (default 5 seconds), notification
 | Refresh-recovery cleanup | 60 s                                         | [auth.service.ts:859](../../services/commerce-api/src/modules/auth/auth.service.ts#L859)                                       | Clears expired `Session.recoveryData`                                                                                                                                                                                                           |
 | Email expiry             | 60 s                                         | [email-deliveries.service.ts:166](../../services/commerce-api/src/infrastructure/email/email-deliveries.service.ts#L166)       | Marks expired `PENDING` deliveries as `FAILED` (`EXPIRED`)                                                                                                                                                                                      |
 
+## Shutdown and observability
+
+- **Shutdown.** On SIGTERM/SIGINT the job worker stops claiming new jobs and waits up to 10 s for the one in progress (`beforeApplicationShutdown`). A job still running after that keeps its lease and is reclaimed after 5 minutes (N7). The outbox dispatcher and other recurring tasks are cleared by the scheduler at application shutdown. A batch in progress then is recovered by its lease. Separating scheduler and worker controls is Stage 11 work.
+- **Metrics.** Each process records job outcomes (`succeeded`, `failed`, `dead_letter`), handler duration and eligible-to-start lag (from `run_at`), plus outbox outcomes and first-attempt dispatch lag. Database gauges add depth by type/topic and status, retrying rows, oldest-due age, stale `RUNNING` claims and dead letters. See [architecture](architecture.md) and `GET /api/v1/metrics`.
+
 ## Running more than one instance
 
 Every API replica runs every task above. What prevents double work:

@@ -15,7 +15,8 @@ Conventions: see [../architecture.md](../architecture.md).
 | ------ | -------------------- | ------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | GET    | /api/v1/health       | Public | n/a         | Liveness, returns `{status: 'ok'}` with no dependencies checked ([health.controller.ts:26](../../../services/commerce-api/src/modules/health/health.controller.ts#L26))                                                                                                                                                                                |
 | GET    | /api/v1/health/ready | Public | n/a         | Readiness: terminus `HealthCheckResult` with a `database` ping; 503 when the ping fails ([health.controller.ts:32](../../../services/commerce-api/src/modules/health/health.controller.ts#L32))                                                                                                                                                        |
-| GET    | /api/v1/metrics      | Public | n/a         | In-memory request counters per method, route and status, plus uptime. It lives in `infrastructure/metrics`, not in a module, and is listed here with the other operational probes ([metrics.controller.ts:13](../../../services/commerce-api/src/infrastructure/metrics/metrics.controller.ts#L13)). The counters reset on restart and are per process |
+| GET    | /api/v1/metrics      | ADMIN  | n/a         | JSON snapshot of process, request, job/outbox and database metrics. It lives in `infrastructure/metrics`, not in a module, and is listed here with the other operational probes ([metrics.controller.ts](../../../services/commerce-api/src/infrastructure/metrics/metrics.controller.ts)). Process values reset on restart and are per process; database gauges are cached for `METRICS_DB_CACHE_MS` |
+| GET    | /api/v1/metrics/prometheus | Scrape token | n/a | Prometheus text format for the internal scraper: `Authorization: Bearer <METRICS_SCRAPE_TOKEN>`, 404 when unset. Labels are bounded (method, route template, status, job type, topic, state) |
 
 The audit module exposes ADMIN-only `GET /api/v1/admin/audit-events` (filtered, paginated) and `GET /api/v1/admin/audit-events/actions`; see [audit-events.controller.ts](../../../services/commerce-api/src/modules/audit/audit-events.controller.ts).
 
@@ -64,6 +65,7 @@ Writes that **bypass** `AuditService`, and so also skip redaction:
 
 - Liveness never touches the DB, so it only shows the process is serving HTTP ([health.controller.ts:25](../../../services/commerce-api/src/modules/health/health.controller.ts#L25)).
 - Readiness runs a single check. Terminus returns 200 `{status: 'ok', info: {database: {status: 'up'}}}` on success and throws a 503 `ServiceUnavailableException` with the error details on failure.
+- Once a shutdown signal arrives, readiness returns 503 without touching the database (`ShutdownState`), while liveness keeps returning 200 until the server closes. The server waits `SHUTDOWN_DRAIN_DELAY_MS` before it stops accepting; see [architecture](../architecture.md).
 
 ## Data
 
@@ -90,7 +92,9 @@ None.
 ## Tests
 
 - [audit.service.spec.ts](../../../services/commerce-api/src/modules/audit/audit.service.spec.ts): field mapping, password redaction.
-- [health.controller.spec.ts](../../../services/commerce-api/src/modules/health/health.controller.spec.ts): liveness payload, readiness delegates to terminus.
+- [health.controller.spec.ts](../../../services/commerce-api/src/modules/health/health.controller.spec.ts): liveness payload, readiness delegates to terminus, readiness fails while draining.
+- `test/graceful-shutdown.e2e-spec.ts`: on a real listening server, readiness returns 503 during the drain, an in-flight request completes, and the port then closes.
+- `test/metrics.e2e-spec.ts`: metrics access (anonymous, customer, admin, scrape token) and bounded labels.
 - `test/app.e2e-spec.ts` hits both health routes. `test/security.e2e-spec.ts` uses `/health` for header checks.
 
 ## Known gaps

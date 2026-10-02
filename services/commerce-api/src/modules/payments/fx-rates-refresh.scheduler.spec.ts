@@ -12,6 +12,7 @@ describe('FxRatesRefreshScheduler', () => {
     );
 
     await scheduler.onModuleInit();
+    await scheduler.refresh();
 
     expect(fxRates.refresh).not.toHaveBeenCalled();
   });

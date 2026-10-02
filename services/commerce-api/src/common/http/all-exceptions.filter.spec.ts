@@ -1,7 +1,9 @@
 import {
   ArgumentsHost,
   BadRequestException,
+  Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 
 import { AllExceptionsFilter } from './all-exceptions.filter';
@@ -17,7 +19,8 @@ function createHost(requestId: string): {
   const request = {
     id: requestId,
     method: 'GET',
-    url: '/api/v1/whatever',
+    url: '/api/v1/whatever?token=secret-reset-token',
+    path: '/api/v1/whatever',
   } as RequestWithId;
   const response = { status };
 
@@ -125,5 +128,30 @@ describe('AllExceptionsFilter', () => {
       },
       requestId: 'req-5',
     });
+  });
+
+  it('logs server errors without the query string', () => {
+    const { host } = createHost('req-6');
+    const logged = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+
+    filter.catch(new Error('boom'), host);
+
+    const message = String(logged.mock.calls[0]?.[0]);
+    expect(message).toContain('GET /api/v1/whatever [req-6]');
+    expect(message).not.toContain('secret-reset-token');
+    logged.mockRestore();
+  });
+
+  it('returns an intentional 503 without logging an error stack', () => {
+    const { host, status } = createHost('req-7');
+    const logged = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+    filter.catch(new ServiceUnavailableException('The service is busy'), host);
+    expect(status).toHaveBeenCalledWith(503);
+    expect(logged).not.toHaveBeenCalled();
+    logged.mockRestore();
   });
 });

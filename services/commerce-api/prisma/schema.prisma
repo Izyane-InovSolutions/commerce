@@ -13,7 +13,10 @@
 //   (`deletedAt DateTime?`) only where the business actually needs them.
 //
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // Exposes connection-pool counters ($metrics) to the operational metrics
+  // collector; it adds no queries and changes no client behaviour.
+  previewFeatures = ["metrics"]
 }
 
 datasource db {

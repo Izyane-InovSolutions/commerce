@@ -1,4 +1,5 @@
 import { ValidationPipe, type ValidationError } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule } from '@nestjs/swagger';
@@ -8,7 +9,9 @@ import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { ValidationException } from './common/http/validation-exception';
 import { createApiDocument } from './common/openapi/create-api-document';
+import { installGracefulShutdown } from './infrastructure/lifecycle/graceful-shutdown';
 import { AppLogger } from './infrastructure/logging/app-logger.service';
+import { MetricsMiddleware } from './infrastructure/metrics/metrics.middleware';
 
 const REQUEST_BODY_LIMIT = '1mb';
 
@@ -28,7 +31,12 @@ async function bootstrap(): Promise<void> {
   // appends the address it observed to the right of anything supplied.
   app.set('trust proxy', 'loopback, linklocal, uniquelocal');
 
-  app.useLogger(app.get(AppLogger));
+  const logger = app.get(AppLogger);
+  app.useLogger(logger);
+  // First, so request timing and error counts include everything after it:
+  // helmet, body-parser rejections (413), guards and unmatched routes.
+  const metrics = app.get(MetricsMiddleware);
+  app.use(metrics.use.bind(metrics));
   app.use(helmet());
   app.use(
     json({
@@ -52,7 +60,12 @@ async function bootstrap(): Promise<void> {
         new ValidationException(errors),
     }),
   );
-  app.enableShutdownHooks();
+  installGracefulShutdown(app, {
+    drainDelayMs: app
+      .get(ConfigService)
+      .get<number>('SHUTDOWN_DRAIN_DELAY_MS', 0),
+    logger,
+  });
 
   const document = createApiDocument(app);
   SwaggerModule.setup('api/docs', app, document);

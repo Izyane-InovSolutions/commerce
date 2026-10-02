@@ -15,8 +15,9 @@ import { DatabaseModule } from './database/database.module';
 import { CacheModule } from './infrastructure/cache/cache.module';
 import { validate } from './infrastructure/config/env.validation';
 import { JobsModule } from './infrastructure/jobs/jobs.module';
+import { AdmissionGuard } from './infrastructure/lifecycle/admission.guard';
+import { LifecycleModule } from './infrastructure/lifecycle/lifecycle.module';
 import { LoggingModule } from './infrastructure/logging/logging.module';
-import { MetricsInterceptor } from './infrastructure/metrics/metrics.interceptor';
 import { MetricsModule } from './infrastructure/metrics/metrics.module';
 import { StorageModule } from './infrastructure/storage/storage.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
@@ -56,6 +57,7 @@ import { WorkersModule } from './infrastructure/workers/workers.module';
     }),
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 100 }]),
     LoggingModule,
+    LifecycleModule,
     MetricsModule,
     CacheModule,
     JobsModule,
@@ -92,8 +94,8 @@ import { WorkersModule } from './infrastructure/workers/workers.module';
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_INTERCEPTOR, useClass: ResponseEnvelopeInterceptor },
-    { provide: APP_INTERCEPTOR, useClass: MetricsInterceptor },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: AdmissionGuard },
   ],
 })
 export class AppModule implements NestModule {

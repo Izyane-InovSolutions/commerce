@@ -20,6 +20,16 @@ Template: [services/commerce-api/.env.example](../../services/commerce-api/.env.
 | `DATABASE_URL`        | –             | ✔       | `postgres://` or `postgresql://` URL.                                                                                                                  |
 | `SHADOW_DATABASE_URL` | –             | ✔       | Prisma shadow database, used by `prisma migrate dev`. Required even at runtime because the schema validates it.                                        |
 
+Prisma Client also loads `services/commerce-api/.env` at runtime and fills any variable the process left unset. This happens whatever the working directory and even when `NODE_ENV=test` makes `ConfigModule` ignore `.env` (register N8). Give non-development entry points an explicit environment and no `.env` beside the schema.
+
+## Operations and metrics
+
+| Variable | Default | Required | Notes |
+| --- | --- | --- | --- |
+| `METRICS_SCRAPE_TOKEN` | unset | – | Bearer secret (at least 32 characters) for the internal Prometheus scraper at `GET /api/v1/metrics/prometheus`. Unset disables that route (404). Admins use `GET /api/v1/metrics` with their session ([metrics-scrape.guard.ts](../../services/commerce-api/src/infrastructure/metrics/metrics-scrape.guard.ts)). |
+| `METRICS_DB_CACHE_MS` | `15000` | – | How long database gauges (queue depth and age, unresolved payments/refunds, lock and connection pressure) are reused between scrapes, from 1000 to 300000 ms. Each collection is a few aggregate queries under a 2 s statement timeout. |
+| `SHUTDOWN_DRAIN_DELAY_MS` | `0` | – | After SIGTERM/SIGINT, how long readiness returns 503 before the server stops accepting connections (0 to 120000). Behind a load balancer, set it to at least the readiness probe interval ([graceful-shutdown.ts](../../services/commerce-api/src/infrastructure/lifecycle/graceful-shutdown.ts)). |
+
 ## Auth and sessions
 
 | Variable                                    | Default             | Required | Notes                                                                                                                                                                                                                                                  |

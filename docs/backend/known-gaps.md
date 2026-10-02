@@ -1,6 +1,6 @@
 # Known gaps
 
-Current register, reviewed **2026-10-01**. This is the authority for current status; the [September 25 audit](../github-issues-backend-audit-2026-09-25.md) and [release verification report](../backend-release-1-verification.md) remain historical snapshots.
+Current register, reviewed **2026-10-02**. This is the authority for current status; the [September 25 audit](../github-issues-backend-audit-2026-09-25.md) and [release verification report](../backend-release-1-verification.md) remain historical snapshots. The [runtime inventory](runtime-inventory.md) lists routes, background work, external calls and state machines, with the source evidence behind the D, C and N IDs below.
 
 ## Evidence and status policy
 
@@ -24,8 +24,8 @@ Rows here record source corrections unless a dated verification link states that
 | R1: no outbox publisher | Dispatcher, subscriber registration, leases, retries and notification fan-out exist. Crash/replay and multi-replica verification remain separate gates. | `src/infrastructure/jobs/outbox-dispatcher.service.ts`, its `.spec.ts`, `src/modules/notifications/notifications-outbox.subscriber.spec.ts`, `src/infrastructure/workers/workers.module.ts` |
 | H2: no autonomous reconciliation | Unified pending payments with references are queued by a 30-second scheduler and refreshed by a job handler. Eligible expired attempts cancel orders. Unknown initialization without a reference remains unresolved. Live webhooks/refunds and late-success handling are still gaps. | `src/modules/payments/jobs/payment-reconciliation.scheduler.ts`, `payment-reconciliation.handler.ts`, `test/payments.integration-spec.ts` |
 | R9: local-only storage | `MEDIA_STORAGE_DRIVER=local\|s3` selects local or S3-compatible storage. Orphan cleanup and database/object-store atomicity remain gaps; real bucket verification is outstanding. | `src/infrastructure/storage/storage.module.ts`, `storage.module.spec.ts`, `s3-storage.provider.spec.ts` |
-| S3: no byte inspection | Media checks byte signatures against the reserved type. Multipart buffering still lacks a transport size limit. Signature detection is not malware scanning. | `src/modules/media/media.service.ts`, `media.service.spec.ts`, `media-signature.spec.ts` |
-| Missing customer cancellation | Owner `POST /api/v1/orders/:id/cancel` and admin cancellation exist; paid orders need refund/fulfillment flows. PostgreSQL tests need the isolated environment. | `src/modules/orders/cancellation/order-cancellation.controller.ts`, `test/orders.integration-spec.ts` |
+| S3: no byte inspection | Media checks byte signatures against the reserved type. Signature detection is not malware scanning. The transport size limit was added later: see the S3 row below (fixed and verified 2026-10-01). | `src/modules/media/media.service.ts`, `media.service.spec.ts`, `media-signature.spec.ts` |
+| Missing customer cancellation | Owner `POST /api/v1/orders/:id/cancel` and admin cancellation exist. The three PostgreSQL cancellation cases passed against the isolated database on 2026-10-02 (17 suites, 90 tests; see [Stage 6 verification](measurement-baseline-verification.md)). Paid orders still need the refund/fulfillment flows tracked in H3, H8 and H12. | `src/modules/orders/cancellation/order-cancellation.controller.ts`, `test/orders.integration-spec.ts` |
 | Missing audit reader | ADMIN-only `GET /api/v1/admin/audit-events` and `/actions` exist. Audit coverage/redaction remain separate concerns. | `src/modules/audit/audit-events.controller.ts`, `audit.service.spec.ts` |
 | H15: every product delete is unguarded | Product, variant and direct offer deletion now lock the affected catalog/stock rows and reject purchase history, stock movements, reservations and nonzero stock. Restrictive history FKs are the concurrency backstop. | `src/modules/products/products.service.ts`, `src/modules/offers/offers.service.ts`, `prisma/migrations/20261001090000_preserve_order_and_stock_history`, `test/catalog-deletion.integration-spec.ts` |
 
@@ -44,8 +44,19 @@ All entries below were checked **2026-09-30**. Exact commands, results and envir
 | B3 | fixed and verified | Full unit run passes: 98 suites and 984 tests. Test timeout is 15 seconds for reliable password-hashing tests on slower runners. |
 | B4 | fixed and verified | PostgreSQL 17 integration passes through the dedicated Docker Compose service: 42 migrations, 16 suites and 79 tests against isolated `commerce_test` on loopback port 55432 and separate test storage. |
 | B5 | fixed and verified | Provider-isolation regression passes; all 14 existing database-target guard tests pass. Workers/live providers are disabled by shared test setup. |
-| B6 | externally blocked | New Node 24 / PostgreSQL 17 workflow awaits its first remote run. Static YAML assertions and equivalent local checks pass; no CI success is claimed. |
+| B6 | externally blocked | Rechecked 2026-10-02. `feat/backend-hardening` is pushed at `99a6b01`, but the workflow runs only on pull requests, pushes to `main` and manual dispatch, so a branch push starts no run. Run status could not be observed here: the repository is private and `gh` is unavailable. Unblock by opening a pull request or dispatching the workflow, then record the revision, run URL and PostgreSQL job result. Equivalent local checks pass; no CI success is claimed. |
 | B7 | deferred | Live-provider activation, performance/load, failover and restore testing are outside Step 1. |
+
+## Stage 6 evidence (2026-10-02)
+
+Commands, results and environment limits are in the [Stage 6 verification](measurement-baseline-verification.md).
+
+| ID | Status | Evidence / remaining work |
+| --- | --- | --- |
+| M1 | fixed and verified | Metrics now cover route-template latency histograms, status/error counts (including guard rejections, unmatched routes and body-parser 413s), in-flight requests, event-loop delay, memory and CPU, the Prisma pool, PostgreSQL connection and lock pressure, job/outbox depth, oldest-due age, retry and dead-letter counts, job start lag and unresolved payments/refunds. Label-bound and access tests pass |
+| M2 | fixed and verified | Liveness stays dependency-free. Readiness returns 503 while draining. Shutdown no longer disconnects Prisma before in-flight requests finish, and the job worker stops claiming and finishes its current job. Process-level test passes |
+| M3 | fixed and verified (provisional) | Synthetic full-profile dataset and a repeatable open-loop workload. A local step-test baseline is published with p50/p95/p99, throughput, errors, resources and queue age. It is single-host and not a capacity claim; the provisional 100 req/s target is not met |
+| B6 | externally blocked | First remote CI run still outstanding; see the Step 1 table |
 
 ## High impact
 
@@ -78,7 +89,7 @@ These can lose money, lose or corrupt stock, or leave customers stuck.
 | S2    | **Audit redaction only matches exact key names.** `accountNumber`, `iban`, `email`, `phone` and `destination` are not redacted. Four writers skip `AuditService` altogether: sellers, storefronts, marketplace offers and gateway payments                                                                               | [audit-and-health](modules/audit-and-health.md#known-gaps)                                 | source-confirmed / 2026-09-29 |
 | S3 | **Multipart upload buffering is bounded.** Multer uses the same `MEDIA_MAX_FILE_SIZE_BYTES` cap as reservations, accepts one file and no form fields, and returns 413 before the media service runs for an oversized file. Byte-signature inspection remains a separate content check. | [Step 5 verification](multipart-upload-verification.md), [media](modules/media.md) | fixed and verified / 2026-10-01 |
 | S4    | **Saved sellers exposes unapproved sellers.** Any seller can be saved regardless of status, and the list then returns unapproved profiles                                                                                                                                                                                | [wishlist-and-saved-sellers](modules/wishlist-and-saved-sellers.md#known-gaps)             | source-confirmed / 2026-09-29 |
-| S5 | **`GET /metrics` is public.** It exposes route-level traffic counts                                                                                                                                                                                                                                                      | [auth-and-access](auth-and-access.md#known-inconsistencies)                                | source-confirmed / 2026-09-29 |
+| S5 | **Metrics access.** `GET /api/v1/metrics` is now ADMIN-only. `GET /api/v1/metrics/prometheus` admits only `Authorization: Bearer <METRICS_SCRAPE_TOKEN>` and returns 404 when no token is configured. Labels are bounded: route templates, never raw URLs or IDs. Production scraper provisioning and network policy remain Stage 10/15 deployment work | [Stage 6 verification](measurement-baseline-verification.md), [auth-and-access](auth-and-access.md#known-inconsistencies) | fixed and verified / 2026-10-02 |
 | S6    | **Service-layer actor rechecks are inconsistent.** Financials, operations, reviews, admin refunds and product submission review do not re-check the admin in the database; sellers and gateway payments do. The JWT guard reads the role from the database, which limits the impact, but the pattern is inconsistent | module docs                                                                                | source-confirmed / 2026-09-30 |
 | S7    | **Missing self-approval checks.** An admin who owns a seller account can approve that seller's payouts and products. Seller applications and POs do block self-approval                                                                                                                                                  | [financials](modules/financials.md#known-gaps), [products](modules/products.md#known-gaps) | source-confirmed / 2026-09-29 |
 | S8 | **No email when the password is changed while signed in.** Only a password reset sends one                                                                                                                                                                                                                               | [auth](modules/auth.md#known-gaps)                                                         | source-confirmed / 2026-09-29 |
@@ -100,21 +111,48 @@ These can lose money, lose or corrupt stock, or leave customers stuck.
 
 ## Data integrity and API consistency
 
-- **Destructive deletes.** Admin deletes of products, variants, offers, attribute values and warehouses cascade into order, cart, wishlist or stock rows. See [products](modules/products.md#known-gaps), [offers](modules/offers.md#known-gaps), [catalog](modules/catalog.md#known-gaps) and [inventory](modules/inventory.md#known-gaps).
-- **Seller offers can draw platform stock.** A seller can create an offer with `stockSource: PLATFORM` and sell from the platform's shared stock. See [offers](modules/offers.md#known-gaps).
-- **Submission status can be bypassed.** Staff can publish a PENDING or REJECTED seller product through `updateStatus`. See [products](modules/products.md#known-gaps).
-- **Error codes.** Every status outside the mapped set (422, 501, 502 and so on) returns the error code `INTERNAL_ERROR`. See [architecture](architecture.md#request-lifecycle).
-- **Pagination.** It is inconsistent: `OfferPage` uses its own shape, and many lists are unpaginated (`GET /orders`, `GET /returns`, admin products, payout accounts, wishlist). See the module docs.
-- **Operations metrics.** They mix currencies and apply the warehouse filter unevenly, and refunds from every source are counted. See [operations](modules/operations.md#known-gaps).
-- **Admin order status filter.** `GET /admin/orders?status=` is probably rejected by `forbidNonWhitelisted`. See [orders](modules/orders.md#known-gaps).
-- **Reviews moderation.** Editing clears a FLAGGED state, and a user can never report the same content again after a dismissal. See [reviews](modules/reviews.md#known-gaps).
+These findings were untabled until 2026-10-02. They were re-verified against source at `99a6b01`, and the evidence is in [runtime inventory §5a](runtime-inventory.md#5a-data-integrity-and-api-consistency). Product, variant and offer deletion is no longer in this list: H15 protects it, and only an unused offer still cascades its cart and wishlist rows, by design.
+
+| # | Gap | Where | Status / evidence date | Stage |
+| --- | --- | --- | --- | --- |
+| D1 | **Attribute and attribute-value deletion rewrites catalog history.** Hard deletes have no usage guard. They cascade only to variant attribute links and category links, not to order, cart, wishlist or stock rows. Order lines keep no attribute snapshot, so past orders display the variant's current attributes | [catalog](modules/catalog.md#known-gaps) | source-confirmed (narrowed) / 2026-10-02 | 10 |
+| D2 | **Warehouse deletion.** No longer reproducible from source: `remove` locks the warehouse, rejects any stock records and maps restrictive FK failures to 409. Only unit tests cover it, so close after a PostgreSQL regression | [inventory](modules/inventory.md#known-gaps) | source-confirmed fixed, DB test pending / 2026-10-02 | 10 |
+| D3 | **Seller offers can draw platform stock.** A seller can create an offer with `stockSource: PLATFORM` and sell from shared stock | [offers](modules/offers.md#known-gaps) | source-confirmed / 2026-10-02 | 10 |
+| D4 | **Submission status can be bypassed.** Staff can publish a PENDING or REJECTED seller product or variant through `updateStatus` | [products](modules/products.md#known-gaps) | source-confirmed / 2026-10-02 | 10 |
+| D5 | **Error codes.** Statuses outside 400/401/403/404/409/413/429/503 (for example the gateway's 501/502) return `INTERNAL_ERROR` | [architecture](architecture.md#request-lifecycle) | source-confirmed / 2026-10-02 | 10 |
+| D6 | **Pagination.** There are two page shapes, and 32 GET routes return unbounded arrays, including `GET /orders`, `GET /returns`, admin products, payout accounts, wishlist, and public brands and categories | module docs | source-confirmed / 2026-10-02 | 12 |
+| D7 | **Operations metrics.** Currency mixing is fixed (a ZMW filter). Gross sales still ignore the warehouse filter while refunds apply it, and without a warehouse filter refunds from every source are counted | [operations](modules/operations.md#known-gaps) | partially fixed / 2026-10-02 | 10 |
+| D8 | **Admin order status filter.** No longer reproducible from source: `status` is a whitelisted DTO field with a pipe-level unit test. Close after an HTTP check | [orders](modules/orders.md#known-gaps) | source-confirmed fixed, HTTP check pending / 2026-10-02 | 10 |
+| D9 | **Reviews moderation.** Editing clears a FLAGGED state, and a user can never report the same content again after a dismissal | [reviews](modules/reviews.md#known-gaps) | source-confirmed / 2026-10-02 | 10 |
 
 ## Configuration drift
 
-- `SELLER_PAYOUT_PROVIDER` is validated but never read. `SCHEDULED_WORKERS_ENABLED` and `UNIFIED_PAYMENTS_ALLOW_HTTP` are read but not validated.
-- `.env.example` is missing several variables. See [configuration.md](configuration.md#drift).
-- `PAYMENT_FX_BASE_CURRENCY` can be set, but the converter assumes ZMW.
-- `CacheService` exists, but no module uses it.
+| # | Gap | Status / evidence date | Stage |
+| --- | --- | --- | --- |
+| C1 | `SELLER_PAYOUT_PROVIDER` is validated but never read; the provider is hard-wired | source-confirmed / 2026-10-02 | 10 |
+| C2 | Nine settings are read but not validated, including `SCHEDULED_WORKERS_ENABLED`, `UNIFIED_PAYMENTS_ALLOW_HTTP`, the `OUTBOX_DISPATCH_*` group and `PAYMENT_RECONCILIATION_MAX_AGE_SECONDS` | source-confirmed / 2026-10-02 | 10 |
+| C3 | `.env.example` is missing ten variables; see [configuration.md](configuration.md#drift) and [runtime inventory §5b](runtime-inventory.md#5b-configuration-drift) | source-confirmed / 2026-10-02 | 10 |
+| C4 | `PAYMENT_FX_BASE_CURRENCY` can be set, but the converter assumes ZMW | source-confirmed / 2026-10-02 | 10 |
+| C5 | `CacheService` exists but no module uses it | source-confirmed / 2026-10-02 | 12 |
+
+## New candidates from the Stage 6 inventory
+
+Candidate findings with source evidence. N1–N7 are source-confirmed only; N8–N12 were reproduced on 2026-10-02. Each needs a focused test before its behavior changes. Details are in [runtime inventory §5c](runtime-inventory.md#5c-new-candidate-findings).
+
+| # | Gap | Status / evidence date | Stage |
+| --- | --- | --- | --- |
+| N1 | `GET /admin/procurement/suppliers?status=` is probably rejected by `forbidNonWhitelisted`, the same pattern as the old admin-orders bug | source-confirmed / 2026-10-02 | 10 |
+| N2 | `GET /admin/inventory` passes unvalidated IDs to UUID columns; a malformed one probably returns 500 (R7 family) | source-confirmed / 2026-10-02 | 10 |
+| N3 | Unbounded reads in operations metrics and in the per-minute shipment poll | source-confirmed / 2026-10-02 | 12 |
+| N4 | The notification mailer ignores the SMTP timeout settings, and its `log`/`disabled` modes can never run because `SMTP_HOST` is required | source-confirmed / 2026-10-02 | 10 |
+| N5 | `SCHEDULED_WORKERS_ENABLED` set only in `.env` stops `registerRecurringTask` tasks but not `@Interval` tasks; inferred from module load order, needs a startup test | source-confirmed / 2026-10-02 | 11 |
+| N6 | Every replica refreshes FX rates with no coordination, and the boot refresh ignores the worker flag (R8 sub-item) | source-confirmed / 2026-10-02 | 11 |
+| N7 | Job claims are reclaimed after a fixed 5 minutes with no lease renewal, so a long job can run twice | source-confirmed / 2026-10-02 | 11 |
+| N8 | **Prisma Client loads `services/commerce-api/.env` at runtime, whatever the working directory or `ConfigModule` settings.** It fills any variable the process did not set. Observed 2026-10-02: an API started from another directory with an explicit environment picked up the developer `PAYMENT_FX_API_KEY` and refreshed FX rates at boot. Test isolation already clears these keys; other entry points need an explicit policy | reproduced / 2026-10-02 | 10 |
+| N9 | The baseline found that bcryptjs cost 12 blocked the event loop. Password hash and compare now run in two bounded worker threads; unit tests confirm the loop remains responsive and hashes retain cost 12. Repeat the load profile before claiming a capacity fix | fixed locally; load verification outstanding / 2026-10-02 ([baseline](measurement-baseline-verification.md#findings-from-the-baseline)) | 12 |
+| N10 | **Interactive transactions expire under load.** Prisma's default 5 s timeout yields 500s on checkout and login and failed `expire_reservation` attempts when the loop or pool stalls | reproduced / 2026-10-02 | 12 (with 7) |
+| N11 | The baseline produced `ECONNREFUSED` and timeouts at 100 req/s. An initial in-process limit now returns 503 with `Retry-After` above 16 concurrent application requests by default while allowing health and metrics probes; an HTTP concurrency test passes. A short 20 req/s run had no connection errors or timeouts, but 38% unexpected 503s. The 100 req/s and edge/replica overload checks are still required | fixed locally; full load verification outstanding / 2026-10-02 | 13 |
+| N12 | Intentional HTTP 503s no longer write error stacks; unexpected 5xx still do. Filter regression passes | fixed and verified locally / 2026-10-02 | 10 |
 
 ## Not built yet
 
@@ -133,4 +171,4 @@ Deferred roadmap items; this list is not a runtime verification claim:
 - Low-stock alerts (`reorderPoint` is stored but nothing uses it). The admin audit reader exists.
 - Mobile-money identity lookup at payout-account setup. The gateway supports it; see [integrations.md](integrations.md#payments).
 - An API for procurement documents (the model exists).
-- Deployment automation remains deferred. Backend verification CI now exists in `.github/workflows/backend.yml`; its first remote run is still required.
+- Deployment automation remains deferred. Backend verification CI now exists in `.github/workflows/backend.yml`; its first remote run is still required (B6).

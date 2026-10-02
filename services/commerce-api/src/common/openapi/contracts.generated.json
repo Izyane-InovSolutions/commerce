@@ -6,7 +6,11 @@
         "metrics"
       ],
       "parameters": [],
-      "security": [],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
       "responses": {
         "200": {
           "description": "Success",
@@ -48,7 +52,43 @@
             }
           }
         }
-      }
+      },
+      "description": "Required role: ADMIN."
+    },
+    "MetricsController_getPrometheusMetrics": {
+      "operationId": "MetricsController_getPrometheusMetrics",
+      "tags": [
+        "metrics"
+      ],
+      "parameters": [],
+      "security": [
+        {
+          "metricsScrapeToken": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Prometheus text exposition format 0.0.4",
+          "content": {
+            "text/plain": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "For the configured internal scraper: send Authorization: Bearer <METRICS_SCRAPE_TOKEN>. Returns 404 when METRICS_SCRAPE_TOKEN is unset. Labels are bounded (method, route template, status, job type, topic); no user IDs, tokens or raw URLs."
     },
     "SalesAnalyticsController_getSales": {
       "operationId": "SalesAnalyticsController_getSales",
@@ -20883,8 +20923,8 @@
           "schema": {
             "type": "string",
             "enum": [
-              "STAFF",
               "ADMIN",
+              "STAFF",
               "CUSTOMER",
               "SELLER"
             ],
@@ -21604,22 +21644,123 @@
     "MetricsSnapshot": {
       "type": "object",
       "properties": {
-        "uptimeSeconds": {
-          "type": "number"
+        "generatedAt": {
+          "type": "string"
+        },
+        "process": {
+          "$ref": "#/components/schemas/ProcessMetrics"
         },
         "requests": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/RequestMetric"
+            "$ref": "#/components/schemas/RouteMetric"
           }
+        },
+        "jobs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/JobMetric"
+          }
+        },
+        "outbox": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/OutboxMetric"
+          }
+        },
+        "operational": {
+          "$ref": "#/components/schemas/OperationalGauges"
+        }
+      },
+      "required": [
+        "generatedAt",
+        "process",
+        "requests",
+        "jobs",
+        "outbox",
+        "operational"
+      ]
+    },
+    "ProcessMetrics": {
+      "type": "object",
+      "properties": {
+        "uptimeSeconds": {
+          "type": "number"
+        },
+        "rssBytes": {
+          "type": "number"
+        },
+        "heapUsedBytes": {
+          "type": "number"
+        },
+        "heapTotalBytes": {
+          "type": "number"
+        },
+        "externalBytes": {
+          "type": "number"
+        },
+        "cpuUserSeconds": {
+          "type": "number"
+        },
+        "cpuSystemSeconds": {
+          "type": "number"
+        },
+        "activeRequests": {
+          "type": "number"
+        },
+        "eventLoopDelay": {
+          "$ref": "#/components/schemas/EventLoopDelaySummary"
         }
       },
       "required": [
         "uptimeSeconds",
-        "requests"
+        "rssBytes",
+        "heapUsedBytes",
+        "heapTotalBytes",
+        "externalBytes",
+        "cpuUserSeconds",
+        "cpuSystemSeconds",
+        "activeRequests",
+        "eventLoopDelay"
       ]
     },
-    "RequestMetric": {
+    "EventLoopDelaySummary": {
+      "type": "object",
+      "properties": {
+        "windowSeconds": {
+          "type": "number"
+        },
+        "p50Ms": {
+          "type": "number",
+          "nullable": true
+        },
+        "p90Ms": {
+          "type": "number",
+          "nullable": true
+        },
+        "p99Ms": {
+          "type": "number",
+          "nullable": true
+        },
+        "maxMs": {
+          "type": "number",
+          "nullable": true
+        },
+        "meanMs": {
+          "type": "number",
+          "nullable": true
+        }
+      },
+      "required": [
+        "windowSeconds",
+        "p50Ms",
+        "p90Ms",
+        "p99Ms",
+        "maxMs",
+        "meanMs"
+      ]
+    },
+    "RouteMetric": {
       "type": "object",
       "properties": {
         "method": {
@@ -21628,26 +21769,321 @@
         "route": {
           "type": "string"
         },
-        "statusCode": {
-          "type": "number"
-        },
         "count": {
           "type": "number"
         },
         "errorCount": {
           "type": "number"
         },
+        "clientErrorCount": {
+          "type": "number"
+        },
+        "statusCounts": {
+          "$ref": "#/components/schemas/Record"
+        },
         "totalDurationMs": {
           "type": "number"
+        },
+        "latency": {
+          "$ref": "#/components/schemas/LatencySummary"
         }
       },
       "required": [
         "method",
         "route",
-        "statusCode",
         "count",
         "errorCount",
-        "totalDurationMs"
+        "clientErrorCount",
+        "statusCounts",
+        "totalDurationMs",
+        "latency"
+      ]
+    },
+    "Record": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "LatencySummary": {
+      "type": "object",
+      "properties": {
+        "p50Ms": {
+          "type": "number",
+          "nullable": true
+        },
+        "p95Ms": {
+          "type": "number",
+          "nullable": true
+        },
+        "p99Ms": {
+          "type": "number",
+          "nullable": true
+        },
+        "meanMs": {
+          "type": "number",
+          "nullable": true
+        }
+      },
+      "required": [
+        "p50Ms",
+        "p95Ms",
+        "p99Ms",
+        "meanMs"
+      ]
+    },
+    "JobMetric": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "succeeded": {
+          "type": "number"
+        },
+        "failed": {
+          "type": "number"
+        },
+        "deadLettered": {
+          "type": "number"
+        },
+        "duration": {
+          "$ref": "#/components/schemas/LatencySummary"
+        },
+        "startLag": {
+          "$ref": "#/components/schemas/LatencySummary"
+        }
+      },
+      "required": [
+        "type",
+        "succeeded",
+        "failed",
+        "deadLettered",
+        "duration",
+        "startLag"
+      ]
+    },
+    "OutboxMetric": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string"
+        },
+        "published": {
+          "type": "number"
+        },
+        "failed": {
+          "type": "number"
+        },
+        "deadLettered": {
+          "type": "number"
+        },
+        "dispatchLag": {
+          "$ref": "#/components/schemas/LatencySummary"
+        }
+      },
+      "required": [
+        "topic",
+        "published",
+        "failed",
+        "deadLettered",
+        "dispatchLag"
+      ]
+    },
+    "OperationalGauges": {
+      "type": "object",
+      "properties": {
+        "collectedAt": {
+          "type": "string"
+        },
+        "collectionMs": {
+          "type": "number"
+        },
+        "error": {
+          "type": "string",
+          "nullable": true
+        },
+        "jobs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/QueueGauge"
+          }
+        },
+        "staleRunningJobs": {
+          "type": "number"
+        },
+        "outbox": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/QueueGauge"
+          }
+        },
+        "payments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/StatusGauge"
+          }
+        },
+        "refundCases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/StatusGauge"
+          }
+        },
+        "refunds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/StatusGauge"
+          }
+        },
+        "emailDeliveries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/StatusGauge"
+          }
+        },
+        "database": {
+          "type": "object",
+          "allOf": [
+            {
+              "$ref": "#/components/schemas/DatabaseGauges"
+            }
+          ],
+          "nullable": true
+        },
+        "pool": {
+          "type": "object",
+          "allOf": [
+            {
+              "$ref": "#/components/schemas/PoolGauges"
+            }
+          ],
+          "nullable": true
+        }
+      },
+      "required": [
+        "collectedAt",
+        "collectionMs",
+        "error",
+        "jobs",
+        "staleRunningJobs",
+        "outbox",
+        "payments",
+        "refundCases",
+        "refunds",
+        "emailDeliveries",
+        "database",
+        "pool"
+      ]
+    },
+    "QueueGauge": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "count": {
+          "type": "number"
+        },
+        "retrying": {
+          "type": "number"
+        },
+        "oldestDueAgeSeconds": {
+          "type": "number",
+          "nullable": true
+        }
+      },
+      "required": [
+        "name",
+        "status",
+        "count",
+        "retrying",
+        "oldestDueAgeSeconds"
+      ]
+    },
+    "StatusGauge": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "count": {
+          "type": "number"
+        },
+        "oldestAgeSeconds": {
+          "type": "number",
+          "nullable": true
+        }
+      },
+      "required": [
+        "status",
+        "count",
+        "oldestAgeSeconds"
+      ]
+    },
+    "DatabaseGauges": {
+      "type": "object",
+      "properties": {
+        "connectionsByState": {
+          "$ref": "#/components/schemas/Record"
+        },
+        "maxConnections": {
+          "type": "number",
+          "nullable": true
+        },
+        "lockWaitingSessions": {
+          "type": "number"
+        },
+        "ungrantedLocks": {
+          "type": "number"
+        },
+        "longestTransactionSeconds": {
+          "type": "number",
+          "nullable": true
+        }
+      },
+      "required": [
+        "connectionsByState",
+        "maxConnections",
+        "lockWaitingSessions",
+        "ungrantedLocks",
+        "longestTransactionSeconds"
+      ]
+    },
+    "PoolGauges": {
+      "type": "object",
+      "properties": {
+        "open": {
+          "type": "number",
+          "nullable": true
+        },
+        "busy": {
+          "type": "number",
+          "nullable": true
+        },
+        "idle": {
+          "type": "number",
+          "nullable": true
+        },
+        "waiting": {
+          "type": "number",
+          "nullable": true
+        },
+        "waitedTotal": {
+          "type": "number",
+          "nullable": true
+        }
+      },
+      "required": [
+        "open",
+        "busy",
+        "idle",
+        "waiting",
+        "waitedTotal"
       ]
     },
     "InputSalesAnalyticsQueryDto": {
@@ -22199,8 +22635,8 @@
         "role": {
           "type": "string",
           "enum": [
-            "STAFF",
             "ADMIN",
+            "STAFF",
             "CUSTOMER",
             "SELLER"
           ]
@@ -24069,7 +24505,7 @@
           "type": "string"
         },
         "destination": {
-          "$ref": "#/components/schemas/Record"
+          "$ref": "#/components/schemas/Record2"
         },
         "maskedReference": {
           "type": "string"
@@ -24125,7 +24561,7 @@
         "updatedAt"
       ]
     },
-    "Record": {
+    "Record2": {
       "type": "object",
       "properties": {},
       "additionalProperties": true
@@ -27946,20 +28382,13 @@
           "type": "number"
         },
         "byStatus": {
-          "$ref": "#/components/schemas/Record2"
+          "$ref": "#/components/schemas/Record"
         }
       },
       "required": [
         "total",
         "byStatus"
       ]
-    },
-    "Record2": {
-      "type": "object",
-      "properties": {},
-      "additionalProperties": {
-        "type": "number"
-      }
     },
     "SellerOrderDetail": {
       "type": "object",
@@ -34858,8 +35287,8 @@
         "role": {
           "type": "string",
           "enum": [
-            "STAFF",
             "ADMIN",
+            "STAFF",
             "CUSTOMER",
             "SELLER"
           ],
@@ -34939,8 +35368,8 @@
         "role": {
           "type": "string",
           "enum": [
-            "STAFF",
             "ADMIN",
+            "STAFF",
             "CUSTOMER",
             "SELLER"
           ]
@@ -35028,8 +35457,8 @@
         "role": {
           "type": "string",
           "enum": [
-            "STAFF",
             "ADMIN",
+            "STAFF",
             "CUSTOMER",
             "SELLER"
           ]
@@ -35078,8 +35507,8 @@
         "role": {
           "type": "string",
           "enum": [
-            "STAFF",
             "ADMIN",
+            "STAFF",
             "CUSTOMER",
             "SELLER"
           ]
@@ -35087,8 +35516,8 @@
         "expectedRole": {
           "type": "string",
           "enum": [
-            "STAFF",
             "ADMIN",
+            "STAFF",
             "CUSTOMER",
             "SELLER"
           ]
@@ -35132,8 +35561,8 @@
         "role": {
           "type": "string",
           "enum": [
-            "STAFF",
             "ADMIN",
+            "STAFF",
             "CUSTOMER",
             "SELLER"
           ]

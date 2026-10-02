@@ -71,6 +71,22 @@ The [backend workflow](../../.github/workflows/backend.yml) runs on pull request
 
 `test:e2e` first checks Swagger consistency. `build` regenerates contracts; review any resulting diff rather than treating generation as verification.
 
+## Synthetic workload
+
+`test/load/` holds the Stage 6 measurement harness. It is not part of any Jest layer or CI job. Results and the recorded environment are in the [Stage 6 verification](measurement-baseline-verification.md).
+
+1. Create a dedicated database whose name ends in `_test` (for example `commerce_load_test` in the Compose service) and run `prisma migrate deploy` against it.
+2. Seed it. `seed-synthetic-data.ts` uses the same `_test` guard as integration tests, refuses a non-empty database unless given `--reset`, and generates deterministic rows in SQL. The default is the plan's profile: 100,000 variants, 100,000 users and 1,000,000 order lines.
+
+   ```powershell
+   $env:LOAD_DATABASE_URL='postgresql://commerce_test:commerce_test_only@127.0.0.1:55432/commerce_load_test?schema=public'
+   $env:LOAD_DATABASE_NAME='commerce_load_test'
+   npx ts-node --transpile-only test/load/seed-synthetic-data.ts --reset
+   ```
+
+3. Build the API, then launch it with `node test/load/start-local-api.cjs` and `LOAD_DATABASE_URL` / `LOAD_DATABASE_NAME` set to the guarded load database. The launcher applies the test-provider settings, supplies inert local values for provider credentials, and enables background workers. Prisma still reads `services/commerce-api/.env` for unset variables (register N8); the launcher closes the known live-provider paths. The recorded Stage 6 baseline predates this launcher and used `NODE_ENV=test` to avoid an FX request.
+4. Run `run-workload.ts`. `LOAD_RPS`, `LOAD_DURATION_S`, `LOAD_WARMUP_S`, `LOAD_POOL_USERS`, `LOAD_ONLY` (groups) and `LOAD_OUTPUT` control it. It issues requests open-loop at a fixed rate and sends an `X-Forwarded-For` from 198.18.0.0/15, so each synthetic client is throttled separately behind the trusted loopback proxy. It also samples `GET /api/v1/metrics` as the seeded admin.
+
 ## Remaining verification
 
 These checks do not certify real SMTP/S3/gateway activation, production migrations, restore durability, load/response time, multi-replica failover or every acceptance criterion. Existing media, storage, outbox and notification specs supersede older claims that these areas had no tests. Use actual spec files and the dated ledger, not old suite counts. Legacy database-check scripts must only be pointed at a disposable database; they do not enforce the `_test` guard.

@@ -420,12 +420,13 @@ Created from domain events (order paid, payment failed, order cancelled, new sel
 | GET `/media/:id/download?expires=&signature=` | [Public] | — |
 | DELETE `/media/:id` | auth | — |
 
-### Health & Metrics — always public
-| Method & Path |
-|---|
-| GET `/health` |
-| GET `/health/ready` |
-| GET `/metrics` |
+### Health & Metrics
+| Method & Path | Access |
+|---|---|
+| GET `/health` | public |
+| GET `/health/ready` | public |
+| GET `/metrics` | [Roles: ADMIN] |
+| GET `/metrics/prometheus` | `Authorization: Bearer <METRICS_SCRAPE_TOKEN>`; 404 when unset |
 
 ---
 

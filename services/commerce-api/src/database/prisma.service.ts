@@ -1,7 +1,7 @@
 import {
   Injectable,
   Logger,
-  OnModuleDestroy,
+  OnApplicationShutdown,
   OnModuleInit,
 } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
@@ -9,7 +9,7 @@ import { PrismaClient } from '@prisma/client';
 @Injectable()
 export class PrismaService
   extends PrismaClient
-  implements OnModuleInit, OnModuleDestroy
+  implements OnModuleInit, OnApplicationShutdown
 {
   private readonly logger = new Logger(PrismaService.name);
 
@@ -26,7 +26,10 @@ export class PrismaService
     }
   }
 
-  async onModuleDestroy(): Promise<void> {
+  // Not onModuleDestroy: Nest runs those before the HTTP server stops
+  // accepting, so requests still in flight would lose their connection.
+  // Shutdown hooks run after the server has drained.
+  async onApplicationShutdown(): Promise<void> {
     await this.$disconnect();
   }
 }

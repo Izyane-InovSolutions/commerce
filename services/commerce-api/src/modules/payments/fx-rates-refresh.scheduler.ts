@@ -35,6 +35,9 @@ export class FxRatesRefreshScheduler implements OnModuleInit {
 
   @Interval(FX_REFRESH_INTERVAL_MS)
   async refresh(): Promise<void> {
+    // Load tests enable background workers, but test mode must never contact
+    // the external FX service, including after the first hourly interval.
+    if (this.config.get('NODE_ENV') === 'test') return;
     try {
       await this.fxRates.refresh(FX_REFRESH_INTERVAL_MS);
     } catch (error) {
