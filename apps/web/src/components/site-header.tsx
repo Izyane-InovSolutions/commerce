@@ -32,7 +32,7 @@ export async function SiteHeader() {
   ]);
 
   return (
-    <header className="bg-background sticky top-0 z-40 border-b">
+    <header className="bg-background sticky top-0 z-40 border-b-4 border-primary">
       <div className={`${pageFrame} flex flex-wrap items-center gap-4 py-3`}>
         <Link
           href="/"
