@@ -33,10 +33,10 @@ function CurrencySelect({
       disabled={pending}
       aria-busy={pending}
       onChange={onChange}
-      className="bg-background rounded-md border px-2 py-1 text-sm"
+      className="rounded-md border border-white/30 bg-white/10 px-2 py-1 text-sm text-white"
     >
       {currencies.map((code) => (
-        <option key={code} value={code}>
+        <option key={code} value={code} className="text-foreground">
           {code} — {currencyName(code)}
         </option>
       ))}
