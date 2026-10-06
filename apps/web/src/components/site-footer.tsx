@@ -13,7 +13,7 @@ import { pageFrame } from '@/lib/page-frame';
 const FOOTER_LINKS = [
   { href: '/help', label: 'Help' },
   { href: '/account?tab=orders', label: 'Your orders' },
-  { href: '/returns', label: 'Returns' },
+  { href: '/account?tab=returns', label: 'Returns' },
   { href: '/best-sellers', label: 'Best sellers' },
   { href: '/new-arrivals', label: 'New arrivals' },
   { href: '/stores', label: 'Stores' },

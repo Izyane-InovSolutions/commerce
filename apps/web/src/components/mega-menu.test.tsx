@@ -43,7 +43,7 @@ describe('MegaMenu', () => {
       ['Hot deals', '/deals'],
       ['New arrivals', '/new-arrivals'],
       ['Best sellers', '/best-sellers'],
-      ['Track an order', '/account?tab=orders'],
+      ['Become a seller', '/account'],
     ]) {
       expect(within(shop).getByRole('link', { name })).toHaveAttribute(
         'href',

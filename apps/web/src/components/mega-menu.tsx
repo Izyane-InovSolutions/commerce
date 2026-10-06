@@ -34,8 +34,7 @@ const QUICK_LINKS = [
     icon: History,
   },
   { href: '/account?tab=wishlist', label: 'Your wishlist', icon: Heart },
-  { href: '/account?tab=orders', label: 'Track an order', icon: Package },
-  { href: '/returns', label: 'Returns', icon: RotateCcw },
+  { href: '/account?tab=returns', label: 'Returns', icon: RotateCcw },
   { href: '/help', label: 'Help', icon: LifeBuoy },
   { href: '/account', label: 'Sell on iZyane', icon: Store },
 ] as const;
@@ -175,11 +174,12 @@ function DesktopMenu({
           </NavigationMenu.Item>
         ))}
 
+
         <NavigationMenu.Item className="ml-auto">
           <NavigationMenu.Link asChild>
-            <Link href="/account?tab=orders" className={barItem}>
-              <Package className="size-4" aria-hidden="true" />
-              Track an order
+            <Link href="/account" className={barItem}>
+              <Store className="size-4" aria-hidden="true" />
+              Become a seller
             </Link>
           </NavigationMenu.Link>
         </NavigationMenu.Item>

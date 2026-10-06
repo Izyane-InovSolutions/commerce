@@ -22,6 +22,7 @@ export type AccountTabValue =
   | 'wishlist'
   | 'saved-sellers'
   | 'orders'
+  | 'returns'
   | 'addresses'
   | 'settings';
 
@@ -30,6 +31,7 @@ export function AccountTabs({
   wishlist,
   savedSellers,
   orders,
+  returns,
   addresses,
   settings,
   defaultTab = 'recently-viewed',
@@ -38,6 +40,8 @@ export function AccountTabs({
   wishlist: ReactNode;
   savedSellers: ReactNode;
   orders: ReactNode;
+  /** Optional for the same reason as `settings`. */
+  returns?: ReactNode;
   addresses: ReactNode;
   /** Profile and password — optional so a panel can be rendered without
    * one, as the tests here do. */
@@ -52,6 +56,7 @@ export function AccountTabs({
         <TabsTrigger value="wishlist">Wishlist</TabsTrigger>
         <TabsTrigger value="saved-sellers">Saved sellers</TabsTrigger>
         <TabsTrigger value="orders">Orders</TabsTrigger>
+        {returns ? <TabsTrigger value="returns">Returns</TabsTrigger> : null}
         <TabsTrigger value="addresses">My addresses</TabsTrigger>
         {settings ? <TabsTrigger value="settings">Settings</TabsTrigger> : null}
       </TabsList>
@@ -59,6 +64,7 @@ export function AccountTabs({
       <TabsContent value="wishlist">{wishlist}</TabsContent>
       <TabsContent value="saved-sellers">{savedSellers}</TabsContent>
       <TabsContent value="orders">{orders}</TabsContent>
+      {returns ? <TabsContent value="returns">{returns}</TabsContent> : null}
       <TabsContent value="addresses">{addresses}</TabsContent>
       {settings ? <TabsContent value="settings">{settings}</TabsContent> : null}
     </Tabs>

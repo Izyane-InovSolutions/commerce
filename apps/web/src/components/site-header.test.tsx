@@ -93,16 +93,17 @@ describe('SiteHeader', () => {
 
     render(await SiteHeader());
 
+    // A button now: it opens the notifications drawer rather than navigating.
     expect(
-      screen.getByRole('link', { name: 'Notifications, 3 unread' }),
-    ).toHaveAttribute('href', '/notifications');
+      screen.getByRole('button', { name: 'Notifications, 3 unread' }),
+    ).toBeInTheDocument();
   });
 
   it('leaves the bell out for a signed-out visitor', async () => {
     render(await SiteHeader());
 
     expect(
-      screen.queryByRole('link', { name: /Notifications/ }),
+      screen.queryByRole('button', { name: /Notifications/ }),
     ).not.toBeInTheDocument();
   });
 });

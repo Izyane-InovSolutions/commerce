@@ -1,6 +1,4 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import { Bell, RotateCcw } from 'lucide-react';
 
 import { AccountSettings } from '@/components/account-settings';
 import { AccountTabs, type AccountTabValue } from '@/components/account-tabs';
@@ -11,13 +9,14 @@ import { AuthPanel } from '@/components/auth-panel';
 import { OrderStatusPoller } from '@/components/order-status-poller';
 import { OrdersList } from '@/components/orders-list';
 import { RecentlyViewedSection } from '@/components/recently-viewed-section';
+import { labelReturnItems, ReturnsList } from '@/components/returns-list';
 import { SavedSellersList } from '@/components/saved-sellers-list';
 import { SellerAccountCard } from '@/components/seller-account-card';
 import { WishlistList } from '@/components/wishlist-list';
-import { Button } from '@/components/ui/button';
 import { labelOffers } from '@/lib/cart';
 import { listAddresses, listOrders, reconcileOrderPayments } from '@/lib/orders';
 import { getProfile } from '@/lib/profile';
+import { listReturns } from '@/lib/returns';
 import { listSavedSellers } from '@/lib/saved-sellers';
 import { getCurrentUser } from '@/lib/session';
 import { getOwnSeller } from '@/lib/sellers';
@@ -51,6 +50,7 @@ const TAB_VALUES: AccountTabValue[] = [
   'wishlist',
   'saved-sellers',
   'orders',
+  'returns',
   'addresses',
   'settings',
 ];
@@ -92,17 +92,31 @@ export default async function AccountPage({
   let labels;
   let seller;
   let profile;
+  let returnsResult;
 
   try {
-    [orders, wishlistItems, savedSellers, addresses, seller, profile] =
-      await Promise.all([
-        listOrders(),
-        listWishlist(),
-        listSavedSellers(),
-        listAddresses(),
-        getOwnSeller(),
-        getProfile(),
-      ]);
+    [
+      orders,
+      wishlistItems,
+      savedSellers,
+      addresses,
+      seller,
+      profile,
+      returnsResult,
+    ] = await Promise.all([
+      listOrders(),
+      listWishlist(),
+      listSavedSellers(),
+      listAddresses(),
+      getOwnSeller(),
+      getProfile(),
+      // Settled on its own: returns failing to load only blanks their tab,
+      // not the whole account page.
+      listReturns().then(
+        (returns) => ({ ok: true as const, returns }),
+        (error: unknown) => ({ ok: false as const, error }),
+      ),
+    ]);
 
     // Same reconciliation the standalone orders page does: a mobile money
     // charge the customer already approved settles at the gateway within
@@ -146,21 +160,6 @@ export default async function AccountPage({
         goToDashboard={goToSellerDashboardAction}
       />
 
-      <nav aria-label="Account shortcuts" className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" asChild>
-          <Link href="/returns">
-            <RotateCcw data-icon="inline-start" />
-            Returns
-          </Link>
-        </Button>
-        <Button variant="outline" size="sm" asChild>
-          <Link href="/notifications">
-            <Bell data-icon="inline-start" />
-            Notifications
-          </Link>
-        </Button>
-      </nav>
-
       <AccountTabs
         defaultTab={defaultTab}
         recentlyViewed={<RecentlyViewedSection />}
@@ -196,6 +195,16 @@ export default async function AccountPage({
             ) : null}
             <OrdersList orders={orders} labels={labels} />
           </div>
+        }
+        returns={
+          returnsResult.ok ? (
+            <ReturnsList
+              returns={returnsResult.returns}
+              itemLabels={labelReturnItems(orders, labels)}
+            />
+          ) : (
+            <ApiErrorNotice error={returnsResult.error} />
+          )
         }
         addresses={
           <AddressesSection
