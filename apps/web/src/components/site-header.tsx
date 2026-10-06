@@ -1,10 +1,11 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { Bell, ShoppingCart, User, Package, Heart } from 'lucide-react';
+import { ShoppingCart, User, Package, Heart } from 'lucide-react';
 
 import izyaneLogo from '@/assets/izyane-black.svg';
 import { AccountMenu } from '@/components/account-menu';
 import { MegaMenu } from '@/components/mega-menu';
+import { NotificationDrawer } from '@/components/notification-drawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { signOutAction } from '@/app/account/actions';
@@ -100,31 +101,7 @@ export async function SiteHeader() {
               Cart
             </Link>
           </Button>
-          {user ? (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              asChild
-              className="relative hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-950 dark:hover:text-blue-300"
-            >
-              <Link
-                href="/notifications"
-                aria-label={
-                  unread ? `Notifications, ${unread} unread` : 'Notifications'
-                }
-              >
-                <Bell />
-                {unread ? (
-                  <span
-                    aria-hidden
-                    className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] leading-none font-semibold text-white"
-                  >
-                    {unread}
-                  </span>
-                ) : null}
-              </Link>
-            </Button>
-          ) : null}
+          {user ? <NotificationDrawer unread={unread} /> : null}
           {user ? (
             <AccountMenu email={user.email} signOut={signOutAction} />
           ) : (

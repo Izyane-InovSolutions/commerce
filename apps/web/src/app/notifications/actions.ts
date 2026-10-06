@@ -5,9 +5,45 @@ import { revalidatePath } from 'next/cache';
 import { toFormState, type FormState } from '@/lib/form';
 import {
   isNotificationsUnavailable,
+  listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
+  type Notification,
 } from '@/lib/notifications';
+
+export type RecentNotifications =
+  | { status: 'ok'; items: Notification[]; total: number; unread: number }
+  | { status: 'error'; message: string };
+
+/**
+ * The newest few, for the header's drawer. Read when the drawer opens rather
+ * than with every page render, so the header costs no extra request.
+ */
+export async function listRecentNotificationsAction(): Promise<RecentNotifications> {
+  try {
+    const [recent, unread] = await Promise.all([
+      listNotifications({ limit: 10 }),
+      listNotifications({ limit: 1, unreadOnly: true }),
+    ]);
+    return {
+      status: 'ok',
+      items: recent.items,
+      total: recent.total,
+      unread: unread.total,
+    };
+  } catch (error) {
+    if (isNotificationsUnavailable(error)) {
+      return {
+        status: 'error',
+        message: 'Notifications aren’t available yet.',
+      };
+    }
+    return {
+      status: 'error',
+      message: toFormState(error).message ?? 'Couldn’t load notifications.',
+    };
+  }
+}
 
 /** The list, and the header's unread badge on every page. */
 function revalidateNotifications(): void {
