@@ -9,6 +9,7 @@ import { PaymentsService } from '../payments/payments.service';
 import type { PaymentWithRedirect } from '../payments/payments.service';
 import { CheckoutQuote, CheckoutResult } from './checkout.types';
 import type { PaymentDetailsDto } from '../payments/dto/payment-details.dto';
+import { CheckoutAttemptsService } from './checkout-attempts.service';
 
 /** A payment that will never accept a charge; nothing was taken from the customer. */
 const TERMINAL_FAILURE_STATUSES: PaymentStatus[] = [
@@ -25,6 +26,7 @@ export class CheckoutService {
     private readonly paymentsService: PaymentsService,
     private readonly cartService: CartService,
     private readonly backgroundJobsService: BackgroundJobsService,
+    private readonly attempts: CheckoutAttemptsService,
   ) {}
 
   /**
@@ -45,15 +47,23 @@ export class CheckoutService {
     itemIds?: string[],
     idempotencyKey?: string,
   ): Promise<CheckoutResult> {
-    const replay = await this.replay(userId, idempotencyKey);
-    if (replay) return replay;
+    return this.attempts.run(userId, idempotencyKey, 'cart', {
+      shippingAddressId, currency, paymentDetails,
+      itemIds: itemIds ? [...new Set(itemIds)].sort() : undefined,
+    }, (attemptId) => this.checkoutCartAttempt(userId, shippingAddressId, currency, paymentDetails, itemIds, idempotencyKey, attemptId));
+  }
 
+  private async checkoutCartAttempt(
+    userId: string, shippingAddressId: string, currency: string,
+    paymentDetails?: PaymentDetailsDto, itemIds?: string[], idempotencyKey?: string, attemptId?: string,
+  ): Promise<CheckoutResult> {
     const order = await this.ordersService.createFromCart(
       userId,
       shippingAddressId,
       currency,
       itemIds,
       idempotencyKey,
+      attemptId,
     );
 
     let payment: PaymentWithRedirect;
@@ -79,7 +89,7 @@ export class CheckoutService {
       };
     }
 
-    await this.cleanUpCart(userId, itemIds);
+    await this.cleanUpCart(userId, order.id);
     return { order, payment };
   }
 
@@ -90,23 +100,20 @@ export class CheckoutService {
    * here is instead handed to a durable job that keeps retrying until the
    * cart matches the order it was checked out into.
    */
-  private async cleanUpCart(userId: string, itemIds?: string[]): Promise<void> {
+  private async cleanUpCart(userId: string, orderId: string): Promise<void> {
     try {
-      if (itemIds && itemIds.length > 0) {
-        await this.cartService.removeItems({ userId }, itemIds);
-      } else {
-        await this.cartService.clearCart({ userId });
-      }
+      await this.cartService.cleanUpCheckout(userId, orderId);
     } catch (error) {
-      this.logger.warn(
-        `Cart cleanup failed after checkout for user ${userId}; retrying via background job: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-      await this.backgroundJobsService.enqueue({
-        type: CART_CLEANUP_JOB_TYPE,
-        payload: { userId, itemIds: itemIds ?? [] },
-      });
+      this.logger.warn(`Cart cleanup requires retry for order ${orderId}`);
+      try {
+        await this.backgroundJobsService.enqueue({
+          type: CART_CLEANUP_JOB_TYPE, payload: { userId, orderId },
+        });
+      } catch {
+        // The order snapshot is durable even if the job enqueue fails. Replays
+        // retry cleanup; never turn an accepted charge into a checkout failure.
+        this.logger.error(`Cart cleanup enqueue failed for order ${orderId}`);
+      }
     }
   }
 
@@ -124,9 +131,15 @@ export class CheckoutService {
     paymentDetails?: PaymentDetailsDto,
     idempotencyKey?: string,
   ): Promise<CheckoutResult> {
-    const replay = await this.replay(userId, idempotencyKey);
-    if (replay) return replay;
+    return this.attempts.run(userId, idempotencyKey, 'buy-now', {
+      offerId, quantity, shippingAddressId, currency, paymentDetails,
+    }, (attemptId) => this.checkoutOfferAttempt(userId, offerId, quantity, shippingAddressId, currency, paymentDetails, idempotencyKey, attemptId));
+  }
 
+  private async checkoutOfferAttempt(
+    userId: string, offerId: string, quantity: number, shippingAddressId: string,
+    currency: string, paymentDetails?: PaymentDetailsDto, idempotencyKey?: string, attemptId?: string,
+  ): Promise<CheckoutResult> {
     const order = await this.ordersService.createFromOffer(
       userId,
       offerId,
@@ -134,6 +147,7 @@ export class CheckoutService {
       shippingAddressId,
       currency,
       idempotencyKey,
+      attemptId,
     );
 
     let payment: PaymentWithRedirect;
@@ -189,27 +203,4 @@ export class CheckoutService {
     );
   }
 
-  /**
-   * The result of a previous call that used this key, if one reached
-   * payment. An order that never got that far (the gateway call threw
-   * before a payment existed) frees its key instead, so this checkout
-   * proceeds as a fresh attempt rather than being replayed or blocked.
-   */
-  private async replay(
-    userId: string,
-    idempotencyKey?: string,
-  ): Promise<CheckoutResult | null> {
-    if (!idempotencyKey) return null;
-    const existing = await this.ordersService.findByIdempotencyKey(
-      userId,
-      idempotencyKey,
-    );
-    if (!existing) return null;
-    if (!existing.payment) {
-      await this.ordersService.releaseIdempotencyKey(existing.id);
-      return null;
-    }
-    const payment = await this.paymentsService.getForOrder(existing.id);
-    return { order: existing, payment };
-  }
 }

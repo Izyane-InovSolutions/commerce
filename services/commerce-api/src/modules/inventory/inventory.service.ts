@@ -623,7 +623,8 @@ export class InventoryService {
       throw new BadRequestException('quantity must be positive');
     }
 
-    const client = tx ?? this.prisma;
+    if (!tx) return this.prisma.$transaction((client) => this.reserve(variantId, quantity, options, client));
+    const client = tx;
     const candidates = await client.inventoryRecord.findMany({
       where: {
         variantId,
@@ -638,12 +639,16 @@ export class InventoryService {
       );
     }
 
+    candidates.sort((a, b) => a.id.localeCompare(b.id));
+    for (const candidate of candidates)
+      await tx.$queryRaw`SELECT id FROM inventory_records WHERE id = ${candidate.id}::uuid FOR UPDATE`;
     for (const candidate of candidates) {
-      await this.sweepExpired(candidate.id);
+      await this.sweepExpired(candidate.id, tx);
     }
 
     const refreshed = await client.inventoryRecord.findMany({
       where: { id: { in: candidates.map((candidate) => candidate.id) } },
+      orderBy: { id: 'asc' },
     });
     const target = refreshed.find(
       (record) => record.onHand - record.reserved >= quantity,
@@ -722,13 +727,15 @@ export class InventoryService {
   ): Promise<Reservation> {
     if (quantity <= 0)
       throw new BadRequestException('quantity must be positive');
-    const client = tx ?? this.prisma;
+    if (!tx) return this.prisma.$transaction((client) => this.reserveOffer(offerId, quantity, options, client));
+    const client = tx;
     const record = await client.inventoryRecord.findUnique({
       where: { offerId },
     });
     if (!record)
       throw new NotFoundException('No inventory record exists for this offer');
-    await this.sweepExpired(record.id);
+    await tx.$queryRaw`SELECT id FROM inventory_records WHERE id = ${record.id}::uuid FOR UPDATE`;
+    await this.sweepExpired(record.id, tx);
     const refreshed = await client.inventoryRecord.findUniqueOrThrow({
       where: { id: record.id },
     });
@@ -819,20 +826,11 @@ export class InventoryService {
     );
   }
 
-  async expireReservation(reservationId: string): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      const reservation = await this.lockReservation(reservationId, tx);
-      if (
-        reservation.status !== ReservationStatus.ACTIVE ||
-        reservation.expiresAt > new Date()
-      )
-        return;
-      await this.finalizeReservation(
-        reservation,
-        ReservationStatus.EXPIRED,
-        tx,
-      );
-    });
+  async expireReservation(reservationId: string, tx?: Prisma.TransactionClient): Promise<void> {
+    if (!tx) return this.prisma.$transaction((client) => this.expireReservation(reservationId, client));
+    const reservation = await this.lockReservation(reservationId, tx);
+    if (reservation.status !== ReservationStatus.ACTIVE || reservation.expiresAt > new Date()) return;
+    await this.finalizeReservation(reservation, ReservationStatus.EXPIRED, tx);
   }
 
   async commit(
@@ -906,8 +904,10 @@ export class InventoryService {
     );
   }
 
-  async sweepExpired(inventoryRecordId: string): Promise<void> {
-    const expired = await this.prisma.reservation.findMany({
+  async sweepExpired(inventoryRecordId: string, tx?: Prisma.TransactionClient): Promise<void> {
+    if (!tx) return this.prisma.$transaction((client) => this.sweepExpired(inventoryRecordId, client));
+    await tx.$queryRaw`SELECT id FROM inventory_records WHERE id = ${inventoryRecordId}::uuid FOR UPDATE`;
+    const expired = await tx.reservation.findMany({
       where: {
         inventoryRecordId,
         status: ReservationStatus.ACTIVE,
@@ -916,7 +916,7 @@ export class InventoryService {
       orderBy: { id: 'asc' },
     });
     for (const reservation of expired)
-      await this.expireReservation(reservation.id);
+      await this.expireReservation(reservation.id, tx);
   }
 
   private async finalizeReservation(
@@ -953,6 +953,10 @@ export class InventoryService {
     id: string,
     tx: Prisma.TransactionClient,
   ): Promise<Reservation> {
+    // Match reserve/sweep ordering: inventory row, then reservation row.
+    const initial = await tx.reservation.findUnique({ where: { id } });
+    if (!initial) throw new NotFoundException('Reservation not found');
+    await tx.$queryRaw`SELECT id FROM inventory_records WHERE id = ${initial.inventoryRecordId}::uuid FOR UPDATE`;
     await tx.$queryRaw`SELECT id FROM reservations WHERE id = ${id}::uuid FOR UPDATE`;
     const reservation = await tx.reservation.findUnique({ where: { id } });
     if (!reservation) throw new NotFoundException('Reservation not found');

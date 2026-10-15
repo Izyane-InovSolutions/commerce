@@ -193,9 +193,7 @@ model User {
   @@map("users")
 }
 
-// Only one address per user should have isDefault: true — enforced in
-// AddressesService (set new default -> unset the previous one in the same
-// transaction), not a DB constraint.
+// A partial unique index in the Stage 7 migration enforces one default per user.
 model Address {
   id            String   @id @default(uuid()) @db.Uuid
   userId        String   @map("user_id") @db.Uuid
@@ -791,6 +789,7 @@ model CartItem {
   offerId   String   @map("offer_id") @db.Uuid
   offer     Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
   quantity  Int
+  revision  Int      @default(0)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -896,6 +895,7 @@ enum PayoutBatchStatus {
 // src/common/addresses/address-snapshot.ts), not a live FK to Address, so the
 // order survives the customer later editing or deleting that address.
 model Order {
+  checkoutCartSnapshot Json? @map("checkout_cart_snapshot")
   id                String             @id @default(uuid()) @db.Uuid
   userId            String             @map("user_id") @db.Uuid
   user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -925,6 +925,25 @@ model Order {
   @@unique([userId, idempotencyKey])
   @@index([userId])
   @@map("orders")
+}
+
+// Durable request receipt. Never reclaim an in-progress attempt automatically:
+// a process may have died after submitting an external charge.
+model CheckoutAttempt {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  key         String   @db.VarChar(64)
+  operation   String   @db.VarChar(16)
+  fingerprint String   @db.VarChar(64)
+  status      String   @default("IN_PROGRESS") @db.VarChar(16)
+  orderId     String?  @unique @map("order_id") @db.Uuid
+  response    Json?
+  errorStatus Int?     @map("error_status")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, key])
+  @@map("checkout_attempts")
 }
 
 // One row per seller group within an Order - sellerId: null is the

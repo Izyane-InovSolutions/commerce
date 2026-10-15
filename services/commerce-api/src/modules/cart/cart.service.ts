@@ -10,6 +10,7 @@ import {
   SellerStatus,
   type Cart,
   type CartItem,
+  type Prisma,
 } from '@prisma/client';
 
 import {
@@ -74,11 +75,11 @@ export class CartService {
 
     const { cart, newGuestToken } = await this.getOrCreateCart(identity);
 
-    await this.prisma.cartItem.upsert({
+    await this.withActiveCart(cart.id, async (tx) => tx.cartItem.upsert({
       where: { cartId_offerId: { cartId: cart.id, offerId } },
       create: { cartId: cart.id, offerId, quantity },
-      update: { quantity: { increment: quantity } },
-    });
+      update: { quantity: { increment: quantity }, revision: { increment: 1 } },
+    }));
 
     return {
       view: await this.buildView(cart.id, currency),
@@ -99,11 +100,12 @@ export class CartService {
     }
 
     const cart = await this.findCartOrThrow(identity);
-    await this.findItemOrThrow(cart.id, itemId);
-
-    await this.prisma.cartItem.update({
-      where: { id: itemId },
-      data: { quantity },
+    await this.withActiveCart(cart.id, async (tx) => {
+      const changed = await tx.cartItem.updateMany({
+        where: { id: itemId, cartId: cart.id },
+        data: { quantity, revision: { increment: 1 } },
+      });
+      if (!changed.count) throw new NotFoundException('Cart item not found');
     });
 
     return this.buildView(cart.id, currency);
@@ -115,9 +117,10 @@ export class CartService {
     currency: string,
   ): Promise<CartView> {
     const cart = await this.findCartOrThrow(identity);
-    await this.findItemOrThrow(cart.id, itemId);
-
-    await this.prisma.cartItem.delete({ where: { id: itemId } });
+    await this.withActiveCart(cart.id, async (tx) => {
+      const removed = await tx.cartItem.deleteMany({ where: { id: itemId, cartId: cart.id } });
+      if (!removed.count) throw new NotFoundException('Cart item not found');
+    });
 
     return this.buildView(cart.id, currency);
   }
@@ -167,7 +170,7 @@ export class CartService {
       return;
     }
 
-    await this.prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
+    await this.withActiveCart(cart.id, (tx) => tx.cartItem.deleteMany({ where: { cartId: cart.id } }));
   }
 
   /**
@@ -183,9 +186,9 @@ export class CartService {
       return;
     }
 
-    await this.prisma.cartItem.deleteMany({
+    await this.withActiveCart(cart.id, (tx) => tx.cartItem.deleteMany({
       where: { cartId: cart.id, id: { in: itemIds } },
-    });
+    }));
   }
 
   async mergeGuestCart(
@@ -197,39 +200,59 @@ export class CartService {
       return this.getCartView({ userId }, currency);
     }
 
-    const guestCart = await this.prisma.cart.findUnique({
-      where: { guestToken },
-      include: { items: true },
-    });
-
-    if (!guestCart || guestCart.status !== CartStatus.ACTIVE) {
+    const guestCart = await this.prisma.cart.findUnique({ where: { guestToken } });
+    if (!guestCart || guestCart.status !== CartStatus.ACTIVE)
       return this.getCartView({ userId }, currency);
-    }
-
     const { cart: userCart } = await this.getOrCreateCart({ userId });
-
     await this.prisma.$transaction(async (tx) => {
-      for (const item of guestCart.items) {
+      for (const id of [guestCart.id, userCart.id].sort())
+        await tx.$queryRaw`SELECT id FROM carts WHERE id = ${id}::uuid FOR UPDATE`;
+      const current = await tx.cart.findUniqueOrThrow({
+        where: { id: guestCart.id }, include: { items: true },
+      });
+      if (current.status !== CartStatus.ACTIVE) return;
+      for (const item of current.items.sort((a, b) => a.offerId.localeCompare(b.offerId))) {
         await tx.cartItem.upsert({
-          where: {
-            cartId_offerId: { cartId: userCart.id, offerId: item.offerId },
-          },
-          create: {
-            cartId: userCart.id,
-            offerId: item.offerId,
-            quantity: item.quantity,
-          },
-          update: { quantity: { increment: item.quantity } },
+          where: { cartId_offerId: { cartId: userCart.id, offerId: item.offerId } },
+          create: { cartId: userCart.id, offerId: item.offerId, quantity: item.quantity },
+          update: { quantity: { increment: item.quantity }, revision: { increment: 1 } },
         });
       }
-
-      await tx.cart.update({
-        where: { id: guestCart.id },
-        data: { status: CartStatus.MERGED },
-      });
+      await tx.cart.update({ where: { id: guestCart.id }, data: { status: CartStatus.MERGED } });
     });
 
     return this.buildView(userCart.id, currency);
+  }
+
+  /** A changed or recreated line is preserved, including same-quantity edits. */
+  async cleanUpCheckout(userId: string, orderId: string): Promise<void> {
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, userId }, select: { checkoutCartSnapshot: true, payment: { select: { status: true, providerReference: true } } },
+    });
+    if (!order) throw new NotFoundException('Order not found');
+    if (!order.payment) throw new Error('Payment initialization is not yet recorded');
+    if (['FAILED', 'CANCELLED'].includes(order.payment.status)) return;
+    if (!order.payment.providerReference && order.payment.status !== 'SUCCEEDED')
+      throw new Error('Payment initialization requires reconciliation');
+    const snapshot = order.checkoutCartSnapshot;
+    if (!Array.isArray(snapshot)) return; // Old orders have no safe cleanup receipt.
+    for (const entry of snapshot) {
+      const item = entry as { id: string; quantity: number; revision: number };
+      await this.prisma.cartItem.deleteMany({ where: {
+        id: item.id, quantity: item.quantity, revision: item.revision,
+        cart: { userId },
+      } });
+    }
+  }
+
+  private withActiveCart<T>(id: string, execute: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM carts WHERE id = ${id}::uuid FOR UPDATE`;
+      const cart = await tx.cart.findUnique({ where: { id } });
+      if (!cart || cart.status !== CartStatus.ACTIVE)
+        throw new NotFoundException('Cart is no longer active');
+      return execute(tx);
+    });
   }
 
   private async getOrCreateCart(
@@ -242,8 +265,10 @@ export class CartService {
     }
 
     if (identity.userId) {
-      const cart = await this.prisma.cart.create({
-        data: { userId: identity.userId },
+      const cart = await this.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM users WHERE id = ${identity.userId}::uuid FOR UPDATE`;
+        return (await tx.cart.findUnique({ where: { userId: identity.userId } }))
+          ?? tx.cart.create({ data: { userId: identity.userId } });
       });
       return { cart };
     }

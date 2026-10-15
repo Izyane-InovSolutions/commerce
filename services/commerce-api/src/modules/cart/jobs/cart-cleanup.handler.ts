@@ -10,6 +10,7 @@ export type CartCleanupPayload = {
   userId: string;
   /** Absent or empty clears the whole cart; otherwise only these lines. */
   itemIds?: string[];
+  orderId?: string;
 };
 
 /**
@@ -24,13 +25,10 @@ export class CartCleanupHandler implements JobHandler {
   constructor(private readonly cartService: CartService) {}
 
   async handle(payload: Prisma.JsonValue): Promise<void> {
-    const { userId, itemIds } = this.parsePayload(payload);
-
-    if (itemIds && itemIds.length > 0) {
-      await this.cartService.removeItems({ userId }, itemIds);
-    } else {
-      await this.cartService.clearCart({ userId });
-    }
+    const { userId, orderId } = this.parsePayload(payload);
+    // Legacy jobs have no line version receipt. Preserve the cart rather than
+    // deleting items added after the old checkout.
+    if (orderId) await this.cartService.cleanUpCheckout(userId, orderId);
   }
 
   private parsePayload(payload: Prisma.JsonValue): CartCleanupPayload {
@@ -45,9 +43,10 @@ export class CartCleanupHandler implements JobHandler {
       );
     }
 
-    const { userId, itemIds } = payload as {
+    const { userId, itemIds, orderId } = payload as {
       userId: string;
       itemIds?: unknown;
+      orderId?: unknown;
     };
 
     if (
@@ -60,6 +59,7 @@ export class CartCleanupHandler implements JobHandler {
       );
     }
 
-    return { userId, itemIds };
+    if (orderId !== undefined && typeof orderId !== 'string') throw new Error('Malformed cleanup orderId');
+    return { userId, itemIds, orderId };
   }
 }

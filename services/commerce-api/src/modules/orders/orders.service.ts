@@ -157,7 +157,12 @@ export class OrdersService {
     currency: string,
     itemIds?: string[],
     idempotencyKey?: string,
+    attemptId?: string,
   ): Promise<OrderWithItems> {
+    const snapshot = await this.prisma.cartItem.findMany({
+      where: { cart: { userId }, ...(itemIds ? { id: { in: itemIds } } : {}) },
+      select: { id: true, quantity: true, revision: true },
+    });
     const cart = await this.cartService.getCartView({ userId }, currency);
     const lines = itemIds
       ? cart.items.filter((item) => itemIds.includes(item.id))
@@ -181,12 +186,16 @@ export class OrdersService {
       );
     }
 
+    if (lines.some((line) => !snapshot.some((item) => item.id === line.id && item.quantity === line.quantity)))
+      throw new ConflictException('Cart changed; retry checkout with a new key');
     return this.createOrderFromLines(
       userId,
       lines,
       shippingAddressId,
       currency,
       idempotencyKey,
+      attemptId,
+      snapshot,
     );
   }
 
@@ -201,6 +210,7 @@ export class OrdersService {
     shippingAddressId: string,
     currency: string,
     idempotencyKey?: string,
+    attemptId?: string,
   ): Promise<OrderWithItems> {
     const line = await this.cartService.previewOfferLine(
       offerId,
@@ -220,6 +230,7 @@ export class OrdersService {
       shippingAddressId,
       currency,
       idempotencyKey,
+      attemptId,
     );
   }
 
@@ -426,6 +437,8 @@ export class OrdersService {
     shippingAddressId: string,
     currency: string,
     idempotencyKey?: string,
+    attemptId?: string,
+      cartSnapshot?: Prisma.InputJsonValue,
   ): Promise<OrderWithItems> {
     const address = await this.addressesService.findOne(
       userId,
@@ -460,8 +473,17 @@ export class OrdersService {
             shippingAddress:
               shippingAddress as unknown as Prisma.InputJsonValue,
             idempotencyKey: idempotencyKey ?? null,
+            checkoutCartSnapshot: cartSnapshot,
           },
         });
+
+        const inventoryRecords = await tx.inventoryRecord.findMany({
+          where: { OR: offers.map((offer) => offer.stockSource === OfferStockSource.SELLER
+            ? { offerId: offer.id } : { variantId: offer.variantId, offerId: null }) },
+          select: { id: true }, orderBy: { id: 'asc' },
+        });
+        for (const record of inventoryRecords)
+          await tx.$queryRaw`SELECT id FROM inventory_records WHERE id = ${record.id}::uuid FOR UPDATE`;
 
         for (const group of quotedGroups) {
           if (group.sellerId)
@@ -552,6 +574,13 @@ export class OrdersService {
           }
         }
 
+        if (cartSnapshot) await this.backgroundJobsService.enqueue({
+          type: 'cart.cleanup_items', payload: { userId, orderId: order.id },
+          runAt: new Date(Date.now() + 60_000),
+        }, tx);
+        if (attemptId) await tx.checkoutAttempt.update({
+          where: { id: attemptId }, data: { orderId: order.id },
+        });
         return order.id;
       });
     } catch (error) {
