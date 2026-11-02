@@ -29,6 +29,11 @@ import { OutboxService } from '../../infrastructure/jobs/outbox.service';
 import { AddressesService } from '../users/addresses/addresses.service';
 import { CartLineView } from '../cart/cart.types';
 import { CartService } from '../cart/cart.service';
+import { CART_CLEANUP_JOB_TYPE } from '../cart/jobs/cart-cleanup.handler';
+import {
+  CHECKOUT_ATTEMPT_LEASE_MS,
+  CheckoutAttemptSupersededError,
+} from '../checkout/checkout-attempt.errors';
 import {
   CustomerFulfillmentSummary,
   deriveCustomerFulfillmentSummary,
@@ -48,6 +53,11 @@ import {
   type AdminOrderDetail,
   toAdminOrderDetail,
 } from './admin-order-detail';
+import {
+  UNPAID_ORDER_EXPIRY_DELAY_MS,
+  UNPAID_ORDER_EXPIRY_JOB_TYPE,
+  UNPAID_ORDER_EXPIRY_MAX_ATTEMPTS,
+} from './jobs/unpaid-order-expiry.job';
 
 export type ShippingGroupWithItems = ShippingGroup & { items: OrderItem[] };
 export type SellerOrderWithItems = SellerOrder & {
@@ -55,7 +65,33 @@ export type SellerOrderWithItems = SellerOrder & {
   shippingGroups: ShippingGroupWithItems[];
 };
 
-export type OrderWithItems = Order & {
+/**
+ * The cart lines a checkout consumed, kept on the order only so the cart
+ * cleanup that follows payment can delete exactly those line versions. It is
+ * persistence detail: no read that leaves this service may carry it, so every
+ * order read here passes this `omit`.
+ */
+export const ORDER_OMIT = { checkoutCartSnapshot: true } as const;
+
+/** An order row as callers see it — without `checkoutCartSnapshot`. */
+export type OrderRecord = Omit<Order, 'checkoutCartSnapshot'>;
+
+/**
+ * The checkout attempt a keyed checkout runs under. The order transaction
+ * links the order to it only while this owner still holds it, so a request
+ * whose lease was taken over can never attach a second order.
+ */
+export type CheckoutAttemptFence = { id: string; ownerToken: string };
+
+type CheckoutCartSnapshot = Awaited<
+  ReturnType<CartService['getCheckoutSnapshot']>
+>;
+
+/** How long a checkout waits before its durable cart cleanup first runs. */
+const CART_CLEANUP_DELAY_MS = 60_000;
+const CART_CLEANUP_MAX_ATTEMPTS = 20;
+
+export type OrderWithItems = OrderRecord & {
   items: OrderItem[];
   sellerOrders: SellerOrderWithItems[];
   /**
@@ -98,11 +134,20 @@ const CUSTOMER_PAYMENT_SELECT = {
 
 type SellerGroup = { sellerId: string | null; items: ShippingLine[] };
 
-function isUniqueConstraintViolation(error: unknown): boolean {
-  return (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === 'P2002'
-  );
+/**
+ * A unique violation on the order's (userId, idempotencyKey). When Prisma
+ * reports no target the violation is still attributed to the key — the only
+ * unique constraint a fresh order transaction can plausibly hit.
+ */
+function isIdempotencyKeyConflict(error: unknown): boolean {
+  if (
+    !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+    error.code !== 'P2002'
+  )
+    return false;
+  const target: unknown = error.meta?.target;
+  if (target === undefined || target === null) return true;
+  return JSON.stringify(target).toLowerCase().includes('idempotency');
 }
 type QuotedSellerGroup = SellerGroup & {
   shippingGroups: ShippingQuoteGroup[];
@@ -157,12 +202,8 @@ export class OrdersService {
     currency: string,
     itemIds?: string[],
     idempotencyKey?: string,
-    attemptId?: string,
+    attempt?: CheckoutAttemptFence,
   ): Promise<OrderWithItems> {
-    const snapshot = await this.prisma.cartItem.findMany({
-      where: { cart: { userId }, ...(itemIds ? { id: { in: itemIds } } : {}) },
-      select: { id: true, quantity: true, revision: true },
-    });
     const cart = await this.cartService.getCartView({ userId }, currency);
     const lines = itemIds
       ? cart.items.filter((item) => itemIds.includes(item.id))
@@ -186,15 +227,41 @@ export class OrdersService {
       );
     }
 
-    if (lines.some((line) => !snapshot.some((item) => item.id === line.id && item.quantity === line.quantity)))
-      throw new ConflictException('Cart changed; retry checkout with a new key');
+    // The receipt of exactly the selected line versions this order is
+    // priced from. The order transaction re-checks it under the cart lock,
+    // and the post-payment cleanup deletes only lines still matching it, so
+    // an edit made meanwhile is never charged stale nor silently deleted.
+    const snapshot = await this.cartService.getCheckoutSnapshot(
+      userId,
+      lines.map((line) => line.id),
+    );
+    const snapshotById = new Map(snapshot.map((row) => [row.id, row]));
+    if (
+      snapshot.length !== lines.length ||
+      lines.some((line) => {
+        const row = snapshotById.get(line.id);
+        return (
+          !row || row.offerId !== line.offerId || row.quantity !== line.quantity
+        );
+      })
+    )
+      throw new ConflictException(
+        'Cart changed; review your cart and check out again',
+      );
+
+    // The snapshot comes in the canonical allocation order — cart line
+    // (createdAt, id) — the same order the cart's own stock check allocates
+    // in, so checkout reserves lines in it too.
+    const lineById = new Map(lines.map((line) => [line.id, line]));
+    const orderedLines = snapshot.map((row) => lineById.get(row.id)!);
+
     return this.createOrderFromLines(
       userId,
-      lines,
+      orderedLines,
       shippingAddressId,
       currency,
       idempotencyKey,
-      attemptId,
+      attempt,
       snapshot,
     );
   }
@@ -210,7 +277,7 @@ export class OrdersService {
     shippingAddressId: string,
     currency: string,
     idempotencyKey?: string,
-    attemptId?: string,
+    attempt?: CheckoutAttemptFence,
   ): Promise<OrderWithItems> {
     const line = await this.cartService.previewOfferLine(
       offerId,
@@ -230,8 +297,13 @@ export class OrdersService {
       shippingAddressId,
       currency,
       idempotencyKey,
-      attemptId,
+      attempt,
     );
+  }
+
+  /** The order a resumed checkout attempt continues with. */
+  findForCheckout(orderId: string): Promise<OrderWithItems> {
+    return this.findByIdOrThrow(orderId);
   }
 
   /**
@@ -395,50 +467,17 @@ export class OrdersService {
   }
 
   /**
-   * The order a previous checkout call already created for this key, if any.
-   *
-   * Scoped to one user so two shoppers minting the same UUID never collide,
-   * matching the `(userId, idempotencyKey)` unique constraint on `Order`.
+   * `lines` must come in the canonical allocation order (cart line
+   * createdAt, then id): reservations are taken in exactly that order.
    */
-  findByIdempotencyKey(
-    userId: string,
-    idempotencyKey: string,
-  ): Promise<OrderWithItems | null> {
-    return this.prisma.order.findUnique({
-      where: { userId_idempotencyKey: { userId, idempotencyKey } },
-      include: {
-        items: true,
-        sellerOrders: {
-          include: {
-            items: true,
-            shippingGroups: { include: { items: true } },
-          },
-        },
-        payment: CUSTOMER_PAYMENT_SELECT,
-      },
-    });
-  }
-
-  /**
-   * Frees an idempotency key from an order that never reached payment, so a
-   * fresh retry with the same key can create a new order instead of being
-   * blocked by the unique constraint on a dead one.
-   */
-  async releaseIdempotencyKey(orderId: string): Promise<void> {
-    await this.prisma.order.update({
-      where: { id: orderId },
-      data: { idempotencyKey: null },
-    });
-  }
-
   private async createOrderFromLines(
     userId: string,
     lines: CartLineView[],
     shippingAddressId: string,
     currency: string,
     idempotencyKey?: string,
-    attemptId?: string,
-      cartSnapshot?: Prisma.InputJsonValue,
+    attempt?: CheckoutAttemptFence,
+    cartSnapshot?: CheckoutCartSnapshot,
   ): Promise<OrderWithItems> {
     const address = await this.addressesService.findOne(
       userId,
@@ -473,18 +512,65 @@ export class OrdersService {
             shippingAddress:
               shippingAddress as unknown as Prisma.InputJsonValue,
             idempotencyKey: idempotencyKey ?? null,
-            checkoutCartSnapshot: cartSnapshot,
+            ...(cartSnapshot
+              ? {
+                  checkoutCartSnapshot: cartSnapshot.map(
+                    ({ id, offerId, quantity, revision }) => ({
+                      id,
+                      offerId,
+                      quantity,
+                      revision,
+                    }),
+                  ),
+                }
+              : {}),
           },
+          select: { id: true },
         });
 
-        const inventoryRecords = await tx.inventoryRecord.findMany({
-          where: { OR: offers.map((offer) => offer.stockSource === OfferStockSource.SELLER
-            ? { offerId: offer.id } : { variantId: offer.variantId, offerId: null }) },
-          select: { id: true }, orderBy: { id: 'asc' },
-        });
-        for (const record of inventoryRecords)
-          await tx.$queryRaw`SELECT id FROM inventory_records WHERE id = ${record.id}::uuid FOR UPDATE`;
+        // Locks follow the global order: checkout attempt, cart, offers (KEY
+        // SHARE), every inventory record (ascending id), then reservations.
+        if (attempt) {
+          // Fenced on the owner token and on no order being linked yet: a
+          // request whose lease expired and was claimed by a retry must not
+          // attach a second order to the same attempt.
+          const linked = await tx.checkoutAttempt.updateMany({
+            where: {
+              id: attempt.id,
+              ownerToken: attempt.ownerToken,
+              status: 'IN_PROGRESS',
+              orderId: null,
+            },
+            data: {
+              orderId: order.id,
+              stage: 'ORDER_CREATED',
+              leaseExpiresAt: new Date(Date.now() + CHECKOUT_ATTEMPT_LEASE_MS),
+            },
+          });
+          if (linked.count !== 1) throw new CheckoutAttemptSupersededError();
+        }
 
+        if (cartSnapshot)
+          await this.cartService.lockAndVerifyCheckoutSnapshot(
+            tx,
+            userId,
+            cartSnapshot,
+          );
+
+        // Each order item insert below takes FOR KEY SHARE on its offer
+        // through the foreign key. Taking those locks now, before any
+        // inventory record, keeps offers ahead of inventory records — the
+        // order a product hard delete locks them in.
+        await this.inventoryService.lockOffersForKeyShare(
+          offers.map((offer) => offer.id),
+          tx,
+        );
+        const lockedRecordIds = await this.inventoryService.lockStockPools(
+          offers,
+          tx,
+        );
+
+        const createdItems: OrderItem[] = [];
         for (const group of quotedGroups) {
           if (group.sellerId)
             await this.ledgerService.ensureCurrency(
@@ -541,46 +627,76 @@ export class OrdersService {
               },
               include: { items: true },
             });
-
-            // Reserving here, inside the same transaction that creates the
-            // order, means a failed reservation rolls the whole order back
-            // instead of leaving it to a separate compensation step that a
-            // crash between the two could skip.
-            for (const item of createdShippingGroup.items) {
-              const offer = offerById.get(item.offerId);
-
-              if (!offer)
-                throw new ConflictException('Offer is no longer available');
-
-              const reservation =
-                offer.stockSource === OfferStockSource.SELLER
-                  ? await this.inventoryService.reserveOffer(
-                      offer.id,
-                      item.quantity,
-                      { holderType: 'order_item', holderId: item.id },
-                      tx,
-                    )
-                  : await this.inventoryService.reserve(
-                      offer.variantId,
-                      item.quantity,
-                      { holderType: 'order_item', holderId: item.id },
-                      tx,
-                    );
-              await tx.orderItem.update({
-                where: { id: item.id },
-                data: { reservationId: reservation.id },
-              });
-            }
+            createdItems.push(...createdShippingGroup.items);
           }
         }
 
-        if (cartSnapshot) await this.backgroundJobsService.enqueue({
-          type: 'cart.cleanup_items', payload: { userId, orderId: order.id },
-          runAt: new Date(Date.now() + 60_000),
-        }, tx);
-        if (attemptId) await tx.checkoutAttempt.update({
-          where: { id: attemptId }, data: { orderId: order.id },
-        });
+        // Reserving here, inside the same transaction that creates the
+        // order, means a failed reservation rolls the whole order back
+        // instead of leaving it to a separate compensation step that a crash
+        // between the two could skip.
+        //
+        // Every item is reserved in `lines` order (one line per offer), not
+        // seller/shipping-group order: first-fit allocation across a shared
+        // pool depends on the order demands arrive in, and this is the order
+        // the cart's stock check assumed.
+        const rankByOfferId = new Map(
+          lines.map((line, index) => [line.offerId, index]),
+        );
+        createdItems.sort(
+          (left, right) =>
+            (rankByOfferId.get(left.offerId) ?? 0) -
+            (rankByOfferId.get(right.offerId) ?? 0),
+        );
+        for (const item of createdItems) {
+          const offer = offerById.get(item.offerId);
+
+          if (!offer)
+            throw new ConflictException('Offer is no longer available');
+
+          const reserveOptions = {
+            holderType: 'order_item',
+            holderId: item.id,
+            lockedRecordIds,
+          };
+          const reservation =
+            offer.stockSource === OfferStockSource.SELLER
+              ? await this.inventoryService.reserveOffer(
+                  offer.id,
+                  item.quantity,
+                  reserveOptions,
+                  tx,
+                )
+              : await this.inventoryService.reserve(
+                  offer.variantId,
+                  item.quantity,
+                  reserveOptions,
+                  tx,
+                );
+          await tx.orderItem.update({
+            where: { id: item.id },
+            data: { reservationId: reservation.id },
+          });
+        }
+
+        // Durable from the moment the order exists, so a request that dies
+        // after payment still gets its checked-out lines cleared. The
+        // handler waits on (and preserves the cart for) the payment outcome,
+        // so enqueueing before payment starts is safe.
+        if (cartSnapshot) await this.enqueueCartCleanup(userId, order.id, tx);
+        // Equally durable: if no payment is ever started for this order (a
+        // keyed checkout kept it for a same-key retry that never came, or a
+        // compensating cancel failed), the reaper cancels it once its
+        // reservations have lapsed. A no-op for an order that got a payment.
+        await this.backgroundJobsService.enqueue(
+          {
+            type: UNPAID_ORDER_EXPIRY_JOB_TYPE,
+            payload: { orderId: order.id },
+            runAt: new Date(Date.now() + UNPAID_ORDER_EXPIRY_DELAY_MS),
+            maxAttempts: UNPAID_ORDER_EXPIRY_MAX_ATTEMPTS,
+          },
+          tx,
+        );
         return order.id;
       });
     } catch (error) {
@@ -588,10 +704,15 @@ export class OrdersService {
       // pre-check; the loser hits this constraint instead of silently
       // creating a second order. The transaction already rolled back, so
       // there is nothing left to compensate.
-      if (idempotencyKey && isUniqueConstraintViolation(error))
+      if (idempotencyKey && isIdempotencyKeyConflict(error)) {
+        // Under an attempt fence the winner is the request that now owns the
+        // attempt (it took over after this one's lease lapsed), so this one
+        // was superseded and must record nothing about the attempt.
+        if (attempt) throw new CheckoutAttemptSupersededError();
         throw new ConflictException(
           'A checkout with this idempotency key is already in progress',
         );
+      }
       throw error;
     }
 
@@ -605,10 +726,26 @@ export class OrdersService {
     await tx.$queryRaw`SELECT id FROM orders WHERE id = ${orderId}::uuid FOR UPDATE`;
   }
 
+  private async enqueueCartCleanup(
+    userId: string,
+    orderId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await this.backgroundJobsService.enqueue(
+      {
+        type: CART_CLEANUP_JOB_TYPE,
+        payload: { userId, orderId },
+        runAt: new Date(Date.now() + CART_CLEANUP_DELAY_MS),
+        maxAttempts: CART_CLEANUP_MAX_ATTEMPTS,
+      },
+      tx,
+    );
+  }
+
   async confirmPayment(
     orderId: string,
     tx?: Prisma.TransactionClient,
-  ): Promise<Order> {
+  ): Promise<OrderRecord> {
     if (!tx)
       return this.prisma.$transaction((client) =>
         this.confirmPayment(orderId, client),
@@ -625,12 +762,7 @@ export class OrdersService {
       return order;
     if (order.status !== OrderStatus.PENDING_PAYMENT)
       throw new ConflictException('Only a pending order can be paid');
-    for (const item of [...order.items].sort((a, b) =>
-      a.id.localeCompare(b.id),
-    )) {
-      if (item.reservationId)
-        await this.inventoryService.commit(item.reservationId, tx);
-    }
+    await this.inventoryService.commitMany(this.reservationIds(order), tx);
     await tx.sellerOrder.updateMany({
       where: { orderId },
       data: { status: OrderStatus.PAID },
@@ -642,6 +774,7 @@ export class OrdersService {
     const paid = await tx.order.update({
       where: { id: orderId },
       data: { status: OrderStatus.PAID },
+      omit: ORDER_OMIT,
     });
 
     // Provisioning is enqueued as its own job rather than driven by the
@@ -662,6 +795,16 @@ export class OrdersService {
       },
       tx,
     );
+
+    // A payment that settles after checkout returned (webhook, reconcile)
+    // still owes the cart its cleanup. The job is idempotent, so one beside
+    // the order transaction's own is harmless.
+    const { checkoutCartSnapshot } = await tx.order.findUniqueOrThrow({
+      where: { id: orderId },
+      select: { checkoutCartSnapshot: true },
+    });
+    if (checkoutCartSnapshot !== null)
+      await this.enqueueCartCleanup(order.userId, orderId, tx);
 
     return paid;
   }
@@ -735,7 +878,10 @@ export class OrdersService {
     return updated;
   }
 
-  async cancel(orderId: string, tx?: Prisma.TransactionClient): Promise<Order> {
+  async cancel(
+    orderId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<OrderRecord> {
     if (!tx)
       return this.prisma.$transaction((client) => this.cancel(orderId, client));
     await this.lockForPayment(orderId, tx);
@@ -745,11 +891,7 @@ export class OrdersService {
       throw new ConflictException(
         'A paid order must be refunded, not cancelled',
       );
-    for (const item of [...order.items].sort((a, b) =>
-      a.id.localeCompare(b.id),
-    ))
-      if (item.reservationId)
-        await this.inventoryService.release(item.reservationId, tx);
+    await this.inventoryService.releaseMany(this.reservationIds(order), tx);
     await tx.sellerOrder.updateMany({
       where: { orderId },
       data: { status: OrderStatus.CANCELLED },
@@ -757,12 +899,20 @@ export class OrdersService {
     return tx.order.update({
       where: { id: orderId },
       data: { status: OrderStatus.CANCELLED },
+      omit: ORDER_OMIT,
     });
+  }
+
+  private reservationIds(order: OrderWithItems): string[] {
+    return order.items.flatMap((item) =>
+      item.reservationId ? [item.reservationId] : [],
+    );
   }
 
   async listOwn(userId: string): Promise<OrderWithItems[]> {
     const orders = await this.prisma.order.findMany({
       where: { userId },
+      omit: ORDER_OMIT,
       include: {
         items: true,
         sellerOrders: {
@@ -801,6 +951,7 @@ export class OrdersService {
   async findAny(orderId: string): Promise<AdminOrderDetail> {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
+      omit: ORDER_OMIT,
       include: {
         items: { include: { offer: ADMIN_ORDER_ITEM_OFFER_SELECT } },
         sellerOrders: {
@@ -831,6 +982,7 @@ export class OrdersService {
     const [items, total] = await this.prisma.$transaction([
       this.prisma.order.findMany({
         where,
+        omit: ORDER_OMIT,
         include: {
           items: true,
           sellerOrders: {
@@ -947,6 +1099,7 @@ export class OrdersService {
   ): Promise<OrderWithItems> {
     const order = await tx.order.findUnique({
       where: { id: orderId },
+      omit: ORDER_OMIT,
       include: {
         items: true,
         sellerOrders: {

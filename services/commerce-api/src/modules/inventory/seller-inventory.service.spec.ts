@@ -14,6 +14,8 @@ describe('SellerInventoryService', () => {
   const inventory = {
     setOfferQuantity: jest.fn(),
     listMovements: jest.fn(),
+    lockOffersForKeyShare: jest.fn(),
+    lockRecordsForWrite: jest.fn(),
   };
   const sellers = { mine: jest.fn(), lockApproved: jest.fn() };
   const offers = {
@@ -35,6 +37,7 @@ describe('SellerInventoryService', () => {
     );
     sellers.mine.mockResolvedValue({ id: 'seller-1' });
     sellers.lockApproved.mockResolvedValue({ id: 'seller-1' });
+    inventory.lockRecordsForWrite.mockResolvedValue([]);
   });
 
   it('lists every seller-stock offer and supplies zeroes before first update', async () => {

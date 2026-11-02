@@ -12,6 +12,7 @@ import {
   Query,
   Res,
 } from '@nestjs/common';
+import { ApiResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 
 import type { AuthenticatedUser } from '../../common/auth/authenticated-user';
@@ -47,6 +48,11 @@ export class CartController {
 
   @OptionalAuth()
   @Post('items')
+  @ApiResponse({
+    status: HttpStatus.CONFLICT,
+    description:
+      'The resulting quantity exceeds available stock (details name the offerId and the available quantity), is too large, or the cart stopped being active',
+  })
   async addItem(
     @OptionalCurrentUser() user: AuthenticatedUser | undefined,
     @GuestToken() guestToken: string | undefined,
@@ -70,6 +76,11 @@ export class CartController {
 
   @OptionalAuth()
   @Patch('items/:itemId')
+  @ApiResponse({
+    status: HttpStatus.CONFLICT,
+    description:
+      'An increased quantity exceeds available stock (details name the offerId and the available quantity), is too large, or the cart stopped being active. Decreases are never stock-checked',
+  })
   updateItem(
     @OptionalCurrentUser() user: AuthenticatedUser | undefined,
     @GuestToken() guestToken: string | undefined,
@@ -87,6 +98,10 @@ export class CartController {
 
   @OptionalAuth()
   @Delete('items/:itemId')
+  @ApiResponse({
+    status: HttpStatus.CONFLICT,
+    description: 'The cart stopped being active',
+  })
   removeItem(
     @OptionalCurrentUser() user: AuthenticatedUser | undefined,
     @GuestToken() guestToken: string | undefined,
@@ -103,6 +118,11 @@ export class CartController {
   // Not @OptionalAuth() — merging requires a real, authenticated user.
   @Post('merge')
   @HttpCode(HttpStatus.OK)
+  @ApiResponse({
+    status: HttpStatus.CONFLICT,
+    description:
+      'A merged line would exceed available stock or be too large. The merge is all or nothing: neither cart changes and the guest cart stays mergeable',
+  })
   merge(
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: CurrencyQueryDto,

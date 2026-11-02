@@ -1,5 +1,207 @@
 import { randomUUID } from 'node:crypto';
-import { ProductStatus, Role } from '@prisma/client';
+import { Prisma, ProductStatus, Role } from '@prisma/client';
+
+type Row = Record<string, unknown>;
+/** Resolves a relation of a row, for nested `where` filters and `select`s. */
+type Relations = Record<string, (row: Row) => unknown>;
+type OrderBy =
+  | Record<string, 'asc' | 'desc'>
+  | Record<string, 'asc' | 'desc'>[];
+
+const FILTER_OPERATORS = new Set([
+  'equals',
+  'in',
+  'notIn',
+  'not',
+  'lt',
+  'lte',
+  'gt',
+  'gte',
+]);
+
+function comparable(value: unknown): unknown {
+  return value instanceof Date ? value.getTime() : value;
+}
+
+function matchesValue(value: unknown, condition: unknown): boolean {
+  if (condition === null) return value === null || value === undefined;
+  if (condition instanceof Date)
+    return value instanceof Date && value.getTime() === condition.getTime();
+  if (typeof condition !== 'object' || Array.isArray(condition))
+    return value === condition;
+
+  const operators = condition as Row;
+  if (!Object.keys(operators).some((key) => FILTER_OPERATORS.has(key)))
+    return JSON.stringify(value) === JSON.stringify(condition);
+  return Object.entries(operators).every(([operator, operand]) => {
+    if (operand === undefined) return true;
+    const left = comparable(value) as number;
+    const right = comparable(operand) as number;
+    switch (operator) {
+      case 'equals':
+        return matchesValue(value, operand);
+      case 'in':
+        return (operand as unknown[]).some((item) => matchesValue(value, item));
+      case 'notIn':
+        return !(operand as unknown[]).some((item) =>
+          matchesValue(value, item),
+        );
+      case 'not':
+        return !matchesValue(value, operand);
+      case 'lt':
+        return value != null && left < right;
+      case 'lte':
+        return value != null && left <= right;
+      case 'gt':
+        return value != null && left > right;
+      case 'gte':
+        return value != null && left >= right;
+      default:
+        return true;
+    }
+  });
+}
+
+/**
+ * The subset of Prisma's `where` the services under e2e use: equality,
+ * null, the scalar operators above, AND/OR/NOT, and to-one relation filters
+ * resolved through `relations`. Undefined conditions are ignored, as Prisma
+ * ignores them.
+ */
+function matchesWhere(
+  row: Row,
+  where: Row | undefined,
+  relations: Relations = {},
+): boolean {
+  if (!where) return true;
+  return Object.entries(where).every(([key, condition]) => {
+    if (condition === undefined) return true;
+    const clauses = (): Row[] =>
+      (Array.isArray(condition) ? condition : [condition]) as Row[];
+    if (key === 'AND')
+      return clauses().every((clause) => matchesWhere(row, clause, relations));
+    if (key === 'OR')
+      return clauses().some((clause) => matchesWhere(row, clause, relations));
+    if (key === 'NOT')
+      return !clauses().some((clause) => matchesWhere(row, clause, relations));
+    const relation = relations[key];
+    if (relation) {
+      const related = relation(row) as Row | null | undefined;
+      return !!related && matchesWhere(related, condition as Row);
+    }
+    return matchesValue(row[key], condition);
+  });
+}
+
+function sortRows<T extends Row>(rows: T[], orderBy?: OrderBy): T[] {
+  if (!orderBy) return rows;
+  const keys = (Array.isArray(orderBy) ? orderBy : [orderBy]).flatMap((entry) =>
+    Object.entries(entry),
+  );
+  return [...rows].sort((left, right) => {
+    for (const [key, direction] of keys) {
+      const a = comparable(left[key]) as string | number | null | undefined;
+      const b = comparable(right[key]) as string | number | null | undefined;
+      if (a === b) continue;
+      // Postgres sorts NULLs last ascending, first descending.
+      const order = a == null ? 1 : b == null ? -1 : a < b ? -1 : 1;
+      return direction === 'desc' ? -order : order;
+    }
+    return 0;
+  });
+}
+
+/** A Prisma `select`: scalars by name, relations through `relations`. */
+function project(row: Row, select: Row, relations: Relations = {}): Row {
+  const projected: Row = {};
+  for (const [key, spec] of Object.entries(select)) {
+    if (!spec) continue;
+    const relation = relations[key];
+    const value = relation && !(key in row) ? relation(row) : row[key];
+    const nested =
+      typeof spec === 'object' ? ((spec as Row).select as Row) : undefined;
+    if (!nested || value == null) projected[key] = value ?? null;
+    else
+      projected[key] = Array.isArray(value)
+        ? (value as Row[]).map((item) => project(item, nested))
+        : project(value as Row, nested);
+  }
+  return projected;
+}
+
+function omitKeys(row: Row, omit?: Row): Row {
+  if (!omit) return row;
+  const copy = { ...row };
+  for (const [key, omitted] of Object.entries(omit))
+    if (omitted) delete copy[key];
+  return copy;
+}
+
+/**
+ * Applies a Prisma update `data`: undefined values are skipped (Prisma
+ * ignores them) and `{ increment }`/`{ decrement }`/`{ set }` are honoured.
+ */
+function applyData(row: Row, data: Row): Row {
+  for (const [key, value] of Object.entries(data)) {
+    if (value === undefined) continue;
+    if (value && typeof value === 'object' && !(value instanceof Date)) {
+      const op = value as {
+        increment?: number;
+        decrement?: number;
+        set?: unknown;
+      };
+      if (op.increment !== undefined) {
+        row[key] = (row[key] as number) + op.increment;
+        continue;
+      }
+      if (op.decrement !== undefined) {
+        row[key] = (row[key] as number) - op.decrement;
+        continue;
+      }
+      if ('set' in op) {
+        row[key] = op.set;
+        continue;
+      }
+    }
+    row[key] = value;
+  }
+  return row;
+}
+
+function definedOnly(data: Row): Row {
+  return Object.fromEntries(
+    Object.entries(data).filter(([, value]) => value !== undefined),
+  );
+}
+
+/** What Prisma throws for a unique violation, so `instanceof` checks hold. */
+function uniqueViolation(
+  target: string[],
+): Prisma.PrismaClientKnownRequestError {
+  return new Prisma.PrismaClientKnownRequestError(
+    `Unique constraint failed on the fields: (${target.join(',')})`,
+    { code: 'P2002', clientVersion: 'fake', meta: { target } },
+  );
+}
+
+/**
+ * Deep copy of plain data (objects, arrays, Dates) for transaction
+ * snapshots; anything else (class instances, buffers) is kept by reference.
+ */
+function cloneData<T>(value: T): T {
+  if (value instanceof Date) return new Date(value.getTime()) as T;
+  if (Array.isArray(value))
+    return (value as unknown[]).map((item) => cloneData(item)) as T;
+  if (
+    value &&
+    typeof value === 'object' &&
+    Object.getPrototypeOf(value) === Object.prototype
+  )
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, cloneData(item)]),
+    ) as T;
+  return value;
+}
 
 type FakeUser = {
   id: string;
@@ -108,19 +310,99 @@ export class FakePrismaService {
 
   // Supports both Prisma $transaction forms: an array of already-started
   // operations, and a callback that receives a transaction client (here,
-  // just `this` again — the fake has no real transactional isolation).
-  $transaction<T>(
+  // just `this` again — the fake has no isolation). A callback that throws
+  // rolls the fake's data back to where it started, as a real transaction
+  // would: services now write first and validate after (e.g. a cart add over
+  // stock), relying on that rollback. Concurrent callbacks are not isolated
+  // from each other, so specs should not overlap a failing transaction with
+  // other writes.
+  async $transaction<T>(
     arg: unknown[] | ((tx: this) => Promise<T>),
+    options?: unknown,
   ): Promise<unknown> {
-    if (typeof arg === 'function') {
-      return arg(this);
-    }
+    void options;
+    if (typeof arg !== 'function') return Promise.all(arg);
 
-    return Promise.all(arg);
+    const restore = this.snapshotState();
+    try {
+      return await arg(this);
+    } catch (error) {
+      restore();
+      throw error;
+    }
   }
 
-  $queryRaw(): Promise<unknown[]> {
+  private snapshotState(): () => void {
+    const restorers: (() => void)[] = [];
+    for (const value of Object.values(this) as unknown[]) {
+      if (value instanceof Map) {
+        const entries = [...(value as Map<unknown, unknown>).entries()].map(
+          ([key, item]) => [key, cloneData(item)] as const,
+        );
+        restorers.push(() => {
+          value.clear();
+          for (const [key, item] of entries) value.set(key, item);
+        });
+      } else if (Array.isArray(value)) {
+        const items = cloneData(value as unknown[]);
+        restorers.push(() => {
+          value.length = 0;
+          value.push(...items);
+        });
+      }
+    }
+    return () => restorers.forEach((restorer) => restorer());
+  }
+
+  // Row locks (`... FOR UPDATE` / `FOR KEY SHARE`) are no-ops here: the fake
+  // runs one request's statements at a time. Only the legacy idempotency
+  // receipt lookups (CheckoutAttemptsService) need an answer.
+  $queryRaw(
+    strings?: TemplateStringsArray,
+    ...values: unknown[]
+  ): Promise<unknown[]> {
+    const sql = Array.isArray(strings) ? strings.join('?') : '';
+
+    if (sql.includes('FROM checkout_attempts') && sql.includes('lower(key)')) {
+      const [userId, key] = values as string[];
+      return Promise.resolve(
+        [...this.checkoutAttempts.values()]
+          .filter(
+            (row) =>
+              row.userId === userId &&
+              (row.key as string).toLowerCase() === key &&
+              row.key !== key,
+          )
+          .slice(0, 1)
+          .map((row) => ({ order_id: row.orderId ?? null })),
+      );
+    }
+
+    if (sql.includes('FROM orders') && sql.includes('lower(idempotency_key)')) {
+      const [userId, key] = values as string[];
+      return Promise.resolve(
+        [...this.orders.values()]
+          .filter(
+            (row) =>
+              row.userId === userId &&
+              typeof row.idempotencyKey === 'string' &&
+              row.idempotencyKey.toLowerCase() === key,
+          )
+          .slice(0, 1)
+          .map((row) => ({ id: row.id })),
+      );
+    }
+
     return Promise.resolve([]);
+  }
+
+  // Strictly increasing timestamps for rows whose (createdAt, id) order
+  // matters (cart lines are allocated in it); Postgres keeps microseconds,
+  // so two rows inserted in the same millisecond still sort by insertion.
+  private lastTick = 0;
+  private tick(): Date {
+    this.lastTick = Math.max(Date.now(), this.lastTick + 1);
+    return new Date(this.lastTick);
   }
 
   // Recognizes the small, fixed set of raw guarded-update queries
@@ -1335,36 +1617,22 @@ export class FakePrismaService {
     },
     findMany: ({
       where,
+      select,
+      orderBy,
     }: {
-      where?: {
-        id?: { in: string[] };
-        warehouseId?: string;
-        offerId?: string | null | { in: string[] };
-        variantId?: string | { in: string[] };
-      };
+      where?: Row;
+      select?: Row;
+      orderBy?: OrderBy;
     } = {}): Promise<Record<string, unknown>[]> => {
-      let rows = [...this.inventoryRecords.values()];
-      if (where?.id?.in)
-        rows = rows.filter((row) => where.id!.in.includes(row.id as string));
-      if (where?.warehouseId)
-        rows = rows.filter((row) => row.warehouseId === where.warehouseId);
-      if (typeof where?.offerId === 'string')
-        rows = rows.filter((row) => row.offerId === where.offerId);
-      if (where?.offerId === null) rows = rows.filter((row) => !row.offerId);
-      const offerIds = where?.offerId;
-      if (offerIds && typeof offerIds === 'object')
-        rows = rows.filter((row) =>
-          offerIds.in.includes(row.offerId as string),
-        );
-      if (where?.variantId) {
-        const variants = where.variantId;
-        rows = rows.filter((row) =>
-          typeof variants === 'string'
-            ? row.variantId === variants
-            : variants.in.includes(row.variantId as string),
-        );
-      }
-      return Promise.resolve(rows);
+      const rows = sortRows(
+        [...this.inventoryRecords.values()].filter((row) =>
+          matchesWhere(row, where),
+        ),
+        orderBy,
+      );
+      return Promise.resolve(
+        rows.map((row) => (select ? project(row, select) : { ...row })),
+      );
     },
     create: ({
       data,
@@ -1480,23 +1748,48 @@ export class FakePrismaService {
       Promise.resolve(this.reservations.get(where.id) ?? null),
     findMany: ({
       where,
+      select,
+      orderBy,
     }: {
-      where: {
-        inventoryRecordId: string;
-        status?: string;
-        expiresAt?: { lt: Date };
-      };
-    }): Promise<Record<string, unknown>[]> => {
-      let rows = [...this.reservations.values()].filter(
-        (row) => row.inventoryRecordId === where.inventoryRecordId,
+      where?: Row;
+      select?: Row;
+      orderBy?: OrderBy;
+    } = {}): Promise<Record<string, unknown>[]> => {
+      const rows = sortRows(
+        [...this.reservations.values()].filter((row) =>
+          matchesWhere(row, where),
+        ),
+        orderBy,
       );
-      if (where.status)
-        rows = rows.filter((row) => row.status === where.status);
-      if (where.expiresAt?.lt)
-        rows = rows.filter(
-          (row) => (row.expiresAt as Date) < where.expiresAt!.lt,
-        );
-      return Promise.resolve(rows);
+      return Promise.resolve(
+        rows.map((row) => (select ? project(row, select) : { ...row })),
+      );
+    },
+    groupBy: ({
+      by,
+      where,
+      _sum,
+    }: {
+      by: string[];
+      where?: Row;
+      _sum?: Record<string, boolean>;
+    }): Promise<Record<string, unknown>[]> => {
+      const groups = new Map<string, Row>();
+      for (const row of this.reservations.values()) {
+        if (!matchesWhere(row, where)) continue;
+        const groupKey = JSON.stringify(by.map((field) => row[field]));
+        const group = groups.get(groupKey) ?? {
+          ...Object.fromEntries(by.map((field) => [field, row[field]])),
+          _sum: Object.fromEntries(
+            Object.keys(_sum ?? {}).map((field) => [field, 0]),
+          ),
+        };
+        const sums = group._sum as Record<string, number>;
+        for (const field of Object.keys(_sum ?? {}))
+          sums[field] = (sums[field] ?? 0) + (row[field] as number);
+        groups.set(groupKey, group);
+      }
+      return Promise.resolve([...groups.values()]);
     },
     create: ({
       data,
@@ -1674,12 +1967,17 @@ export class FakePrismaService {
   address = {
     findMany: ({
       where,
+      orderBy,
     }: {
-      where: { userId: string };
+      where?: Row;
+      orderBy?: OrderBy;
     }): Promise<Record<string, unknown>[]> =>
       Promise.resolve(
-        [...this.addresses.values()].filter(
-          (row) => row.userId === where.userId,
+        sortRows(
+          [...this.addresses.values()].filter((row) =>
+            matchesWhere(row, where),
+          ),
+          orderBy,
         ),
       ),
     findUnique: ({
@@ -1690,22 +1988,21 @@ export class FakePrismaService {
       Promise.resolve(this.addresses.get(where.id) ?? null),
     findFirst: ({
       where,
+      orderBy = { updatedAt: 'desc' },
     }: {
-      where: { userId: string };
+      where?: Row;
+      orderBy?: OrderBy;
     }): Promise<Record<string, unknown> | null> => {
-      const rows = [...this.addresses.values()]
-        .filter((row) => row.userId === where.userId)
-        .sort(
-          (a, b) =>
-            (b.updatedAt as Date).getTime() - (a.updatedAt as Date).getTime(),
-        );
+      const rows = sortRows(
+        [...this.addresses.values()].filter((row) => matchesWhere(row, where)),
+        orderBy,
+      );
       return Promise.resolve(rows[0] ?? null);
     },
-    count: ({ where }: { where: { userId: string } }): Promise<number> =>
+    count: ({ where }: { where?: Row }): Promise<number> =>
       Promise.resolve(
-        [...this.addresses.values()].filter(
-          (row) => row.userId === where.userId,
-        ).length,
+        [...this.addresses.values()].filter((row) => matchesWhere(row, where))
+          .length,
       ),
     create: ({
       data,
@@ -1734,20 +2031,20 @@ export class FakePrismaService {
       data: Record<string, unknown>;
     }): Promise<Record<string, unknown>> => {
       const row = this.addresses.get(where.id)!;
-      Object.assign(row, data, { updatedAt: new Date() });
+      applyData(row, { ...data, updatedAt: new Date() });
       return Promise.resolve(row);
     },
     updateMany: ({
       where,
       data,
     }: {
-      where: { userId: string; isDefault: boolean };
+      where?: Row;
       data: Record<string, unknown>;
     }): Promise<{ count: number }> => {
       let count = 0;
       for (const row of this.addresses.values()) {
-        if (row.userId === where.userId && row.isDefault === where.isDefault) {
-          Object.assign(row, data, { updatedAt: new Date() });
+        if (matchesWhere(row, where)) {
+          applyData(row, { ...data, updatedAt: new Date() });
           count += 1;
         }
       }
@@ -1806,6 +2103,13 @@ export class FakePrismaService {
       if (!row) return Promise.resolve(null);
       return Promise.resolve(this.cartDetail(row.id as string) ?? null);
     },
+    findUniqueOrThrow: async (args: {
+      where: { id?: string; userId?: string; guestToken?: string };
+    }): Promise<Record<string, unknown>> => {
+      const row = await this.cart.findUnique(args);
+      if (!row) throw new Error('No Cart found');
+      return row;
+    },
     findFirst: ({
       where,
     }: {
@@ -1850,13 +2154,66 @@ export class FakePrismaService {
     },
   };
 
+  private readonly cartItemRelations: Relations = {
+    cart: (row) => this.carts.get(row.cartId as string),
+  };
+
+  private findCartItemRow(where: {
+    id?: string;
+    cartId_offerId?: { cartId: string; offerId: string };
+  }): Record<string, unknown> | undefined {
+    if (where.id) return this.cartItems.get(where.id);
+    const { cartId, offerId } = where.cartId_offerId!;
+    return [...this.cartItems.values()].find(
+      (item) => item.cartId === cartId && item.offerId === offerId,
+    );
+  }
+
+  private findCartItemRows(where?: Row, orderBy?: OrderBy): Row[] {
+    return sortRows(
+      [...this.cartItems.values()].filter((row) =>
+        matchesWhere(row, where, this.cartItemRelations),
+      ),
+      orderBy,
+    );
+  }
+
   cartItem = {
     findUnique: ({
       where,
     }: {
-      where: { id: string };
-    }): Promise<Record<string, unknown> | null> =>
-      Promise.resolve(this.cartItems.get(where.id) ?? null),
+      where: {
+        id?: string;
+        cartId_offerId?: { cartId: string; offerId: string };
+      };
+    }): Promise<Record<string, unknown> | null> => {
+      const row = this.findCartItemRow(where);
+      return Promise.resolve(row ? { ...row } : null);
+    },
+    findFirst: ({
+      where,
+      orderBy,
+    }: {
+      where?: Row;
+      orderBy?: OrderBy;
+    }): Promise<Record<string, unknown> | null> => {
+      const row = this.findCartItemRows(where, orderBy)[0];
+      return Promise.resolve(row ? { ...row } : null);
+    },
+    findMany: ({
+      where,
+      select,
+      orderBy,
+    }: {
+      where?: Row;
+      select?: Row;
+      orderBy?: OrderBy;
+    } = {}): Promise<Record<string, unknown>[]> =>
+      Promise.resolve(
+        this.findCartItemRows(where, orderBy).map((row) =>
+          select ? project(row, select, this.cartItemRelations) : { ...row },
+        ),
+      ),
     upsert: ({
       where,
       create,
@@ -1866,36 +2223,23 @@ export class FakePrismaService {
       create: Record<string, unknown>;
       update: Record<string, unknown>;
     }): Promise<Record<string, unknown>> => {
-      const { cartId, offerId } = where.cartId_offerId;
-      const existing = [...this.cartItems.values()].find(
-        (item) => item.cartId === cartId && item.offerId === offerId,
-      );
+      const existing = this.findCartItemRow(where);
 
       if (existing) {
-        if (
-          update.quantity &&
-          typeof update.quantity === 'object' &&
-          'increment' in update.quantity
-        ) {
-          existing.quantity =
-            (existing.quantity as number) +
-            (update.quantity as { increment: number }).increment;
-        } else {
-          Object.assign(existing, update);
-        }
-        existing.updatedAt = new Date();
-        return Promise.resolve(existing);
+        applyData(existing, { ...update, updatedAt: new Date() });
+        return Promise.resolve({ ...existing });
       }
 
-      const now = new Date();
+      const now = this.tick();
       const row = {
         id: randomUUID(),
+        revision: 0,
         createdAt: now,
         updatedAt: now,
-        ...create,
+        ...definedOnly(create),
       };
       this.cartItems.set(row.id, row);
-      return Promise.resolve(row);
+      return Promise.resolve({ ...row });
     },
     update: ({
       where,
@@ -1905,26 +2249,17 @@ export class FakePrismaService {
       data: Record<string, unknown>;
     }): Promise<Record<string, unknown>> => {
       const row = this.cartItems.get(where.id)!;
-      Object.assign(row, data, { updatedAt: new Date() });
-      return Promise.resolve(row);
+      applyData(row, { ...data, updatedAt: new Date() });
+      return Promise.resolve({ ...row });
     },
     delete: ({ where }: { where: { id: string } }): Promise<void> => {
       this.cartItems.delete(where.id);
       return Promise.resolve();
     },
-    deleteMany: ({
-      where,
-    }: {
-      where: { cartId: string };
-    }): Promise<{ count: number }> => {
-      let count = 0;
-      for (const [id, item] of this.cartItems.entries()) {
-        if (item.cartId === where.cartId) {
-          this.cartItems.delete(id);
-          count += 1;
-        }
-      }
-      return Promise.resolve({ count });
+    deleteMany: ({ where }: { where?: Row }): Promise<{ count: number }> => {
+      const doomed = this.findCartItemRows(where);
+      for (const row of doomed) this.cartItems.delete(row.id as string);
+      return Promise.resolve({ count: doomed.length });
     },
   };
 
@@ -2010,21 +2345,65 @@ export class FakePrismaService {
     return { ...order, items, sellerOrders };
   }
 
+  private readonly orderRelations = {
+    payment: (row: Row): unknown =>
+      [...this.payments.values()].find(
+        (payment) => payment.orderId === row.id,
+      ) ?? null,
+  } satisfies Relations;
+
+  /**
+   * An order read shaped by its args: `select` projects the row; otherwise
+   * the detail (items, seller orders — always attached here) plus the
+   * `payment` relation when included, minus any `omit`ted fields.
+   */
+  private orderRead(
+    id: string,
+    args: { select?: Row; omit?: Row; include?: Row } = {},
+  ): Record<string, unknown> | null {
+    const row = this.orders.get(id);
+    if (!row) return null;
+    if (args.select) return project(row, args.select, this.orderRelations);
+    const detail: Row = this.orderDetail(id)!;
+    const payment = args.include?.payment as { select?: Row } | undefined;
+    if (payment) {
+      const paymentRow = this.orderRelations.payment(row) as Row | null;
+      detail.payment =
+        paymentRow && payment.select
+          ? project(paymentRow, payment.select)
+          : paymentRow;
+    }
+    return omitKeys(detail, args.omit);
+  }
+
   order = {
     create: ({
       data,
+      select,
     }: {
       data: Record<string, unknown> & {
         items?: { create: Record<string, unknown>[] };
       };
+      select?: Row;
     }): Promise<Record<string, unknown>> => {
       const now = new Date();
       const { items, ...orderData } = data;
+      if (
+        typeof orderData.idempotencyKey === 'string' &&
+        [...this.orders.values()].some(
+          (order) =>
+            order.userId === orderData.userId &&
+            order.idempotencyKey === orderData.idempotencyKey,
+        )
+      )
+        return Promise.reject(uniqueViolation(['userId', 'idempotencyKey']));
       const row = {
         id: randomUUID(),
+        checkoutCartSnapshot: null,
+        idempotencyKey: null,
         createdAt: now,
         updatedAt: now,
-        ...orderData,
+        ...definedOnly(orderData),
       };
       this.orders.set(row.id as string, row);
 
@@ -2039,38 +2418,74 @@ export class FakePrismaService {
         this.orderItems.set(itemRow.id, itemRow);
       }
 
-      return Promise.resolve(this.orderDetail(row.id as string)!);
+      return Promise.resolve(this.orderRead(row.id as string, { select })!);
     },
     findUnique: ({
       where,
+      ...args
     }: {
       where: { id: string };
+      select?: Row;
+      omit?: Row;
+      include?: Row;
     }): Promise<Record<string, unknown> | null> =>
-      Promise.resolve(this.orderDetail(where.id) ?? null),
+      Promise.resolve(this.orderRead(where.id, args)),
+    findUniqueOrThrow: async (args: {
+      where: { id: string };
+      select?: Row;
+      omit?: Row;
+      include?: Row;
+    }): Promise<Record<string, unknown>> => {
+      const row = await this.order.findUnique(args);
+      if (!row) throw new Error('No Order found');
+      return row;
+    },
+    findFirst: ({
+      where,
+      ...args
+    }: {
+      where?: Row;
+      select?: Row;
+      omit?: Row;
+      include?: Row;
+    }): Promise<Record<string, unknown> | null> => {
+      const row = [...this.orders.values()].find((order) =>
+        matchesWhere(order, where),
+      );
+      return Promise.resolve(
+        row ? this.orderRead(row.id as string, args) : null,
+      );
+    },
     findMany: ({
       where,
+      ...args
     }: {
-      where: { userId: string };
+      where?: Row;
+      select?: Row;
+      omit?: Row;
+      include?: Row;
     }): Promise<Record<string, unknown>[]> =>
       Promise.resolve(
         [...this.orders.values()]
-          .filter((row) => row.userId === where.userId)
+          .filter((row) => matchesWhere(row, where))
           .sort(
             (a, b) =>
               (b.createdAt as Date).getTime() - (a.createdAt as Date).getTime(),
           )
-          .map((row) => this.orderDetail(row.id as string)!),
+          .map((row) => this.orderRead(row.id as string, args)!),
       ),
     update: ({
       where,
       data,
+      omit,
     }: {
       where: { id: string };
       data: Record<string, unknown>;
+      omit?: Row;
     }): Promise<Record<string, unknown>> => {
       const row = this.orders.get(where.id)!;
-      Object.assign(row, data, { updatedAt: new Date() });
-      return Promise.resolve(row);
+      applyData(row, { ...data, updatedAt: new Date() });
+      return Promise.resolve(omitKeys({ ...row }, omit));
     },
   };
 
@@ -2260,6 +2675,12 @@ export class FakePrismaService {
     }: {
       data: Record<string, unknown>;
     }): Promise<Record<string, unknown>> => {
+      if (
+        [...this.payments.values()].some(
+          (payment) => payment.orderId === data.orderId,
+        )
+      )
+        return Promise.reject(uniqueViolation(['order_id']));
       const now = new Date();
       const row = {
         id: randomUUID(),
@@ -2318,6 +2739,117 @@ export class FakePrismaService {
       const row = { id: randomUUID(), createdAt: new Date(), ...data };
       this.paymentEvents.set(row.id as string, row);
       return Promise.resolve(row);
+    },
+  };
+
+  // --- Checkout attempts (Stage 7) -----------------------------------------
+  // The Idempotency-Key receipts. Reads return copies, as Prisma does, so a
+  // service comparing a row it read earlier never sees a later write.
+  private readonly checkoutAttempts = new Map<
+    string,
+    Record<string, unknown>
+  >();
+
+  private findCheckoutAttemptRow(where: {
+    id?: string;
+    userId_key?: { userId: string; key: string };
+  }): Record<string, unknown> | undefined {
+    if (where.id) return this.checkoutAttempts.get(where.id);
+    const { userId, key } = where.userId_key!;
+    return [...this.checkoutAttempts.values()].find(
+      (row) => row.userId === userId && row.key === key,
+    );
+  }
+
+  checkoutAttempt = {
+    findUnique: ({
+      where,
+      select,
+    }: {
+      where: { id?: string; userId_key?: { userId: string; key: string } };
+      select?: Row;
+    }): Promise<Record<string, unknown> | null> => {
+      const row = this.findCheckoutAttemptRow(where);
+      if (!row) return Promise.resolve(null);
+      return Promise.resolve(
+        select ? project(row, select) : (cloneData(row) as Row),
+      );
+    },
+    findUniqueOrThrow: async (args: {
+      where: { id?: string; userId_key?: { userId: string; key: string } };
+      select?: Row;
+    }): Promise<Record<string, unknown>> => {
+      const row = await this.checkoutAttempt.findUnique(args);
+      if (!row) throw new Error('No CheckoutAttempt found');
+      return row;
+    },
+    findMany: ({
+      where,
+      orderBy,
+    }: {
+      where?: Row;
+      orderBy?: OrderBy;
+    } = {}): Promise<Record<string, unknown>[]> =>
+      Promise.resolve(
+        sortRows(
+          [...this.checkoutAttempts.values()].filter((row) =>
+            matchesWhere(row, where),
+          ),
+          orderBy,
+        ).map((row) => cloneData(row) as Row),
+      ),
+    create: ({
+      data,
+    }: {
+      data: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const rows = [...this.checkoutAttempts.values()];
+      if (
+        rows.some((row) => row.userId === data.userId && row.key === data.key)
+      )
+        return Promise.reject(uniqueViolation(['user_id', 'key']));
+      if (data.orderId && rows.some((row) => row.orderId === data.orderId))
+        return Promise.reject(uniqueViolation(['order_id']));
+      const now = this.tick();
+      const row = {
+        id: randomUUID(),
+        fingerprintKeyId: null,
+        fingerprintVersion: null,
+        status: 'IN_PROGRESS',
+        stage: 'RECEIVED',
+        ownerToken: null,
+        leaseExpiresAt: null,
+        orderId: null,
+        response: null,
+        errorStatus: null,
+        completedAt: null,
+        createdAt: now,
+        updatedAt: now,
+        ...definedOnly(data),
+      };
+      this.checkoutAttempts.set(row.id, row);
+      return Promise.resolve(cloneData(row));
+    },
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where?: Row;
+      data: Record<string, unknown>;
+    }): Promise<{ count: number }> => {
+      const matched = [...this.checkoutAttempts.values()].filter((row) =>
+        matchesWhere(row, where),
+      );
+      if (
+        typeof data.orderId === 'string' &&
+        [...this.checkoutAttempts.values()].some(
+          (row) => row.orderId === data.orderId && !matched.includes(row),
+        )
+      )
+        return Promise.reject(uniqueViolation(['order_id']));
+      for (const row of matched)
+        applyData(row, { ...data, updatedAt: new Date() });
+      return Promise.resolve({ count: matched.length });
     },
   };
 

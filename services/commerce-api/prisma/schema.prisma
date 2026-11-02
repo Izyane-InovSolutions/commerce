@@ -189,6 +189,7 @@ model User {
   reviewReports           ReviewReport[]
   notifications           Notification[]
   stockAdjustmentReceipts StockAdjustmentReceipt[]
+  checkoutAttempts        CheckoutAttempt[]
 
   @@map("users")
 }
@@ -895,7 +896,6 @@ enum PayoutBatchStatus {
 // src/common/addresses/address-snapshot.ts), not a live FK to Address, so the
 // order survives the customer later editing or deleting that address.
 model Order {
-  checkoutCartSnapshot Json? @map("checkout_cart_snapshot")
   id                String             @id @default(uuid()) @db.Uuid
   userId            String             @map("user_id") @db.Uuid
   user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -922,25 +922,51 @@ model Order {
   // treats every NULL in a unique index as distinct from every other NULL.
   idempotencyKey String? @map("idempotency_key") @db.VarChar(64)
 
+  // Internal cleanup receipt: [{ id, offerId, quantity, revision }] for the
+  // cart lines this order consumed. Never returned by customer or admin APIs;
+  // reads omit it (see ORDER_OMIT in orders.service.ts).
+  checkoutCartSnapshot Json?            @map("checkout_cart_snapshot")
+  checkoutAttempt      CheckoutAttempt?
+
   @@unique([userId, idempotencyKey])
   @@index([userId])
   @@map("orders")
 }
 
-// Durable request receipt. Never reclaim an in-progress attempt automatically:
-// a process may have died after submitting an external charge.
+// Durable checkout request receipt, scoped to (userId, key).
+//
+// status: IN_PROGRESS | COMPLETED | REJECTED | BLOCKED. BLOCKED means provider
+// submission may have happened and the outcome is unknown, so the key can never
+// start another payment; callers reconcile through the linked order.
+// stage: RECEIVED -> ORDER_CREATED -> PAYMENT_STARTED -> FINISHED. Local work is
+// only recovered while no Payment row exists for the linked order, because the
+// Payment row is committed before the provider is ever called.
+// ownerToken/leaseExpiresAt fence the executing request; the order link is
+// written only by the current owner inside the order transaction.
+// fingerprint is HMAC-SHA256 (fingerprintKeyId, fingerprintVersion) over the
+// normalized request; NULL metadata marks a legacy receipt that cannot be
+// compared and therefore never replays or resubmits.
 model CheckoutAttempt {
-  id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @map("user_id") @db.Uuid
-  key         String   @db.VarChar(64)
-  operation   String   @db.VarChar(16)
-  fingerprint String   @db.VarChar(64)
-  status      String   @default("IN_PROGRESS") @db.VarChar(16)
-  orderId     String?  @unique @map("order_id") @db.Uuid
-  response    Json?
-  errorStatus Int?     @map("error_status")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id                 String    @id @default(uuid()) @db.Uuid
+  userId             String    @map("user_id") @db.Uuid
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key                String    @db.VarChar(64)
+  operation          String    @db.VarChar(16)
+  fingerprint        String    @db.VarChar(64)
+  fingerprintKeyId   String?   @map("fingerprint_key_id") @db.VarChar(32)
+  fingerprintVersion Int?      @map("fingerprint_version") @db.SmallInt
+  status             String    @default("IN_PROGRESS") @db.VarChar(16)
+  stage              String    @default("RECEIVED") @db.VarChar(24)
+  ownerToken         String?   @map("owner_token") @db.Uuid
+  leaseExpiresAt     DateTime? @map("lease_expires_at")
+  orderId            String?   @unique @map("order_id") @db.Uuid
+  order              Order?    @relation(fields: [orderId], references: [id], onDelete: NoAction)
+  // json, not jsonb: replays must return the stored body byte for byte.
+  response           Json?     @db.Json
+  errorStatus        Int?      @map("error_status")
+  completedAt        DateTime? @map("completed_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
   @@unique([userId, key])
   @@map("checkout_attempts")

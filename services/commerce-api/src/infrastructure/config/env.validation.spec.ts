@@ -3,6 +3,7 @@ import 'reflect-metadata';
 import { smtpPort, validate } from './env.validation';
 
 const KEYRING = '{"v1":"dGVzdC1vbmx5LWZpZWxkLWVuY3J5cHRpb24ta2V5ISE="}';
+const FINGERPRINT_KEY = 'dGVzdC1vbmx5LWNoZWNrb3V0LWZpbmdlcnByaW50LWtleS0wMDAx';
 
 /** The smallest environment the API accepts; each test varies one thing. */
 function env(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -16,6 +17,8 @@ function env(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     REFRESH_RECOVERY_ENCRYPTION_KEYS: KEYRING,
     EMAIL_DELIVERY_ENCRYPTION_ACTIVE_KEY_ID: 'v1',
     EMAIL_DELIVERY_ENCRYPTION_KEYS: KEYRING,
+    CHECKOUT_FINGERPRINT_ACTIVE_KEY_ID: 'v1',
+    CHECKOUT_FINGERPRINT_KEYS: JSON.stringify({ v1: FINGERPRINT_KEY }),
     SMTP_HOST: 'smtp.example.com',
     EMAIL_FROM: 'Commerce <no-reply@example.com>',
     CUSTOMER_WEB_URL: 'https://shop.example.com',
@@ -34,6 +37,89 @@ describe('validate', () => {
     const { CUSTOMER_WEB_URL, ...rest } = env();
     void CUSTOMER_WEB_URL;
     expect(() => validate(rest)).toThrow(/CUSTOMER_WEB_URL/);
+  });
+
+  describe('checkout fingerprint keyring', () => {
+    it.each([
+      'CHECKOUT_FINGERPRINT_ACTIVE_KEY_ID',
+      'CHECKOUT_FINGERPRINT_KEYS',
+    ])('requires %s', (name) => {
+      const config = env();
+      delete config[name];
+      expect(() => validate(config)).toThrow(new RegExp(name));
+    });
+
+    it('accepts a rotated ring whose active key is not the first', () => {
+      expect(() =>
+        validate(
+          env({
+            CHECKOUT_FINGERPRINT_ACTIVE_KEY_ID: 'k_2026-10',
+            CHECKOUT_FINGERPRINT_KEYS: JSON.stringify({
+              v1: FINGERPRINT_KEY,
+              'k_2026-10': Buffer.alloc(48, 7).toString('base64'),
+            }),
+          }),
+        ),
+      ).not.toThrow();
+    });
+
+    it.each([
+      [
+        'an active key id with a colon',
+        { CHECKOUT_FINGERPRINT_ACTIVE_KEY_ID: 'v:1' },
+      ],
+      [
+        'an active key id longer than 32 characters',
+        { CHECKOUT_FINGERPRINT_ACTIVE_KEY_ID: 'k'.repeat(33) },
+      ],
+      [
+        'an active key missing from the ring',
+        { CHECKOUT_FINGERPRINT_ACTIVE_KEY_ID: 'v2' },
+      ],
+      ['a ring that is not JSON', { CHECKOUT_FINGERPRINT_KEYS: 'v1=abc' }],
+      ['a ring that is a JSON array', { CHECKOUT_FINGERPRINT_KEYS: '[]' }],
+      [
+        'a key shorter than 32 bytes',
+        {
+          CHECKOUT_FINGERPRINT_KEYS: JSON.stringify({
+            v1: Buffer.alloc(31, 1).toString('base64'),
+          }),
+        },
+      ],
+      [
+        'a key that is not strict base64',
+        {
+          CHECKOUT_FINGERPRINT_KEYS: JSON.stringify({
+            v1: 'change-me-to-a-base64-32-byte-key-value-please',
+          }),
+        },
+      ],
+      [
+        'an invalid retired key id',
+        {
+          CHECKOUT_FINGERPRINT_KEYS: JSON.stringify({
+            v1: FINGERPRINT_KEY,
+            'old key': FINGERPRINT_KEY,
+          }),
+        },
+      ],
+    ])('rejects %s', (_case, overrides) => {
+      expect(() => validate(env(overrides))).toThrow(/CHECKOUT_FINGERPRINT/);
+    });
+
+    it('never echoes key material in its errors', () => {
+      const secret = Buffer.alloc(16, 9).toString('base64');
+      let message = '';
+      try {
+        validate(
+          env({ CHECKOUT_FINGERPRINT_KEYS: JSON.stringify({ v1: secret }) }),
+        );
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).toMatch(/CHECKOUT_FINGERPRINT_KEYS/);
+      expect(message).not.toContain(secret);
+    });
   });
 
   it('rejects implicit TLS on the STARTTLS port', () => {

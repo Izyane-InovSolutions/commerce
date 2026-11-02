@@ -32,6 +32,8 @@ Status 2026-10-02: **partial.** Local implementation and evidence are recorded i
 
 ## 7. Fix transactional shopping and inventory races
 
+Status 2026-10-16: **TBD**. Local implementation and evidence are recorded in the [Stage 7 verification](transactional-shopping-verification.md). The first remote CI run (B6) remains externally blocked.
+
 **Implement / deliver**
 
 - Remove inventory sweeps that open another transaction while their caller holds relevant locks. Reuse the caller's transaction or sweep before entering it, with consistent lock ordering.

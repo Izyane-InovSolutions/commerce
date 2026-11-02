@@ -4,7 +4,7 @@
 
 ## Purpose and features
 
-- **Checkout** calls `PaymentsService.initializeForOrder` once per order. A `Payment` row (ZMW, idempotency key = order id) is persisted before the gateway is contacted; card payments also persist a private `PaymentSettlement` quote in USD/GBP.
+- **Checkout** calls `PaymentsService.initializeForOrder` once per order. A `Payment` row (ZMW, idempotency key = order id) is persisted before the gateway is contacted, under the order lock and only while the order is `PENDING_PAYMENT`; card payments also persist a private `PaymentSettlement` quote in USD/GBP.
 - **Customers** read their payment's live gateway state, ask the gateway for status (which also applies a terminal outcome locally) and request gateway-side cancellation of a pending payment.
 - **Admins** list gateway payments, open a refund case against a seller order, and reconcile a refund attempt.
 - **System** applies gateway outcomes idempotently (order confirm or cancel), opens refund cases for fulfillment cancellations through a job, projects refund state onto return requests, and refreshes FX rates hourly.
@@ -31,7 +31,7 @@ Both refund bodies use `RefundPaymentDto`: `amount` int 1..2^31-1 minor units, `
 
 | Service                                                                                                                                         | Responsibility                                                                                                                                                                                                                                                             |
 | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PaymentsService` ([payments.service.ts](../../../services/commerce-api/src/modules/payments/payments.service.ts))                              | `initializeForOrder`, `getForOrder`, `handleWebhook`, `reconcile`, `applyProviderResult`, `refundSellerOrder`, `reconcileRefund`. Exported.                                                                                                                                |
+| `PaymentsService` ([payments.service.ts](../../../services/commerce-api/src/modules/payments/payments.service.ts))                              | `initializeForOrder`, `findForOrder`, `getForOrder`, `handleWebhook`, `reconcile`, `applyProviderResult`, `refundSellerOrder`, `reconcileRefund`. Exported.                                                                                                                |
 | `GatewayPaymentsService` ([gateway-payments.service.ts](../../../services/commerce-api/src/modules/payments/gateway-payments.service.ts))       | Customer/admin gateway routes. Talks to `UnifiedPaymentProvider` directly, not through `PAYMENT_PROVIDER`. Re-checks the actor in the DB (active; `ADMIN` for admin calls) ([:175](../../../services/commerce-api/src/modules/payments/gateway-payments.service.ts#L175)). |
 | `RefundCasesService` ([refund-cases.service.ts](../../../services/commerce-api/src/modules/payments/refund-cases.service.ts))                   | Refund obligations: `createCase`, `prepareCase` (in caller's tx), `processPending`, `retry`, `reconcile`, `findById`, `listForSellerOrder`. Exported; used by returns.                                                                                                     |
 | `PendingPaymentProvider` ([pending-payment.provider.ts](../../../services/commerce-api/src/modules/payments/pending-payment.provider.ts))       | Name `pending-integration`. Every method rejects with 503 "awaiting the external provider API" ([:53](../../../services/commerce-api/src/modules/payments/pending-payment.provider.ts#L53)).                                                                               |
@@ -88,22 +88,29 @@ stateDiagram-v2
 
 `REQUIRES_ACTION` and `PROCESSING` are treated like `PENDING` everywhere ([payments.service.ts:43](../../../services/commerce-api/src/modules/payments/payments.service.ts#L43)).
 
-**Initialization** ([payments.service.ts:87](../../../services/commerce-api/src/modules/payments/payments.service.ts#L87))
+**Initialization** ([payments.service.ts:104](../../../services/commerce-api/src/modules/payments/payments.service.ts#L104))
 
-- `prepareInput` then `validateInput` run before any write; a throw there leaves no `Payment` (checkout then cancels the order and frees its idempotency key).
-- `Payment` stores the ZMW `order.total`; any settlement quote is nested-created in the same insert ([:102](../../../services/commerce-api/src/modules/payments/payments.service.ts#L102)). `orderId` and `idempotencyKey` (= order id) are unique, so one payment per order.
-- An already-expired settlement quote -> 503 and the payment is marked FAILED ([:118](../../../services/commerce-api/src/modules/payments/payments.service.ts#L118)).
-- On return, `providerReference` is saved and the result is applied through `applyProviderResult`, so an inline SUCCESS confirms the order and an inline decline cancels it in the same request ([:148](../../../services/commerce-api/src/modules/payments/payments.service.ts#L148)).
-- If the gateway accepted the call, or threw `PaymentOutcomeUnknownException`, any later error is swallowed: the payment stays PENDING with `failureReason = 'Gateway outcome requires reconciliation'` and `requiresReconciliation: true` is returned ([:165](../../../services/commerce-api/src/modules/payments/payments.service.ts#L165)). Any other error marks it FAILED with the error message and rethrows ([:178](../../../services/commerce-api/src/modules/payments/payments.service.ts#L178)).
-- Response adds `redirectUrl`, `gatewayStatus` and `requiresReconciliation = gatewayStatus !== 'PENDING'` ([:157](../../../services/commerce-api/src/modules/payments/payments.service.ts#L157)).
+- `prepareInput` then `validateInput` run before any write. A throw there leaves no `Payment`; checkout then decides whether to cancel the order (see [checkout.md](checkout.md#business-rules)).
+- The `Payment` row is created in one transaction ([:124](../../../services/commerce-api/src/modules/payments/payments.service.ts#L124)):
+  1. The optional `guard(tx)` runs first. Checkout passes its fenced `markPaymentStarted`, so only the current owner of a keyed checkout attempt can insert.
+  2. `OrdersService.lockForPayment` locks the order row.
+  3. The order is re-read and must still be `PENDING_PAYMENT`, else 409 with `details` code `CHECKOUT_EXPIRED` and no payment.
+  4. The row is inserted.
+
+  `cancel` takes the same order lock, so an order is either cancelled or has a payment row, never both. A request that stalls before the insert cannot charge an order that was given up meanwhile.
+- `Payment` stores the ZMW `order.total`; any settlement quote is nested-created in the same insert. `orderId` and `idempotencyKey` (= order id) are unique, so one payment per order. The row commits before the gateway is called, so its absence proves the provider was never contacted for that order (`findForOrder`, [:242](../../../services/commerce-api/src/modules/payments/payments.service.ts#L242)).
+- An already-expired settlement quote -> 503 and the payment is marked FAILED ([:154](../../../services/commerce-api/src/modules/payments/payments.service.ts#L154)).
+- On return, `providerReference` is saved and the result is applied through `applyProviderResult`, so an inline SUCCESS confirms the order and an inline decline cancels it in the same request ([:184](../../../services/commerce-api/src/modules/payments/payments.service.ts#L184)).
+- If the gateway accepted the call, or threw `PaymentOutcomeUnknownException`, any later error is swallowed: the payment stays PENDING with `failureReason = 'Gateway outcome requires reconciliation'` and `requiresReconciliation: true` is returned ([:201](../../../services/commerce-api/src/modules/payments/payments.service.ts#L201)). That includes a failed cart-cleanup enqueue inside `confirmPayment`, which leaves the settlement for reconciliation. Any other error marks it FAILED with the error message and rethrows ([:214](../../../services/commerce-api/src/modules/payments/payments.service.ts#L214)).
+- Response adds `redirectUrl`, `gatewayStatus` and `requiresReconciliation = gatewayStatus !== 'PENDING'` ([:190](../../../services/commerce-api/src/modules/payments/payments.service.ts#L190)).
 
 **Applying outcomes** (`applyProviderResult` -> `applyEvent`)
 
-- For `unified` payments the result must match the stored reference, amount and currency (settlement's if present, else payment's) and `reference == orderId`, else 409 ([payments.service.ts:252](../../../services/commerce-api/src/modules/payments/payments.service.ts#L252)).
-- Nothing is applied unless the payment is reconcilable (same provider, has a reference, still pending) and the mapped status is not `PENDING` ([:268](../../../services/commerce-api/src/modules/payments/payments.service.ts#L268)).
-- The synthetic event id is `gateway:<providerReference>:<gatewayStatus|status>`, stable across checkout, status route and reconcile ([:276](../../../services/commerce-api/src/modules/payments/payments.service.ts#L276)).
-- `applyEvent` ([:298](../../../services/commerce-api/src/modules/payments/payments.service.ts#L298)): in one tx, lock the order `FOR UPDATE`, re-read the payment, dedupe on `PaymentEvent.providerEventId` (same id on another payment -> 409). If the payment is neither settled nor rejected: SUCCEEDED -> `OrdersService.confirmPayment`; FAILED/CANCELLED -> `OrdersService.cancel`; then update status and `failureReason` (`code: message`, only for FAILED/CANCELLED) ([:56](../../../services/commerce-api/src/modules/payments/payments.service.ts#L56)). A SUCCEEDED event on a FAILED/CANCELLED payment -> 409 "reconciliation is required" ([:342](../../../services/commerce-api/src/modules/payments/payments.service.ts#L342)). Stale failures on a settled payment are recorded but change nothing. The `PaymentEvent` commits with the effects, so a failed tx stays retryable.
-- `reconcile(paymentId)` ([:217](../../../services/commerce-api/src/modules/payments/payments.service.ts#L217)): a SUCCEEDED payment re-runs `confirmPayment` (idempotent) without a gateway call; pending ones call `getPayment` and apply.
+- For `unified` payments the result must match the stored reference, amount and currency (settlement's if present, else payment's) and `reference == orderId`, else 409 ([payments.service.ts:293](../../../services/commerce-api/src/modules/payments/payments.service.ts#L293)).
+- Nothing is applied unless the payment is reconcilable (same provider, has a reference, still pending) and the mapped status is not `PENDING` ([:313](../../../services/commerce-api/src/modules/payments/payments.service.ts#L313)).
+- The synthetic event id is `gateway:<providerReference>:<gatewayStatus|status>`, stable across checkout, status route and reconcile ([:321](../../../services/commerce-api/src/modules/payments/payments.service.ts#L321)).
+- `applyEvent` ([:365](../../../services/commerce-api/src/modules/payments/payments.service.ts#L365)): in one tx, lock the order `FOR UPDATE`, re-read the payment, dedupe on `PaymentEvent.providerEventId` (same id on another payment -> 409). If the payment is neither settled nor rejected: SUCCEEDED -> `OrdersService.confirmPayment`; FAILED/CANCELLED -> `OrdersService.cancel`; then update status and `failureReason` (`code: message`, only for FAILED/CANCELLED) ([:56](../../../services/commerce-api/src/modules/payments/payments.service.ts#L56)). A SUCCEEDED event on a FAILED/CANCELLED payment -> 409 "reconciliation is required" ([:435](../../../services/commerce-api/src/modules/payments/payments.service.ts#L435)). Stale failures on a settled payment are recorded but change nothing. The `PaymentEvent` commits with the effects, so a failed tx stays retryable.
+- `reconcile(paymentId)` ([:262](../../../services/commerce-api/src/modules/payments/payments.service.ts#L262)): a SUCCEEDED payment re-runs `confirmPayment` (idempotent) without a gateway call; pending ones call `getPayment` and apply.
 
 **Customer gateway routes** ([gateway-payments.service.ts](../../../services/commerce-api/src/modules/payments/gateway-payments.service.ts))
 
@@ -174,7 +181,7 @@ stateDiagram-v2
 
 - Imports `UsersModule` (actor re-check), `OrdersModule` (`lockForPayment`, `confirmPayment`, `cancel`, `applyRefund`, `getSellerOrderForPayment`), `FinancialsModule` (`recordRefundReversal`) ([payments.module.ts:37](../../../services/commerce-api/src/modules/payments/payments.module.ts#L37)).
 - Exports `PAYMENT_PROVIDER`, `PaymentsService`, `RefundCasesService`, `FulfillmentCancellationRefundHandler`, `FxRatesService`.
-- Callers: checkout (`initializeForOrder`, `getForOrder`), returns (`prepareCase`, `processPending`, `retry`), fulfillment (enqueues the refund job), `WorkersModule` (registers the handler).
+- Callers: checkout (`initializeForOrder` with its attempt guard, `findForOrder`), returns (`prepareCase`, `processPending`, `retry`), fulfillment (enqueues the refund job), `WorkersModule` (registers the handler).
 - `main.ts` keeps the raw request body for the webhook ([main.ts:38](../../../services/commerce-api/src/main.ts#L38)).
 
 ## Jobs and events
@@ -228,4 +235,4 @@ Dedicated PostgreSQL scenarios also exist in `test/payments.integration-spec.ts`
 - `AdminRefundsController` relies on the JWT role only; `GatewayPaymentsService` re-checks the DB role.
 - `PAYMENT_FX_BASE_CURRENCY` is configurable, but the converter assumes ZMW (divides by 100, and `prepareInput` requires ZMW); a non-ZMW base would produce wrong settlement amounts ([payment-currency-converter.ts:64](../../../services/commerce-api/src/modules/payments/payment-currency-converter.ts#L64)).
 - The FX cache is per process and only refreshed by that replica's own scheduler; with `SCHEDULED_WORKERS_ENABLED=false` a replica keeps its boot-time rates until they expire, then card payments return 503.
-- Checkout replay returns the stored payment without `requiresReconciliation`/`redirectUrl` ([payments.service.ts:193](../../../services/commerce-api/src/modules/payments/payments.service.ts#L193)).
+- `getForOrder` has no callers since Stage 7: checkout replays its stored response, including `redirectUrl` and `requiresReconciliation`, and uses `findForOrder` for decisions ([payments.service.ts:229](../../../services/commerce-api/src/modules/payments/payments.service.ts#L229)).

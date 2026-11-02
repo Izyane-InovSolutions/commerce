@@ -65,6 +65,19 @@ Prisma Client also loads `services/commerce-api/.env` at runtime and fills any v
 | `MEDIA_URL_TTL_SECONDS`        | `900`               | –        | TTL of general signed URLs.                                               |
 | `MEDIA_PUBLIC_URL_TTL_SECONDS` | `86400`             | –        | TTL of product image URLs embedded in cached catalog responses.           |
 
+## Checkout
+
+| Variable | Default | Required | Notes |
+| --- | --- | --- | --- |
+| `CHECKOUT_FINGERPRINT_ACTIVE_KEY_ID` | – | ✔ | Id of the key that signs new checkout receipts. 1–32 characters of `A-Z a-z 0-9 _ -`. It must exist in `CHECKOUT_FINGERPRINT_KEYS`. |
+| `CHECKOUT_FINGERPRINT_KEYS` | – | ✔ | JSON object `{"<keyId>":"<base64>"}`. Each value must be padded base64 that decodes to at least 32 bytes. These are HMAC-SHA256 keys for the fingerprint of an `Idempotency-Key` checkout request, which lets a retry be recognized without storing card or phone details. |
+
+Startup fails when either variable is missing or invalid: a malformed JSON, a bad key id, a short or non-canonical base64 value, or an active id missing from the ring. Messages never include key material ([checkout-fingerprint.ts](../../services/commerce-api/src/modules/checkout/checkout-fingerprint.ts), [env.validation.ts](../../services/commerce-api/src/infrastructure/config/env.validation.ts)).
+
+Generate a key with `openssl rand -base64 32`; the `node` command under [Generating keys](#generating-keys) produces the same format.
+
+**Rotation.** Add the new key id to the JSON and point `CHECKOUT_FINGERPRINT_ACTIVE_KEY_ID` at it, but **keep every retired key in the ring** while receipts signed with it may still be retried. A receipt whose key id is no longer in the ring cannot be compared with a retry: that retry answers 409 `CHECKOUT_KEY_LEGACY_RECEIPT` instead of replaying the original result. Unlike the encryption keyrings, this keyring has no expiry-based point after which old keys can go. Remove a key only when its receipts no longer need to replay. See [checkout.md](modules/checkout.md).
+
 ## Payments
 
 | Variable                         | Default   | Required       | Notes                                                                                                                                                                                                                     |

@@ -160,6 +160,7 @@ describe('FulfillmentsService', () => {
   let inventoryService: {
     returnCancelledStock: jest.Mock;
     returnCancelledOfferStock: jest.Mock;
+    lockRecordsForWrite: jest.Mock;
   };
   let numberingService: {
     nextFulfillmentDispatchNumber: jest.Mock;
@@ -182,6 +183,7 @@ describe('FulfillmentsService', () => {
       returnCancelledOfferStock: jest
         .fn()
         .mockResolvedValue({ record: {}, movement: { id: 'mv-1' } }),
+      lockRecordsForWrite: jest.fn().mockResolvedValue([]),
     };
     numberingService = {
       nextFulfillmentDispatchNumber: jest

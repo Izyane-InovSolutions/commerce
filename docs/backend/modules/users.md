@@ -42,10 +42,15 @@ Response shape: the profile goes through `toUserProfile`, which leaves out `pass
 
 **Addresses**
 
-- Ownership: `findOne` returns 404 both when the address does not exist and when it belongs to someone else, so the API never reveals whether an id exists ([addresses.service.ts:22](../../../services/commerce-api/src/modules/users/addresses/addresses.service.ts#L22)). `update`, `remove` and `setDefault` all call `findOne` first.
-- The first address a user creates becomes the default. Any `isDefault` in the body is not a DTO field, so the whitelist validation pipe rejects it ([addresses.service.ts:30](../../../services/commerce-api/src/modules/users/addresses/addresses.service.ts#L30)).
-- Deleting the default address promotes the most recently updated remaining address to default. Deleting the last address leaves the user with no default ([addresses.service.ts:54](../../../services/commerce-api/src/modules/users/addresses/addresses.service.ts#L54)).
-- `setDefault` clears every current default and sets the new one inside a single transaction ([addresses.service.ts:74](../../../services/commerce-api/src/modules/users/addresses/addresses.service.ts#L74)). "One default per user" is enforced only in application code; the database has no constraint for it ([schema.prisma:190](../../../services/commerce-api/prisma/schema.prisma#L190)).
+- Invariant: a user with at least one address has exactly one default ([addresses.service.ts:8](../../../services/commerce-api/src/modules/users/addresses/addresses.service.ts#L8)).
+- Locking: `create`, `update`, `remove` and `setDefault` each run in one transaction that first locks the `users` row `FOR UPDATE`. That is the only lock address writes take, and `users` is first in the global lock order ([addresses.service.ts:105](../../../services/commerce-api/src/modules/users/addresses/addresses.service.ts#L105)). Concurrent first creates, promotions and deletes of the default therefore serialize per user.
+- Ownership: `findOne` returns 404 both when the address does not exist and when it belongs to someone else, so the API never reveals whether an id exists ([addresses.service.ts:31](../../../services/commerce-api/src/modules/users/addresses/addresses.service.ts#L31)). `update`, `remove` and `setDefault` check ownership inside the locked transaction ([:147](../../../services/commerce-api/src/modules/users/addresses/addresses.service.ts#L147)).
+- The first address a user creates becomes the default. Any `isDefault` in the body is not a DTO field, so the whitelist validation pipe rejects it, and `update` never changes the flag ([addresses.service.ts:41](../../../services/commerce-api/src/modules/users/addresses/addresses.service.ts#L41)). The default therefore moves only through `setDefault` or promotion, and "unset the only default" cannot be expressed.
+- `setDefault` clears the current default and sets the new one in the same transaction ([addresses.service.ts:86](../../../services/commerce-api/src/modules/users/addresses/addresses.service.ts#L86)).
+- Promotion ([addresses.service.ts:122](../../../services/commerce-api/src/modules/users/addresses/addresses.service.ts#L122)):
+  - Deleting the default promotes the most recently updated remaining address, with id as the tie-breaker. Deleting the last address leaves none, without error.
+  - `create` and `remove` also repair a legacy user who has addresses but no default, using the same rule.
+- Database backstop: the partial unique index `addresses_one_default_per_user` (migration `20261008000000_transactional_shopping`) rejects a second default for the same user. It is not expressible in `schema.prisma`, so it lives only in the migration.
 - Validation: `recipientName`, `line1`, `city` and `postalCode` are required and non-empty. `country` must be exactly 2 characters but its case is not checked. `label`, `phone`, `line2` and `region` are optional ([create-address.dto.ts:3](../../../services/commerce-api/src/modules/users/addresses/dto/create-address.dto.ts#L3)).
 
 ## Data
@@ -72,15 +77,21 @@ None.
 ## Tests
 
 - [users.service.spec.ts](../../../services/commerce-api/src/modules/users/users.service.spec.ts): email normalisation on create and lookup; `updatePasswordHash` uses the supplied transaction.
-- [addresses.service.spec.ts](../../../services/commerce-api/src/modules/users/addresses/addresses.service.spec.ts): cross-user 404; first address becomes default; later addresses do not; default promoted on delete; no default after the last address is deleted; `setDefault` clears the old default first; cross-user `setDefault` rejected.
+- [addresses.service.spec.ts](../../../services/commerce-api/src/modules/users/addresses/addresses.service.spec.ts), [addresses.service.invariant.spec.ts](../../../services/commerce-api/src/modules/users/addresses/addresses.service.invariant.spec.ts): cross-user 404; first address becomes default; later addresses do not; default promoted on delete (updatedAt, then id); legacy zero-default repair; no default after the last address is deleted; `setDefault` clears the old default first; every write takes the user lock.
+- [test/addresses.integration-spec.ts](../../../services/commerce-api/test/addresses.integration-spec.ts) (real PostgreSQL):
+  - concurrent first creates and competing `setDefault` calls;
+  - deleting the default while another address is created or promoted;
+  - ownership inside the lock;
+  - the partial unique index;
+  - legacy zero-default repair under concurrency.
+
+  Results: [Stage 7 verification](../transactional-shopping-verification.md#verification).
 - [test/users.e2e-spec.ts](../../../services/commerce-api/test/users.e2e-spec.ts): profile update; auto-default and re-default over HTTP; cross-customer isolation.
-- Untested: `promoteCustomerToSeller`, `findAccessById`, `updateProfile` validation edge cases, concurrent `create` or `setDefault`.
+- Untested: `promoteCustomerToSeller`, `findAccessById`, `updateProfile` validation edge cases.
 
 ## Known gaps
 
-- `AddressesService.create` counts existing addresses and then inserts, outside a transaction ([addresses.service.ts:30](../../../services/commerce-api/src/modules/users/addresses/addresses.service.ts#L30)). Two concurrent first-address creates can both become default. There is no DB constraint to stop it.
-- `remove` deletes the address and then promotes the next default in separate statements, outside a transaction ([addresses.service.ts:52](../../../services/commerce-api/src/modules/users/addresses/addresses.service.ts#L52)).
-- `findOne` and `setDefault`'s ownership check run before the transaction starts, and the update inside it is keyed only by `id` ([addresses.service.ts:72](../../../services/commerce-api/src/modules/users/addresses/addresses.service.ts#L72)).
+- A legacy user with addresses but no default is repaired only on their next address `create` or `remove` (or by `setDefault`); `update` does no repair. `scripts/check-transactional-shopping-preflight.cjs` lists such users as a warning.
 - `country` is not uppercased or checked against ISO-3166. `phone` has no format check.
 - `PATCH /users/me` returns a 500-class Prisma error (P2025) if the user row has been deleted, because `updateProfile` does not check that the row exists first ([users.service.ts:65](../../../services/commerce-api/src/modules/users/users.service.ts#L65)).
 - There are two "who am I" endpoints with different shapes: `GET /auth/me` (`PublicUser` including `emailVerified`) and `GET /users/me` (`UserProfile`, which has names/phone but no verification flag).

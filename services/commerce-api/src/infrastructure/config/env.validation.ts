@@ -7,12 +7,18 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  Matches,
   Max,
   Min,
   MinLength,
   ValidateIf,
   validateSync,
 } from 'class-validator';
+
+import {
+  CHECKOUT_FINGERPRINT_KEY_ID_PATTERN,
+  parseCheckoutFingerprintKeyring,
+} from '../../modules/checkout/checkout-fingerprint';
 
 enum NodeEnv {
   Development = 'development',
@@ -54,6 +60,17 @@ class EnvironmentVariables {
   @IsString()
   @IsNotEmpty()
   EMAIL_DELIVERY_ENCRYPTION_KEYS!: string;
+
+  // HMAC keyring for checkout Idempotency-Key receipts; see
+  // CheckoutFingerprintService. JSON object keyId -> padded base64 secret of
+  // at least 32 bytes. Keep retired keys while their receipts may be retried:
+  // a receipt whose key is gone answers 409 instead of replaying.
+  @Matches(CHECKOUT_FINGERPRINT_KEY_ID_PATTERN)
+  CHECKOUT_FINGERPRINT_ACTIVE_KEY_ID!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  CHECKOUT_FINGERPRINT_KEYS!: string;
 
   @IsString()
   @IsNotEmpty()
@@ -385,6 +402,10 @@ export function validate(
     'EMAIL_DELIVERY',
     validatedConfig.EMAIL_DELIVERY_ENCRYPTION_ACTIVE_KEY_ID,
     validatedConfig.EMAIL_DELIVERY_ENCRYPTION_KEYS,
+  );
+  parseCheckoutFingerprintKeyring(
+    validatedConfig.CHECKOUT_FINGERPRINT_ACTIVE_KEY_ID,
+    validatedConfig.CHECKOUT_FINGERPRINT_KEYS,
   );
   if (
     Boolean(validatedConfig.SMTP_USER) !== Boolean(validatedConfig.SMTP_PASS)

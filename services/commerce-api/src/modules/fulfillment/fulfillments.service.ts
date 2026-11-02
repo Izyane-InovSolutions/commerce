@@ -1351,6 +1351,13 @@ export class FulfillmentsService {
       orderItems.map((item) => [item.id, item.offerId]),
     );
 
+    // Every record this cancellation restocks, locked in ascending id before
+    // the first write — the global inventory lock order checkout relies on.
+    await this.inventoryService.lockRecordsForWrite(
+      orderItems.map((item) => ({ offerId: item.offerId })),
+      tx,
+    );
+
     for (const { line, quantity } of entries) {
       await tx.fulfillmentLine.update({
         where: { id: line.id },
@@ -1426,6 +1433,16 @@ export class FulfillmentsService {
     entries: { line: FulfillmentLine; quantity: number }[],
     reason: string,
   ): Promise<void> {
+    // Every record this cancellation restocks, locked in ascending id before
+    // the first write — the global inventory lock order checkout relies on.
+    await this.inventoryService.lockRecordsForWrite(
+      entries.map(({ line }) => ({
+        warehouseId: fo.warehouseId!,
+        variantId: line.variantId,
+      })),
+      tx,
+    );
+
     for (const { line, quantity } of entries) {
       const activeUndispatched =
         line.allocatedQuantity -

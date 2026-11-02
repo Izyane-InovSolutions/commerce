@@ -30,3 +30,24 @@ export type AddItemResult = {
 };
 
 export type AddItemResponse = CartView & { guestToken?: string };
+
+/**
+ * One persisted cart line as a checkout consumed it. The order keeps these as
+ * its cleanup receipt, so only lines still exactly in this state are removed.
+ */
+export type CheckoutCartSnapshotLine = {
+  id: string;
+  offerId: string;
+  quantity: number;
+  revision: number;
+};
+
+/**
+ * A snapshot line as read from the cart, with the line's `createdAt`: cart
+ * lines are allocated stock in (createdAt, id) order, both by the cart's own
+ * stock check and by checkout's reservations. `createdAt` only orders the
+ * reservations; it is not part of the receipt the order persists.
+ */
+export type CheckoutCartSnapshotRow = CheckoutCartSnapshotLine & {
+  createdAt: Date;
+};

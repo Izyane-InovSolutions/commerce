@@ -347,6 +347,8 @@ export class GoodsReceiptsService {
       }[] = [];
       const seenPoLineIds = new Set<string>();
 
+      await this.lockReceiptRecords(tx, receipt, poLinesById);
+
       for (const line of receipt.lines) {
         if (
           line.deliveredQuantity !==
@@ -531,6 +533,7 @@ export class GoodsReceiptsService {
       const po: PurchaseOrderWithLines =
         await this.purchaseOrdersService.lockRow(tx, receipt.purchaseOrderId);
       const poLinesById = new Map(po.lines.map((line) => [line.id, line]));
+      await this.lockReceiptRecords(tx, receipt, poLinesById);
       const receiptNumber =
         await this.numberingService.nextGoodsReceiptNumber(tx);
 
@@ -631,6 +634,26 @@ export class GoodsReceiptsService {
         include: { lines: true },
       });
     });
+  }
+
+  /**
+   * Locks every inventory record a post or reversal of this receipt will
+   * change, in ascending id, before its first per-line write — the global
+   * inventory lock order checkout relies on — rather than line by line.
+   */
+  private async lockReceiptRecords(
+    tx: Prisma.TransactionClient,
+    receipt: GoodsReceiptWithLines,
+    poLinesById: Map<string, PurchaseOrderWithLines['lines'][number]>,
+  ): Promise<void> {
+    const keys = receipt.lines.flatMap((line) => {
+      const poLine = poLinesById.get(line.purchaseOrderLineId);
+      return line.acceptedQuantity > 0 && poLine
+        ? [{ warehouseId: receipt.warehouseId, variantId: poLine.variantId }]
+        : [];
+    });
+    if (keys.length > 0)
+      await this.inventoryService.lockRecordsForWrite(keys, tx);
   }
 
   private assertReconciled(lines: GoodsReceiptLineDto[]): void {

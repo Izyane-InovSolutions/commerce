@@ -61,7 +61,7 @@ sequenceDiagram
 
 ### Key rules along the way
 
-- **Checkout idempotency.** Sending the same `Idempotency-Key` again returns the order and payment that already exist. If the first attempt never reached payment, the key is released and checkout starts over. See [checkout.md](modules/checkout.md).
+- **Checkout idempotency.** The key is optional. Sending the same `Idempotency-Key` with the same request replays the recorded outcome; a different request gets 409. An interrupted attempt that never reached payment is resumed by the retry. Once a payment row exists, the key is never used to pay again. See [checkout.md](modules/checkout.md) and the [Stage 7 verification](transactional-shopping-verification.md).
 - **Order split.** An order splits into one **SellerOrder per seller** (the platform counts as seller `null`), and each of those into **ShippingGroups**. Every shipping group is quoted, fulfilled and shipped on its own. See [orders.md](modules/orders.md).
 - **Unknown payment outcome.** If the gateway times out or its answer is unclear, the payment is kept, flagged `requiresReconciliation`, and **stock stays reserved**. The order is never cancelled on a guess. See [payments.md](modules/payments.md).
 - **No verified gateway webhooks yet.** Pending unified payments can settle through `POST payments/:id/status` or the background reconciliation scheduler/job. Referenced attempts can also expire through that worker. This does not prove safe late-success recovery. See [integrations.md](integrations.md#payments).

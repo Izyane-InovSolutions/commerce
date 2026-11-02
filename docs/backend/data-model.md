@@ -13,7 +13,7 @@
   - `InventoryMovement`
   - `LedgerEntry`
   - `AuditEvent`
-- **Constraints.** Idempotency and uniqueness are enforced by database constraints, not only by checks in code. For example: `(userId, idempotencyKey)` on orders, `(type, referenceType, referenceId)` on ledger entries, one review per order item, and `CarrierWebhookDelivery` dedupe keys.
+- **Constraints.** Idempotency and uniqueness are enforced by database constraints, not only by checks in code. For example: `(userId, idempotencyKey)` on orders, `(userId, key)` on checkout attempts, one default address per user (partial unique index), `(type, referenceType, referenceId)` on ledger entries, one review per order item, and `CarrierWebhookDelivery` dedupe keys.
 - **Concurrency.** Aggregates that are edited concurrently carry `version Int @default(0)`.
 
 ## Domains
@@ -23,7 +23,7 @@
 | Model                                          | Purpose                                                                                                                                                                                                  |
 | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `User`                                         | Account. `role` (`Role`: CUSTOMER, SELLER, STAFF, ADMIN), `isActive`, `emailVerifiedAt`, `verificationGraceUntil`                                                                                        |
-| `Address`                                      | The user's address book. One default per user                                                                                                                                                            |
+| `Address`                                      | The user's address book. Exactly one default whenever a user has addresses; the partial unique index `addresses_one_default_per_user` (created in a migration, not expressible in the schema) rejects a second one |
 | `Session`                                      | One row per issued refresh token. Rows are grouped into rotation families (`familyId`). The row also holds revocation state, the encrypted 30 s `recoveryData`, and IP / user-agent / last-used metadata |
 | `PasswordResetToken`, `EmailVerificationToken` | Hashed single-use tokens. The verification token is bound to `targetEmail`                                                                                                                               |
 | `HandoffToken`                                 | Single-use 60 s code for signing in across apps                                                                                                                                                          |
@@ -91,14 +91,15 @@ erDiagram
 | Model          | Purpose                                                                                                    |
 | -------------- | ---------------------------------------------------------------------------------------------------------- |
 | `Cart`         | A cart owned by a user or a guest (`CartStatus`: ACTIVE, MERGED). A guest cart is keyed by its guest token |
-| `CartItem`     | An offer and a quantity                                                                                    |
+| `CartItem`     | An offer, a quantity (`CHECK > 0`) and a `revision` (`CHECK >= 0`) bumped on every quantity write, so a checkout snapshot names exact line versions |
 | `WishlistItem` | An offer a user has saved                                                                                  |
 
 ### Orders, payments and financials
 
 | Model                           | Purpose                                                                                                                                                                                                              |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Order`                         | The customer's order (`OrderStatus`: PENDING_PAYMENT, PAID, CANCELLED, PARTIALLY_REFUNDED, REFUNDED). Holds totals, the address snapshot and `idempotencyKey`                                                        |
+| `Order`                         | The customer's order (`OrderStatus`: PENDING_PAYMENT, PAID, CANCELLED, PARTIALLY_REFUNDED, REFUNDED). Holds totals, the address snapshot and `idempotencyKey`. `checkoutCartSnapshot` (`jsonb`) is an internal cleanup receipt, `[{id, offerId, quantity, revision}]` for the cart lines consumed; no API returns it (`ORDER_OMIT`) |
+| `CheckoutAttempt`               | Receipt for a keyed checkout, unique per `(userId, key)`. Holds `operation`, an HMAC `fingerprint` with `fingerprintKeyId`/`fingerprintVersion`, `status` (IN_PROGRESS, COMPLETED, REJECTED, BLOCKED), `stage` (RECEIVED, ORDER_CREATED, PAYMENT_STARTED, FINISHED), `ownerToken` and `leaseExpiresAt`, the unique linked `orderId`, the replayed `response` (`json`, so replays are byte-identical) and `errorStatus`. CHECK constraints enforce the allowed values and the outcome shape; FKs to `users` (cascade) and `orders` (no action). See [checkout.md](modules/checkout.md) |
 | `SellerOrder`                   | The part of an order for one seller (the platform is `seller = null`). It has its own status and `refundedAmount`                                                                                                    |
 | `ShippingGroup`                 | A shipping unit inside a seller order, with its quote snapshot (rate, provider and carrier codes)                                                                                                                    |
 | `OrderItem`                     | One line: offer, price and seller snapshots, quantity, and its seller order and shipping group                                                                                                                       |

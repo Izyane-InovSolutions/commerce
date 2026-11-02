@@ -15,6 +15,7 @@ function buildPrisma(): {
     delete: jest.Mock;
   };
   $transaction: jest.Mock;
+  $queryRaw: jest.Mock;
 } {
   const prisma = {
     address: {
@@ -28,6 +29,7 @@ function buildPrisma(): {
       delete: jest.fn(),
     },
     $transaction: jest.fn(),
+    $queryRaw: jest.fn().mockResolvedValue([{ id: 'user-1' }]),
   };
   prisma.$transaction.mockImplementation(
     (callback: (tx: typeof prisma) => unknown) => callback(prisma),
@@ -89,13 +91,14 @@ describe('AddressesService', () => {
     });
 
     it('does not default a subsequent address', async () => {
-      prisma.address.count.mockResolvedValue(1);
+      // One existing address, which is the default.
+      prisma.address.count.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
       prisma.address.create.mockResolvedValue({
         id: 'addr-2',
         isDefault: false,
       });
 
-      await service.create('user-1', {
+      const created = await service.create('user-1', {
         recipientName: 'A',
         line1: 'L1',
         city: 'C',
@@ -108,6 +111,122 @@ describe('AddressesService', () => {
           data: expect.objectContaining({ isDefault: false }) as object,
         }),
       );
+      expect(prisma.address.update).not.toHaveBeenCalled();
+      expect(created).toEqual({ id: 'addr-2', isDefault: false });
+    });
+
+    it('promotes and returns the new address for a user with addresses but no default', async () => {
+      prisma.address.count.mockResolvedValueOnce(2).mockResolvedValueOnce(0);
+      prisma.address.create.mockResolvedValue({
+        id: 'addr-3',
+        isDefault: false,
+      });
+      prisma.address.findFirst.mockResolvedValue({ id: 'addr-3' });
+      prisma.address.update.mockResolvedValue({
+        id: 'addr-3',
+        isDefault: true,
+      });
+
+      const created = await service.create('user-1', {
+        recipientName: 'A',
+        line1: 'L1',
+        city: 'C',
+        postalCode: '00000',
+        country: 'US',
+      });
+
+      expect(prisma.address.findFirst).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+      });
+      expect(created).toEqual({ id: 'addr-3', isDefault: true });
+    });
+
+    it('returns the created row unchanged when the repair promotes an older address', async () => {
+      prisma.address.count.mockResolvedValueOnce(2).mockResolvedValueOnce(0);
+      prisma.address.create.mockResolvedValue({
+        id: 'addr-3',
+        isDefault: false,
+      });
+      prisma.address.findFirst.mockResolvedValue({ id: 'addr-1' });
+      prisma.address.update.mockResolvedValue({
+        id: 'addr-1',
+        isDefault: true,
+      });
+
+      const created = await service.create('user-1', {
+        recipientName: 'A',
+        line1: 'L1',
+        city: 'C',
+        postalCode: '00000',
+        country: 'US',
+      });
+
+      expect(prisma.address.update).toHaveBeenCalledWith({
+        where: { id: 'addr-1' },
+        data: { isDefault: true },
+      });
+      expect(created).toEqual({ id: 'addr-3', isDefault: false });
+    });
+  });
+
+  describe('user lock', () => {
+    it('locks the users row before counting addresses on create', async () => {
+      const calls: string[] = [];
+      prisma.$queryRaw.mockImplementation(() => {
+        calls.push('lock');
+        return Promise.resolve([{ id: 'user-1' }]);
+      });
+      prisma.address.count.mockImplementation(() => {
+        calls.push('count');
+        return Promise.resolve(0);
+      });
+      prisma.address.create.mockResolvedValue({ id: 'addr-1' });
+
+      await service.create('user-1', {
+        recipientName: 'A',
+        line1: 'L1',
+        city: 'C',
+        postalCode: '00000',
+        country: 'US',
+      });
+
+      expect(calls).toEqual(['lock', 'count']);
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('checks ownership inside the locked transaction on update', async () => {
+      prisma.address.findUnique.mockResolvedValue({
+        id: 'addr-1',
+        userId: 'user-2',
+      });
+
+      await expect(
+        service.update('user-1', 'addr-1', { city: 'X' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+      expect(prisma.address.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('update', () => {
+    it('never changes the default flag', async () => {
+      prisma.address.findUnique.mockResolvedValue({
+        id: 'addr-1',
+        userId: 'user-1',
+        isDefault: true,
+      });
+      prisma.address.update.mockResolvedValue({ id: 'addr-1' });
+
+      await service.update('user-1', 'addr-1', {
+        city: 'X',
+        isDefault: false,
+      } as never);
+
+      expect(prisma.address.update).toHaveBeenCalledWith({
+        where: { id: 'addr-1' },
+        data: { city: 'X', isDefault: undefined },
+      });
     });
   });
 
@@ -118,12 +237,18 @@ describe('AddressesService', () => {
         userId: 'user-1',
         isDefault: true,
       });
+      // The default went with the delete.
+      prisma.address.count.mockResolvedValue(0);
       prisma.address.findFirst.mockResolvedValue({ id: 'addr-2' });
 
       await service.remove('user-1', 'addr-1');
 
       expect(prisma.address.delete).toHaveBeenCalledWith({
         where: { id: 'addr-1' },
+      });
+      expect(prisma.address.findFirst).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
       });
       expect(prisma.address.update).toHaveBeenCalledWith({
         where: { id: 'addr-2' },
@@ -137,10 +262,33 @@ describe('AddressesService', () => {
         userId: 'user-1',
         isDefault: false,
       });
+      // Another address is still the default.
+      prisma.address.count.mockResolvedValue(1);
 
       await service.remove('user-1', 'addr-1');
 
+      expect(prisma.address.count).toHaveBeenCalledWith({
+        where: { userId: 'user-1', isDefault: true },
+      });
+      expect(prisma.address.findFirst).not.toHaveBeenCalled();
       expect(prisma.address.update).not.toHaveBeenCalled();
+    });
+
+    it('repairs a user left with no default when a non-default address is deleted', async () => {
+      prisma.address.findUnique.mockResolvedValue({
+        id: 'addr-1',
+        userId: 'user-1',
+        isDefault: false,
+      });
+      prisma.address.count.mockResolvedValue(0);
+      prisma.address.findFirst.mockResolvedValue({ id: 'addr-3' });
+
+      await service.remove('user-1', 'addr-1');
+
+      expect(prisma.address.update).toHaveBeenCalledWith({
+        where: { id: 'addr-3' },
+        data: { isDefault: true },
+      });
     });
 
     it('leaves no default when the last address is deleted', async () => {
@@ -149,6 +297,7 @@ describe('AddressesService', () => {
         userId: 'user-1',
         isDefault: true,
       });
+      prisma.address.count.mockResolvedValue(0);
       prisma.address.findFirst.mockResolvedValue(null);
 
       await service.remove('user-1', 'addr-1');

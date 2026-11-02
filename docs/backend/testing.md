@@ -37,6 +37,18 @@ docker compose -f deploy/docker-compose.test.yml down
 
 The 2026-09-30 Step 2 run verified Docker Desktop's WSL 2 Linux engine and the commands above from a newly created test volume. The dedicated Compose service became healthy on `127.0.0.1:55432`; all 42 migrations, 16 suites and 79 integration tests passed. GitHub Actions provisions an independent PostgreSQL 17 service and does not require developer database credentials or secrets.
 
+### Running a suite against its own database
+
+The guard reads `TEST_DATABASE_URL` and `TEST_DATABASE_NAME` from the process environment before `.env.integration`, so one suite can target its own empty database. The name must end in `_test` and the database must already exist; global setup runs `prisma migrate deploy` against it. From `services/commerce-api`:
+
+```powershell
+$env:TEST_DATABASE_URL='postgresql://<user>:<password>@127.0.0.1:<port>/commerce_checkout_test?schema=public'
+$env:TEST_DATABASE_NAME='commerce_checkout_test'
+npm run test:integration -- test/checkout-idempotency
+```
+
+The Stage 7 suites are `checkout-idempotency`, `checkout-reaper`, `inventory-locking`, `cart-concurrency`, `cart-cleanup`, `addresses` and `transactional-shopping-migration`. The migration suite also needs `CREATE DATABASE` on the server behind `TEST_DATABASE_URL`. It creates and drops its own `stage7_*_test` scratch databases from `template0` and deploys partial migration histories from copies under the OS temp directory. It reads and writes no rows in the target database. Results are in the [Stage 7 verification](transactional-shopping-verification.md#verification). That run used a disposable `initdb` PostgreSQL 17.6 cluster on loopback port 54329 instead of the Compose service, because Docker is not installed on that machine and port 55432 falls inside a Windows reserved port range there.
+
 ## Database and provider safeguards
 
 [integration-test.config.ts](../../services/commerce-api/src/infrastructure/config/integration-test.config.ts) and its existing unit tests retain these safeguards:

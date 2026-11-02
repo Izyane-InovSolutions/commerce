@@ -11,6 +11,7 @@ import { Test } from '@nestjs/testing';
 import { Role } from '@prisma/client';
 import { json, type Request } from 'express';
 import request from 'supertest';
+import type { Test as SupertestRequest } from 'supertest';
 
 import { AppModule } from '../../src/app.module';
 import { ValidationException } from '../../src/common/http/validation-exception';
@@ -38,6 +39,27 @@ export type CheckoutHarness = {
     onHand: number,
     unitAmount?: number,
   ): Promise<StockedOffer>;
+  /** Adds `quantity` of the offer to the customer's cart (expects 201). */
+  addToCart(
+    customer: Customer,
+    offer: StockedOffer,
+    quantity: number,
+  ): Promise<void>;
+  /** POST /checkout for the whole cart; `body` overrides/extends the default
+   * { shippingAddressId, currency: 'ZMW' }. The status is not asserted. */
+  postCheckout(
+    customer: Customer,
+    idempotencyKey?: string,
+    body?: Record<string, unknown>,
+  ): SupertestRequest;
+  /** POST /checkout/buy-now for `quantity` of the offer; status not asserted. */
+  postBuyNow(
+    customer: Customer,
+    offer: StockedOffer,
+    quantity: number,
+    idempotencyKey?: string,
+    body?: Record<string, unknown>,
+  ): SupertestRequest;
   /** Adds `quantity` of the offer to the customer's cart and checks out. */
   checkout(
     customer: Customer,
@@ -103,7 +125,9 @@ export async function createCheckoutHarness(
         new ValidationException(errors),
     }),
   );
-  await app.init();
+  // Listening once up front lets specs fire concurrent requests at one
+  // server; supertest would otherwise start and stop a listener per request.
+  await app.listen(0, '127.0.0.1');
 
   const prisma = app.get(PrismaService);
   const jwt = app.get(JwtService);
@@ -199,23 +223,69 @@ export async function createCheckoutHarness(
     };
   }
 
+  async function addToCart(
+    customer: Customer,
+    offer: StockedOffer,
+    quantity: number,
+  ): Promise<void> {
+    await request(server())
+      .post('/api/v1/cart/items?currency=ZMW')
+      .set(customer.headers)
+      .send({ offerId: offer.offerId, quantity })
+      .expect(201);
+  }
+
+  function withKey(
+    test: SupertestRequest,
+    idempotencyKey: string | undefined,
+  ): SupertestRequest {
+    return idempotencyKey === undefined
+      ? test
+      : test.set('Idempotency-Key', idempotencyKey);
+  }
+
+  function postCheckout(
+    customer: Customer,
+    idempotencyKey?: string,
+    body: Record<string, unknown> = {},
+  ): SupertestRequest {
+    return withKey(
+      request(server()).post('/api/v1/checkout').set(customer.headers),
+      idempotencyKey,
+    ).send({
+      shippingAddressId: customer.addressId,
+      currency: 'ZMW',
+      ...body,
+    });
+  }
+
+  function postBuyNow(
+    customer: Customer,
+    offer: StockedOffer,
+    quantity: number,
+    idempotencyKey?: string,
+    body: Record<string, unknown> = {},
+  ): SupertestRequest {
+    return withKey(
+      request(server()).post('/api/v1/checkout/buy-now').set(customer.headers),
+      idempotencyKey,
+    ).send({
+      offerId: offer.offerId,
+      quantity,
+      shippingAddressId: customer.addressId,
+      currency: 'ZMW',
+      ...body,
+    });
+  }
+
   async function checkout(
     customer: Customer,
     offer: StockedOffer,
     quantity: number,
     idempotencyKey: string = randomUUID(),
   ): Promise<CheckoutResponse> {
-    await request(server())
-      .post('/api/v1/cart/items?currency=ZMW')
-      .set(customer.headers)
-      .send({ offerId: offer.offerId, quantity })
-      .expect(201);
-    const response = await request(server())
-      .post('/api/v1/checkout')
-      .set(customer.headers)
-      .set('Idempotency-Key', idempotencyKey)
-      .send({ shippingAddressId: customer.addressId, currency: 'ZMW' })
-      .expect(201);
+    await addToCart(customer, offer, quantity);
+    const response = await postCheckout(customer, idempotencyKey).expect(201);
     return (response.body as { data: CheckoutResponse }).data;
   }
 
@@ -295,6 +365,9 @@ export async function createCheckoutHarness(
     server,
     createCustomer,
     createStockedOffer,
+    addToCart,
+    postCheckout,
+    postBuyNow,
     checkout,
     deliverWebhook,
     stock,

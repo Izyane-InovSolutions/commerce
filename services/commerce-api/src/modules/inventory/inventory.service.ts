@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import {
   InventoryMovementType,
+  OfferStockSource,
   ReservationStatus,
   type InventoryMovement,
   type InventoryRecord,
@@ -19,8 +20,16 @@ import { PrismaService } from '../../database/prisma.service';
 import { BackgroundJobsService } from '../../infrastructure/jobs/background-jobs.service';
 import { AuditService } from '../audit/audit.service';
 import { InventoryRecordView, ReserveOptions } from './inventory.types';
+import { stockPoolKey, type StockPoolKey } from './stock-allocation';
 
-const DEFAULT_RESERVATION_TTL_SECONDS = 15 * 60;
+export type { StockPoolKey } from './stock-allocation';
+
+/**
+ * How long a reservation holds stock unless the caller passes its own
+ * `ttlSeconds`. Checkout reservations use this, and the unpaid-order reaper
+ * is scheduled just after it (see UNPAID_ORDER_EXPIRY_DELAY_MS).
+ */
+export const DEFAULT_RESERVATION_TTL_SECONDS = 15 * 60;
 const POSTGRES_INTEGER_MIN = -2_147_483_648;
 const POSTGRES_INTEGER_MAX = 2_147_483_647;
 
@@ -43,6 +52,38 @@ type InventoryClient = Pick<
   Prisma.TransactionClient,
   'inventoryMovement' | 'inventoryRecord' | 'reservation' | '$executeRaw'
 >;
+
+/** What `lockStockPools` needs to know about an offer to find its records. */
+export type StockPoolOffer = {
+  id: string;
+  variantId: string;
+  stockSource: OfferStockSource;
+};
+
+/** One inventory record by its natural key: a warehouse's or an offer's. */
+export type InventoryRecordKey =
+  | { warehouseId: string; variantId: string }
+  | { offerId: string };
+
+export type LockedRecordKey = Pick<
+  InventoryRecord,
+  'id' | 'offerId' | 'warehouseId' | 'variantId'
+>;
+
+/**
+ * Plain code-unit order for lowercase UUID strings, which matches
+ * PostgreSQL's own `uuid` ordering — unlike `localeCompare`, whose collation
+ * is locale-dependent. Every row-lock loop sorts with this so two
+ * transactions always take the same locks in the same order.
+ */
+function compareIds(left: string, right: string): number {
+  if (left < right) return -1;
+  return left > right ? 1 : 0;
+}
+
+function sortedUniqueIds(ids: string[]): string[] {
+  return [...new Set(ids)].sort(compareIds);
+}
 
 @Injectable()
 export class InventoryService {
@@ -125,6 +166,172 @@ export class InventoryService {
           : [],
       ),
     );
+  }
+
+  /**
+   * What checkout would find free on each record of each pool, in ascending
+   * record id (the order `reserve` tries them), keyed by `stockPoolKey`.
+   *
+   * ACTIVE reservations already past `expiresAt` count as free: checkout
+   * sweeps them before allocating, so treating them as held would refuse
+   * stock a real checkout would get. Read-only and lock-free — a snapshot
+   * for an early check, never a substitute for checkout's own locked
+   * allocation. A requested pool with no records maps to an empty array.
+   */
+  async getAllocatableStock(
+    pools: StockPoolKey[],
+    client: Pick<
+      Prisma.TransactionClient,
+      'inventoryRecord' | 'reservation'
+    > = this.prisma,
+  ): Promise<Map<string, number[]>> {
+    const allocatable = new Map<string, number[]>(
+      pools.map((pool) => [stockPoolKey(pool), []]),
+    );
+    if (pools.length === 0) return allocatable;
+
+    const records = await client.inventoryRecord.findMany({
+      where: {
+        OR: pools.map((pool) =>
+          pool.kind === 'offer'
+            ? { offerId: pool.offerId }
+            : { variantId: pool.variantId, offerId: null },
+        ),
+      },
+      select: {
+        id: true,
+        variantId: true,
+        offerId: true,
+        onHand: true,
+        reserved: true,
+      },
+      orderBy: { id: 'asc' },
+    });
+    if (records.length === 0) return allocatable;
+
+    const lapsed = await client.reservation.groupBy({
+      by: ['inventoryRecordId'],
+      where: {
+        inventoryRecordId: { in: records.map((record) => record.id) },
+        status: ReservationStatus.ACTIVE,
+        expiresAt: { lt: new Date() },
+      },
+      _sum: { quantity: true },
+    });
+    const lapsedByRecordId = new Map(
+      lapsed.map((row) => [row.inventoryRecordId, row._sum.quantity ?? 0]),
+    );
+
+    for (const record of records) {
+      const key = record.offerId
+        ? stockPoolKey({ kind: 'offer', offerId: record.offerId })
+        : stockPoolKey({ kind: 'variant', variantId: record.variantId });
+      allocatable
+        .get(key)
+        ?.push(
+          record.onHand -
+            record.reserved +
+            (lapsedByRecordId.get(record.id) ?? 0),
+        );
+    }
+
+    return allocatable;
+  }
+
+  /**
+   * Row-locks the given inventory records, each once, in ascending id — the
+   * one order every path that locks several records must use, so two of
+   * them can never each hold a record the other is waiting on.
+   */
+  async lockInventoryRecords(
+    ids: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    for (const id of sortedUniqueIds(ids))
+      await tx.$queryRaw`SELECT id FROM inventory_records WHERE id = ${id}::uuid FOR UPDATE`;
+  }
+
+  /**
+   * Takes FOR KEY SHARE on the given offers, in ascending id. Inserting a row
+   * that references an offer (an order item, a seller inventory record) takes
+   * this lock implicitly through the foreign key; a path that will do so
+   * after locking inventory records calls this first instead, so offers are
+   * always locked before inventory records — the order a product hard delete
+   * (offers FOR UPDATE, then their records) also follows.
+   */
+  async lockOffersForKeyShare(
+    offerIds: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const ids = sortedUniqueIds(offerIds);
+    if (ids.length === 0) return;
+    await tx.$queryRaw`SELECT id FROM offers WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR KEY SHARE`;
+  }
+
+  /**
+   * Locks every record any of these offers could reserve from (see
+   * `reserve`/`reserveOffer`) up front, so an order spanning several pools
+   * takes all its inventory locks in one global order rather than pool by
+   * pool as each line happens to be reserved.
+   *
+   * Returns the locked ids (ascending): pass them to `reserve`/`reserveOffer`
+   * as `lockedRecordIds`, so a record that appears afterwards is never locked
+   * behind higher ids this transaction already holds.
+   */
+  async lockStockPools(
+    offers: StockPoolOffer[],
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    if (offers.length === 0) return [];
+    const records = await tx.inventoryRecord.findMany({
+      where: {
+        OR: offers.map((offer) =>
+          offer.stockSource === OfferStockSource.SELLER
+            ? { offerId: offer.id }
+            : { variantId: offer.variantId, offerId: null },
+        ),
+      },
+      select: { id: true },
+    });
+    const ids = sortedUniqueIds(records.map((record) => record.id));
+    await this.lockInventoryRecords(ids, tx);
+    return ids;
+  }
+
+  /**
+   * Locks, in ascending id, the existing records a multi-line stock write is
+   * about to change — before its first per-line write, so that write never
+   * holds one record while waiting on a lower one. A key with no record yet is
+   * skipped: the row that write creates is new and uncontended. Returns the
+   * locked records' keys in ascending id.
+   */
+  async lockRecordsForWrite(
+    keys: InventoryRecordKey[],
+    tx: Prisma.TransactionClient,
+  ): Promise<LockedRecordKey[]> {
+    if (keys.length === 0) return [];
+    const records = await tx.inventoryRecord.findMany({
+      where: {
+        OR: keys.map((key) =>
+          'offerId' in key
+            ? { offerId: key.offerId }
+            : {
+                warehouseId: key.warehouseId,
+                variantId: key.variantId,
+                offerId: null,
+              },
+        ),
+      },
+      select: { id: true, offerId: true, warehouseId: true, variantId: true },
+    });
+    const sorted = [...records].sort((left, right) =>
+      compareIds(left.id, right.id),
+    );
+    await this.lockInventoryRecords(
+      sorted.map((record) => record.id),
+      tx,
+    );
+    return sorted;
   }
 
   listMovements(inventoryRecordId: string): Promise<InventoryMovement[]> {
@@ -623,14 +830,20 @@ export class InventoryService {
       throw new BadRequestException('quantity must be positive');
     }
 
-    if (!tx) return this.prisma.$transaction((client) => this.reserve(variantId, quantity, options, client));
-    const client = tx;
-    const candidates = await client.inventoryRecord.findMany({
+    if (!tx)
+      return this.prisma.$transaction((client) =>
+        this.reserve(variantId, quantity, options, client),
+      );
+    const candidates = await tx.inventoryRecord.findMany({
       where: {
         variantId,
         offerId: null,
         ...(options.warehouseId ? { warehouseId: options.warehouseId } : {}),
+        ...(options.lockedRecordIds
+          ? { id: { in: options.lockedRecordIds } }
+          : {}),
       },
+      select: { id: true },
     });
 
     if (candidates.length === 0) {
@@ -639,15 +852,18 @@ export class InventoryService {
       );
     }
 
-    candidates.sort((a, b) => a.id.localeCompare(b.id));
-    for (const candidate of candidates)
-      await tx.$queryRaw`SELECT id FROM inventory_records WHERE id = ${candidate.id}::uuid FOR UPDATE`;
-    for (const candidate of candidates) {
-      await this.sweepExpired(candidate.id, tx);
-    }
+    const candidateIds = sortedUniqueIds(
+      candidates.map((candidate) => candidate.id),
+    );
+    // Lock every candidate before sweeping any, so the sweep's own
+    // record-then-reservation locks never interleave with a second record.
+    await this.lockInventoryRecords(candidateIds, tx);
+    for (const id of candidateIds) await this.sweepExpired(id, tx);
 
-    const refreshed = await client.inventoryRecord.findMany({
-      where: { id: { in: candidates.map((candidate) => candidate.id) } },
+    // Ascending id is the allocation order: a line is served whole by the
+    // first record that can hold it, never split across warehouses.
+    const refreshed = await tx.inventoryRecord.findMany({
+      where: { id: { in: candidateIds } },
       orderBy: { id: 'asc' },
     });
     const target = refreshed.find(
@@ -727,16 +943,23 @@ export class InventoryService {
   ): Promise<Reservation> {
     if (quantity <= 0)
       throw new BadRequestException('quantity must be positive');
-    if (!tx) return this.prisma.$transaction((client) => this.reserveOffer(offerId, quantity, options, client));
-    const client = tx;
-    const record = await client.inventoryRecord.findUnique({
+    if (!tx)
+      return this.prisma.$transaction((client) =>
+        this.reserveOffer(offerId, quantity, options, client),
+      );
+    const record = await tx.inventoryRecord.findUnique({
       where: { offerId },
     });
-    if (!record)
+    // A record the caller's pool lock did not see is treated as absent, as
+    // in `reserve`.
+    if (
+      !record ||
+      (options.lockedRecordIds && !options.lockedRecordIds.includes(record.id))
+    )
       throw new NotFoundException('No inventory record exists for this offer');
-    await tx.$queryRaw`SELECT id FROM inventory_records WHERE id = ${record.id}::uuid FOR UPDATE`;
+    await this.lockInventoryRecords([record.id], tx);
     await this.sweepExpired(record.id, tx);
-    const refreshed = await client.inventoryRecord.findUniqueOrThrow({
+    const refreshed = await tx.inventoryRecord.findUniqueOrThrow({
       where: { id: record.id },
     });
     if (refreshed.onHand - refreshed.reserved < quantity)
@@ -818,7 +1041,38 @@ export class InventoryService {
         this.release(reservationId, client),
       );
     const reservation = await this.lockReservation(reservationId, tx);
-    if (reservation.status !== ReservationStatus.ACTIVE) return reservation;
+    return this.releaseLocked(reservation, tx);
+  }
+
+  /**
+   * Releases several reservations (an order's lines) in one go: every
+   * affected inventory record is locked first, in ascending id, then every
+   * reservation in ascending id — the global lock order — instead of the
+   * record/reservation pairs one at a time, which could deadlock against a
+   * concurrent multi-record path. Same per-item semantics as `release`.
+   */
+  async releaseMany(
+    reservationIds: string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<Reservation[]> {
+    if (!tx)
+      return this.prisma.$transaction((client) =>
+        this.releaseMany(reservationIds, client),
+      );
+    const reservations = await this.lockReservations(reservationIds, tx);
+    const released: Reservation[] = [];
+    for (const reservation of reservations)
+      released.push(await this.releaseLocked(reservation, tx));
+    return released;
+  }
+
+  private releaseLocked(
+    reservation: Reservation,
+    tx: Prisma.TransactionClient,
+  ): Promise<Reservation> {
+    // Idempotent: already released or expired stock was returned once.
+    if (reservation.status !== ReservationStatus.ACTIVE)
+      return Promise.resolve(reservation);
     return this.finalizeReservation(
       reservation,
       ReservationStatus.RELEASED,
@@ -826,10 +1080,20 @@ export class InventoryService {
     );
   }
 
-  async expireReservation(reservationId: string, tx?: Prisma.TransactionClient): Promise<void> {
-    if (!tx) return this.prisma.$transaction((client) => this.expireReservation(reservationId, client));
+  async expireReservation(
+    reservationId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    if (!tx)
+      return this.prisma.$transaction((client) =>
+        this.expireReservation(reservationId, client),
+      );
     const reservation = await this.lockReservation(reservationId, tx);
-    if (reservation.status !== ReservationStatus.ACTIVE || reservation.expiresAt > new Date()) return;
+    if (
+      reservation.status !== ReservationStatus.ACTIVE ||
+      reservation.expiresAt > new Date()
+    )
+      return;
     await this.finalizeReservation(reservation, ReservationStatus.EXPIRED, tx);
   }
 
@@ -842,6 +1106,29 @@ export class InventoryService {
         this.commit(reservationId, client),
       );
     const reservation = await this.lockReservation(reservationId, tx);
+    return this.commitLocked(reservation, tx);
+  }
+
+  /** `releaseMany`'s counterpart for payment: same lock order as there. */
+  async commitMany(
+    reservationIds: string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<Reservation[]> {
+    if (!tx)
+      return this.prisma.$transaction((client) =>
+        this.commitMany(reservationIds, client),
+      );
+    const reservations = await this.lockReservations(reservationIds, tx);
+    const committed: Reservation[] = [];
+    for (const reservation of reservations)
+      committed.push(await this.commitLocked(reservation, tx));
+    return committed;
+  }
+
+  private async commitLocked(
+    reservation: Reservation,
+    tx: Prisma.TransactionClient,
+  ): Promise<Reservation> {
     if (reservation.status === ReservationStatus.COMMITTED) return reservation;
     if (reservation.status !== ReservationStatus.ACTIVE) {
       throw new ConflictException(
@@ -858,7 +1145,7 @@ export class InventoryService {
         'Inventory record state does not allow committing this reservation',
       );
     const committed = await tx.reservation.update({
-      where: { id: reservationId },
+      where: { id: reservation.id },
       data: { status: ReservationStatus.COMMITTED },
     });
     await this.recordMovement(
@@ -904,9 +1191,15 @@ export class InventoryService {
     );
   }
 
-  async sweepExpired(inventoryRecordId: string, tx?: Prisma.TransactionClient): Promise<void> {
-    if (!tx) return this.prisma.$transaction((client) => this.sweepExpired(inventoryRecordId, client));
-    await tx.$queryRaw`SELECT id FROM inventory_records WHERE id = ${inventoryRecordId}::uuid FOR UPDATE`;
+  async sweepExpired(
+    inventoryRecordId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    if (!tx)
+      return this.prisma.$transaction((client) =>
+        this.sweepExpired(inventoryRecordId, client),
+      );
+    await this.lockInventoryRecords([inventoryRecordId], tx);
     const expired = await tx.reservation.findMany({
       where: {
         inventoryRecordId,
@@ -953,14 +1246,47 @@ export class InventoryService {
     id: string,
     tx: Prisma.TransactionClient,
   ): Promise<Reservation> {
-    // Match reserve/sweep ordering: inventory row, then reservation row.
+    // Match reserve/sweep ordering: inventory row, then reservation row. A
+    // reservation's record never changes, so the unlocked first read is
+    // enough to know which record to lock.
     const initial = await tx.reservation.findUnique({ where: { id } });
     if (!initial) throw new NotFoundException('Reservation not found');
-    await tx.$queryRaw`SELECT id FROM inventory_records WHERE id = ${initial.inventoryRecordId}::uuid FOR UPDATE`;
+    await this.lockInventoryRecords([initial.inventoryRecordId], tx);
     await tx.$queryRaw`SELECT id FROM reservations WHERE id = ${id}::uuid FOR UPDATE`;
     const reservation = await tx.reservation.findUnique({ where: { id } });
     if (!reservation) throw new NotFoundException('Reservation not found');
     return reservation;
+  }
+
+  /**
+   * The multi-reservation form of `lockReservation`: all their inventory
+   * records (ascending id), then all the reservations (ascending id).
+   * Returns them re-read under the lock, in ascending id.
+   */
+  private async lockReservations(
+    ids: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Reservation[]> {
+    const reservationIds = sortedUniqueIds(ids);
+    if (reservationIds.length === 0) return [];
+    const initial = await tx.reservation.findMany({
+      where: { id: { in: reservationIds } },
+      select: { id: true, inventoryRecordId: true },
+    });
+    if (initial.length !== reservationIds.length)
+      throw new NotFoundException('Reservation not found');
+    await this.lockInventoryRecords(
+      initial.map((reservation) => reservation.inventoryRecordId),
+      tx,
+    );
+    for (const id of reservationIds)
+      await tx.$queryRaw`SELECT id FROM reservations WHERE id = ${id}::uuid FOR UPDATE`;
+    const reservations = await tx.reservation.findMany({
+      where: { id: { in: reservationIds } },
+    });
+    if (reservations.length !== reservationIds.length)
+      throw new NotFoundException('Reservation not found');
+    return reservations.sort((left, right) => compareIds(left.id, right.id));
   }
 
   private recordMovement(
