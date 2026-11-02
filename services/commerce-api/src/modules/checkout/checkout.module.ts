@@ -5,10 +5,16 @@ import { OrdersModule } from '../orders/orders.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { CheckoutController } from './checkout.controller';
 import { CheckoutService } from './checkout.service';
+import { CheckoutAttemptsService } from './checkout-attempts.service';
+import { CheckoutFingerprintService } from './checkout-fingerprint';
 
 @Module({
   imports: [OrdersModule, PaymentsModule, CartModule],
   controllers: [CheckoutController],
-  providers: [CheckoutService],
+  providers: [
+    CheckoutService,
+    CheckoutAttemptsService,
+    CheckoutFingerprintService,
+  ],
 })
 export class CheckoutModule {}

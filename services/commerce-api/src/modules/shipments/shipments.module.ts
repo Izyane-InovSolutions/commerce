@@ -28,7 +28,9 @@ import { ShippingWebhooksController } from './shipping-webhooks.controller';
     ManualCarrierProvider,
     {
       provide: CARRIER_PROVIDERS,
-      useFactory: (manual: ManualCarrierProvider): ManualCarrierProvider[] => [manual],
+      useFactory: (manual: ManualCarrierProvider): ManualCarrierProvider[] => [
+        manual,
+      ],
       inject: [ManualCarrierProvider],
     },
     ShipmentTrackingPollerService,

@@ -396,6 +396,55 @@ for (const source of program
           content: json({ $ref: '#/components/schemas/ErrorEnvelope' }),
         };
       }
+      if (
+        id === 'CheckoutController_checkout' ||
+        id === 'CheckoutController_buyNow'
+      ) {
+        operation.description =
+          'Idempotency-Key is optional, a UUID v4, and case-insensitive. Retrying with the same key and the same request replays the recorded result (or the recorded error) instead of checking out again; the same key with a different request returns 409. Without a key every call is a new checkout, so a retried or double-clicked submit can create a second order.';
+        const header = operation.parameters.find(
+          (p) => p.name === 'idempotency-key',
+        );
+        header.required = false;
+        header.schema = { type: 'string', format: 'uuid' };
+        header.description =
+          'Optional UUID v4, case-insensitive. Same key + same request replays the recorded outcome; same key + different request is a 409 CHECKOUT_KEY_REUSED. Omit it and every call is a new checkout.';
+        operation.responses['409'] = {
+          description: [
+            'Conflict. Checkout-key outcomes carry error.details entries { field: "code", message: <code> }, plus { field: "orderId" } and { field: "paymentId" } when known:',
+            'CHECKOUT_KEY_REUSED — the key was already used for a different request or the other checkout operation;',
+            'CHECKOUT_KEY_LEGACY_RECEIPT — the key belongs to an earlier checkout that cannot be compared or retried; check your orders and use a new key;',
+            'CHECKOUT_IN_PROGRESS — a request with this key is still running; retry the same key shortly;',
+            'CHECKOUT_REQUIRES_RECONCILIATION — payment may already have been submitted; check the order and payment instead of checking out again;',
+            'CHECKOUT_EXPIRED — the checkout was given up before payment started; check out again with a new key;',
+            'CHECKOUT_PAYMENT_FAILED — the payment was refused and the order cancelled; check out again with a new key.',
+            'Without a code detail: insufficient stock for an item, the cart changed since it was read (review the cart and check out again), selected items no longer in the cart, or an offer no longer available.',
+          ].join(' '),
+          content: json({ $ref: '#/components/schemas/ErrorEnvelope' }),
+        };
+      }
+      const cartConflicts = {
+        CartController_addItem:
+          'The resulting quantity exceeds available stock (error.details: { field: "offerId", message: <offerId> } and { field: "available", message: <units available> }), or exceeds the largest storable quantity ("Cart quantity is too large"), or the cart stopped being active.',
+        CartController_updateItem:
+          'An increased quantity exceeds available stock (error.details: { field: "offerId" } and { field: "available" }), or exceeds the largest storable quantity ("Cart quantity is too large"), or the cart stopped being active. Decreases are never stock-checked.',
+        CartController_merge:
+          'A merged line would exceed available stock (error.details: { field: "offerId" } and { field: "available" }) or the largest storable quantity ("Cart quantity is too large"). The merge is all or nothing: neither cart changes and the guest cart stays mergeable.',
+      };
+      if (cartConflicts[id])
+        operation.responses['409'] = {
+          description: cartConflicts[id],
+          content: json({ $ref: '#/components/schemas/ErrorEnvelope' }),
+        };
+      if (id === 'MetricsController_getPrometheusMetrics') {
+        operation.security = [{ metricsScrapeToken: [] }];
+        operation.description =
+          'For the configured internal scraper: send Authorization: Bearer <METRICS_SCRAPE_TOKEN>. Returns 404 when METRICS_SCRAPE_TOKEN is unset. Labels are bounded (method, route template, status, job type, topic); no user IDs, tokens or raw URLs.';
+        operation.responses[status] = {
+          description: 'Prometheus text exposition format 0.0.4',
+          content: { 'text/plain': { schema: { type: 'string' } } },
+        };
+      }
       operations[id] = operation;
     }
   }

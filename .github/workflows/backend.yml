@@ -1,0 +1,96 @@
+name: Backend checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_ENV: test
+  SCHEDULED_WORKERS_ENABLED: 'false'
+  PAYMENTS_PROVIDER: pending
+  MEDIA_STORAGE_DRIVER: local
+  AWS_EC2_METADATA_DISABLED: 'true'
+  # Non-database checks must never connect to an application database.
+  DATABASE_URL: postgresql://unused:unused@127.0.0.1:1/commerce_test
+  SHADOW_DATABASE_URL: postgresql://unused:unused@127.0.0.1:1/commerce_test_shadow
+
+jobs:
+  checks:
+    name: Backend / ${{ matrix.command }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        command:
+          [
+            typecheck,
+            lint,
+            'format:check',
+            'swagger:check',
+            test,
+            'test:e2e',
+            build,
+          ]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install backend dependencies
+        run: npm ci --workspace=@commerce/commerce-api --include-workspace-root
+      - name: Generate Prisma client
+        run: npm run prisma:generate --workspace=@commerce/commerce-api
+      - name: Run check
+        run: npm run ${{ matrix.command }} --workspace=@commerce/commerce-api
+      - name: Check generated contracts stayed committed
+        if: matrix.command == 'build'
+        run: git diff --exit-code -- services/commerce-api/src/common/openapi/contracts.generated.json
+
+  integration:
+    name: Backend / PostgreSQL integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17-bookworm
+        env:
+          POSTGRES_USER: commerce_test
+          POSTGRES_PASSWORD: commerce_test_only
+          POSTGRES_DB: commerce_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U commerce_test -d commerce_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      TEST_DATABASE_URL: postgresql://commerce_test:commerce_test_only@127.0.0.1:5432/commerce_test?schema=public
+      TEST_DATABASE_NAME: commerce_test
+      INTEGRATION_DATABASE_MODE: dedicated-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install backend dependencies
+        run: npm ci --workspace=@commerce/commerce-api --include-workspace-root
+      - name: Generate Prisma client
+        run: npm run prisma:generate --workspace=@commerce/commerce-api
+      - name: Migrate isolated database and run integration tests
+        # Jest globalSetup validates the target before running migrate deploy.
+        run: npm run test:integration --workspace=@commerce/commerce-api

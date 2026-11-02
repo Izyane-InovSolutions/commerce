@@ -13,7 +13,10 @@
 //   (`deletedAt DateTime?`) only where the business actually needs them.
 //
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // Exposes connection-pool counters ($metrics) to the operational metrics
+  // collector; it adds no queries and changes no client behaviour.
+  previewFeatures = ["metrics"]
 }
 
 datasource db {
@@ -185,13 +188,13 @@ model User {
   sellerRatings           SellerRating[]
   reviewReports           ReviewReport[]
   notifications           Notification[]
+  stockAdjustmentReceipts StockAdjustmentReceipt[]
+  checkoutAttempts        CheckoutAttempt[]
 
   @@map("users")
 }
 
-// Only one address per user should have isDefault: true — enforced in
-// AddressesService (set new default -> unset the previous one in the same
-// transaction), not a DB constraint.
+// A partial unique index in the Stage 7 migration enforces one default per user.
 model Address {
   id            String   @id @default(uuid()) @db.Uuid
   userId        String   @map("user_id") @db.Uuid
@@ -710,7 +713,7 @@ model InventoryRecord {
 model InventoryMovement {
   id                String                @id @default(uuid()) @db.Uuid
   inventoryRecordId String                @map("inventory_record_id") @db.Uuid
-  inventoryRecord   InventoryRecord       @relation(fields: [inventoryRecordId], references: [id], onDelete: Cascade)
+  inventoryRecord   InventoryRecord       @relation(fields: [inventoryRecordId], references: [id], onDelete: Restrict)
   type              InventoryMovementType
   quantity          Int
   referenceType     String?               @map("reference_type")
@@ -722,12 +725,30 @@ model InventoryMovement {
   @@map("inventory_movements")
 }
 
+// Stores the result of an optional retry-safe admin stock adjustment. The
+// key is scoped to the authenticated actor so two administrators can use the
+// same client-generated UUID independently. The response is the immutable
+// snapshot returned by the first successful request.
+model StockAdjustmentReceipt {
+  id             String   @id @default(uuid()) @db.Uuid
+  actorUserId    String   @map("actor_user_id") @db.Uuid
+  actor          User     @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  idempotencyKey String   @map("idempotency_key") @db.Uuid
+  requestHash    String   @map("request_hash") @db.VarChar(64)
+  response       Json
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@unique([actorUserId, idempotencyKey])
+  @@index([createdAt])
+  @@map("inventory_adjustment_receipts")
+}
+
 // holderType/holderId are nullable now — Cart/Checkout (Phase 1.4/1.5)
 // populate them; same forward-compatible-nullable pattern as Offer.sellerId.
 model Reservation {
   id                String            @id @default(uuid()) @db.Uuid
   inventoryRecordId String            @map("inventory_record_id") @db.Uuid
-  inventoryRecord   InventoryRecord   @relation(fields: [inventoryRecordId], references: [id], onDelete: Cascade)
+  inventoryRecord   InventoryRecord   @relation(fields: [inventoryRecordId], references: [id], onDelete: Restrict)
   quantity          Int
   status            ReservationStatus @default(ACTIVE)
   holderType        String?           @map("holder_type")
@@ -769,6 +790,7 @@ model CartItem {
   offerId   String   @map("offer_id") @db.Uuid
   offer     Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
   quantity  Int
+  revision  Int      @default(0)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -900,9 +922,54 @@ model Order {
   // treats every NULL in a unique index as distinct from every other NULL.
   idempotencyKey String? @map("idempotency_key") @db.VarChar(64)
 
+  // Internal cleanup receipt: [{ id, offerId, quantity, revision }] for the
+  // cart lines this order consumed. Never returned by customer or admin APIs;
+  // reads omit it (see ORDER_OMIT in orders.service.ts).
+  checkoutCartSnapshot Json?            @map("checkout_cart_snapshot")
+  checkoutAttempt      CheckoutAttempt?
+
   @@unique([userId, idempotencyKey])
   @@index([userId])
   @@map("orders")
+}
+
+// Durable checkout request receipt, scoped to (userId, key).
+//
+// status: IN_PROGRESS | COMPLETED | REJECTED | BLOCKED. BLOCKED means provider
+// submission may have happened and the outcome is unknown, so the key can never
+// start another payment; callers reconcile through the linked order.
+// stage: RECEIVED -> ORDER_CREATED -> PAYMENT_STARTED -> FINISHED. Local work is
+// only recovered while no Payment row exists for the linked order, because the
+// Payment row is committed before the provider is ever called.
+// ownerToken/leaseExpiresAt fence the executing request; the order link is
+// written only by the current owner inside the order transaction.
+// fingerprint is HMAC-SHA256 (fingerprintKeyId, fingerprintVersion) over the
+// normalized request; NULL metadata marks a legacy receipt that cannot be
+// compared and therefore never replays or resubmits.
+model CheckoutAttempt {
+  id                 String    @id @default(uuid()) @db.Uuid
+  userId             String    @map("user_id") @db.Uuid
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key                String    @db.VarChar(64)
+  operation          String    @db.VarChar(16)
+  fingerprint        String    @db.VarChar(64)
+  fingerprintKeyId   String?   @map("fingerprint_key_id") @db.VarChar(32)
+  fingerprintVersion Int?      @map("fingerprint_version") @db.SmallInt
+  status             String    @default("IN_PROGRESS") @db.VarChar(16)
+  stage              String    @default("RECEIVED") @db.VarChar(24)
+  ownerToken         String?   @map("owner_token") @db.Uuid
+  leaseExpiresAt     DateTime? @map("lease_expires_at")
+  orderId            String?   @unique @map("order_id") @db.Uuid
+  order              Order?    @relation(fields: [orderId], references: [id], onDelete: NoAction)
+  // json, not jsonb: replays must return the stored body byte for byte.
+  response           Json?     @db.Json
+  errorStatus        Int?      @map("error_status")
+  completedAt        DateTime? @map("completed_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  @@unique([userId, key])
+  @@map("checkout_attempts")
 }
 
 // One row per seller group within an Order - sellerId: null is the
@@ -998,7 +1065,7 @@ model OrderItem {
   shippingGroupId String?          @map("shipping_group_id") @db.Uuid
   shippingGroup   ShippingGroup?   @relation(fields: [shippingGroupId], references: [id], onDelete: SetNull)
   offerId         String           @map("offer_id") @db.Uuid
-  offer           Offer            @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  offer           Offer            @relation(fields: [offerId], references: [id], onDelete: Restrict)
   quantity        Int
   unitAmount      Int              @map("unit_amount")
   currency        String           @db.VarChar(3)
@@ -1474,9 +1541,9 @@ model PurchaseOrderLine {
 }
 
 // DRAFT lets staff key in or scan a delivery before committing it — only
-// POSTED affects inventory. A posted receipt is immutable; correcting one
-// means posting a REVERSED receipt (reversalOfId) with negative movements,
-// never editing the original rows.
+// POSTED affects inventory. Correcting one marks the original REVERSED and
+// creates a POSTED reversal receipt (reversalOfId) with negative movements;
+// the original lines remain immutable.
 model GoodsReceipt {
   id                      String                @id @default(uuid()) @db.Uuid
   receiptNumber           String                @unique @map("receipt_number")

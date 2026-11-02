@@ -1,5 +1,12 @@
 import { ReturnDisposition } from '@prisma/client';
-import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Min,
+} from 'class-validator';
 
 export class InspectionLineDto {
   @IsUUID()

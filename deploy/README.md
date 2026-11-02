@@ -1,5 +1,7 @@
 # Deploying the Commerce API — internal testing
 
+For automated backend tests, use the separate [PostgreSQL test setup](../docs/backend/testing.md#isolated-local-postgresql-17) and `docker-compose.test.yml`. It has its own database, credentials, volume and loopback port; the deployment database below is not a test target.
+
 Runs the NestJS API, PostgreSQL and a Caddy reverse proxy on the on-premise
 server at **192.168.100.105**, reachable from the LAN at:
 

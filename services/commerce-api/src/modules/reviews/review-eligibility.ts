@@ -57,7 +57,12 @@ export function computeItemDeliveryCoverage(
     };
   }
 
-  return { eligible: true, requiredQuantity, deliveredQuantity, lastDeliveredAt };
+  return {
+    eligible: true,
+    requiredQuantity,
+    deliveredQuantity,
+    lastDeliveredAt,
+  };
 }
 
 /**
@@ -65,9 +70,11 @@ export function computeItemDeliveryCoverage(
  * individually clears delivery coverage — one undelivered/cancelled-before-
  * delivery item blocks the whole seller-order rating.
  */
-export function computeSellerOrderCoverage(
-  itemCoverages: ItemCoverage[],
-): { eligible: boolean; reason?: string; lastDeliveredAt: Date | null } {
+export function computeSellerOrderCoverage(itemCoverages: ItemCoverage[]): {
+  eligible: boolean;
+  reason?: string;
+  lastDeliveredAt: Date | null;
+} {
   if (itemCoverages.length === 0) {
     return {
       eligible: false,

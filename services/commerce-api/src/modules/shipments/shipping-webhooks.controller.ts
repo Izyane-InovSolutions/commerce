@@ -39,7 +39,10 @@ export class ShippingWebhooksController {
 
     let payload: Record<string, unknown>;
     try {
-      payload = JSON.parse(request.rawBody.toString('utf8')) as Record<string, unknown>;
+      payload = JSON.parse(request.rawBody.toString('utf8')) as Record<
+        string,
+        unknown
+      >;
     } catch {
       throw new BadRequestException('Webhook body must be valid JSON');
     }

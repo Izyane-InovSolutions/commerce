@@ -36,11 +36,13 @@ describe('SellerReviewsController', () => {
   // Cross-seller isolation: a user with no approved seller (or someone
   // else's) never reaches SellerReviewsService — requireApproved rejects
   // first, the same gate SellerFinancialsController uses.
-  it('never lists another seller\'s data — requireApproved rejects first', async () => {
+  it("never lists another seller's data — requireApproved rejects first", async () => {
     const sellersService = {
       requireApproved: jest
         .fn()
-        .mockRejectedValue(new ForbiddenException('Seller approval is required')),
+        .mockRejectedValue(
+          new ForbiddenException('Seller approval is required'),
+        ),
     };
     const sellerReviews = {
       listReviews: jest.fn(),

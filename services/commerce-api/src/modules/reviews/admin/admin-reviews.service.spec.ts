@@ -61,8 +61,16 @@ function buildTx(): Tx {
 }
 
 type PrismaMock = {
-  productReview: { findUnique: jest.Mock; findMany: jest.Mock; count: jest.Mock };
-  sellerRating: { findUnique: jest.Mock; findMany: jest.Mock; count: jest.Mock };
+  productReview: {
+    findUnique: jest.Mock;
+    findMany: jest.Mock;
+    count: jest.Mock;
+  };
+  sellerRating: {
+    findUnique: jest.Mock;
+    findMany: jest.Mock;
+    count: jest.Mock;
+  };
   reviewModerationEvent: { findUnique: jest.Mock; findMany: jest.Mock };
   reviewReport: { findUnique: jest.Mock; findUniqueOrThrow: jest.Mock };
   $transaction: jest.Mock;
@@ -72,8 +80,16 @@ type PrismaMock = {
 function buildPrisma(): PrismaMock {
   const tx = buildTx();
   return {
-    productReview: { findUnique: jest.fn(), findMany: jest.fn(), count: jest.fn() },
-    sellerRating: { findUnique: jest.fn(), findMany: jest.fn(), count: jest.fn() },
+    productReview: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      count: jest.fn(),
+    },
+    sellerRating: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      count: jest.fn(),
+    },
     reviewModerationEvent: {
       findUnique: jest.fn().mockResolvedValue(null),
       // findOne() re-reads the full detail (including moderation history)
@@ -175,7 +191,9 @@ describe('AdminReviewsService', () => {
 
       expect(prisma.tx.reviewReport.updateMany).toHaveBeenCalledWith({
         where: { productReviewId: 'review-1', status: ReviewReportStatus.OPEN },
-        data: expect.objectContaining({ status: ReviewReportStatus.DISMISSED }) as object,
+        data: expect.objectContaining({
+          status: ReviewReportStatus.DISMISSED,
+        }) as object,
       });
     });
 
@@ -231,11 +249,16 @@ describe('AdminReviewsService', () => {
           version: 0,
           visibility: { in: [ReviewVisibility.PUBLISHED] },
         },
-        data: { visibility: ReviewVisibility.HIDDEN, version: { increment: 1 } },
+        data: {
+          visibility: ReviewVisibility.HIDDEN,
+          version: { increment: 1 },
+        },
       });
       expect(prisma.tx.reviewReport.updateMany).toHaveBeenCalledWith({
         where: { productReviewId: 'review-1', status: ReviewReportStatus.OPEN },
-        data: expect.objectContaining({ status: ReviewReportStatus.ACTIONED }) as object,
+        data: expect.objectContaining({
+          status: ReviewReportStatus.ACTIONED,
+        }) as object,
       });
       expect(ratingAggregate.recalculateProductSummary).toHaveBeenCalledWith(
         prisma.tx,
@@ -302,9 +325,14 @@ describe('AdminReviewsService', () => {
         where: {
           id: 'rating-1',
           version: 0,
-          visibility: { in: [ReviewVisibility.PUBLISHED, ReviewVisibility.HIDDEN] },
+          visibility: {
+            in: [ReviewVisibility.PUBLISHED, ReviewVisibility.HIDDEN],
+          },
         },
-        data: { visibility: ReviewVisibility.REMOVED, version: { increment: 1 } },
+        data: {
+          visibility: ReviewVisibility.REMOVED,
+          version: { increment: 1 },
+        },
       });
       expect(ratingAggregate.recalculateSellerSummary).toHaveBeenCalledWith(
         prisma.tx,
@@ -414,9 +442,8 @@ describe('AdminReviewsService', () => {
         'admin-1',
         '55555555-5555-4555-8555-555555555555',
       );
-      const createdCall = prisma.tx.reviewModerationEvent.create.mock.calls[0] as [
-        { data: { requestHash: string } },
-      ];
+      const createdCall = prisma.tx.reviewModerationEvent.create.mock
+        .calls[0] as [{ data: { requestHash: string } }];
       const storedHash = createdCall[0].data.requestHash;
 
       prisma.reviewModerationEvent.findUnique.mockResolvedValue({
@@ -472,7 +499,9 @@ describe('AdminReviewsService', () => {
         productReviewId: 'review-1',
         sellerRatingId: null,
       });
-      prisma.reviewReport.findUniqueOrThrow.mockResolvedValue({ id: 'report-1' });
+      prisma.reviewReport.findUniqueOrThrow.mockResolvedValue({
+        id: 'report-1',
+      });
       prisma.productReview.findUnique.mockResolvedValue(flaggedReview);
       prisma.tx.reviewReport.updateMany.mockResolvedValue({ count: 1 });
       prisma.tx.reviewReport.count.mockResolvedValue(0);
@@ -496,7 +525,10 @@ describe('AdminReviewsService', () => {
 
       expect(prisma.tx.productReview.updateMany).toHaveBeenCalledWith({
         where: { id: 'review-1', version: 0 },
-        data: { moderationState: ReviewModerationState.PENDING, version: { increment: 1 } },
+        data: {
+          moderationState: ReviewModerationState.PENDING,
+          version: { increment: 1 },
+        },
       });
     });
 
@@ -506,7 +538,9 @@ describe('AdminReviewsService', () => {
         productReviewId: 'review-1',
         sellerRatingId: null,
       });
-      prisma.reviewReport.findUniqueOrThrow.mockResolvedValue({ id: 'report-2' });
+      prisma.reviewReport.findUniqueOrThrow.mockResolvedValue({
+        id: 'report-2',
+      });
       prisma.productReview.findUnique.mockResolvedValue(flaggedReview);
       prisma.tx.reviewReport.updateMany.mockResolvedValue({ count: 1 });
       prisma.tx.reviewReport.count.mockResolvedValue(0);
@@ -534,7 +568,10 @@ describe('AdminReviewsService', () => {
 
       expect(prisma.tx.productReview.updateMany).toHaveBeenCalledWith({
         where: { id: 'review-1', version: 0 },
-        data: { moderationState: ReviewModerationState.APPROVED, version: { increment: 1 } },
+        data: {
+          moderationState: ReviewModerationState.APPROVED,
+          version: { increment: 1 },
+        },
       });
     });
 
@@ -544,7 +581,9 @@ describe('AdminReviewsService', () => {
         productReviewId: 'review-1',
         sellerRatingId: null,
       });
-      prisma.reviewReport.findUniqueOrThrow.mockResolvedValue({ id: 'report-3' });
+      prisma.reviewReport.findUniqueOrThrow.mockResolvedValue({
+        id: 'report-3',
+      });
       prisma.productReview.findUnique.mockResolvedValue(flaggedReview);
       prisma.tx.reviewReport.updateMany.mockResolvedValue({ count: 1 });
       prisma.tx.reviewReport.count.mockResolvedValue(1);

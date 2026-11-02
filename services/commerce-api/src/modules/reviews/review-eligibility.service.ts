@@ -45,7 +45,9 @@ export class ReviewEligibilityService {
           select: { orderItemId: true },
         }),
         this.prisma.sellerRating.findMany({
-          where: { sellerOrderId: { in: order.sellerOrders.map((so) => so.id) } },
+          where: {
+            sellerOrderId: { in: order.sellerOrders.map((so) => so.id) },
+          },
           select: { sellerOrderId: true },
         }),
         this.prisma.seller.findUnique({
@@ -84,7 +86,8 @@ export class ReviewEligibilityService {
         const alreadyRated = ratedSellerOrderIds.has(sellerOrder.id);
         const isOwnSeller = ownedSeller?.id === sellerOrder.sellerId;
         let reason = groupCoverage.reason;
-        if (alreadyRated) reason = 'A rating already exists for this seller order';
+        if (alreadyRated)
+          reason = 'A rating already exists for this seller order';
         if (isOwnSeller) reason = 'You cannot rate your own seller account';
         return {
           sellerOrderId: sellerOrder.id,
@@ -159,7 +162,11 @@ export class ReviewEligibilityService {
         items: { include: { fulfillmentLine: true } },
       },
     });
-    if (!sellerOrder || sellerOrder.order.userId !== userId || !sellerOrder.sellerId) {
+    if (
+      !sellerOrder ||
+      sellerOrder.order.userId !== userId ||
+      !sellerOrder.sellerId
+    ) {
       throw new NotFoundException('Seller order not found');
     }
     const itemCoverages = await Promise.all(
@@ -187,19 +194,28 @@ export class ReviewEligibilityService {
         select: { orderItemId: true, cancelledQuantity: true },
       }),
       client.shipmentLine.findMany({
-        where: { orderItemId: { in: orderItemIds }, shipment: { status: 'DELIVERED' } },
+        where: {
+          orderItemId: { in: orderItemIds },
+          shipment: { status: 'DELIVERED' },
+        },
         include: { shipment: { select: { deliveredAt: true } } },
       }),
     ]);
 
     const cancelledByItem = new Map(
-      fulfillmentLines.map((line) => [line.orderItemId, line.cancelledQuantity]),
+      fulfillmentLines.map((line) => [
+        line.orderItemId,
+        line.cancelledQuantity,
+      ]),
     );
     const chunksByItem = new Map<string, DeliveredQuantityChunk[]>();
     for (const line of shipmentLines) {
       if (!line.shipment.deliveredAt) continue;
       const list = chunksByItem.get(line.orderItemId) ?? [];
-      list.push({ quantity: line.quantity, deliveredAt: line.shipment.deliveredAt });
+      list.push({
+        quantity: line.quantity,
+        deliveredAt: line.shipment.deliveredAt,
+      });
       chunksByItem.set(line.orderItemId, list);
     }
 

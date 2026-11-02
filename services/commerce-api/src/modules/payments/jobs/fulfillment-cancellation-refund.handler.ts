@@ -23,11 +23,7 @@ type JobPayload = {
 };
 
 function parsePayload(payload: Prisma.JsonValue): JobPayload {
-  if (
-    typeof payload !== 'object' ||
-    payload === null ||
-    Array.isArray(payload)
-  )
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload))
     throw new Error(
       `Malformed ${FULFILLMENT_CANCELLATION_REFUND_JOB_TYPE} payload`,
     );

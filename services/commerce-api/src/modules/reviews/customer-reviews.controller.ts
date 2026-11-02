@@ -25,7 +25,10 @@ import { ReportReviewDto } from './dto/report-review.dto';
 import { SubmitProductReviewDto } from './dto/submit-product-review.dto';
 import { SubmitSellerRatingDto } from './dto/submit-seller-rating.dto';
 import { ReviewsService } from './reviews.service';
-import type { OrderReviewEligibilityView, OwnReviewsPage } from './reviews.types';
+import type {
+  OrderReviewEligibilityView,
+  OwnReviewsPage,
+} from './reviews.types';
 
 // Stricter than the app-wide default (100/60s) — mirrors
 // AUTH_BRUTE_FORCE_THROTTLE's naming convention in auth.controller.ts.

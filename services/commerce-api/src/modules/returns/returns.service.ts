@@ -888,6 +888,24 @@ export class ReturnsService {
           },
         });
 
+        const restockLines = inspection.lines.filter(
+          (line) =>
+            line.disposition === ReturnDisposition.RESTOCK &&
+            line.acceptedQuantity > 0,
+        );
+        // Every record this inspection restocks, locked in ascending id
+        // before the first write — the global inventory lock order checkout
+        // relies on.
+        if (restockLines.length > 0)
+          await this.inventoryService.lockRecordsForWrite(
+            restockLines.map((line) => ({
+              warehouseId: line.warehouseId,
+              variantId: itemsById.get(line.returnItemId)!.orderItem.offer
+                .variantId,
+            })),
+            tx,
+          );
+
         for (const line of inspection.lines) {
           if (
             line.disposition === ReturnDisposition.RESTOCK &&

@@ -2,6 +2,7 @@
   "moduleFileExtensions": ["js", "json", "ts"],
   "rootDir": ".",
   "testEnvironment": "node",
+  "testTimeout": 15000,
   "testRegex": ".integration-spec.ts$",
   "setupFiles": ["<rootDir>/setup-integration-env.ts"],
   "globalSetup": "<rootDir>/prepare-integration-database.ts",

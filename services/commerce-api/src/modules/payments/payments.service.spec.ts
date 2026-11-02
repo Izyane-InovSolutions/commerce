@@ -65,10 +65,10 @@ describe('PaymentsService', () => {
   let outboxService: { record: jest.Mock };
   let service: PaymentsService;
   const payment = {
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  idempotencyKey: "test-payment",
-  failureReason: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    idempotencyKey: 'test-payment',
+    failureReason: null,
     id: 'payment-1',
     orderId: 'order-1',
     provider: 'fake-provider',
@@ -352,9 +352,9 @@ describe('PaymentsService', () => {
         ...pending,
         status: 'SUCCEEDED',
       });
-      await expect(
-        service.reconcileRefund('refund-1'),
-      ).resolves.toMatchObject({ status: 'SUCCEEDED' });
+      await expect(service.reconcileRefund('refund-1')).resolves.toMatchObject({
+        status: 'SUCCEEDED',
+      });
       expect(refundCasesService.reconcile).toHaveBeenCalledWith('case-1');
     });
   });

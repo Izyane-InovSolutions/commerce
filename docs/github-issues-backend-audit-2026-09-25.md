@@ -1,3 +1,5 @@
+> **Historical record.** This report preserves its original findings and execution dates. For current implementation status and newer verification, use the [current gap register](backend/known-gaps.md) and [2026-09-30 baseline](backend/baseline-verification.md). In particular, old statements deferring password-reset delivery are superseded; source implementation now exists.
+
 Backend audit of all GitHub issues — 2026-09-25
 
 Reviewed all **61 issues** in [Izyane-InovSolutions/commerce](https://github.com/Izyane-InovSolutions/commerce/issues): **42 open, 19 closed**, including parent issues #1–#8. Pull requests were excluded. The all-state GitHub listing returned 86 entries including PRs, so one 100-entry page covered the repository at audit time. Issue bodies and all available comments were retrieved; code takes precedence over older status comments.

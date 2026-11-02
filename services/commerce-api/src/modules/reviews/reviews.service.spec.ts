@@ -39,7 +39,10 @@ function buildTx(): Tx {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       update: jest.fn(),
     },
-    productReviewRevision: { create: jest.fn(), count: jest.fn().mockResolvedValue(1) },
+    productReviewRevision: {
+      create: jest.fn(),
+      count: jest.fn().mockResolvedValue(1),
+    },
     sellerRating: {
       create: jest.fn(),
       findUnique: jest.fn(),
@@ -47,9 +50,15 @@ function buildTx(): Tx {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       update: jest.fn(),
     },
-    sellerRatingRevision: { create: jest.fn(), count: jest.fn().mockResolvedValue(1) },
+    sellerRatingRevision: {
+      create: jest.fn(),
+      count: jest.fn().mockResolvedValue(1),
+    },
     reviewModerationEvent: { create: jest.fn().mockResolvedValue({}) },
-    reviewReport: { findFirst: jest.fn().mockResolvedValue(null), create: jest.fn() },
+    reviewReport: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      create: jest.fn(),
+    },
   };
 }
 
@@ -63,8 +72,14 @@ function buildPrisma(): {
 } {
   const tx = buildTx();
   return {
-    productReview: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn() },
-    sellerRating: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn() },
+    productReview: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn(),
+    },
+    sellerRating: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn(),
+    },
     reviewModerationEvent: { findUnique: jest.fn().mockResolvedValue(null) },
     reviewReport: { findFirst: jest.fn().mockResolvedValue(null) },
     $transaction: jest.fn((arg: (client: Tx) => unknown) => arg(tx)),
@@ -147,11 +162,19 @@ describe('ReviewsService', () => {
 
       expect(prisma.tx.productReview.create).toHaveBeenCalled();
       expect(prisma.tx.productReviewRevision.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ revisionNumber: 1, source: 'SUBMISSION' }) as object }),
+        expect.objectContaining({
+          data: expect.objectContaining({
+            revisionNumber: 1,
+            source: 'SUBMISSION',
+          }) as object,
+        }),
       );
       expect(prisma.tx.reviewModerationEvent.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ action: 'SUBMITTED', resultingVisibility: 'PUBLISHED' }) as object,
+          data: expect.objectContaining({
+            action: 'SUBMITTED',
+            resultingVisibility: 'PUBLISHED',
+          }) as object,
         }),
       );
       expect(ratingAggregate.recalculateProductSummary).toHaveBeenCalledWith(
@@ -180,7 +203,11 @@ describe('ReviewsService', () => {
     it('rejects submission when the item is not delivery-eligible', async () => {
       eligibility.computeProductEligibilityForSubmission.mockResolvedValue({
         orderItem,
-        coverage: { ...eligibleCoverage, eligible: false, reason: 'Item has not been fully delivered' },
+        coverage: {
+          ...eligibleCoverage,
+          eligible: false,
+          reason: 'Item has not been fully delivered',
+        },
       });
 
       await expect(
@@ -212,7 +239,11 @@ describe('ReviewsService', () => {
   });
 
   describe('submitSellerRating', () => {
-    const sellerOrder = { id: 'so-1', sellerId: 'seller-1', rating: null as unknown };
+    const sellerOrder = {
+      id: 'so-1',
+      sellerId: 'seller-1',
+      rating: null as unknown,
+    };
 
     it('rejects rating your own seller account', async () => {
       eligibility.computeSellerEligibilityForSubmission.mockResolvedValue({
@@ -222,7 +253,10 @@ describe('ReviewsService', () => {
       });
 
       await expect(
-        service.submitSellerRating('user-1', { sellerOrderId: 'so-1', rating: 5 }),
+        service.submitSellerRating('user-1', {
+          sellerOrderId: 'so-1',
+          rating: 5,
+        }),
       ).rejects.toThrow(ConflictException);
       expect(prisma.tx.sellerRating.create).not.toHaveBeenCalled();
     });
@@ -235,7 +269,10 @@ describe('ReviewsService', () => {
       });
 
       await expect(
-        service.submitSellerRating('user-1', { sellerOrderId: 'so-1', rating: 5 }),
+        service.submitSellerRating('user-1', {
+          sellerOrderId: 'so-1',
+          rating: 5,
+        }),
       ).rejects.toThrow(ConflictException);
     });
 
@@ -252,7 +289,10 @@ describe('ReviewsService', () => {
         rating: 4,
       });
 
-      await service.submitSellerRating('user-1', { sellerOrderId: 'so-1', rating: 4 });
+      await service.submitSellerRating('user-1', {
+        sellerOrderId: 'so-1',
+        rating: 4,
+      });
 
       expect(ratingAggregate.recalculateSellerSummary).toHaveBeenCalledWith(
         prisma.tx,
@@ -365,11 +405,15 @@ describe('ReviewsService', () => {
 
       expect(prisma.tx.productReview.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ moderationState: 'PENDING' }) as object,
+          data: expect.objectContaining({
+            moderationState: 'PENDING',
+          }) as object,
         }),
       );
       expect(prisma.tx.productReviewRevision.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ revisionNumber: 2 }) as object }),
+        expect.objectContaining({
+          data: expect.objectContaining({ revisionNumber: 2 }) as object,
+        }),
       );
       expect(ratingAggregate.recalculateProductSummary).toHaveBeenCalled();
     });
@@ -405,7 +449,14 @@ describe('ReviewsService', () => {
     it('is idempotent on a replayed Idempotency-Key with the same payload', async () => {
       // Force the requestHash to match exactly what the service computes.
       const expectedHash = createHash('sha256')
-        .update(JSON.stringify({ id: 'review-1', rating: 5, title: null, body: null }))
+        .update(
+          JSON.stringify({
+            id: 'review-1',
+            rating: 5,
+            title: null,
+            body: null,
+          }),
+        )
         .digest('hex');
       prisma.reviewModerationEvent.findUnique.mockResolvedValue({
         targetId: 'review-1',
@@ -464,7 +515,9 @@ describe('ReviewsService', () => {
       );
 
       expect(prisma.tx.productReview.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ visibility: 'WITHDRAWN' }) as object }),
+        expect.objectContaining({
+          data: expect.objectContaining({ visibility: 'WITHDRAWN' }) as object,
+        }),
       );
       expect(ratingAggregate.recalculateProductSummary).toHaveBeenCalledWith(
         prisma.tx,
@@ -603,7 +656,9 @@ describe('ReviewsService', () => {
         visibility: 'PUBLISHED',
         moderationState: 'FLAGGED',
       });
-      prisma.tx.reviewReport.findFirst.mockResolvedValue({ id: 'existing-report' });
+      prisma.tx.reviewReport.findFirst.mockResolvedValue({
+        id: 'existing-report',
+      });
       prisma.tx.reviewReport.create.mockResolvedValue({ id: 'report-2' });
 
       await service.reportProductReview(

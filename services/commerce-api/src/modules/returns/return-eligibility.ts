@@ -87,14 +87,20 @@ export function computeItemEligibility(
   if (totalRemainingQuantity === 0) {
     return {
       eligible: false,
-      reason: 'Return window has expired or the delivered quantity is already claimed by another return',
+      reason:
+        'Return window has expired or the delivered quantity is already claimed by another return',
       windowDays,
       chunks: resolved,
       totalRemainingQuantity: 0,
     };
   }
 
-  return { eligible: true, windowDays, chunks: resolved, totalRemainingQuantity };
+  return {
+    eligible: true,
+    windowDays,
+    chunks: resolved,
+    totalRemainingQuantity,
+  };
 }
 
 /**
@@ -108,7 +114,9 @@ export function allocateGreedy(
   now: Date = new Date(),
 ): { shipmentLineId: string; quantity: number }[] | null {
   const usable = chunks
-    .filter((c) => !c.expired && c.eligibleUntil >= now && c.remainingQuantity > 0)
+    .filter(
+      (c) => !c.expired && c.eligibleUntil >= now && c.remainingQuantity > 0,
+    )
     .sort((a, b) => a.deliveredAt.getTime() - b.deliveredAt.getTime());
 
   const allocations: { shipmentLineId: string; quantity: number }[] = [];
@@ -117,7 +125,10 @@ export function allocateGreedy(
     if (remaining <= 0) break;
     const take = Math.min(chunk.remainingQuantity, remaining);
     if (take > 0) {
-      allocations.push({ shipmentLineId: chunk.shipmentLineId, quantity: take });
+      allocations.push({
+        shipmentLineId: chunk.shipmentLineId,
+        quantity: take,
+      });
       remaining -= take;
     }
   }

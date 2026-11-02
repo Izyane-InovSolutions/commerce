@@ -16,6 +16,10 @@ import {
 
 import { PrismaService } from '../../database/prisma.service';
 import { OutboxService } from '../../infrastructure/jobs/outbox.service';
+import {
+  CHECKOUT_EXPIRED,
+  checkoutAttemptConflict,
+} from '../checkout/checkout-attempt.errors';
 import { OrderWithItems, OrdersService } from '../orders/orders.service';
 import type { PaymentDetailsDto } from './dto/payment-details.dto';
 import { PaymentOutcomeUnknownException } from './gateway-errors';
@@ -91,9 +95,16 @@ export class PaymentsService {
     private readonly outboxService: OutboxService,
   ) {}
 
+  /**
+   * `guard`, when given, runs inside the transaction that creates the
+   * Payment row, before the order row is locked, so a caller can fence the
+   * insert on rows that precede orders in the global lock order (checkout
+   * passes its attempt-ownership check). Throwing from it creates nothing.
+   */
   async initializeForOrder(
     order: OrderWithItems,
     details?: PaymentDetailsDto,
+    guard?: (tx: Prisma.TransactionClient) => Promise<void>,
   ): Promise<PaymentWithRedirect> {
     const originalInput = {
       paymentId: order.id,
@@ -106,18 +117,46 @@ export class PaymentsService {
     const input: InitializePaymentInput & { settlement?: SettlementQuote } =
       this.provider.prepareInput?.(originalInput) ?? originalInput;
     this.provider.validateInput?.(input);
-    const payment = await this.prisma.payment.create({
-      data: {
-        orderId: order.id,
-        provider: this.provider.name,
-        status: PaymentStatus.PENDING,
-        amount: order.total,
-        currency: order.currency,
-        idempotencyKey: order.id,
-        ...(input.settlement
-          ? { settlement: { create: input.settlement } }
-          : {}),
-      },
+    // The row is created under the order lock (OrdersService.lockForPayment)
+    // and only while the order is still PENDING_PAYMENT, so no payment is
+    // ever created for an order already cancelled: a stalled request cannot
+    // submit a charge for an order given up meanwhile. The converse — never
+    // cancelling an order whose payment was just inserted and submitted — is
+    // each canceller's job, by deciding "no payment" under this same lock or
+    // by excluding this insert: OrderCancellationService and the unpaid-order
+    // reaper re-read the payment after locking; a retry's resume/expiry first
+    // replaced the owner token `guard` fences on; a keyless request cancels
+    // only after its own call here failed. (CheckoutService's cancel after a
+    // keyed request's own failure reads the payment unlocked; it is only
+    // stale if that request outlived its lease and a retry resumed and paid
+    // in between.) A cancelled order can still carry a payment row — one that
+    // failed, or was stopped at the gateway first — never one left submitted.
+    const payment = await this.prisma.$transaction(async (tx) => {
+      if (guard) await guard(tx);
+      await this.ordersService.lockForPayment(order.id, tx);
+      const { status } = await tx.order.findUniqueOrThrow({
+        where: { id: order.id },
+        select: { status: true },
+      });
+      if (status !== OrderStatus.PENDING_PAYMENT)
+        throw checkoutAttemptConflict(
+          CHECKOUT_EXPIRED,
+          'This order is no longer awaiting payment; check out again',
+          { orderId: order.id },
+        );
+      return tx.payment.create({
+        data: {
+          orderId: order.id,
+          provider: this.provider.name,
+          status: PaymentStatus.PENDING,
+          amount: order.total,
+          currency: order.currency,
+          idempotencyKey: order.id,
+          ...(input.settlement
+            ? { settlement: { create: input.settlement } }
+            : {}),
+        },
+      });
     });
 
     let accepted = false;
@@ -203,6 +242,15 @@ export class PaymentsService {
     });
     if (!payment) throw new NotFoundException('Payment not found');
     return payment;
+  }
+
+  /**
+   * The payment row for an order, or null when none was ever created. The
+   * row is committed before the provider is called, so its absence proves no
+   * submission to the gateway could have happened.
+   */
+  findForOrder(orderId: string): Promise<Payment | null> {
+    return this.prisma.payment.findUnique({ where: { orderId } });
   }
 
   async handleWebhook(rawBody: Buffer, signature: string): Promise<void> {
@@ -437,7 +485,9 @@ export class PaymentsService {
   }
 
   async reconcileRefund(refundId: string): Promise<Refund> {
-    const refund = await this.prisma.refund.findUnique({ where: { id: refundId } });
+    const refund = await this.prisma.refund.findUnique({
+      where: { id: refundId },
+    });
     if (!refund) throw new NotFoundException('Refund not found');
     if (!refund.refundCaseId) return refund;
     await this.refundCasesService.reconcile(refund.refundCaseId);

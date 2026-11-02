@@ -242,7 +242,9 @@ export class ProductsService {
    * time, until `limit` products qualify — so an ineligible top seller
    * never leaves the list short.
    */
-  async findBestSellers(query: BestSellersQueryDto): Promise<BestSellersResult> {
+  async findBestSellers(
+    query: BestSellersQueryDto,
+  ): Promise<BestSellersResult> {
     const since = new Date(Date.now() - query.days * 24 * 60 * 60 * 1000);
     const ranked = await this.prisma.$queryRaw<{ productId: string }[]>`
       SELECT v.product_id AS "productId"
@@ -477,16 +479,14 @@ export class ProductsService {
     return this.findByIdAdmin(id);
   }
 
-  /**
-   * Hard delete, for drafts and mistakes only. Order items cascade from
-   * offers, which cascade from variants — deleting anything that has sold or
-   * held stock would silently erase order lines and inventory movements, so
-   * that is refused and the caller is pointed at ARCHIVED instead.
-   */
+  /** Hard delete for drafts and mistakes with no durable order/stock history. */
   async remove(id: string): Promise<void> {
     await this.findByIdAdmin(id);
-    await this.deleteUnlessUsed({ productId: id }, 'This product', (tx) =>
-      tx.product.delete({ where: { id } }),
+    await this.deleteUnlessUsed(
+      { productId: id },
+      'This product',
+      { productId: id },
+      (tx) => tx.product.delete({ where: { id } }),
     );
   }
 
@@ -565,8 +565,11 @@ export class ProductsService {
   /** Same guard as {@link remove}, scoped to one variant. */
   async removeVariant(productId: string, variantId: string): Promise<void> {
     await this.findProductVariant(productId, variantId);
-    await this.deleteUnlessUsed({ id: variantId }, 'This variant', (tx) =>
-      tx.productVariant.delete({ where: { id: variantId } }),
+    await this.deleteUnlessUsed(
+      { id: variantId },
+      'This variant',
+      { productId, variantId },
+      (tx) => tx.productVariant.delete({ where: { id: variantId } }),
     );
   }
 
@@ -814,6 +817,7 @@ export class ProductsService {
     await this.deleteUnlessUsed(
       { productId },
       'This product',
+      { productId },
       async (tx) => {
         await this.claimForSellerEdit(tx, sellerId, productId);
         await tx.product.delete({ where: { id: productId } });
@@ -832,6 +836,7 @@ export class ProductsService {
     await this.deleteUnlessUsed(
       { id: variantId },
       'This variant',
+      { productId, variantId },
       async (tx) => {
         await this.claimForSellerEdit(tx, sellerId, productId);
         await tx.productVariant.delete({ where: { id: variantId } });
@@ -941,9 +946,7 @@ export class ProductsService {
     if (!product || product.createdBySellerId !== seller.id)
       throw new NotFoundException('Product not found');
     if (product.submissionStatus !== ProductSubmissionStatus.PENDING)
-      throw new ConflictException(
-        'This submission has already been reviewed',
-      );
+      throw new ConflictException('This submission has already been reviewed');
   }
 
   /** An approved seller's own submission, or 404 — never a 403 that would
@@ -1030,7 +1033,9 @@ export class ProductsService {
       },
     });
     if (values.length !== ids.length) {
-      throw new BadRequestException('One of the attribute values does not exist');
+      throw new BadRequestException(
+        'One of the attribute values does not exist',
+      );
     }
 
     const category = product.category.name;
@@ -1343,24 +1348,29 @@ export class ProductsService {
     const products = await this.prisma.product.findMany({
       where: {
         status: ProductStatus.PUBLISHED,
-        OR: [{ id: { in: contestedIds } }, { variants: {
-          some: {
-            status: ProductStatus.PUBLISHED,
-            offers: {
+        OR: [
+          { id: { in: contestedIds } },
+          {
+            variants: {
               some: {
                 status: ProductStatus.PUBLISHED,
-                ...PUBLICLY_ELIGIBLE_OFFER,
-                prices: {
+                offers: {
                   some: {
-                    currency: query.currency,
-                    startsAt: { lte: now },
-                    endsAt: { gt: now },
+                    status: ProductStatus.PUBLISHED,
+                    ...PUBLICLY_ELIGIBLE_OFFER,
+                    prices: {
+                      some: {
+                        currency: query.currency,
+                        startsAt: { lte: now },
+                        endsAt: { gt: now },
+                      },
+                    },
                   },
                 },
               },
             },
           },
-        } }],
+        ],
       },
       include: PUBLIC_PRODUCT_INCLUDE,
       take: DEAL_CANDIDATES,
@@ -1518,10 +1528,16 @@ export class ProductsService {
               seller: offer.seller ?? null,
               isFirstParty: offer.sellerId === null,
               currentPrice: currentPrice
-                ? { amount: currentPrice.amount, currency: currentPrice.currency }
+                ? {
+                    amount: currentPrice.amount,
+                    currency: currentPrice.currency,
+                  }
                 : null,
               compareAtPrice: sale
-                ? { amount: sale.regular.amount, currency: sale.regular.currency }
+                ? {
+                    amount: sale.regular.amount,
+                    currency: sale.regular.currency,
+                  }
                 : null,
               saleEndsAt: sale ? sale.endsAt.toISOString() : null,
               // What the offer *is* priced in, so a client can tell "we don't
@@ -1532,7 +1548,10 @@ export class ProductsService {
               inStock: available > 0,
               shippingCost:
                 offer.shippingAmount !== null && offer.shippingCurrency !== null
-                  ? { amount: offer.shippingAmount, currency: offer.shippingCurrency }
+                  ? {
+                      amount: offer.shippingAmount,
+                      currency: offer.shippingCurrency,
+                    }
                   : null,
               priceLead: null,
             };
@@ -1549,21 +1568,81 @@ export class ProductsService {
   private async deleteUnlessUsed(
     variants: Prisma.ProductVariantWhereInput,
     subject: string,
+    target: { productId: string; variantId?: string },
     remove: (tx: Prisma.TransactionClient) => Promise<unknown>,
   ): Promise<void> {
     const inUse = new ConflictException(
-      `${subject} has order or stock history and can't be deleted. Archive it instead.`,
+      `${subject} has purchase history, stock movements, reservations, or nonzero stock and can't be deleted. Archive it instead.`,
     );
 
     try {
       await this.prisma.$transaction(async (tx) => {
-        const [orderItems, movements] = await Promise.all([
-          tx.orderItem.count({ where: { offer: { variant: variants } } }),
-          tx.inventoryMovement.count({
-            where: { inventoryRecord: { variant: variants } },
-          }),
-        ]);
-        if (orderItems > 0 || movements > 0) throw inUse;
+        const lockedTarget = target.variantId
+          ? await tx.$queryRaw<{ id: string }[]>`
+              SELECT id FROM product_variants
+              WHERE id = ${target.variantId}::uuid
+                AND product_id = ${target.productId}::uuid
+              FOR UPDATE
+            `
+          : await tx.$queryRaw<{ id: string }[]>`
+              SELECT id FROM products
+              WHERE id = ${target.productId}::uuid
+              FOR UPDATE
+            `;
+        if (!lockedTarget[0])
+          throw new NotFoundException(
+            target.variantId
+              ? 'Product variant not found'
+              : 'Product not found',
+          );
+
+        const variantIds = await tx.productVariant.findMany({
+          where: variants,
+          select: { id: true },
+          orderBy: { id: 'asc' },
+        });
+        if (variantIds.length) {
+          const ids = variantIds.map(({ id }) => id);
+          await tx.$queryRaw`
+            SELECT id FROM product_variants
+            WHERE id = ANY(ARRAY[${Prisma.join(ids)}]::uuid[])
+            ORDER BY id FOR UPDATE
+          `;
+          await tx.$queryRaw`
+            SELECT id FROM offers
+            WHERE variant_id = ANY(ARRAY[${Prisma.join(ids)}]::uuid[])
+            ORDER BY id FOR UPDATE
+          `;
+          await tx.$queryRaw`
+            SELECT id FROM inventory_records
+            WHERE variant_id = ANY(ARRAY[${Prisma.join(ids)}]::uuid[])
+            ORDER BY id FOR UPDATE
+          `;
+        }
+
+        const [orderItems, movements, reservations, nonzeroStock] =
+          await Promise.all([
+            tx.orderItem.count({ where: { offer: { variant: variants } } }),
+            tx.inventoryMovement.count({
+              where: { inventoryRecord: { variant: variants } },
+            }),
+            tx.reservation.count({
+              where: { inventoryRecord: { variant: variants } },
+            }),
+            tx.inventoryRecord.count({
+              where: {
+                variant: variants,
+                OR: [{ onHand: { not: 0 } }, { reserved: { not: 0 } }],
+              },
+            }),
+          ]);
+        if (
+          orderItems > 0 ||
+          movements > 0 ||
+          reservations > 0 ||
+          nonzeroStock > 0
+        )
+          throw inUse;
 
         await remove(tx);
       });
@@ -1571,6 +1650,10 @@ export class ProductsService {
       // Fulfillment lines, purchase-order lines and reviews Restrict the
       // delete at the database — same meaning, same answer.
       if (this.isPrismaError(error, 'P2003')) throw inUse;
+      if (this.isPrismaError(error, 'P2025'))
+        throw new NotFoundException(
+          target.variantId ? 'Product variant not found' : 'Product not found',
+        );
       throw error;
     }
   }

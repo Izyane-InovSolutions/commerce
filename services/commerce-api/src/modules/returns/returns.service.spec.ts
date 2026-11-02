@@ -245,7 +245,10 @@ function buildPrisma(): {
 
 describe('ReturnsService', () => {
   let prisma: ReturnType<typeof buildPrisma>;
-  let inventoryService: { receiveReturnedStock: jest.Mock };
+  let inventoryService: {
+    receiveReturnedStock: jest.Mock;
+    lockRecordsForWrite: jest.Mock;
+  };
   let numberingService: { nextReturnRmaNumber: jest.Mock };
   let refundCasesService: {
     createCase: jest.Mock;
@@ -259,6 +262,7 @@ describe('ReturnsService', () => {
     prisma = buildPrisma();
     inventoryService = {
       receiveReturnedStock: jest.fn().mockResolvedValue({}),
+      lockRecordsForWrite: jest.fn().mockResolvedValue([]),
     };
     numberingService = {
       nextReturnRmaNumber: jest.fn().mockResolvedValue('RMA-2026-000001'),

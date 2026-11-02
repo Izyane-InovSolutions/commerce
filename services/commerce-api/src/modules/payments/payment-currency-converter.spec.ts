@@ -66,7 +66,11 @@ describe('PaymentCurrencyConverter', () => {
       const converterWithLiveRate = new PaymentCurrencyConverter(
         new ConfigService({
           PAYMENT_FX_QUOTES: JSON.stringify({
-            USD: { rate: '999', quoteId: 'manual', expiresAt: '2026-09-15T00:00:00Z' },
+            USD: {
+              rate: '999',
+              quoteId: 'manual',
+              expiresAt: '2026-09-15T00:00:00Z',
+            },
           }),
         }),
         rateSource({
@@ -87,7 +91,11 @@ describe('PaymentCurrencyConverter', () => {
       const converterWithFallback = new PaymentCurrencyConverter(
         new ConfigService({
           PAYMENT_FX_QUOTES: JSON.stringify({
-            USD: { rate: '0.05', quoteId: 'manual', expiresAt: '2026-09-15T00:00:00Z' },
+            USD: {
+              rate: '0.05',
+              quoteId: 'manual',
+              expiresAt: '2026-09-15T00:00:00Z',
+            },
           }),
         }),
         rateSource(undefined),

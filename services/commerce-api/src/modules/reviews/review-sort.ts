@@ -6,7 +6,9 @@
 export const REVIEW_SORTS = ['newest', 'oldest', 'highest', 'lowest'] as const;
 export type ReviewSort = (typeof REVIEW_SORTS)[number];
 
-type ReviewOrderBy = Array<{ createdAt: 'asc' | 'desc' } | { rating: 'asc' | 'desc' }>;
+type ReviewOrderBy = Array<
+  { createdAt: 'asc' | 'desc' } | { rating: 'asc' | 'desc' }
+>;
 
 /**
  * newest (default): createdAt desc.

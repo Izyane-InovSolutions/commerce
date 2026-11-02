@@ -1,4 +1,8 @@
-import { FulfillmentStatus, OfferFulfillmentMode, OrderStatus } from '@prisma/client';
+import {
+  FulfillmentStatus,
+  OfferFulfillmentMode,
+  OrderStatus,
+} from '@prisma/client';
 import { IsDateString, IsEnum, IsOptional } from 'class-validator';
 
 import { PaginationQueryDto } from '../../../common/pagination/pagination-query.dto';

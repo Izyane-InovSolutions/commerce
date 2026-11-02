@@ -61,7 +61,9 @@ describe('Reviews integrity (integration, real Postgres)', () => {
       });
       await prisma.reviewModerationEvent.deleteMany({
         where: {
-          targetId: { in: [...reviews.map((r) => r.id), ...ratings.map((r) => r.id)] },
+          targetId: {
+            in: [...reviews.map((r) => r.id), ...ratings.map((r) => r.id)],
+          },
         },
       });
       await prisma.productReviewRevision.deleteMany({
@@ -70,8 +72,12 @@ describe('Reviews integrity (integration, real Postgres)', () => {
       await prisma.sellerRatingRevision.deleteMany({
         where: { sellerRatingId: { in: ratings.map((r) => r.id) } },
       });
-      await prisma.productReview.deleteMany({ where: { orderItemId: { in: orderItemIds } } });
-      await prisma.sellerRating.deleteMany({ where: { sellerOrderId: { in: sellerOrderIds } } });
+      await prisma.productReview.deleteMany({
+        where: { orderItemId: { in: orderItemIds } },
+      });
+      await prisma.sellerRating.deleteMany({
+        where: { sellerOrderId: { in: sellerOrderIds } },
+      });
 
       const fulfillmentOrders = await prisma.fulfillmentOrder.findMany({
         where: { orderId: { in: createdOrderIds } },
@@ -98,13 +104,17 @@ describe('Reviews integrity (integration, real Postgres)', () => {
       await prisma.productVariant.deleteMany({
         where: { productId: { in: createdProductIds } },
       });
-      await prisma.product.deleteMany({ where: { id: { in: createdProductIds } } });
+      await prisma.product.deleteMany({
+        where: { id: { in: createdProductIds } },
+      });
     }
     if (createdSellerIds.length) {
       await prisma.sellerRatingSummary.deleteMany({
         where: { sellerId: { in: createdSellerIds } },
       });
-      await prisma.seller.deleteMany({ where: { id: { in: createdSellerIds } } });
+      await prisma.seller.deleteMany({
+        where: { id: { in: createdSellerIds } },
+      });
     }
     if (createdUserIds.length) {
       await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
@@ -118,7 +128,9 @@ describe('Reviews integrity (integration, real Postgres)', () => {
    * too. Bypasses the fulfillment/shipment services entirely — this suite
    * only needs the delivered state those services eventually produce.
    */
-  async function createDeliveredOrder(options?: { withSeller?: boolean }): Promise<{
+  async function createDeliveredOrder(options?: {
+    withSeller?: boolean;
+  }): Promise<{
     userId: string;
     productId: string;
     sellerId: string | undefined;
@@ -135,7 +147,10 @@ describe('Reviews integrity (integration, real Postgres)', () => {
     let sellerId: string | undefined;
     if (options?.withSeller) {
       const sellerOwner = await prisma.user.create({
-        data: { email: `reviews-seller-${rowSuffix}@example.test`, passwordHash: 'x' },
+        data: {
+          email: `reviews-seller-${rowSuffix}@example.test`,
+          passwordHash: 'x',
+        },
       });
       createdUserIds.push(sellerOwner.id);
       const seller = await prisma.seller.create({
@@ -153,7 +168,10 @@ describe('Reviews integrity (integration, real Postgres)', () => {
     }
 
     const product = await prisma.product.create({
-      data: { name: `Reviews Product ${rowSuffix}`, slug: `reviews-product-${rowSuffix}` },
+      data: {
+        name: `Reviews Product ${rowSuffix}`,
+        slug: `reviews-product-${rowSuffix}`,
+      },
     });
     createdProductIds.push(product.id);
     const variant = await prisma.productVariant.create({
@@ -360,9 +378,10 @@ describe('Reviews integrity (integration, real Postgres)', () => {
     ).rejects.toThrow(ConflictException);
 
     await service.withdrawSellerRating(userId, rating.id, randomUUID());
-    const summaryAfterWithdrawal = await prisma.sellerRatingSummary.findUniqueOrThrow({
-      where: { sellerId: sellerId! },
-    });
+    const summaryAfterWithdrawal =
+      await prisma.sellerRatingSummary.findUniqueOrThrow({
+        where: { sellerId: sellerId! },
+      });
     expect(summaryAfterWithdrawal.ratingCount).toBe(0);
   });
 
@@ -377,7 +396,12 @@ describe('Reviews integrity (integration, real Postgres)', () => {
     const key = randomUUID();
     const edit = { version: 0, rating: 3 };
     const first = await service.editProductReview(userId, review.id, edit, key);
-    const replay = await service.editProductReview(userId, review.id, edit, key);
+    const replay = await service.editProductReview(
+      userId,
+      review.id,
+      edit,
+      key,
+    );
 
     expect(replay.id).toBe(first.id);
     const revisions = await prisma.productReviewRevision.count({
@@ -394,14 +418,27 @@ describe('Reviews integrity (integration, real Postgres)', () => {
       body: 'Original body text here for review.',
     });
     const reporter = await prisma.user.create({
-      data: { email: `reporter-${randomUUID()}@example.test`, passwordHash: 'x' },
+      data: {
+        email: `reporter-${randomUUID()}@example.test`,
+        passwordHash: 'x',
+      },
     });
     createdUserIds.push(reporter.id);
 
     const key = randomUUID();
     const dto = { reason: 'SPAM' as const };
-    const first = await service.reportProductReview(reporter.id, review.id, dto, key);
-    const replay = await service.reportProductReview(reporter.id, review.id, dto, key);
+    const first = await service.reportProductReview(
+      reporter.id,
+      review.id,
+      dto,
+      key,
+    );
+    const replay = await service.reportProductReview(
+      reporter.id,
+      review.id,
+      dto,
+      key,
+    );
 
     expect(replay.id).toBe(first.id);
     const reportCount = await prisma.reviewReport.count({

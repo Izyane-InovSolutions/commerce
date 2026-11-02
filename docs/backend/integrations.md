@@ -6,10 +6,10 @@
 
 | Seam           | Token / interface                                                                                                               | Adapter today                                                                                 | Status                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Payments       | `PAYMENT_PROVIDER` / [`PaymentProvider`](../../services/commerce-api/src/modules/payments/payment-provider.ts)                  | `UnifiedPaymentProvider` when `PAYMENTS_PROVIDER=unified`, otherwise `PendingPaymentProvider` | Live for charges (mobile money and card). **No webhooks, no refunds.** |
-| FX rates       | `FX_RATE_PROVIDER` / `FxRateProvider`                                                                                           | `ExchangeRateApiProvider` (exchangerate-api.com), with the `PAYMENT_FX_QUOTES` fallback       | Live when `PAYMENT_FX_API_KEY` is set                                  |
-| Email          | `EMAIL_SENDER` / [`EmailSender`](../../services/commerce-api/src/infrastructure/email/email-sender.interface.ts)                | `SmtpEmailSender` (nodemailer)                                                                | Live                                                                   |
-| File storage   | `STORAGE_PROVIDER` / [`StorageProvider`](../../services/commerce-api/src/infrastructure/storage/storage-provider.ts)            | `LocalStorageProvider` (filesystem)                                                           | Live, single node only                                                 |
+| Payments       | `PAYMENT_PROVIDER` / [`PaymentProvider`](../../services/commerce-api/src/modules/payments/payment-provider.ts)                  | `UnifiedPaymentProvider` when `PAYMENTS_PROVIDER=unified`, otherwise `PendingPaymentProvider` | Charge implementation exists (mobile money and card); live acceptance is separate. **No webhooks, no refunds.** |
+| FX rates       | `FX_RATE_PROVIDER` / `FxRateProvider`                                                                                           | `ExchangeRateApiProvider` (exchangerate-api.com), with the `PAYMENT_FX_QUOTES` fallback       | Configured when `PAYMENT_FX_API_KEY` is set; activation evidence required                                  |
+| Email          | `EMAIL_SENDER` / [`EmailSender`](../../services/commerce-api/src/infrastructure/email/email-sender.interface.ts)                | `SmtpEmailSender` (nodemailer)                                                                | Source-confirmed; live delivery evidence required |
+| File storage   | `STORAGE_PROVIDER` / [`StorageProvider`](../../services/commerce-api/src/infrastructure/storage/storage-provider.ts)            | `LocalStorageProvider` or `S3StorageProvider`                                                           | Source-confirmed; real storage verification pending                                                 |
 | Shipping rates | `SHIPPING_RATE_PROVIDER` / [`ShippingRateProvider`](../../services/commerce-api/src/modules/shipping/shipping-rate.provider.ts) | `ZoneShippingRateProvider`                                                                    | Flat zone rates from env                                               |
 | Carriers       | `CARRIER_PROVIDERS` / [`CarrierProvider`](../../services/commerce-api/src/modules/shipments/carrier-provider.interface.ts)      | `ManualCarrierProvider`                                                                       | Manual: booking works, polling returns nothing, no webhooks            |
 | Seller payouts | `PAYOUT_PROVIDER` / [`PayoutProvider`](../../services/commerce-api/src/modules/financials/payouts/payout-provider.ts)           | `ManualPayoutProvider`                                                                        | Manual: every payout needs an admin to resolve it                      |
@@ -17,6 +17,8 @@
 To add an integration, implement the interface and bind it in the owning module. Nothing outside the seam should need to change.
 
 ## Payments
+
+Pending unified payments with references are refreshed by the reconciliation scheduler/job as well as the status route. The worker can expire eligible unresolved attempts; no-reference unknown outcomes and late-success handling remain separate gaps. See [payments](modules/payments.md).
 
 ### The seam
 
@@ -124,7 +126,7 @@ Card details pass through and are never stored. `redact()` masks `card`, `phoneN
 - **Adapter.** `LocalStorageProvider` ([local-storage.provider.ts](../../services/commerce-api/src/infrastructure/storage/local-storage.provider.ts)) writes each object to `MEDIA_STORAGE_PATH/<key>`, with a `<key>.mime` sidecar file holding its MIME type.
 - **Safety.** Keys are resolved inside the root directory, and any path that escapes it is rejected.
 - **Downloads.** They are signed with HMAC, see [modules/media.md](modules/media.md).
-- **Limits.** The adapter only works while every replica shares one disk (the `media` volume). Running several nodes needs an object-storage adapter implementing `put`, `get` and `delete`.
+- **Selection and limits.** `MEDIA_STORAGE_DRIVER=local` requires shared disk across replicas; `s3` selects [S3StorageProvider](../../services/commerce-api/src/infrastructure/storage/s3-storage.provider.ts), configured with `S3_*` variables. Unit tests mock the SDK; real bucket access and recovery are not verified by those tests.
 
 ## Shipping rates
 

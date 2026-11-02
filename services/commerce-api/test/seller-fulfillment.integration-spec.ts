@@ -121,6 +121,19 @@ describe('Seller fulfillment (#37, integration, real Postgres)', () => {
       await prisma.order.deleteMany({ where: { id: { in: createdOrderIds } } });
     }
     if (createdSellerIds.length) {
+      await prisma.reservation.deleteMany({
+        where: {
+          inventoryRecord: { offer: { sellerId: { in: createdSellerIds } } },
+        },
+      });
+      await prisma.inventoryMovement.deleteMany({
+        where: {
+          inventoryRecord: { offer: { sellerId: { in: createdSellerIds } } },
+        },
+      });
+      await prisma.inventoryRecord.deleteMany({
+        where: { offer: { sellerId: { in: createdSellerIds } } },
+      });
       // Offer.sellerId is Restrict — must go before the seller row.
       await prisma.offer.deleteMany({
         where: { sellerId: { in: createdSellerIds } },

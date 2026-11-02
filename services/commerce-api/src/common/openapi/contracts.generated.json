@@ -6,7 +6,11 @@
         "metrics"
       ],
       "parameters": [],
-      "security": [],
+      "security": [
+        {
+          "bearer": []
+        }
+      ],
       "responses": {
         "200": {
           "description": "Success",
@@ -48,7 +52,43 @@
             }
           }
         }
-      }
+      },
+      "description": "Required role: ADMIN."
+    },
+    "MetricsController_getPrometheusMetrics": {
+      "operationId": "MetricsController_getPrometheusMetrics",
+      "tags": [
+        "metrics"
+      ],
+      "parameters": [],
+      "security": [
+        {
+          "metricsScrapeToken": []
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Prometheus text exposition format 0.0.4",
+          "content": {
+            "text/plain": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        }
+      },
+      "description": "For the configured internal scraper: send Authorization: Bearer <METRICS_SCRAPE_TOKEN>. Returns 404 when METRICS_SCRAPE_TOKEN is unset. Labels are bounded (method, route template, status, job type, topic); no user IDs, tokens or raw URLs."
     },
     "SalesAnalyticsController_getSales": {
       "operationId": "SalesAnalyticsController_getSales",
@@ -1492,6 +1532,16 @@
             }
           }
         },
+        "409": {
+          "description": "The resulting quantity exceeds available stock (error.details: { field: \"offerId\", message: <offerId> } and { field: \"available\", message: <units available> }), or exceeds the largest storable quantity (\"Cart quantity is too large\"), or the cart stopped being active.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        },
         "default": {
           "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
           "content": {
@@ -1584,6 +1634,16 @@
                     }
                   }
                 }
+              }
+            }
+          }
+        },
+        "409": {
+          "description": "An increased quantity exceeds available stock (error.details: { field: \"offerId\" } and { field: \"available\" }), or exceeds the largest storable quantity (\"Cart quantity is too large\"), or the cart stopped being active. Decreases are never stock-checked.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
               }
             }
           }
@@ -1756,6 +1816,16 @@
                     }
                   }
                 }
+              }
+            }
+          }
+        },
+        "409": {
+          "description": "A merged line would exceed available stock (error.details: { field: \"offerId\" } and { field: \"available\" }) or the largest storable quantity (\"Cart quantity is too large\"). The merge is all or nothing: neither cart changes and the guest cart stays mergeable.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
               }
             }
           }
@@ -3324,8 +3394,10 @@
           "in": "header",
           "required": false,
           "schema": {
-            "type": "string"
-          }
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "Optional UUID v4, case-insensitive. Same key + same request replays the recorded outcome; same key + different request is a 409 CHECKOUT_KEY_REUSED. Omit it and every call is a new checkout."
         }
       ],
       "security": [
@@ -3360,6 +3432,16 @@
                     }
                   }
                 }
+              }
+            }
+          }
+        },
+        "409": {
+          "description": "Conflict. Checkout-key outcomes carry error.details entries { field: \"code\", message: <code> }, plus { field: \"orderId\" } and { field: \"paymentId\" } when known: CHECKOUT_KEY_REUSED — the key was already used for a different request or the other checkout operation; CHECKOUT_KEY_LEGACY_RECEIPT — the key belongs to an earlier checkout that cannot be compared or retried; check your orders and use a new key; CHECKOUT_IN_PROGRESS — a request with this key is still running; retry the same key shortly; CHECKOUT_REQUIRES_RECONCILIATION — payment may already have been submitted; check the order and payment instead of checking out again; CHECKOUT_EXPIRED — the checkout was given up before payment started; check out again with a new key; CHECKOUT_PAYMENT_FAILED — the payment was refused and the order cancelled; check out again with a new key. Without a code detail: insufficient stock for an item, the cart changed since it was read (review the cart and check out again), selected items no longer in the cart, or an offer no longer available.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
               }
             }
           }
@@ -3384,7 +3466,8 @@
             }
           }
         }
-      }
+      },
+      "description": "Idempotency-Key is optional, a UUID v4, and case-insensitive. Retrying with the same key and the same request replays the recorded result (or the recorded error) instead of checking out again; the same key with a different request returns 409. Without a key every call is a new checkout, so a retried or double-clicked submit can create a second order."
     },
     "CheckoutController_buyNow": {
       "operationId": "CheckoutController_buyNow",
@@ -3397,8 +3480,10 @@
           "in": "header",
           "required": false,
           "schema": {
-            "type": "string"
-          }
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "Optional UUID v4, case-insensitive. Same key + same request replays the recorded outcome; same key + different request is a 409 CHECKOUT_KEY_REUSED. Omit it and every call is a new checkout."
         }
       ],
       "security": [
@@ -3437,6 +3522,16 @@
             }
           }
         },
+        "409": {
+          "description": "Conflict. Checkout-key outcomes carry error.details entries { field: \"code\", message: <code> }, plus { field: \"orderId\" } and { field: \"paymentId\" } when known: CHECKOUT_KEY_REUSED — the key was already used for a different request or the other checkout operation; CHECKOUT_KEY_LEGACY_RECEIPT — the key belongs to an earlier checkout that cannot be compared or retried; check your orders and use a new key; CHECKOUT_IN_PROGRESS — a request with this key is still running; retry the same key shortly; CHECKOUT_REQUIRES_RECONCILIATION — payment may already have been submitted; check the order and payment instead of checking out again; CHECKOUT_EXPIRED — the checkout was given up before payment started; check out again with a new key; CHECKOUT_PAYMENT_FAILED — the payment was refused and the order cancelled; check out again with a new key. Without a code detail: insufficient stock for an item, the cart changed since it was read (review the cart and check out again), selected items no longer in the cart, or an offer no longer available.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+              }
+            }
+          }
+        },
         "default": {
           "description": "Error response (validation, authentication, authorization, missing resources, conflicts, rate limits or server errors).",
           "content": {
@@ -3457,7 +3552,8 @@
             }
           }
         }
-      }
+      },
+      "description": "Idempotency-Key is optional, a UUID v4, and case-insensitive. Retrying with the same key and the same request replays the recorded result (or the recorded error) instead of checking out again; the same key with a different request returns 409. Without a key every call is a new checkout, so a retried or double-clicked submit can create a second order."
     },
     "CheckoutController_quote": {
       "operationId": "CheckoutController_quote",
@@ -7473,7 +7569,24 @@
       "tags": [
         "admin/inventory"
       ],
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "idempotency-key",
+          "in": "header",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "user-agent",
+          "in": "header",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
       "security": [
         {
           "bearer": []
@@ -20866,8 +20979,8 @@
           "schema": {
             "type": "string",
             "enum": [
-              "STAFF",
               "ADMIN",
+              "STAFF",
               "CUSTOMER",
               "SELLER"
             ],
@@ -21587,22 +21700,123 @@
     "MetricsSnapshot": {
       "type": "object",
       "properties": {
-        "uptimeSeconds": {
-          "type": "number"
+        "generatedAt": {
+          "type": "string"
+        },
+        "process": {
+          "$ref": "#/components/schemas/ProcessMetrics"
         },
         "requests": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/RequestMetric"
+            "$ref": "#/components/schemas/RouteMetric"
           }
+        },
+        "jobs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/JobMetric"
+          }
+        },
+        "outbox": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/OutboxMetric"
+          }
+        },
+        "operational": {
+          "$ref": "#/components/schemas/OperationalGauges"
+        }
+      },
+      "required": [
+        "generatedAt",
+        "process",
+        "requests",
+        "jobs",
+        "outbox",
+        "operational"
+      ]
+    },
+    "ProcessMetrics": {
+      "type": "object",
+      "properties": {
+        "uptimeSeconds": {
+          "type": "number"
+        },
+        "rssBytes": {
+          "type": "number"
+        },
+        "heapUsedBytes": {
+          "type": "number"
+        },
+        "heapTotalBytes": {
+          "type": "number"
+        },
+        "externalBytes": {
+          "type": "number"
+        },
+        "cpuUserSeconds": {
+          "type": "number"
+        },
+        "cpuSystemSeconds": {
+          "type": "number"
+        },
+        "activeRequests": {
+          "type": "number"
+        },
+        "eventLoopDelay": {
+          "$ref": "#/components/schemas/EventLoopDelaySummary"
         }
       },
       "required": [
         "uptimeSeconds",
-        "requests"
+        "rssBytes",
+        "heapUsedBytes",
+        "heapTotalBytes",
+        "externalBytes",
+        "cpuUserSeconds",
+        "cpuSystemSeconds",
+        "activeRequests",
+        "eventLoopDelay"
       ]
     },
-    "RequestMetric": {
+    "EventLoopDelaySummary": {
+      "type": "object",
+      "properties": {
+        "windowSeconds": {
+          "type": "number"
+        },
+        "p50Ms": {
+          "type": "number",
+          "nullable": true
+        },
+        "p90Ms": {
+          "type": "number",
+          "nullable": true
+        },
+        "p99Ms": {
+          "type": "number",
+          "nullable": true
+        },
+        "maxMs": {
+          "type": "number",
+          "nullable": true
+        },
+        "meanMs": {
+          "type": "number",
+          "nullable": true
+        }
+      },
+      "required": [
+        "windowSeconds",
+        "p50Ms",
+        "p90Ms",
+        "p99Ms",
+        "maxMs",
+        "meanMs"
+      ]
+    },
+    "RouteMetric": {
       "type": "object",
       "properties": {
         "method": {
@@ -21611,26 +21825,321 @@
         "route": {
           "type": "string"
         },
-        "statusCode": {
-          "type": "number"
-        },
         "count": {
           "type": "number"
         },
         "errorCount": {
           "type": "number"
         },
+        "clientErrorCount": {
+          "type": "number"
+        },
+        "statusCounts": {
+          "$ref": "#/components/schemas/Record"
+        },
         "totalDurationMs": {
           "type": "number"
+        },
+        "latency": {
+          "$ref": "#/components/schemas/LatencySummary"
         }
       },
       "required": [
         "method",
         "route",
-        "statusCode",
         "count",
         "errorCount",
-        "totalDurationMs"
+        "clientErrorCount",
+        "statusCounts",
+        "totalDurationMs",
+        "latency"
+      ]
+    },
+    "Record": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "LatencySummary": {
+      "type": "object",
+      "properties": {
+        "p50Ms": {
+          "type": "number",
+          "nullable": true
+        },
+        "p95Ms": {
+          "type": "number",
+          "nullable": true
+        },
+        "p99Ms": {
+          "type": "number",
+          "nullable": true
+        },
+        "meanMs": {
+          "type": "number",
+          "nullable": true
+        }
+      },
+      "required": [
+        "p50Ms",
+        "p95Ms",
+        "p99Ms",
+        "meanMs"
+      ]
+    },
+    "JobMetric": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "succeeded": {
+          "type": "number"
+        },
+        "failed": {
+          "type": "number"
+        },
+        "deadLettered": {
+          "type": "number"
+        },
+        "duration": {
+          "$ref": "#/components/schemas/LatencySummary"
+        },
+        "startLag": {
+          "$ref": "#/components/schemas/LatencySummary"
+        }
+      },
+      "required": [
+        "type",
+        "succeeded",
+        "failed",
+        "deadLettered",
+        "duration",
+        "startLag"
+      ]
+    },
+    "OutboxMetric": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string"
+        },
+        "published": {
+          "type": "number"
+        },
+        "failed": {
+          "type": "number"
+        },
+        "deadLettered": {
+          "type": "number"
+        },
+        "dispatchLag": {
+          "$ref": "#/components/schemas/LatencySummary"
+        }
+      },
+      "required": [
+        "topic",
+        "published",
+        "failed",
+        "deadLettered",
+        "dispatchLag"
+      ]
+    },
+    "OperationalGauges": {
+      "type": "object",
+      "properties": {
+        "collectedAt": {
+          "type": "string"
+        },
+        "collectionMs": {
+          "type": "number"
+        },
+        "error": {
+          "type": "string",
+          "nullable": true
+        },
+        "jobs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/QueueGauge"
+          }
+        },
+        "staleRunningJobs": {
+          "type": "number"
+        },
+        "outbox": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/QueueGauge"
+          }
+        },
+        "payments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/StatusGauge"
+          }
+        },
+        "refundCases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/StatusGauge"
+          }
+        },
+        "refunds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/StatusGauge"
+          }
+        },
+        "emailDeliveries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/StatusGauge"
+          }
+        },
+        "database": {
+          "type": "object",
+          "allOf": [
+            {
+              "$ref": "#/components/schemas/DatabaseGauges"
+            }
+          ],
+          "nullable": true
+        },
+        "pool": {
+          "type": "object",
+          "allOf": [
+            {
+              "$ref": "#/components/schemas/PoolGauges"
+            }
+          ],
+          "nullable": true
+        }
+      },
+      "required": [
+        "collectedAt",
+        "collectionMs",
+        "error",
+        "jobs",
+        "staleRunningJobs",
+        "outbox",
+        "payments",
+        "refundCases",
+        "refunds",
+        "emailDeliveries",
+        "database",
+        "pool"
+      ]
+    },
+    "QueueGauge": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "count": {
+          "type": "number"
+        },
+        "retrying": {
+          "type": "number"
+        },
+        "oldestDueAgeSeconds": {
+          "type": "number",
+          "nullable": true
+        }
+      },
+      "required": [
+        "name",
+        "status",
+        "count",
+        "retrying",
+        "oldestDueAgeSeconds"
+      ]
+    },
+    "StatusGauge": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "count": {
+          "type": "number"
+        },
+        "oldestAgeSeconds": {
+          "type": "number",
+          "nullable": true
+        }
+      },
+      "required": [
+        "status",
+        "count",
+        "oldestAgeSeconds"
+      ]
+    },
+    "DatabaseGauges": {
+      "type": "object",
+      "properties": {
+        "connectionsByState": {
+          "$ref": "#/components/schemas/Record"
+        },
+        "maxConnections": {
+          "type": "number",
+          "nullable": true
+        },
+        "lockWaitingSessions": {
+          "type": "number"
+        },
+        "ungrantedLocks": {
+          "type": "number"
+        },
+        "longestTransactionSeconds": {
+          "type": "number",
+          "nullable": true
+        }
+      },
+      "required": [
+        "connectionsByState",
+        "maxConnections",
+        "lockWaitingSessions",
+        "ungrantedLocks",
+        "longestTransactionSeconds"
+      ]
+    },
+    "PoolGauges": {
+      "type": "object",
+      "properties": {
+        "open": {
+          "type": "number",
+          "nullable": true
+        },
+        "busy": {
+          "type": "number",
+          "nullable": true
+        },
+        "idle": {
+          "type": "number",
+          "nullable": true
+        },
+        "waiting": {
+          "type": "number",
+          "nullable": true
+        },
+        "waitedTotal": {
+          "type": "number",
+          "nullable": true
+        }
+      },
+      "required": [
+        "open",
+        "busy",
+        "idle",
+        "waiting",
+        "waitedTotal"
       ]
     },
     "InputSalesAnalyticsQueryDto": {
@@ -22182,8 +22691,8 @@
         "role": {
           "type": "string",
           "enum": [
-            "STAFF",
             "ADMIN",
+            "STAFF",
             "CUSTOMER",
             "SELLER"
           ]
@@ -24052,7 +24561,7 @@
           "type": "string"
         },
         "destination": {
-          "$ref": "#/components/schemas/Record"
+          "$ref": "#/components/schemas/Record2"
         },
         "maskedReference": {
           "type": "string"
@@ -24108,7 +24617,7 @@
         "updatedAt"
       ]
     },
-    "Record": {
+    "Record2": {
       "type": "object",
       "properties": {},
       "additionalProperties": true
@@ -25696,6 +26205,8 @@
         },
         "delta": {
           "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
           "not": {
             "enum": [
               0
@@ -27927,20 +28438,13 @@
           "type": "number"
         },
         "byStatus": {
-          "$ref": "#/components/schemas/Record2"
+          "$ref": "#/components/schemas/Record"
         }
       },
       "required": [
         "total",
         "byStatus"
       ]
-    },
-    "Record2": {
-      "type": "object",
-      "properties": {},
-      "additionalProperties": {
-        "type": "number"
-      }
     },
     "SellerOrderDetail": {
       "type": "object",
@@ -34839,8 +35343,8 @@
         "role": {
           "type": "string",
           "enum": [
-            "STAFF",
             "ADMIN",
+            "STAFF",
             "CUSTOMER",
             "SELLER"
           ],
@@ -34920,8 +35424,8 @@
         "role": {
           "type": "string",
           "enum": [
-            "STAFF",
             "ADMIN",
+            "STAFF",
             "CUSTOMER",
             "SELLER"
           ]
@@ -35009,8 +35513,8 @@
         "role": {
           "type": "string",
           "enum": [
-            "STAFF",
             "ADMIN",
+            "STAFF",
             "CUSTOMER",
             "SELLER"
           ]
@@ -35059,8 +35563,8 @@
         "role": {
           "type": "string",
           "enum": [
-            "STAFF",
             "ADMIN",
+            "STAFF",
             "CUSTOMER",
             "SELLER"
           ]
@@ -35068,8 +35572,8 @@
         "expectedRole": {
           "type": "string",
           "enum": [
-            "STAFF",
             "ADMIN",
+            "STAFF",
             "CUSTOMER",
             "SELLER"
           ]
@@ -35113,8 +35617,8 @@
         "role": {
           "type": "string",
           "enum": [
-            "STAFF",
             "ADMIN",
+            "STAFF",
             "CUSTOMER",
             "SELLER"
           ]

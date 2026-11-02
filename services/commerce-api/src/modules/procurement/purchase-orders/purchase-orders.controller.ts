@@ -19,7 +19,10 @@ import { ReasonActionDto } from './dto/reason-action.dto';
 import { UpdatePurchaseOrderDto } from './dto/update-purchase-order.dto';
 import { VersionDto } from './dto/version.dto';
 import { PurchaseOrdersService } from './purchase-orders.service';
-import { PurchaseOrderPage, PurchaseOrderWithLines } from './purchase-orders.types';
+import {
+  PurchaseOrderPage,
+  PurchaseOrderWithLines,
+} from './purchase-orders.types';
 
 @Controller('admin/procurement/purchase-orders')
 export class PurchaseOrdersController {

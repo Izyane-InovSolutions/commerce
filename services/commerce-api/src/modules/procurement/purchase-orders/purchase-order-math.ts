@@ -19,8 +19,11 @@ export type LineAmounts = {
  * truncating, so line-level tax never silently underestimates.
  */
 export function computeLineAmounts(line: LineInput): LineAmounts {
-  const netAmount = line.orderedQuantity * line.unitCostAmount - line.discountAmount;
-  const taxAmount = Math.round((netAmount * line.taxRateBasisPoints) / BASIS_POINTS);
+  const netAmount =
+    line.orderedQuantity * line.unitCostAmount - line.discountAmount;
+  const taxAmount = Math.round(
+    (netAmount * line.taxRateBasisPoints) / BASIS_POINTS,
+  );
   const grossAmount = netAmount + taxAmount;
 
   return { netAmount, taxAmount, grossAmount };

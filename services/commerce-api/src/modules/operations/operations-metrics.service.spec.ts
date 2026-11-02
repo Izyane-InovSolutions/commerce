@@ -14,7 +14,11 @@ import { OperationsMetricsService } from './operations-metrics.service';
 function buildPrisma(): {
   order: { aggregate: jest.Mock; groupBy: jest.Mock };
   refundCase: { findMany: jest.Mock; aggregate: jest.Mock };
-  fulfillmentOrder: { count: jest.Mock; groupBy: jest.Mock; findMany: jest.Mock };
+  fulfillmentOrder: {
+    count: jest.Mock;
+    groupBy: jest.Mock;
+    findMany: jest.Mock;
+  };
   inventoryRecord: { findMany: jest.Mock };
   returnRequest: { groupBy: jest.Mock; count: jest.Mock; findMany: jest.Mock };
   returnItem: { groupBy: jest.Mock };

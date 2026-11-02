@@ -9,6 +9,8 @@
 # testing
 /coverage
 **/coverage
+# Workload outputs (test/load); publish summaries in docs instead
+**/load-results
 
 # next.js
 .next/

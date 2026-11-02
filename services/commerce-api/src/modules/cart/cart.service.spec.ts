@@ -2,10 +2,17 @@ import {
   OfferReadService,
   type CommerceOffer,
 } from '../offers/offer-read.service';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   CartStatus,
   OfferStockSource,
+  OrderStatus,
+  PaymentStatus,
+  Prisma,
   ProductStatus,
   SellerStatus,
 } from '@prisma/client';
@@ -14,38 +21,48 @@ import { PrismaService } from '../../database/prisma.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { CartService } from './cart.service';
 
+type OfferCarrier = { offerId: string; offer?: CommerceOffer };
+
 function buildPrisma(): {
   offer: { findUnique: jest.Mock };
+  order: { findFirst: jest.Mock };
   cart: {
     findUnique: jest.Mock;
+    findUniqueOrThrow: jest.Mock;
     findFirst: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
   };
   cartItem: {
     findUnique: jest.Mock;
+    findFirst: jest.Mock;
+    findMany: jest.Mock;
     upsert: jest.Mock;
     update: jest.Mock;
-    delete: jest.Mock;
     deleteMany: jest.Mock;
   };
+  $queryRaw: jest.Mock;
   $transaction: jest.Mock;
 } {
   const prisma = {
     offer: { findUnique: jest.fn() },
+    order: { findFirst: jest.fn() },
     cart: {
       findUnique: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
       findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
     },
     cartItem: {
-      findUnique: jest.fn(),
+      findUnique: jest.fn().mockResolvedValue(null),
+      findFirst: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
       upsert: jest.fn(),
       update: jest.fn(),
-      delete: jest.fn(),
-      deleteMany: jest.fn(),
+      deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
+    $queryRaw: jest.fn().mockResolvedValue([]),
     $transaction: jest.fn(),
   };
   prisma.$transaction.mockImplementation(
@@ -74,11 +91,19 @@ function buildOffer(
   };
 }
 
+function lockedSql(prisma: ReturnType<typeof buildPrisma>): string[] {
+  return prisma.$queryRaw.mock.calls.map(
+    ([strings, ...values]: [TemplateStringsArray, ...unknown[]]) =>
+      `${strings.join('?')} [${values.join(',')}]`,
+  );
+}
+
 describe('CartService', () => {
   let prisma: ReturnType<typeof buildPrisma>;
   let inventoryService: {
     getAvailableQuantities: jest.Mock;
     getAvailableOfferQuantities: jest.Mock;
+    getAllocatableStock: jest.Mock;
   };
   let service: CartService;
 
@@ -95,21 +120,51 @@ describe('CartService', () => {
         .mockImplementation((ids: string[]) =>
           Promise.resolve(new Map(ids.map((id) => [id, 10]))),
         ),
+      getAllocatableStock: jest.fn().mockImplementation(
+        (
+          pools: Array<{
+            kind: string;
+            variantId?: string;
+            offerId?: string;
+          }>,
+        ) =>
+          Promise.resolve(
+            new Map(
+              pools.map((pool) => [
+                `${pool.kind}:${pool.variantId ?? pool.offerId}`,
+                [10],
+              ]),
+            ),
+          ),
+      ),
+    };
+    // Offers resolve from whatever lines the test's cart reads returned last,
+    // falling back to a plain published offer.
+    const findOffers = async (ids: string[]): Promise<CommerceOffer[]> => {
+      const known = new Map<string, CommerceOffer>();
+      const cart = (await prisma.cart.findUnique.mock.results.at(-1)?.value) as
+        | { items?: OfferCarrier[] }
+        | null
+        | undefined;
+      const lines = (await prisma.cartItem.findMany.mock.results.at(-1)
+        ?.value) as OfferCarrier[] | undefined;
+      for (const item of [...(cart?.items ?? []), ...(lines ?? [])]) {
+        if (item.offer) known.set(item.offerId, item.offer);
+      }
+      return ids.map(
+        (id) =>
+          ({
+            ...(known.get(id) ?? buildOffer()),
+            id,
+          }) as unknown as CommerceOffer,
+      );
     };
     service = new CartService(
       prisma as unknown as PrismaService,
       inventoryService as unknown as InventoryService,
       {
         find: prisma.offer.findUnique,
-        findMany: jest.fn().mockImplementation(() =>
-          (
-            prisma.cart.findUnique.mock.results.at(-1)?.value as Promise<{
-              items: Array<{ offerId: string; offer: CommerceOffer }>;
-            }>
-          ).then((result) =>
-            result.items.map((item) => ({ ...item.offer, id: item.offerId })),
-          ),
-        ),
+        findMany: jest.fn().mockImplementation(findOffers),
       } as unknown as OfferReadService,
     );
   });
@@ -124,7 +179,11 @@ describe('CartService', () => {
         }),
       );
       prisma.cart.findFirst.mockResolvedValue({ id: 'cart-1' });
-      prisma.cart.findUnique.mockResolvedValue({ id: 'cart-1', items: [] });
+      prisma.cart.findUnique.mockResolvedValue({
+        id: 'cart-1',
+        status: CartStatus.ACTIVE,
+        items: [],
+      });
 
       await expect(
         service.addItem({ userId: 'user-1' }, 'offer-1', 1, 'USD'),
@@ -165,13 +224,13 @@ describe('CartService', () => {
 
     it('creates a guest cart and returns its token when the guest has no cart yet', async () => {
       // identity = {} (a brand-new guest with no token yet), so findCart()
-      // short-circuits without touching the DB — the only findUnique call is
-      // buildView's re-fetch after the cart is created.
+      // short-circuits without touching the DB.
       prisma.offer.findUnique.mockResolvedValue(buildOffer());
       prisma.cart.findUnique.mockResolvedValue({
         id: 'cart-1',
         userId: null,
         guestToken: 'guest-token',
+        status: CartStatus.ACTIVE,
         items: [
           {
             id: 'item-1',
@@ -195,7 +254,56 @@ describe('CartService', () => {
       expect(result.view.items).toHaveLength(1);
     });
 
-    it('increments quantity instead of duplicating a line for the same offer', async () => {
+    it('creates a user cart under the users row lock', async () => {
+      prisma.offer.findUnique.mockResolvedValue(buildOffer());
+      prisma.cart.findFirst.mockResolvedValue(null);
+      prisma.cart.findUnique.mockResolvedValueOnce(null).mockResolvedValue({
+        id: 'cart-1',
+        status: CartStatus.ACTIVE,
+        items: [],
+      });
+      prisma.cart.create.mockResolvedValue({ id: 'cart-1', userId: 'user-1' });
+
+      await service.addItem({ userId: 'user-1' }, 'offer-1', 1, 'USD');
+
+      expect(lockedSql(prisma)[0]).toMatch(
+        /FROM users .*FOR UPDATE \[user-1\]/,
+      );
+      expect(prisma.cart.create).toHaveBeenCalledWith({
+        data: { userId: 'user-1' },
+      });
+    });
+
+    it('rereads the user cart when a concurrent creation wins the unique index', async () => {
+      prisma.offer.findUnique.mockResolvedValue(buildOffer());
+      prisma.cart.findFirst.mockResolvedValue(null);
+      prisma.$transaction.mockImplementationOnce(() =>
+        Promise.reject(
+          new Prisma.PrismaClientKnownRequestError('duplicate', {
+            code: 'P2002',
+            clientVersion: 'test',
+          }),
+        ),
+      );
+      prisma.cart.findUniqueOrThrow.mockResolvedValue({
+        id: 'cart-1',
+        userId: 'user-1',
+      });
+      prisma.cart.findUnique.mockResolvedValue({
+        id: 'cart-1',
+        status: CartStatus.ACTIVE,
+        items: [],
+      });
+
+      await service.addItem({ userId: 'user-1' }, 'offer-1', 1, 'USD');
+
+      expect(prisma.cart.findUniqueOrThrow).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+      });
+      expect(prisma.cartItem.upsert).toHaveBeenCalled();
+    });
+
+    it('sets the summed quantity and bumps the revision of an existing line', async () => {
       prisma.offer.findUnique.mockResolvedValue(buildOffer());
       prisma.cart.findFirst.mockResolvedValue({
         id: 'cart-1',
@@ -203,23 +311,92 @@ describe('CartService', () => {
       });
       prisma.cart.findUnique.mockResolvedValue({
         id: 'cart-1',
-        items: [
-          {
-            id: 'item-1',
-            offerId: 'offer-1',
-            quantity: 2,
-            offer: buildOffer(),
-          },
-        ],
+        status: CartStatus.ACTIVE,
+        items: [],
+      });
+      prisma.cartItem.findUnique.mockResolvedValue({
+        id: 'item-1',
+        offerId: 'offer-1',
+        quantity: 2,
       });
 
       await service.addItem({ userId: 'user-1' }, 'offer-1', 3, 'USD');
 
+      expect(lockedSql(prisma)).toEqual([
+        expect.stringMatching(/FROM carts .*FOR UPDATE \[cart-1\]/),
+      ]);
       expect(prisma.cartItem.upsert).toHaveBeenCalledWith({
         where: { cartId_offerId: { cartId: 'cart-1', offerId: 'offer-1' } },
         create: { cartId: 'cart-1', offerId: 'offer-1', quantity: 3 },
-        update: { quantity: { increment: 3 } },
+        update: { quantity: 5, revision: { increment: 1 } },
       });
+    });
+
+    it('rejects with 409 when the resulting line exceeds allocatable stock', async () => {
+      prisma.offer.findUnique.mockResolvedValue(buildOffer());
+      prisma.cart.findFirst.mockResolvedValue({ id: 'cart-1' });
+      prisma.cart.findUnique.mockResolvedValue({
+        id: 'cart-1',
+        status: CartStatus.ACTIVE,
+        items: [],
+      });
+      prisma.cartItem.findMany.mockResolvedValue([
+        { id: 'item-1', offerId: 'offer-1', quantity: 6 },
+      ]);
+      // Two warehouses with 4 and 5: 9 in total, but no single record holds 6.
+      inventoryService.getAllocatableStock.mockResolvedValue(
+        new Map([['variant:variant-1', [4, 5]]]),
+      );
+
+      const error = (await service
+        .addItem({ userId: 'user-1' }, 'offer-1', 6, 'USD')
+        .catch((caught: unknown) => caught)) as ConflictException;
+
+      expect(error).toBeInstanceOf(ConflictException);
+      expect(error.getResponse()).toEqual({
+        message: 'Requested quantity exceeds available stock',
+        details: [
+          { field: 'offerId', message: 'offer-1' },
+          { field: 'available', message: '9' },
+        ],
+      });
+      expect(inventoryService.getAllocatableStock).toHaveBeenCalledWith(
+        [{ kind: 'variant', variantId: 'variant-1' }],
+        prisma,
+      );
+    });
+
+    it('rejects a quantity that would overflow the column before writing', async () => {
+      prisma.offer.findUnique.mockResolvedValue(buildOffer());
+      prisma.cart.findFirst.mockResolvedValue({ id: 'cart-1' });
+      prisma.cart.findUnique.mockResolvedValue({
+        id: 'cart-1',
+        status: CartStatus.ACTIVE,
+      });
+      prisma.cartItem.findUnique.mockResolvedValue({
+        id: 'item-1',
+        offerId: 'offer-1',
+        quantity: 2_147_483_647,
+      });
+
+      await expect(
+        service.addItem({ userId: 'user-1' }, 'offer-1', 1, 'USD'),
+      ).rejects.toThrow('Cart quantity is too large');
+      expect(prisma.cartItem.upsert).not.toHaveBeenCalled();
+    });
+
+    it('rejects with 409 when the cart stopped being active under the lock', async () => {
+      prisma.offer.findUnique.mockResolvedValue(buildOffer());
+      prisma.cart.findFirst.mockResolvedValue({ id: 'cart-1' });
+      prisma.cart.findUnique.mockResolvedValue({
+        id: 'cart-1',
+        status: CartStatus.MERGED,
+      });
+
+      await expect(
+        service.addItem({ guestToken: 'guest' }, 'offer-1', 1, 'USD'),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.cartItem.upsert).not.toHaveBeenCalled();
     });
   });
 
@@ -402,6 +579,15 @@ describe('CartService', () => {
   });
 
   describe('updateItemQuantity / removeItem', () => {
+    beforeEach(() => {
+      prisma.cart.findFirst.mockResolvedValue({ id: 'cart-1' });
+      prisma.cart.findUnique.mockResolvedValue({
+        id: 'cart-1',
+        status: CartStatus.ACTIVE,
+        items: [],
+      });
+    });
+
     it('throws not found when the cart does not exist', async () => {
       prisma.cart.findFirst.mockResolvedValue(null);
 
@@ -411,15 +597,101 @@ describe('CartService', () => {
     });
 
     it('throws not found when the item does not belong to the resolved cart', async () => {
-      prisma.cart.findFirst.mockResolvedValue({ id: 'cart-1' });
-      prisma.cartItem.findUnique.mockResolvedValue({
-        id: 'item-1',
-        cartId: 'someone-elses-cart',
-      });
+      prisma.cartItem.deleteMany.mockResolvedValue({ count: 0 });
 
       await expect(
         service.removeItem({ userId: 'user-1' }, 'item-1', 'USD'),
       ).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.cartItem.deleteMany).toHaveBeenCalledWith({
+        where: { id: 'item-1', cartId: 'cart-1' },
+      });
+    });
+
+    it('throws not found when updating a line outside the resolved cart', async () => {
+      prisma.cartItem.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.updateItemQuantity({ userId: 'user-1' }, 'item-1', 2, 'USD'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.cartItem.update).not.toHaveBeenCalled();
+    });
+
+    it('bumps the revision even when the quantity is unchanged, without a stock check', async () => {
+      prisma.cartItem.findFirst.mockResolvedValue({
+        id: 'item-1',
+        offerId: 'offer-1',
+        quantity: 2,
+      });
+
+      await service.updateItemQuantity(
+        { userId: 'user-1' },
+        'item-1',
+        2,
+        'USD',
+      );
+
+      expect(prisma.cartItem.update).toHaveBeenCalledWith({
+        where: { id: 'item-1' },
+        data: { quantity: 2, revision: { increment: 1 } },
+      });
+      expect(inventoryService.getAllocatableStock).not.toHaveBeenCalled();
+    });
+
+    it('lets a decrease through even when the pool is already short', async () => {
+      prisma.cartItem.findFirst.mockResolvedValue({
+        id: 'item-1',
+        offerId: 'offer-1',
+        quantity: 8,
+      });
+      inventoryService.getAllocatableStock.mockResolvedValue(
+        new Map([['variant:variant-1', [1]]]),
+      );
+
+      await service.updateItemQuantity(
+        { userId: 'user-1' },
+        'item-1',
+        5,
+        'USD',
+      );
+
+      expect(prisma.cartItem.update).toHaveBeenCalled();
+      expect(inventoryService.getAllocatableStock).not.toHaveBeenCalled();
+    });
+
+    it('stock-checks an increase', async () => {
+      prisma.cartItem.findFirst.mockResolvedValue({
+        id: 'item-1',
+        offerId: 'offer-1',
+        quantity: 1,
+      });
+      prisma.cartItem.findMany.mockResolvedValue([
+        { id: 'item-1', offerId: 'offer-1', quantity: 4 },
+      ]);
+      inventoryService.getAllocatableStock.mockResolvedValue(
+        new Map([['variant:variant-1', [3]]]),
+      );
+
+      await expect(
+        service.updateItemQuantity({ userId: 'user-1' }, 'item-1', 4, 'USD'),
+      ).rejects.toThrow('Requested quantity exceeds available stock');
+    });
+
+    it('rejects a quantity larger than the column holds', async () => {
+      prisma.cartItem.findFirst.mockResolvedValue({
+        id: 'item-1',
+        offerId: 'offer-1',
+        quantity: 1,
+      });
+
+      await expect(
+        service.updateItemQuantity(
+          { userId: 'user-1' },
+          'item-1',
+          2_147_483_648,
+          'USD',
+        ),
+      ).rejects.toThrow('Cart quantity is too large');
+      expect(prisma.cartItem.update).not.toHaveBeenCalled();
     });
   });
 
@@ -432,30 +704,92 @@ describe('CartService', () => {
       expect(prisma.cart.findUnique).not.toHaveBeenCalled();
     });
 
-    it('upserts guest lines into the user cart and marks the guest cart MERGED', async () => {
+    it('locks both carts in id order, merges with revisions and marks the guest cart MERGED', async () => {
       prisma.cart.findUnique
+        // Unlocked guest lookup, locked guest reread, locked user reread.
+        .mockResolvedValueOnce({ id: 'b-guest', status: CartStatus.ACTIVE })
         .mockResolvedValueOnce({
-          id: 'guest-cart',
+          id: 'b-guest',
           status: CartStatus.ACTIVE,
-          items: [{ id: 'gi-1', offerId: 'offer-1', quantity: 2 }],
+          items: [
+            { id: 'gi-1', offerId: 'offer-1', quantity: 2 },
+            { id: 'gi-2', offerId: 'offer-2', quantity: 1 },
+          ],
         })
-        .mockResolvedValue({ id: 'user-cart', items: [] });
+        .mockResolvedValueOnce({
+          id: 'a-user',
+          status: CartStatus.ACTIVE,
+          items: [{ id: 'ui-1', offerId: 'offer-1', quantity: 3 }],
+        })
+        .mockResolvedValue({ id: 'a-user', items: [] });
       prisma.cart.findFirst.mockResolvedValue({
-        id: 'user-cart',
+        id: 'a-user',
         userId: 'user-1',
       });
 
       await service.mergeGuestCart('user-1', 'guest-token', 'USD');
 
+      expect(lockedSql(prisma)).toEqual([
+        expect.stringMatching(/FROM carts .*\[a-user\]/),
+        expect.stringMatching(/FROM carts .*\[b-guest\]/),
+      ]);
       expect(prisma.cartItem.upsert).toHaveBeenCalledWith({
-        where: { cartId_offerId: { cartId: 'user-cart', offerId: 'offer-1' } },
-        create: { cartId: 'user-cart', offerId: 'offer-1', quantity: 2 },
-        update: { quantity: { increment: 2 } },
+        where: { cartId_offerId: { cartId: 'a-user', offerId: 'offer-1' } },
+        create: { cartId: 'a-user', offerId: 'offer-1', quantity: 5 },
+        update: { quantity: 5, revision: { increment: 1 } },
+      });
+      expect(prisma.cartItem.upsert).toHaveBeenCalledWith({
+        where: { cartId_offerId: { cartId: 'a-user', offerId: 'offer-2' } },
+        create: { cartId: 'a-user', offerId: 'offer-2', quantity: 1 },
+        update: { quantity: 1, revision: { increment: 1 } },
       });
       expect(prisma.cart.update).toHaveBeenCalledWith({
-        where: { id: 'guest-cart' },
+        where: { id: 'b-guest' },
         data: { status: CartStatus.MERGED },
       });
+    });
+
+    it('does nothing when the guest cart was merged concurrently', async () => {
+      prisma.cart.findUnique
+        .mockResolvedValueOnce({ id: 'guest-cart', status: CartStatus.ACTIVE })
+        .mockResolvedValueOnce({
+          id: 'guest-cart',
+          status: CartStatus.MERGED,
+          items: [{ id: 'gi-1', offerId: 'offer-1', quantity: 2 }],
+        })
+        .mockResolvedValue({ id: 'user-cart', items: [] });
+      prisma.cart.findFirst.mockResolvedValue({ id: 'user-cart' });
+
+      await service.mergeGuestCart('user-1', 'guest-token', 'USD');
+
+      expect(prisma.cartItem.upsert).not.toHaveBeenCalled();
+      expect(prisma.cart.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects the whole merge with 409 on a stock shortage', async () => {
+      prisma.cart.findUnique
+        .mockResolvedValueOnce({ id: 'guest-cart', status: CartStatus.ACTIVE })
+        .mockResolvedValueOnce({
+          id: 'guest-cart',
+          status: CartStatus.ACTIVE,
+          items: [{ id: 'gi-1', offerId: 'offer-1', quantity: 4 }],
+        })
+        .mockResolvedValueOnce({
+          id: 'user-cart',
+          status: CartStatus.ACTIVE,
+          items: [],
+        });
+      prisma.cart.findFirst.mockResolvedValue({ id: 'user-cart' });
+      prisma.cartItem.findMany.mockResolvedValue([
+        { id: 'ui-1', offerId: 'offer-1', quantity: 4 },
+      ]);
+      inventoryService.getAllocatableStock.mockResolvedValue(
+        new Map([['variant:variant-1', [3]]]),
+      );
+
+      await expect(
+        service.mergeGuestCart('user-1', 'guest-token', 'USD'),
+      ).rejects.toBeInstanceOf(ConflictException);
     });
 
     it('does nothing when the guest token does not resolve to an active cart', async () => {
@@ -468,9 +802,155 @@ describe('CartService', () => {
     });
   });
 
+  describe('checkout snapshot', () => {
+    it('reads only the named lines of the active user cart', async () => {
+      prisma.cartItem.findMany.mockResolvedValue([]);
+
+      await service.getCheckoutSnapshot('user-1', ['item-1']);
+
+      expect(prisma.cartItem.findMany).toHaveBeenCalledWith({
+        where: {
+          id: { in: ['item-1'] },
+          cart: { userId: 'user-1', status: CartStatus.ACTIVE },
+        },
+        select: {
+          id: true,
+          offerId: true,
+          quantity: true,
+          revision: true,
+          createdAt: true,
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      });
+    });
+
+    const snapshot = [
+      { id: 'item-1', offerId: 'offer-1', quantity: 2, revision: 3 },
+    ];
+
+    it('locks the cart and accepts an unchanged snapshot', async () => {
+      prisma.cart.findUnique.mockResolvedValue({
+        id: 'cart-1',
+        status: CartStatus.ACTIVE,
+      });
+      prisma.cartItem.findMany.mockResolvedValue(snapshot);
+
+      await expect(
+        service.lockAndVerifyCheckoutSnapshot(
+          prisma as unknown as Prisma.TransactionClient,
+          'user-1',
+          snapshot,
+        ),
+      ).resolves.toBeUndefined();
+      expect(lockedSql(prisma)).toEqual([
+        expect.stringMatching(/FROM carts .*FOR UPDATE \[cart-1\]/),
+      ]);
+    });
+
+    it.each([
+      ['a changed revision', [{ ...snapshot[0], revision: 4 }]],
+      ['a changed quantity', [{ ...snapshot[0], quantity: 1 }]],
+      ['a missing line', []],
+    ])('rejects %s', async (_label, rows) => {
+      prisma.cart.findUnique.mockResolvedValue({
+        id: 'cart-1',
+        status: CartStatus.ACTIVE,
+      });
+      prisma.cartItem.findMany.mockResolvedValue(rows);
+
+      await expect(
+        service.lockAndVerifyCheckoutSnapshot(
+          prisma as unknown as Prisma.TransactionClient,
+          'user-1',
+          snapshot,
+        ),
+      ).rejects.toThrow('Cart changed; review your cart and check out again');
+    });
+  });
+
+  describe('cleanUpCheckout', () => {
+    const receipt = [
+      { id: 'item-1', offerId: 'offer-1', quantity: 2, revision: 3 },
+    ];
+
+    it('deletes only lines that still match the receipt', async () => {
+      prisma.order.findFirst.mockResolvedValue({
+        checkoutCartSnapshot: receipt,
+        payment: { status: PaymentStatus.PENDING, providerReference: 'ref-1' },
+      });
+      prisma.cart.findUnique.mockResolvedValue({ id: 'cart-1' });
+
+      await service.cleanUpCheckout('user-1', 'order-1');
+
+      expect(lockedSql(prisma)).toEqual([
+        expect.stringMatching(/FROM carts .*FOR UPDATE \[cart-1\]/),
+      ]);
+      expect(prisma.cartItem.deleteMany).toHaveBeenCalledWith({
+        where: {
+          cartId: 'cart-1',
+          OR: [{ id: 'item-1', quantity: 2, revision: 3 }],
+        },
+      });
+    });
+
+    it('throws for a retry while no payment is recorded', async () => {
+      prisma.order.findFirst.mockResolvedValue({
+        status: OrderStatus.PENDING_PAYMENT,
+        checkoutCartSnapshot: receipt,
+        payment: null,
+      });
+
+      await expect(
+        service.cleanUpCheckout('user-1', 'order-1'),
+      ).rejects.toThrow();
+      expect(prisma.cartItem.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('throws for a retry while an unsubmitted payment awaits reconciliation', async () => {
+      prisma.order.findFirst.mockResolvedValue({
+        checkoutCartSnapshot: receipt,
+        payment: { status: PaymentStatus.PENDING, providerReference: null },
+      });
+
+      await expect(
+        service.cleanUpCheckout('user-1', 'order-1'),
+      ).rejects.toThrow();
+      expect(prisma.cartItem.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it.each([PaymentStatus.FAILED, PaymentStatus.CANCELLED])(
+      'keeps the cart when the payment is %s',
+      async (status) => {
+        prisma.order.findFirst.mockResolvedValue({
+          checkoutCartSnapshot: receipt,
+          payment: { status, providerReference: 'ref-1' },
+        });
+
+        await service.cleanUpCheckout('user-1', 'order-1');
+
+        expect(prisma.cartItem.deleteMany).not.toHaveBeenCalled();
+      },
+    );
+
+    it('deletes nothing for a legacy order without a receipt', async () => {
+      prisma.order.findFirst.mockResolvedValue({
+        checkoutCartSnapshot: null,
+        payment: { status: PaymentStatus.SUCCEEDED, providerReference: null },
+      });
+
+      await service.cleanUpCheckout('user-1', 'order-1');
+
+      expect(prisma.cartItem.deleteMany).not.toHaveBeenCalled();
+    });
+  });
+
   describe('clearCart', () => {
     it('deletes every item on the resolved cart', async () => {
       prisma.cart.findFirst.mockResolvedValue({ id: 'cart-1' });
+      prisma.cart.findUnique.mockResolvedValue({
+        id: 'cart-1',
+        status: CartStatus.ACTIVE,
+      });
 
       await service.clearCart({ userId: 'user-1' });
 
@@ -491,6 +971,10 @@ describe('CartService', () => {
   describe('removeItems', () => {
     it('deletes only the named items on the resolved cart', async () => {
       prisma.cart.findFirst.mockResolvedValue({ id: 'cart-1' });
+      prisma.cart.findUnique.mockResolvedValue({
+        id: 'cart-1',
+        status: CartStatus.ACTIVE,
+      });
 
       await service.removeItems({ userId: 'user-1' }, ['item-1', 'item-2']);
 

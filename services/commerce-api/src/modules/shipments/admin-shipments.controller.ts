@@ -57,7 +57,11 @@ export class AdminShipmentsController {
     @Body() dto: CreateShipmentDto,
     @Headers('idempotency-key') key?: string,
   ): Promise<ShipmentWithLines> {
-    return this.shipmentsService.create(dto, user.id, requireIdempotencyKey(key));
+    return this.shipmentsService.create(
+      dto,
+      user.id,
+      requireIdempotencyKey(key),
+    );
   }
 
   @Post(':id/book')
@@ -83,6 +87,11 @@ export class AdminShipmentsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AddTrackingEventDto,
   ): Promise<TrackingEvent> {
-    return this.shipmentsService.addManualTrackingEvent(id, dto, user.id, user.role);
+    return this.shipmentsService.addManualTrackingEvent(
+      id,
+      dto,
+      user.id,
+      user.role,
+    );
   }
 }

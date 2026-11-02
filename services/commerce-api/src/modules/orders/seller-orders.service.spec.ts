@@ -18,7 +18,11 @@ function buildPrisma(): {
   $transaction: jest.Mock;
 } {
   const prisma = {
-    sellerOrder: { findMany: jest.fn(), count: jest.fn(), findUnique: jest.fn() },
+    sellerOrder: {
+      findMany: jest.fn(),
+      count: jest.fn(),
+      findUnique: jest.fn(),
+    },
     returnItem: { findMany: jest.fn().mockResolvedValue([]) },
     $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
   };
@@ -42,7 +46,10 @@ describe('SellerOrdersService', () => {
         id: 'so-1',
         sellerId: 'seller-2',
       });
-      const service = new SellerOrdersService(prisma as never, sellers as never);
+      const service = new SellerOrdersService(
+        prisma as never,
+        sellers as never,
+      );
 
       await expect(service.findOwn('user-1', 'so-1')).rejects.toBeInstanceOf(
         NotFoundException,
@@ -53,7 +60,10 @@ describe('SellerOrdersService', () => {
       const prisma = buildPrisma();
       const sellers = buildSellersService();
       prisma.sellerOrder.findUnique.mockResolvedValue(null);
-      const service = new SellerOrdersService(prisma as never, sellers as never);
+      const service = new SellerOrdersService(
+        prisma as never,
+        sellers as never,
+      );
 
       await expect(service.findOwn('user-1', 'missing')).rejects.toBeInstanceOf(
         NotFoundException,
@@ -119,7 +129,10 @@ describe('SellerOrdersService', () => {
           ],
         }),
       );
-      const service = new SellerOrdersService(prisma as never, sellers as never);
+      const service = new SellerOrdersService(
+        prisma as never,
+        sellers as never,
+      );
 
       const detail = await service.findOwn('user-1', 'so-1');
 
@@ -155,7 +168,10 @@ describe('SellerOrdersService', () => {
           ],
         }),
       );
-      const service = new SellerOrdersService(prisma as never, sellers as never);
+      const service = new SellerOrdersService(
+        prisma as never,
+        sellers as never,
+      );
 
       const detail = await service.findOwn('user-1', 'so-1');
 
@@ -194,7 +210,10 @@ describe('SellerOrdersService', () => {
           ],
         }),
       );
-      const service = new SellerOrdersService(prisma as never, sellers as never);
+      const service = new SellerOrdersService(
+        prisma as never,
+        sellers as never,
+      );
 
       const detail = await service.findOwn('user-1', 'so-1');
 
@@ -207,7 +226,7 @@ describe('SellerOrdersService', () => {
       expect(detail.shippingGroups[0]!.fulfillmentOrders[0]!.id).toBeNull();
     });
 
-    it('projects only this seller order\'s own return items', async () => {
+    it("projects only this seller order's own return items", async () => {
       const prisma = buildPrisma();
       const sellers = buildSellersService();
       prisma.sellerOrder.findUnique.mockResolvedValue(baseSellerOrder());
@@ -224,7 +243,10 @@ describe('SellerOrdersService', () => {
           refundCaseItems: [],
         },
       ]);
-      const service = new SellerOrdersService(prisma as never, sellers as never);
+      const service = new SellerOrdersService(
+        prisma as never,
+        sellers as never,
+      );
 
       const detail = await service.findOwn('user-1', 'so-1');
 
@@ -263,7 +285,10 @@ describe('SellerOrdersService', () => {
               shippingGroup: { fulfillmentMode: OfferFulfillmentMode.SELLER },
             },
           ],
-          shipments: [{ status: ShipmentStatus.BOOKED }, { status: ShipmentStatus.BOOKED }],
+          shipments: [
+            { status: ShipmentStatus.BOOKED },
+            { status: ShipmentStatus.BOOKED },
+          ],
         },
       ]);
       prisma.sellerOrder.count.mockResolvedValue(1);
@@ -273,9 +298,15 @@ describe('SellerOrdersService', () => {
           returnRequest: { status: ReturnStatus.REQUESTED },
         },
       ]);
-      const service = new SellerOrdersService(prisma as never, sellers as never);
+      const service = new SellerOrdersService(
+        prisma as never,
+        sellers as never,
+      );
 
-      const page = await service.listOwn('user-1', { page: 1, limit: 20 } as never);
+      const page = await service.listOwn('user-1', {
+        page: 1,
+        limit: 20,
+      } as never);
 
       expect(prisma.sellerOrder.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { sellerId: 'seller-1' } }),
@@ -303,7 +334,10 @@ describe('SellerOrdersService', () => {
       const sellers = buildSellersService('seller-1');
       prisma.sellerOrder.findMany.mockResolvedValue([]);
       prisma.sellerOrder.count.mockResolvedValue(0);
-      const service = new SellerOrdersService(prisma as never, sellers as never);
+      const service = new SellerOrdersService(
+        prisma as never,
+        sellers as never,
+      );
 
       await service.listOwn('user-1', {
         page: 1,

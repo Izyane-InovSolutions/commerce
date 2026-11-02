@@ -1,14 +1,30 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PaymentStatus } from '@prisma/client';
 
-import { BackgroundJobsService } from '../../infrastructure/jobs/background-jobs.service';
 import { CartService } from '../cart/cart.service';
-import { CART_CLEANUP_JOB_TYPE } from '../cart/jobs/cart-cleanup.handler';
 import { OrdersService } from '../orders/orders.service';
+import type {
+  CheckoutAttemptFence,
+  OrderWithItems,
+} from '../orders/orders.service';
 import { PaymentsService } from '../payments/payments.service';
 import type { PaymentWithRedirect } from '../payments/payments.service';
-import { CheckoutQuote, CheckoutResult } from './checkout.types';
 import type { PaymentDetailsDto } from '../payments/dto/payment-details.dto';
+import {
+  CheckoutAttemptSupersededError,
+  isDefiniteCheckoutFailure,
+} from './checkout-attempt.errors';
+import { CheckoutAttemptsService } from './checkout-attempts.service';
+import {
+  normalizeBuyNowCheckout,
+  normalizeCartCheckout,
+} from './checkout-fingerprint';
+import {
+  CheckoutAttemptContext,
+  CheckoutIdempotencyKey,
+  CheckoutQuote,
+  CheckoutResult,
+} from './checkout.types';
 
 /** A payment that will never accept a charge; nothing was taken from the customer. */
 const TERMINAL_FAILURE_STATUSES: PaymentStatus[] = [
@@ -24,7 +40,7 @@ export class CheckoutService {
     private readonly ordersService: OrdersService,
     private readonly paymentsService: PaymentsService,
     private readonly cartService: CartService,
-    private readonly backgroundJobsService: BackgroundJobsService,
+    private readonly attempts: CheckoutAttemptsService,
   ) {}
 
   /**
@@ -34,8 +50,9 @@ export class CheckoutService {
    * same as before partial checkout existed.
    *
    * `idempotencyKey`, when given, makes a retried call — a double submit, or
-   * a retry after a timeout — return the order that call already created
-   * instead of checking out a second time.
+   * a retry after a timeout — return the outcome that call already recorded
+   * instead of checking out a second time (see CheckoutAttemptsService).
+   * Without one, every call is a new checkout.
    */
   async checkout(
     userId: string,
@@ -43,71 +60,29 @@ export class CheckoutService {
     currency: string,
     paymentDetails?: PaymentDetailsDto,
     itemIds?: string[],
-    idempotencyKey?: string,
+    idempotencyKey?: CheckoutIdempotencyKey,
   ): Promise<CheckoutResult> {
-    const replay = await this.replay(userId, idempotencyKey);
-    if (replay) return replay;
-
-    const order = await this.ordersService.createFromCart(
-      userId,
+    const request = normalizeCartCheckout({
       shippingAddressId,
       currency,
       itemIds,
-      idempotencyKey,
+      paymentDetails,
+    });
+    // The order is built from the normalized request, not the raw one, so
+    // two requests that fingerprint alike can never execute differently (and
+    // a replayed rejection is always the one the retry itself would get).
+    return this.attempts.run(userId, idempotencyKey, request, (context) =>
+      this.execute(userId, context, paymentDetails, true, (fence) =>
+        this.ordersService.createFromCart(
+          userId,
+          request.shippingAddressId,
+          request.currency,
+          request.itemIds ?? undefined,
+          idempotencyKey?.key,
+          fence,
+        ),
+      ),
     );
-
-    let payment: PaymentWithRedirect;
-    try {
-      payment = await this.paymentsService.initializeForOrder(
-        order,
-        paymentDetails,
-      );
-    } catch (error) {
-      // Cart is left untouched here so the customer can retry checkout.
-      await this.ordersService.cancel(order.id);
-      throw error;
-    }
-
-    // A gateway that settles inline can come back already declined; the
-    // order is already cancelled by then (see PaymentsService.applyEvent),
-    // so the cart must be preserved, not cleared, and the caller needs the
-    // cancelled order rather than the stale pending one it was created as.
-    if (TERMINAL_FAILURE_STATUSES.includes(payment.status)) {
-      return {
-        order: await this.ordersService.findOwn(userId, order.id),
-        payment,
-      };
-    }
-
-    await this.cleanUpCart(userId, itemIds);
-    return { order, payment };
-  }
-
-  /**
-   * A cart write failure cannot undo a charge already accepted by the
-   * gateway, so it must never fail the checkout response. Retrying inline
-   * would still block the response on a second flaky write, so a failure
-   * here is instead handed to a durable job that keeps retrying until the
-   * cart matches the order it was checked out into.
-   */
-  private async cleanUpCart(userId: string, itemIds?: string[]): Promise<void> {
-    try {
-      if (itemIds && itemIds.length > 0) {
-        await this.cartService.removeItems({ userId }, itemIds);
-      } else {
-        await this.cartService.clearCart({ userId });
-      }
-    } catch (error) {
-      this.logger.warn(
-        `Cart cleanup failed after checkout for user ${userId}; retrying via background job: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-      await this.backgroundJobsService.enqueue({
-        type: CART_CLEANUP_JOB_TYPE,
-        payload: { userId, itemIds: itemIds ?? [] },
-      });
-    }
   }
 
   /**
@@ -122,39 +97,28 @@ export class CheckoutService {
     shippingAddressId: string,
     currency: string,
     paymentDetails?: PaymentDetailsDto,
-    idempotencyKey?: string,
+    idempotencyKey?: CheckoutIdempotencyKey,
   ): Promise<CheckoutResult> {
-    const replay = await this.replay(userId, idempotencyKey);
-    if (replay) return replay;
-
-    const order = await this.ordersService.createFromOffer(
-      userId,
+    const request = normalizeBuyNowCheckout({
       offerId,
       quantity,
       shippingAddressId,
       currency,
-      idempotencyKey,
+      paymentDetails,
+    });
+    return this.attempts.run(userId, idempotencyKey, request, (context) =>
+      this.execute(userId, context, paymentDetails, false, (fence) =>
+        this.ordersService.createFromOffer(
+          userId,
+          request.offerId,
+          request.quantity,
+          request.shippingAddressId,
+          request.currency,
+          idempotencyKey?.key,
+          fence,
+        ),
+      ),
     );
-
-    let payment: PaymentWithRedirect;
-    try {
-      payment = await this.paymentsService.initializeForOrder(
-        order,
-        paymentDetails,
-      );
-    } catch (error) {
-      await this.ordersService.cancel(order.id);
-      throw error;
-    }
-
-    if (TERMINAL_FAILURE_STATUSES.includes(payment.status)) {
-      return {
-        order: await this.ordersService.findOwn(userId, order.id),
-        payment,
-      };
-    }
-
-    return { order, payment };
   }
 
   /** The cost breakdown a cart checkout would charge right now — no order is created. */
@@ -190,26 +154,102 @@ export class CheckoutService {
   }
 
   /**
-   * The result of a previous call that used this key, if one reached
-   * payment. An order that never got that far (the gateway call threw
-   * before a payment existed) frees its key instead, so this checkout
-   * proceeds as a fresh attempt rather than being replayed or blocked.
+   * Shared by both checkouts. `context` is null for a keyless request; for a
+   * keyed one it carries the attempt this request owns, and possibly an
+   * order an interrupted earlier owner created that never reached payment.
    */
-  private async replay(
+  private async execute(
     userId: string,
-    idempotencyKey?: string,
-  ): Promise<CheckoutResult | null> {
-    if (!idempotencyKey) return null;
-    const existing = await this.ordersService.findByIdempotencyKey(
-      userId,
-      idempotencyKey,
-    );
-    if (!existing) return null;
-    if (!existing.payment) {
-      await this.ordersService.releaseIdempotencyKey(existing.id);
-      return null;
+    context: CheckoutAttemptContext | null,
+    paymentDetails: PaymentDetailsDto | undefined,
+    cartCheckout: boolean,
+    createOrder: (fence?: CheckoutAttemptFence) => Promise<OrderWithItems>,
+  ): Promise<CheckoutResult> {
+    const order = context?.resumeOrderId
+      ? await this.ordersService.findForCheckout(context.resumeOrderId)
+      : await createOrder(
+          context
+            ? { id: context.attemptId, ownerToken: context.ownerToken }
+            : undefined,
+        );
+
+    let payment: PaymentWithRedirect;
+    try {
+      // Fenced inside the Payment insert's own transaction: a request that
+      // lost its attempt creates no payment and reaches no provider.
+      payment = await this.paymentsService.initializeForOrder(
+        order,
+        paymentDetails,
+        context
+          ? (tx): Promise<void> =>
+              this.attempts.markPaymentStarted(context, order.id, tx)
+          : undefined,
+      );
+    } catch (error) {
+      // The order belongs to whichever request now owns the attempt.
+      if (error instanceof CheckoutAttemptSupersededError) throw error;
+      // Cart is left untouched here so the customer can retry checkout.
+      await this.cancelAfterPaymentError(order.id, error, context !== null);
+      throw error;
     }
-    const payment = await this.paymentsService.getForOrder(existing.id);
-    return { order: existing, payment };
+
+    // A gateway that settles inline can come back already declined; the
+    // order is already cancelled by then (see PaymentsService.applyEvent),
+    // so the cart must be preserved, not cleared, and the caller needs the
+    // cancelled order rather than the stale pending one it was created as.
+    const declined = TERMINAL_FAILURE_STATUSES.includes(payment.status);
+    const result: CheckoutResult = declined
+      ? { order: await this.ordersService.findOwn(userId, order.id), payment }
+      : { order, payment };
+
+    // Recorded before cart cleanup: a replay must never depend on it.
+    if (context) await this.attempts.complete(context, order.id, result);
+    if (cartCheckout && !declined) await this.cleanUpCart(userId, order.id);
+    return result;
+  }
+
+  /**
+   * Releases the order's stock only when no charge can follow: the payment
+   * row is FAILED/CANCELLED, or there is none and either the error is a
+   * definite refusal or there is no keyed attempt that could resume the
+   * order. Anything else (a pending payment, or a transient error a retry of
+   * the same key will resume) keeps the order and its reservations.
+   */
+  private async cancelAfterPaymentError(
+    orderId: string,
+    error: unknown,
+    keyed: boolean,
+  ): Promise<void> {
+    try {
+      const payment = await this.paymentsService.findForOrder(orderId);
+      const definiteFailure = payment
+        ? TERMINAL_FAILURE_STATUSES.includes(payment.status)
+        : isDefiniteCheckoutFailure(error) || !keyed;
+      if (definiteFailure) await this.ordersService.cancel(orderId);
+    } catch (cancelError) {
+      // Never mask the payment error; the reservations still expire.
+      this.logger.error(
+        `Could not cancel order ${orderId} after its payment failed to start`,
+        cancelError instanceof Error ? cancelError.stack : String(cancelError),
+      );
+    }
+  }
+
+  /**
+   * A cart write failure cannot undo a charge already accepted by the
+   * gateway, so it must never fail the checkout response. The order
+   * transaction already enqueued a durable cleanup job for this order, which
+   * keeps retrying until the cart matches what was checked out.
+   */
+  private async cleanUpCart(userId: string, orderId: string): Promise<void> {
+    try {
+      await this.cartService.cleanUpCheckout(userId, orderId);
+    } catch (error) {
+      this.logger.warn(
+        `Cart cleanup for order ${orderId} deferred to its background job: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 }

@@ -9,6 +9,8 @@ import { InventoryModule } from '../../modules/inventory/inventory.module';
 import { InventoryExpireReservationHandler } from '../../modules/inventory/jobs/inventory-expire-reservation.handler';
 import { NotificationsModule } from '../../modules/notifications/notifications.module';
 import { NotificationsOutboxSubscriber } from '../../modules/notifications/notifications-outbox.subscriber';
+import { UnpaidOrderExpiryHandler } from '../../modules/orders/jobs/unpaid-order-expiry.handler';
+import { OrdersModule } from '../../modules/orders/orders.module';
 import { PaymentsModule } from '../../modules/payments/payments.module';
 import { FulfillmentCancellationRefundHandler } from '../../modules/payments/jobs/fulfillment-cancellation-refund.handler';
 import { EmailModule } from '../email/email.module';
@@ -27,6 +29,7 @@ import { OutboxDispatcherService } from '../jobs/outbox-dispatcher.service';
     EmailModule,
     InventoryModule,
     CartModule,
+    OrdersModule,
     FulfillmentModule,
     PaymentsModule,
     NotificationsModule,
@@ -38,6 +41,7 @@ export class WorkersModule implements OnModuleInit {
     private readonly jobWorkerService: JobWorkerService,
     private readonly inventoryExpireReservationHandler: InventoryExpireReservationHandler,
     private readonly cartCleanupHandler: CartCleanupHandler,
+    private readonly unpaidOrderExpiryHandler: UnpaidOrderExpiryHandler,
     private readonly fulfillmentProvisionHandler: FulfillmentProvisionHandler,
     private readonly fulfillmentCancellationRefundHandler: FulfillmentCancellationRefundHandler,
     private readonly outboxDispatcherService: OutboxDispatcherService,
@@ -51,6 +55,7 @@ export class WorkersModule implements OnModuleInit {
       this.inventoryExpireReservationHandler,
     );
     this.jobWorkerService.registerHandler(this.cartCleanupHandler);
+    this.jobWorkerService.registerHandler(this.unpaidOrderExpiryHandler);
     this.jobWorkerService.registerHandler(this.fulfillmentProvisionHandler);
     this.jobWorkerService.registerHandler(
       this.fulfillmentCancellationRefundHandler,

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -98,7 +99,56 @@ export class OffersService {
 
   async remove(id: string): Promise<void> {
     this.requireFirstParty(await this.findByIdAdmin(id));
-    await this.prisma.offer.delete({ where: { id } });
+    const inUse = new ConflictException(
+      "This offer has purchase history, stock movements, reservations, or nonzero stock and can't be deleted. Archive it instead.",
+    );
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const [offer] = await tx.$queryRaw<
+          { id: string; seller_id: string | null }[]
+        >`SELECT id, seller_id FROM offers WHERE id = ${id}::uuid FOR UPDATE`;
+        if (!offer) throw new NotFoundException('Offer not found');
+        if (offer.seller_id)
+          throw new BadRequestException(
+            'Seller offers must use the seller workflow; admin can suspend the seller account',
+          );
+
+        await tx.$queryRaw`
+          SELECT id FROM inventory_records
+          WHERE offer_id = ${id}::uuid FOR UPDATE
+        `;
+        const [orderItems, movements, reservations, nonzeroStock] =
+          await Promise.all([
+            tx.orderItem.count({ where: { offerId: id } }),
+            tx.inventoryMovement.count({
+              where: { inventoryRecord: { offerId: id } },
+            }),
+            tx.reservation.count({
+              where: { inventoryRecord: { offerId: id } },
+            }),
+            tx.inventoryRecord.count({
+              where: {
+                offerId: id,
+                OR: [{ onHand: { not: 0 } }, { reserved: { not: 0 } }],
+              },
+            }),
+          ]);
+        if (
+          orderItems > 0 ||
+          movements > 0 ||
+          reservations > 0 ||
+          nonzeroStock > 0
+        )
+          throw inUse;
+
+        await tx.offer.delete({ where: { id } });
+      });
+    } catch (error) {
+      if (this.isPrismaError(error, 'P2003')) throw inUse;
+      if (this.isPrismaError(error, 'P2025'))
+        throw new NotFoundException('Offer not found');
+      throw error;
+    }
   }
 
   async addPrice(
@@ -146,5 +196,13 @@ export class OffersService {
       throw new BadRequestException(
         'Seller offers must use the seller workflow; admin can suspend the seller account',
       );
+  }
+
+  private isPrismaError(error: unknown, code: string): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      (error as { code?: string }).code === code
+    );
   }
 }

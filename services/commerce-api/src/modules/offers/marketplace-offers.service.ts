@@ -4,7 +4,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { MediaStatus, Prisma, ProductStatus, SellerStatus } from '@prisma/client';
+import {
+  MediaStatus,
+  Prisma,
+  ProductStatus,
+  SellerStatus,
+} from '@prisma/client';
 import type { Offer, Price, Seller } from '@prisma/client';
 import { MediaService } from '../media/media.service';
 import { ProductReferencesService } from '../products/product-references.service';
@@ -278,7 +283,12 @@ export class MarketplaceOffersService {
         variant: {
           select: {
             product: {
-              select: { id: true, name: true, slug: true, media: PRIMARY_PRODUCT_IMAGE },
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+                media: PRIMARY_PRODUCT_IMAGE,
+              },
             },
           },
         },
@@ -352,7 +362,12 @@ export class MarketplaceOffersService {
           variant: {
             select: {
               product: {
-                select: { id: true, name: true, slug: true, media: PRIMARY_PRODUCT_IMAGE },
+                select: {
+                  id: true,
+                  name: true,
+                  slug: true,
+                  media: PRIMARY_PRODUCT_IMAGE,
+                },
               },
             },
           },

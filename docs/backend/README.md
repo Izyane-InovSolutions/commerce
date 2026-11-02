@@ -2,7 +2,9 @@
 
 > Engineer reference for `services/commerce-api`, the NestJS + PostgreSQL backend for the marketplace's storefront, seller portal, admin console and mobile app.
 
-It describes the code as it stands on the `feature/currency_conversion` branch (September 2026). Where these docs and the code disagree, **the code wins**. Please fix the doc in the same PR.
+It describes the backend source (September 2026). Where these docs and the code disagree, **the code wins**. Please fix the doc in the same PR.
+
+Current evidence and verification dates are maintained in the [gap register](known-gaps.md), [acceptance matrix](../backend-acceptance-matrix.md#current-baseline-2026-10-01), [baseline ledger](baseline-verification.md), [stock-adjustment verification](stock-adjustment-verification.md), [catalog-history verification](catalog-history-verification.md), [receipt-reversal verification](receipt-reversal-verification.md), [multipart-upload verification](multipart-upload-verification.md), [Stage 6 measurement verification](measurement-baseline-verification.md) and [Stage 7 transactional shopping verification](transactional-shopping-verification.md). The [runtime inventory](runtime-inventory.md) lists routes, background work, external calls and state machines.
 
 ## At a glance
 
@@ -31,6 +33,7 @@ Reference pages:
 - [integrations.md](integrations.md): external systems and the interfaces in front of them.
 - [testing.md](testing.md): test layers and test-database safety.
 - [known-gaps.md](known-gaps.md): current limitations and bugs, ranked.
+- [remaining-hardening-plan.md](remaining-hardening-plan.md): proposed Steps 6–15 for correctness, security, performance, scalability and recovery, with completion criteria.
 
 ## Modules
 

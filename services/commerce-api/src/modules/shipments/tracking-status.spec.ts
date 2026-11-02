@@ -1,6 +1,9 @@
 import { ShipmentStatus } from '@prisma/client';
 
-import { isTerminalShipmentStatus, projectShipmentStatus } from './tracking-status';
+import {
+  isTerminalShipmentStatus,
+  projectShipmentStatus,
+} from './tracking-status';
 
 const T0 = new Date('2026-01-01T00:00:00Z');
 const T1 = new Date('2026-01-02T00:00:00Z');
@@ -12,7 +15,11 @@ describe('projectShipmentStatus', () => {
       projectShipmentStatus({
         currentStatus: ShipmentStatus.BOOKED,
         latestEventOccurredAt: T0,
-        newEvent: { normalizedStatus: ShipmentStatus.IN_TRANSIT, occurredAt: T1, isCorrection: false },
+        newEvent: {
+          normalizedStatus: ShipmentStatus.IN_TRANSIT,
+          occurredAt: T1,
+          isCorrection: false,
+        },
       }),
     ).toBe(ShipmentStatus.IN_TRANSIT);
   });
@@ -22,7 +29,11 @@ describe('projectShipmentStatus', () => {
       projectShipmentStatus({
         currentStatus: ShipmentStatus.DELIVERED,
         latestEventOccurredAt: T2,
-        newEvent: { normalizedStatus: ShipmentStatus.IN_TRANSIT, occurredAt: T1, isCorrection: false },
+        newEvent: {
+          normalizedStatus: ShipmentStatus.IN_TRANSIT,
+          occurredAt: T1,
+          isCorrection: false,
+        },
       }),
     ).toBe(ShipmentStatus.DELIVERED);
   });
@@ -32,7 +43,11 @@ describe('projectShipmentStatus', () => {
       projectShipmentStatus({
         currentStatus: ShipmentStatus.IN_TRANSIT,
         latestEventOccurredAt: T2,
-        newEvent: { normalizedStatus: ShipmentStatus.OUT_FOR_DELIVERY, occurredAt: T1, isCorrection: false },
+        newEvent: {
+          normalizedStatus: ShipmentStatus.OUT_FOR_DELIVERY,
+          occurredAt: T1,
+          isCorrection: false,
+        },
       }),
     ).toBe(ShipmentStatus.IN_TRANSIT);
   });
@@ -42,7 +57,11 @@ describe('projectShipmentStatus', () => {
       projectShipmentStatus({
         currentStatus: ShipmentStatus.DELIVERED,
         latestEventOccurredAt: T2,
-        newEvent: { normalizedStatus: ShipmentStatus.RETURN_TO_SENDER, occurredAt: T0, isCorrection: true },
+        newEvent: {
+          normalizedStatus: ShipmentStatus.RETURN_TO_SENDER,
+          occurredAt: T0,
+          isCorrection: true,
+        },
       }),
     ).toBe(ShipmentStatus.RETURN_TO_SENDER);
   });
@@ -52,7 +71,11 @@ describe('projectShipmentStatus', () => {
       projectShipmentStatus({
         currentStatus: ShipmentStatus.BOOKED,
         latestEventOccurredAt: null,
-        newEvent: { normalizedStatus: ShipmentStatus.DISPATCHED, occurredAt: T0, isCorrection: false },
+        newEvent: {
+          normalizedStatus: ShipmentStatus.DISPATCHED,
+          occurredAt: T0,
+          isCorrection: false,
+        },
       }),
     ).toBe(ShipmentStatus.DISPATCHED);
   });

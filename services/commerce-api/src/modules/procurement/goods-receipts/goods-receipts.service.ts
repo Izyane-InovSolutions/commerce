@@ -47,7 +47,9 @@ export class GoodsReceiptsService {
     return receipt;
   }
 
-  listForPurchaseOrder(purchaseOrderId: string): Promise<GoodsReceiptWithLines[]> {
+  listForPurchaseOrder(
+    purchaseOrderId: string,
+  ): Promise<GoodsReceiptWithLines[]> {
     return this.prisma.goodsReceipt.findMany({
       where: { purchaseOrderId },
       include: { lines: true },
@@ -75,7 +77,8 @@ export class GoodsReceiptsService {
         include: { lines: true },
       });
       if (existing) {
-        return existing.status === GoodsReceiptStatus.DRAFT && dto.post !== false
+        return existing.status === GoodsReceiptStatus.DRAFT &&
+          dto.post !== false
           ? this.post(existing.id, actorUserId, actorRole, idempotencyKey)
           : existing;
       }
@@ -109,14 +112,20 @@ export class GoodsReceiptsService {
       seenPoLineIds.add(line.purchaseOrderLineId);
 
       const outstanding =
-        poLine.orderedQuantity - poLine.receivedQuantity - poLine.cancelledQuantity;
-      this.assertDiscrepancyExplained(line, line.acceptedQuantity - outstanding);
+        poLine.orderedQuantity -
+        poLine.receivedQuantity -
+        poLine.cancelledQuantity;
+      this.assertDiscrepancyExplained(
+        line,
+        line.acceptedQuantity - outstanding,
+      );
     }
 
     let draft: GoodsReceiptWithLines;
     try {
       draft = await this.prisma.$transaction(async (tx) => {
-        const receiptNumber = await this.numberingService.nextGoodsReceiptNumber(tx);
+        const receiptNumber =
+          await this.numberingService.nextGoodsReceiptNumber(tx);
 
         return tx.goodsReceipt.create({
           data: {
@@ -178,7 +187,9 @@ export class GoodsReceiptsService {
       throw new ConflictException('Only a draft goods receipt can be edited');
     }
 
-    const po = await this.purchaseOrdersService.findById(receipt.purchaseOrderId);
+    const po = await this.purchaseOrdersService.findById(
+      receipt.purchaseOrderId,
+    );
     this.assertReconciled(dto.lines);
     this.assertExcessAuthorized(dto.lines, actorRole);
 
@@ -199,8 +210,13 @@ export class GoodsReceiptsService {
       seenPoLineIds.add(line.purchaseOrderLineId);
 
       const outstanding =
-        poLine.orderedQuantity - poLine.receivedQuantity - poLine.cancelledQuantity;
-      this.assertDiscrepancyExplained(line, line.acceptedQuantity - outstanding);
+        poLine.orderedQuantity -
+        poLine.receivedQuantity -
+        poLine.cancelledQuantity;
+      this.assertDiscrepancyExplained(
+        line,
+        line.acceptedQuantity - outstanding,
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -325,8 +341,13 @@ export class GoodsReceiptsService {
       this.assertExcessAuthorized(receipt.lines, actorRole);
 
       const poLinesById = new Map(po.lines.map((line) => [line.id, line]));
-      const deltas: { purchaseOrderLineId: string; acceptedQuantity: number }[] = [];
+      const deltas: {
+        purchaseOrderLineId: string;
+        acceptedQuantity: number;
+      }[] = [];
       const seenPoLineIds = new Set<string>();
+
+      await this.lockReceiptRecords(tx, receipt, poLinesById);
 
       for (const line of receipt.lines) {
         if (
@@ -356,7 +377,9 @@ export class GoodsReceiptsService {
         seenPoLineIds.add(poLine.id);
 
         const outstanding =
-          poLine.orderedQuantity - poLine.receivedQuantity - poLine.cancelledQuantity;
+          poLine.orderedQuantity -
+          poLine.receivedQuantity -
+          poLine.cancelledQuantity;
         const excess = line.acceptedQuantity - outstanding;
         if (excess > 0 && excess > line.authorizedExcessQty) {
           throw new ConflictException(
@@ -368,14 +391,15 @@ export class GoodsReceiptsService {
         if (line.acceptedQuantity > 0) {
           // acceptedQuantity is in purchasing units; packSize converts it to
           // the inventory unit (e.g. 3 cases of 12 -> 36 each).
-          const { movement } = await this.inventoryService.receiveStockForReference(
-            tx,
-            receipt.warehouseId,
-            poLine.variantId,
-            line.acceptedQuantity * poLine.packSize,
-            { referenceType: 'goods_receipt_line', referenceId: line.id },
-            receipt.supplierDeliveryNoteRef ?? undefined,
-          );
+          const { movement } =
+            await this.inventoryService.receiveStockForReference(
+              tx,
+              receipt.warehouseId,
+              poLine.variantId,
+              line.acceptedQuantity * poLine.packSize,
+              { referenceType: 'goods_receipt_line', referenceId: line.id },
+              receipt.supplierDeliveryNoteRef ?? undefined,
+            );
           await tx.goodsReceiptLine.update({
             where: { id: line.id },
             data: { inventoryMovementId: movement.id },
@@ -388,11 +412,12 @@ export class GoodsReceiptsService {
         });
       }
 
-      const newPoStatus = await this.purchaseOrdersService.applyReceivedQuantities(
-        tx,
-        po,
-        deltas,
-      );
+      const newPoStatus =
+        await this.purchaseOrdersService.applyReceivedQuantities(
+          tx,
+          po,
+          deltas,
+        );
 
       let posted;
       try {
@@ -430,7 +455,10 @@ export class GoodsReceiptsService {
           topic: 'procurement.receipt.posted',
           aggregateType: 'GoodsReceipt',
           aggregateId: posted.id,
-          payload: { purchaseOrderId: po.id, receiptNumber: posted.receiptNumber },
+          payload: {
+            purchaseOrderId: po.id,
+            receiptNumber: posted.receiptNumber,
+          },
         },
         tx,
       );
@@ -482,7 +510,10 @@ export class GoodsReceiptsService {
         include: { lines: true },
       });
       if (!receipt) throw new NotFoundException('Goods receipt not found');
-      if (receipt.status !== GoodsReceiptStatus.POSTED) {
+      if (receipt.reversalOfId) {
+        throw new ConflictException('A reversal receipt cannot be reversed');
+      }
+      if (receipt.status === GoodsReceiptStatus.DRAFT) {
         throw new ConflictException(
           'Only a posted goods receipt can be reversed',
         );
@@ -493,13 +524,18 @@ export class GoodsReceiptsService {
         include: { lines: true },
       });
       if (existingReversal) return existingReversal;
+      if (receipt.status !== GoodsReceiptStatus.POSTED) {
+        throw new ConflictException(
+          'Only a posted goods receipt can be reversed',
+        );
+      }
 
-      const po: PurchaseOrderWithLines = await this.purchaseOrdersService.lockRow(
-        tx,
-        receipt.purchaseOrderId,
-      );
+      const po: PurchaseOrderWithLines =
+        await this.purchaseOrdersService.lockRow(tx, receipt.purchaseOrderId);
       const poLinesById = new Map(po.lines.map((line) => [line.id, line]));
-      const receiptNumber = await this.numberingService.nextGoodsReceiptNumber(tx);
+      await this.lockReceiptRecords(tx, receipt, poLinesById);
+      const receiptNumber =
+        await this.numberingService.nextGoodsReceiptNumber(tx);
 
       const reversal = await tx.goodsReceipt.create({
         data: {
@@ -515,7 +551,10 @@ export class GoodsReceiptsService {
         },
       });
 
-      const deltas: { purchaseOrderLineId: string; acceptedQuantity: number }[] = [];
+      const deltas: {
+        purchaseOrderLineId: string;
+        acceptedQuantity: number;
+      }[] = [];
 
       for (const line of receipt.lines) {
         if (line.acceptedQuantity <= 0) continue;
@@ -597,10 +636,32 @@ export class GoodsReceiptsService {
     });
   }
 
+  /**
+   * Locks every inventory record a post or reversal of this receipt will
+   * change, in ascending id, before its first per-line write — the global
+   * inventory lock order checkout relies on — rather than line by line.
+   */
+  private async lockReceiptRecords(
+    tx: Prisma.TransactionClient,
+    receipt: GoodsReceiptWithLines,
+    poLinesById: Map<string, PurchaseOrderWithLines['lines'][number]>,
+  ): Promise<void> {
+    const keys = receipt.lines.flatMap((line) => {
+      const poLine = poLinesById.get(line.purchaseOrderLineId);
+      return line.acceptedQuantity > 0 && poLine
+        ? [{ warehouseId: receipt.warehouseId, variantId: poLine.variantId }]
+        : [];
+    });
+    if (keys.length > 0)
+      await this.inventoryService.lockRecordsForWrite(keys, tx);
+  }
+
   private assertReconciled(lines: GoodsReceiptLineDto[]): void {
     for (const line of lines) {
       const delivered =
-        line.acceptedQuantity + (line.rejectedQuantity ?? 0) + (line.damagedQuantity ?? 0);
+        line.acceptedQuantity +
+        (line.rejectedQuantity ?? 0) +
+        (line.damagedQuantity ?? 0);
       if (delivered !== line.deliveredQuantity) {
         throw new BadRequestException(
           'delivered quantity must equal accepted + rejected + damaged',

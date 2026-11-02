@@ -1,4 +1,8 @@
-import type { RefundCaseStatus, ReturnReasonCode, ReturnStatus } from '@prisma/client';
+import type {
+  RefundCaseStatus,
+  ReturnReasonCode,
+  ReturnStatus,
+} from '@prisma/client';
 
 export type SellerReturnRefundOutcome = {
   refundCaseId: string;

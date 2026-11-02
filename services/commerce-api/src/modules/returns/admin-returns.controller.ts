@@ -62,7 +62,9 @@ export class AdminReturnsController {
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string): Promise<ReturnRequestWithDetail> {
+  findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<ReturnRequestWithDetail> {
     return this.returnsService.findAny(id);
   }
 

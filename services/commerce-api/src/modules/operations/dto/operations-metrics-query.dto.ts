@@ -1,9 +1,5 @@
 import { Transform } from 'class-transformer';
-import {
-  FulfillmentStatus,
-  OrderStatus,
-  ReturnStatus,
-} from '@prisma/client';
+import { FulfillmentStatus, OrderStatus, ReturnStatus } from '@prisma/client';
 import {
   IsArray,
   IsEnum,

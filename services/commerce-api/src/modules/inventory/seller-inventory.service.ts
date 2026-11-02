@@ -80,10 +80,31 @@ export class SellerInventoryService {
           );
       }
 
+      // Global lock order: offers (KEY SHARE — creating a record for an offer
+      // takes it through the foreign key), then every existing record in
+      // ascending id, before the first write. Writes then follow record id
+      // too; offers with no record yet come last, in offer id order (their
+      // new rows are uncontended).
+      await this.inventory.lockOffersForKeyShare(ids, tx);
+      const locked = await this.inventory.lockRecordsForWrite(
+        ids.map((offerId) => ({ offerId })),
+        tx,
+      );
+      const recordIdByOfferId = new Map(
+        locked.map((record) => [record.offerId, record.id]),
+      );
+      const sortKey = (offerId: string): string => {
+        const recordId = recordIdByOfferId.get(offerId);
+        return recordId ? `0:${recordId}` : `1:${offerId}`;
+      };
+
       const updated: SellerInventoryView[] = [];
-      for (const item of [...items].sort((a, b) =>
-        a.offerId.localeCompare(b.offerId),
-      )) {
+      for (const item of [...items].sort((a, b) => {
+        const left = sortKey(a.offerId);
+        const right = sortKey(b.offerId);
+        if (left < right) return -1;
+        return left > right ? 1 : 0;
+      })) {
         const offer = byId.get(item.offerId)!;
         const record = await this.inventory.setOfferQuantity(
           offer.id,
@@ -107,7 +128,9 @@ export class SellerInventoryService {
           updatedAt: record.updatedAt,
         });
       }
-      return updated;
+      // Respond in the same (offer id) order as before writes followed
+      // record id.
+      return updated.sort((a, b) => a.offerId.localeCompare(b.offerId));
     });
   }
 

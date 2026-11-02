@@ -19,6 +19,14 @@ export function createApiDocument(app: INestApplication): OpenAPIObject {
         'JSON successes contain data and meta.requestId. Errors contain error and requestId. Guest cart requests may send x-guest-token. Unified Payments routes require provider configuration; automatic payment reconciliation awaits the full provider status and webhook contracts.',
       )
       .addBearerAuth()
+      .addBearerAuth(
+        {
+          type: 'http',
+          scheme: 'bearer',
+          description: 'METRICS_SCRAPE_TOKEN, for the internal scraper only',
+        },
+        'metricsScrapeToken',
+      )
       .build(),
   );
   const generated = contracts as unknown as {

@@ -29,7 +29,10 @@ import {
 import { RatingAggregateService } from '../rating-aggregate.service';
 import { ApproveModerationDto } from './dto/approve-moderation.dto';
 import { DismissReportDto } from './dto/dismiss-report.dto';
-import { AdminReviewType, ListAdminReviewsDto } from './dto/list-admin-reviews.dto';
+import {
+  AdminReviewType,
+  ListAdminReviewsDto,
+} from './dto/list-admin-reviews.dto';
 import { ModerationActionDto } from './dto/moderation-action.dto';
 import {
   AdminReviewDetail,
@@ -57,9 +60,7 @@ export function assertAdminReviewType(
   type: string,
 ): asserts type is AdminReviewTargetParam {
   if (type !== 'product' && type !== 'seller') {
-    throw new BadRequestException(
-      "type must be 'product' or 'seller'",
-    );
+    throw new BadRequestException("type must be 'product' or 'seller'");
   }
 }
 
@@ -111,7 +112,8 @@ export class AdminReviewsService {
     // productId has no meaning against SellerRating — a productId filter
     // combined with type=seller (or no type) simply yields no seller rows.
     const wantsSeller =
-      (!query.type || query.type === AdminReviewType.SELLER) && !query.productId;
+      (!query.type || query.type === AdminReviewType.SELLER) &&
+      !query.productId;
 
     const dateWhere = (
       from: string | undefined,
@@ -134,7 +136,9 @@ export class AdminReviewsService {
           : { ReviewReport: { none: { status: ReviewReportStatus.OPEN } } };
 
     const productWhere: Prisma.ProductReviewWhereInput = {
-      ...(query.moderationState ? { moderationState: query.moderationState } : {}),
+      ...(query.moderationState
+        ? { moderationState: query.moderationState }
+        : {}),
       ...(query.visibility ? { visibility: query.visibility } : {}),
       ...(query.rating ? { rating: query.rating } : {}),
       ...(query.productId ? { productId: query.productId } : {}),
@@ -144,7 +148,9 @@ export class AdminReviewsService {
       ...reportFilter,
     };
     const sellerWhere: Prisma.SellerRatingWhereInput = {
-      ...(query.moderationState ? { moderationState: query.moderationState } : {}),
+      ...(query.moderationState
+        ? { moderationState: query.moderationState }
+        : {}),
       ...(query.visibility ? { visibility: query.visibility } : {}),
       ...(query.rating ? { rating: query.rating } : {}),
       ...(query.sellerId ? { sellerId: query.sellerId } : {}),
@@ -322,13 +328,20 @@ export class AdminReviewsService {
     actorUserId: string,
     idempotencyKey: string,
   ): Promise<AdminReviewDetail> {
-    return this.transitionVisibility(type, id, dto, actorUserId, idempotencyKey, {
-      action: ReviewModerationAction.HIDDEN,
-      allowedFrom: [ReviewVisibility.PUBLISHED],
-      resultingVisibility: ReviewVisibility.HIDDEN,
-      reportDisposition: ReviewReportStatus.ACTIONED,
-      recalculateAggregate: true,
-    });
+    return this.transitionVisibility(
+      type,
+      id,
+      dto,
+      actorUserId,
+      idempotencyKey,
+      {
+        action: ReviewModerationAction.HIDDEN,
+        allowedFrom: [ReviewVisibility.PUBLISHED],
+        resultingVisibility: ReviewVisibility.HIDDEN,
+        reportDisposition: ReviewReportStatus.ACTIONED,
+        recalculateAggregate: true,
+      },
+    );
   }
 
   async remove(
@@ -338,13 +351,20 @@ export class AdminReviewsService {
     actorUserId: string,
     idempotencyKey: string,
   ): Promise<AdminReviewDetail> {
-    return this.transitionVisibility(type, id, dto, actorUserId, idempotencyKey, {
-      action: ReviewModerationAction.REMOVED,
-      allowedFrom: [ReviewVisibility.PUBLISHED, ReviewVisibility.HIDDEN],
-      resultingVisibility: ReviewVisibility.REMOVED,
-      reportDisposition: ReviewReportStatus.ACTIONED,
-      recalculateAggregate: true,
-    });
+    return this.transitionVisibility(
+      type,
+      id,
+      dto,
+      actorUserId,
+      idempotencyKey,
+      {
+        action: ReviewModerationAction.REMOVED,
+        allowedFrom: [ReviewVisibility.PUBLISHED, ReviewVisibility.HIDDEN],
+        resultingVisibility: ReviewVisibility.REMOVED,
+        reportDisposition: ReviewReportStatus.ACTIONED,
+        recalculateAggregate: true,
+      },
+    );
   }
 
   async restore(
@@ -354,14 +374,21 @@ export class AdminReviewsService {
     actorUserId: string,
     idempotencyKey: string,
   ): Promise<AdminReviewDetail> {
-    return this.transitionVisibility(type, id, dto, actorUserId, idempotencyKey, {
-      action: ReviewModerationAction.RESTORED,
-      allowedFrom: [ReviewVisibility.HIDDEN],
-      resultingVisibility: ReviewVisibility.PUBLISHED,
-      resultingModerationState: ReviewModerationState.PENDING,
-      reportDisposition: null,
-      recalculateAggregate: true,
-    });
+    return this.transitionVisibility(
+      type,
+      id,
+      dto,
+      actorUserId,
+      idempotencyKey,
+      {
+        action: ReviewModerationAction.RESTORED,
+        allowedFrom: [ReviewVisibility.HIDDEN],
+        resultingVisibility: ReviewVisibility.PUBLISHED,
+        resultingModerationState: ReviewModerationState.PENDING,
+        reportDisposition: null,
+        recalculateAggregate: true,
+      },
+    );
   }
 
   private async transitionVisibility(
@@ -509,7 +536,10 @@ export class AdminReviewsService {
       action: 'dismiss-report',
     });
     if (await this.isReplay(idempotencyKey, requestHash)) {
-      return { report: await this.reloadReport(reportId), target: await this.findOne(type, targetId) };
+      return {
+        report: await this.reloadReport(reportId),
+        target: await this.findOne(type, targetId),
+      };
     }
 
     const current = await this.loadCurrent(type, targetId);
@@ -534,7 +564,11 @@ export class AdminReviewsService {
         }
 
         const remainingOpen = await tx.reviewReport.count({
-          where: this.reportTargetWhere(targetType, targetId, ReviewReportStatus.OPEN),
+          where: this.reportTargetWhere(
+            targetType,
+            targetId,
+            ReviewReportStatus.OPEN,
+          ),
         });
 
         let resultingModerationState = current.moderationState;
@@ -555,9 +589,7 @@ export class AdminReviewsService {
             { moderationState: resultingModerationState },
           );
           if (updateResult.count !== 1) {
-            throw new ConflictException(
-              'Record changed; reload and try again',
-            );
+            throw new ConflictException('Record changed; reload and try again');
           }
         }
 
@@ -583,7 +615,11 @@ export class AdminReviewsService {
             action: 'reviews.moderation.report_dismissed',
             targetType,
             targetId,
-            metadata: { reportId, reason: dto.reason, resultingModerationState },
+            metadata: {
+              reportId,
+              reason: dto.reason,
+              resultingModerationState,
+            },
           },
           tx,
         );

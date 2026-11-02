@@ -100,7 +100,9 @@ describe('SuppliersService', () => {
       expect(prisma.supplier.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'sup-1', version: 0 },
-          data: expect.objectContaining({ status: SupplierStatus.INACTIVE }) as object,
+          data: expect.objectContaining({
+            status: SupplierStatus.INACTIVE,
+          }) as object,
         }),
       );
     });

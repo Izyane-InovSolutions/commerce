@@ -2,6 +2,7 @@ import { config } from 'dotenv';
 import { resolve } from 'node:path';
 
 import { integrationTestDatabaseUrl } from '../src/infrastructure/config/integration-test.config';
+import { configureTestProviders } from './test-provider-env';
 
 // The application database requires an explicit opt-in and exact local database
 // name. It is never selected as a fallback for missing test configuration.
@@ -16,9 +17,16 @@ if (useApplication && loaded.parsed?.NODE_ENV === 'production') {
   );
 }
 
-process.env.DATABASE_URL = integrationTestDatabaseUrl(process.env);
-process.env.NODE_ENV = 'test';
-process.env.SCHEDULED_WORKERS_ENABLED = 'false';
+// Prisma's default pool is 2 x CPUs + 1, so it shrinks to 5 on a 2-vCPU CI
+// runner. Concurrency specs park more transactions than that on one row lock
+// (inventory-locking holds 6 checkouts plus the barrier), and they must not
+// pass or fail with the machine's core count. An explicit limit wins.
+const databaseUrl = new URL(integrationTestDatabaseUrl(process.env));
+if (!databaseUrl.searchParams.has('connection_limit'))
+  databaseUrl.searchParams.set('connection_limit', '15');
+process.env.DATABASE_URL = databaseUrl.toString();
+// Apply only after the database guard has checked the original environment.
+configureTestProviders(process.env);
 // migrate deploy never uses a shadow database, but Prisma rejects identical
 // URLs even for deploy. An unreachable placeholder prevents accidental access
 // to either the application database or an existing development shadow database.
@@ -33,11 +41,6 @@ process.env.REFRESH_RECOVERY_ENCRYPTION_KEYS ??=
 process.env.EMAIL_DELIVERY_ENCRYPTION_ACTIVE_KEY_ID ??= 'v1';
 process.env.EMAIL_DELIVERY_ENCRYPTION_KEYS ??=
   '{"v1":"aW50ZWdyYXRpb24tZW1haWwta2V5LTAwMDAwMDAwMDE="}';
-process.env.SMTP_HOST ??= 'localhost';
-process.env.SMTP_PORT ??= '1025';
-process.env.SMTP_SECURE ??= 'false';
-process.env.SMTP_USER ??= '';
-process.env.SMTP_PASS ??= '';
-process.env.EMAIL_FROM ??= 'Commerce <no-reply@commerce.test>';
-process.env.CUSTOMER_WEB_URL ??= 'http://localhost:3001';
-process.env.PAYMENTS_PROVIDER = 'pending';
+process.env.CHECKOUT_FINGERPRINT_ACTIVE_KEY_ID ??= 'v1';
+process.env.CHECKOUT_FINGERPRINT_KEYS ??=
+  '{"v1":"aW50ZWdyYXRpb24tY2hlY2tvdXQtZmluZ2VycHJpbnQta2V5LTAwMDAx"}';

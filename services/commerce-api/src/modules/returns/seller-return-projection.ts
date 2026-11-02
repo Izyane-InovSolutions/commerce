@@ -11,11 +11,19 @@ export const SELLER_RETURN_ITEM_INCLUDE = {
   returnRequest: { select: { id: true, status: true } },
   orderItem: { select: { id: true } },
   receiptLines: { select: { quantity: true } },
-  inspectionLines: { select: { acceptedQuantity: true, rejectedQuantity: true } },
+  inspectionLines: {
+    select: { acceptedQuantity: true, rejectedQuantity: true },
+  },
   refundCaseItems: {
     select: {
       refundCase: {
-        select: { id: true, status: true, amount: true, currency: true, source: true },
+        select: {
+          id: true,
+          status: true,
+          amount: true,
+          currency: true,
+          source: true,
+        },
       },
     },
   },

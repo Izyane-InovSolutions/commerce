@@ -22,7 +22,9 @@ export class ExchangeRateApiProvider implements FxRateProvider {
   async fetchRates(baseCurrency: string): Promise<Record<string, string>> {
     const apiKey = this.config.get<string>('PAYMENT_FX_API_KEY');
     if (!apiKey)
-      throw new ServiceUnavailableException('PAYMENT_FX_API_KEY is not configured');
+      throw new ServiceUnavailableException(
+        'PAYMENT_FX_API_KEY is not configured',
+      );
 
     const url = `https://v6.exchangerate-api.com/v6/${encodeURIComponent(apiKey)}/latest/${encodeURIComponent(baseCurrency)}`;
     let response: Response;
@@ -39,7 +41,9 @@ export class ExchangeRateApiProvider implements FxRateProvider {
     try {
       body = await response.json();
     } catch {
-      throw new ServiceUnavailableException('FX provider returned an invalid response');
+      throw new ServiceUnavailableException(
+        'FX provider returned an invalid response',
+      );
     }
 
     if (

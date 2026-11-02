@@ -1,4 +1,8 @@
-import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { GoodsReceiptStatus, PurchaseOrderStatus, Role } from '@prisma/client';
 
 import { PrismaService } from '../../../database/prisma.service';
@@ -76,7 +80,9 @@ const PO_LINE = {
   packSize: 1,
 };
 
-function buildPo(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+function buildPo(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
   return {
     id: 'po-1',
     poNumber: 'PO-2026-000001',
@@ -100,6 +106,7 @@ describe('GoodsReceiptsService', () => {
   let inventoryService: {
     receiveStockForReference: jest.Mock;
     reverseReceiptStock: jest.Mock;
+    lockRecordsForWrite: jest.Mock;
   };
   let numberingService: { nextGoodsReceiptNumber: jest.Mock };
   let auditService: { record: jest.Mock };
@@ -126,6 +133,7 @@ describe('GoodsReceiptsService', () => {
       reverseReceiptStock: jest
         .fn()
         .mockResolvedValue({ record: {}, movement: { id: 'mv-2' } }),
+      lockRecordsForWrite: jest.fn().mockResolvedValue([]),
     };
     numberingService = {
       nextGoodsReceiptNumber: jest.fn().mockResolvedValue('GR-2026-000001'),
@@ -150,7 +158,11 @@ describe('GoodsReceiptsService', () => {
           {
             warehouseId: 'wh-1',
             lines: [
-              { purchaseOrderLineId: 'pol-1', deliveredQuantity: 10, acceptedQuantity: 5 },
+              {
+                purchaseOrderLineId: 'pol-1',
+                deliveredQuantity: 10,
+                acceptedQuantity: 5,
+              },
             ],
           } as never,
           'user-1',
@@ -187,7 +199,11 @@ describe('GoodsReceiptsService', () => {
           {
             warehouseId: 'wh-1',
             lines: [
-              { purchaseOrderLineId: 'not-a-line', deliveredQuantity: 1, acceptedQuantity: 1 },
+              {
+                purchaseOrderLineId: 'not-a-line',
+                deliveredQuantity: 1,
+                acceptedQuantity: 1,
+              },
             ],
           } as never,
           'user-1',
@@ -199,7 +215,11 @@ describe('GoodsReceiptsService', () => {
 
   describe('post', () => {
     it('replays an already-posted receipt instead of posting twice', async () => {
-      const posted = { id: 'gr-1', status: GoodsReceiptStatus.POSTED, lines: [] };
+      const posted = {
+        id: 'gr-1',
+        status: GoodsReceiptStatus.POSTED,
+        lines: [],
+      };
       prisma.tx.goodsReceipt.findUnique.mockResolvedValue(posted);
 
       const result = await service.post('gr-1', 'user-1', Role.STAFF);
@@ -215,9 +235,9 @@ describe('GoodsReceiptsService', () => {
         lines: [],
       });
 
-      await expect(service.post('gr-1', 'user-1', Role.STAFF)).rejects.toBeInstanceOf(
-        ConflictException,
-      );
+      await expect(
+        service.post('gr-1', 'user-1', Role.STAFF),
+      ).rejects.toBeInstanceOf(ConflictException);
     });
 
     it('rejects accepted quantity beyond outstanding without authorization', async () => {
@@ -240,9 +260,9 @@ describe('GoodsReceiptsService', () => {
         ],
       });
 
-      await expect(service.post('gr-1', 'user-1', Role.STAFF)).rejects.toBeInstanceOf(
-        ConflictException,
-      );
+      await expect(
+        service.post('gr-1', 'user-1', Role.STAFF),
+      ).rejects.toBeInstanceOf(ConflictException);
       expect(inventoryService.receiveStockForReference).not.toHaveBeenCalled();
     });
 
@@ -367,13 +387,15 @@ describe('GoodsReceiptsService', () => {
         ],
       });
 
-      await expect(service.post('gr-1', 'user-1', Role.STAFF)).rejects.toBeInstanceOf(
-        ConflictException,
-      );
+      await expect(
+        service.post('gr-1', 'user-1', Role.STAFF),
+      ).rejects.toBeInstanceOf(ConflictException);
       // Neither line's stock movement should have been posted before the
       // duplicate was caught, and the combined 5+5 against an outstanding
       // quantity of 10 must never both silently pass.
-      expect(inventoryService.receiveStockForReference).toHaveBeenCalledTimes(1);
+      expect(inventoryService.receiveStockForReference).toHaveBeenCalledTimes(
+        1,
+      );
     });
 
     it('requires a discrepancy reason for a rejected quantity', async () => {
@@ -397,9 +419,9 @@ describe('GoodsReceiptsService', () => {
         ],
       });
 
-      await expect(service.post('gr-1', 'user-1', Role.STAFF)).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(
+        service.post('gr-1', 'user-1', Role.STAFF),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 
@@ -424,7 +446,11 @@ describe('GoodsReceiptsService', () => {
           {
             warehouseId: 'wh-1',
             lines: [
-              { purchaseOrderLineId: 'pol-1', deliveredQuantity: 1, acceptedQuantity: 1 },
+              {
+                purchaseOrderLineId: 'pol-1',
+                deliveredQuantity: 1,
+                acceptedQuantity: 1,
+              },
             ],
           } as never,
           'user-1',
@@ -441,9 +467,9 @@ describe('GoodsReceiptsService', () => {
         status: GoodsReceiptStatus.POSTED,
       });
 
-      await expect(service.deleteDraft('gr-1', 'user-1')).rejects.toBeInstanceOf(
-        ConflictException,
-      );
+      await expect(
+        service.deleteDraft('gr-1', 'user-1'),
+      ).rejects.toBeInstanceOf(ConflictException);
       expect(prisma.tx.goodsReceipt.delete).not.toHaveBeenCalled();
       expect(auditService.record).not.toHaveBeenCalled();
     });
@@ -460,12 +486,52 @@ describe('GoodsReceiptsService', () => {
         where: { id: 'gr-1' },
       });
       expect(auditService.record).toHaveBeenCalledWith(
-        expect.objectContaining({ action: 'procurement.goods_receipt.draft_deleted' }),
+        expect.objectContaining({
+          action: 'procurement.goods_receipt.draft_deleted',
+        }),
       );
     });
   });
 
   describe('reverse', () => {
+    it('rejects reversing a reversal receipt before touching the purchase order or stock', async () => {
+      prisma.tx.goodsReceipt.findUnique.mockResolvedValue({
+        id: 'gr-reversal',
+        status: GoodsReceiptStatus.POSTED,
+        reversalOfId: 'gr-original',
+        lines: [],
+      });
+
+      await expect(
+        service.reverse('gr-reversal', 'try again', 'user-1'),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.tx.goodsReceipt.findFirst).not.toHaveBeenCalled();
+      expect(purchaseOrdersService.lockRow).not.toHaveBeenCalled();
+      expect(inventoryService.reverseReceiptStock).not.toHaveBeenCalled();
+    });
+
+    it('returns the original reversal on retry without applying stock again', async () => {
+      prisma.tx.goodsReceipt.findUnique.mockResolvedValue({
+        id: 'gr-original',
+        status: GoodsReceiptStatus.REVERSED,
+        reversalOfId: null,
+        lines: [],
+      });
+      prisma.tx.goodsReceipt.findFirst.mockResolvedValue({
+        id: 'gr-reversal',
+        status: GoodsReceiptStatus.POSTED,
+        reversalOfId: 'gr-original',
+        lines: [],
+      });
+
+      await expect(
+        service.reverse('gr-original', 'retry', 'user-1'),
+      ).resolves.toMatchObject({ id: 'gr-reversal' });
+      expect(purchaseOrdersService.lockRow).not.toHaveBeenCalled();
+      expect(inventoryService.reverseReceiptStock).not.toHaveBeenCalled();
+      expect(auditService.record).not.toHaveBeenCalled();
+    });
+
     it('marks the original receipt REVERSED and creates a posted reversal receipt', async () => {
       prisma.tx.goodsReceipt.findUnique.mockResolvedValue({
         id: 'gr-1',

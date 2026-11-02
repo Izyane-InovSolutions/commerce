@@ -7,7 +7,9 @@ describe('ExchangeRateApiProvider', () => {
   let fetchMock: jest.SpiedFunction<typeof fetch>;
 
   function reply(value: unknown, status = 200): void {
-    fetchMock.mockResolvedValue(new Response(JSON.stringify(value), { status }));
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify(value), { status }),
+    );
   }
 
   beforeEach(() => {
@@ -79,9 +81,7 @@ describe('ExchangeRateApiProvider', () => {
     const provider = new ExchangeRateApiProvider(
       new ConfigService({ PAYMENT_FX_API_KEY: 'bad-key' }),
     );
-    await expect(provider.fetchRates('ZMW')).rejects.toThrow(
-      /invalid-key/,
-    );
+    await expect(provider.fetchRates('ZMW')).rejects.toThrow(/invalid-key/);
   });
 
   it('refuses a non-2xx HTTP response', async () => {

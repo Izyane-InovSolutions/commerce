@@ -52,7 +52,9 @@ export class CustomerReturnsController {
   }
 
   @Get('returns')
-  list(@CurrentUser() user: AuthenticatedUser): Promise<ReturnRequestWithDetail[]> {
+  list(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ReturnRequestWithDetail[]> {
     return this.returnsService.listOwn(user.id);
   }
 

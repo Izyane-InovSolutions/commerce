@@ -7,12 +7,18 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  Matches,
   Max,
   Min,
   MinLength,
   ValidateIf,
   validateSync,
 } from 'class-validator';
+
+import {
+  CHECKOUT_FINGERPRINT_KEY_ID_PATTERN,
+  parseCheckoutFingerprintKeyring,
+} from '../../modules/checkout/checkout-fingerprint';
 
 enum NodeEnv {
   Development = 'development',
@@ -54,6 +60,17 @@ class EnvironmentVariables {
   @IsString()
   @IsNotEmpty()
   EMAIL_DELIVERY_ENCRYPTION_KEYS!: string;
+
+  // HMAC keyring for checkout Idempotency-Key receipts; see
+  // CheckoutFingerprintService. JSON object keyId -> padded base64 secret of
+  // at least 32 bytes. Keep retired keys while their receipts may be retried:
+  // a receipt whose key is gone answers 409 instead of replaying.
+  @Matches(CHECKOUT_FINGERPRINT_KEY_ID_PATTERN)
+  CHECKOUT_FINGERPRINT_ACTIVE_KEY_ID!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  CHECKOUT_FINGERPRINT_KEYS!: string;
 
   @IsString()
   @IsNotEmpty()
@@ -328,6 +345,37 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   SMTP_URL?: string;
+
+  // Bearer secret for the internal Prometheus scraper at
+  // GET /api/v1/metrics/prometheus. Unset disables that route (404); admins
+  // still read GET /api/v1/metrics with their session. Empty counts as unset.
+  @ValidateIf((env: EnvironmentVariables) => Boolean(env.METRICS_SCRAPE_TOKEN))
+  @IsString()
+  @MinLength(32)
+  METRICS_SCRAPE_TOKEN?: string;
+
+  // How long database-derived gauges (queue depth, unresolved payments,
+  // lock pressure) are reused between scrapes.
+  @Type(() => Number)
+  @IsInt()
+  @Min(1000)
+  @Max(300000)
+  METRICS_DB_CACHE_MS = 15_000;
+
+  // On SIGTERM/SIGINT, readiness reports 503 for this long before the server
+  // stops accepting connections, so a load balancer can stop routing here.
+  // Set it to at least the balancer's readiness probe interval.
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(120000)
+  SHUTDOWN_DRAIN_DELAY_MS = 0;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(10000)
+  MAX_IN_FLIGHT_REQUESTS = 16;
 }
 
 export function validate(
@@ -354,6 +402,10 @@ export function validate(
     'EMAIL_DELIVERY',
     validatedConfig.EMAIL_DELIVERY_ENCRYPTION_ACTIVE_KEY_ID,
     validatedConfig.EMAIL_DELIVERY_ENCRYPTION_KEYS,
+  );
+  parseCheckoutFingerprintKeyring(
+    validatedConfig.CHECKOUT_FINGERPRINT_ACTIVE_KEY_ID,
+    validatedConfig.CHECKOUT_FINGERPRINT_KEYS,
   );
   if (
     Boolean(validatedConfig.SMTP_USER) !== Boolean(validatedConfig.SMTP_PASS)

@@ -1,9 +1,4 @@
-import {
-  ConflictException,
-  Inject,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger } from '@nestjs/common';
 import { OrderStatus, PaymentStatus, type Payment } from '@prisma/client';
 
 import { PrismaService } from '../../../database/prisma.service';
@@ -28,6 +23,20 @@ const OPEN_PAYMENT_STATUSES: PaymentStatus[] = [
   PaymentStatus.REQUIRES_ACTION,
   PaymentStatus.PROCESSING,
 ];
+
+/**
+ * Which way `cancel` handles an order's payment: none to stop, a settled one
+ * to apply instead, an open one to stop at the gateway first, or one that
+ * can no longer charge. Statuses within one branch are interchangeable.
+ */
+function paymentBranch(payment: Pick<Payment, 'id' | 'status'> | null): string {
+  if (!payment) return 'none';
+  if (payment.status === PaymentStatus.SUCCEEDED)
+    return `settled:${payment.id}`;
+  if (OPEN_PAYMENT_STATUSES.includes(payment.status))
+    return `open:${payment.id}`;
+  return `closed:${payment.id}`;
+}
 
 /** A provider that can ask its gateway to stop a payment (the unified
  * gateway can; the pending placeholder and test doubles can't). */
@@ -97,8 +106,11 @@ export class OrderCancellationService {
    *
    * The open payment attempt is stopped at the gateway first — before any
    * local change — so a charge the shopper already approved is discovered
-   * (and applied) rather than cancelled over. Then, in one transaction, the
-   * stock reservations are released and the order cancelled
+   * (and applied) rather than cancelled over. Then, in one transaction under
+   * the order lock — after re-reading the payment, so one a checkout started
+   * since the first read refuses the cancel (409, retryable) instead of being
+   * cancelled over unstopped — the stock reservations are released and the
+   * order cancelled
    * (OrdersService.cancel, the same path a failed payment takes), with the
    * audit row and the `order.cancelled` outbox event. Finally the payment
    * row is marked CANCELLED through PaymentsService's own event path, so it
@@ -143,6 +155,17 @@ export class OrderCancellationService {
       });
       if (current.status === OrderStatus.CANCELLED) return false;
       this.requireUnpaid(current.status);
+      // The payment was read before this lock. A checkout inserts its Payment
+      // row under this same lock and then calls the provider, so one may
+      // have appeared (and been submitted) since: cancelling now would
+      // release the stock of an order the customer may be paying for. The
+      // retry reads the new payment and takes the payment-aware branch.
+      const lockedPayment = await tx.payment.findUnique({
+        where: { orderId },
+        select: { id: true, status: true },
+      });
+      if (paymentBranch(lockedPayment) !== paymentBranch(payment))
+        throw new ConflictException('Payment is starting; retry cancellation');
 
       await this.ordersService.cancel(orderId, tx);
       await this.auditService.record(

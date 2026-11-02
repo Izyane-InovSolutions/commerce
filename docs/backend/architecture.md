@@ -65,16 +65,18 @@ What [main.ts](../../services/commerce-api/src/main.ts) does, in order:
 4. Adds JSON and urlencoded parsers with a **1 MB** limit. The JSON parser keeps the raw bytes on `req.rawBody` so webhooks can verify signatures ([main.ts:33-43](../../services/commerce-api/src/main.ts#L33-L43)).
 5. Sets the global prefix to **`api/v1`**. Nest URI versioning is not used ([main.ts:45](../../services/commerce-api/src/main.ts#L45)).
 6. Registers a global `ValidationPipe` with `whitelist`, `forbidNonWhitelisted` and `transform`. Validation failures become `ValidationException` ([main.ts:46-54](../../services/commerce-api/src/main.ts#L46-L54)).
-7. Enables shutdown hooks and mounts Swagger UI at `/api/docs`, with the JSON at `/api/docs-json`.
+7. Installs graceful shutdown in place of Nest's shutdown hooks and mounts Swagger UI at `/api/docs`, with the JSON at `/api/docs-json`. On SIGTERM or SIGINT, readiness returns 503 for `SHUTDOWN_DRAIN_DELAY_MS`. Then the HTTP server stops accepting and drains in-flight requests, the job worker finishes its current job, and Prisma disconnects last ([graceful-shutdown.ts](../../services/commerce-api/src/infrastructure/lifecycle/graceful-shutdown.ts)).
+
+The metrics middleware is mounted before helmet and the body parsers, so request timing covers everything after it.
 8. Listens on `PORT` (default 3000).
 
 [app.module.ts](../../services/commerce-api/src/app.module.ts) sets up the rest:
 
 - `ConfigModule` is global and validated at startup by [env.validation.ts](../../services/commerce-api/src/infrastructure/config/env.validation.ts). The `.env` file is ignored when `NODE_ENV=test` ([app.module.ts:49-53](../../services/commerce-api/src/app.module.ts#L49-L53)).
 - `ThrottlerModule` allows **100 requests per 60 s per IP** by default ([app.module.ts:54](../../services/commerce-api/src/app.module.ts#L54)). Some auth and review routes have tighter limits; see [auth-and-access.md](auth-and-access.md#rate-limits).
-- Global providers: `AllExceptionsFilter`, `ResponseEnvelopeInterceptor`, `MetricsInterceptor` and `ThrottlerGuard` ([app.module.ts:86-91](../../services/commerce-api/src/app.module.ts#L86-L91)).
+- Global providers: `AllExceptionsFilter`, `ResponseEnvelopeInterceptor` and `ThrottlerGuard` ([app.module.ts](../../services/commerce-api/src/app.module.ts)). Request metrics come from `MetricsMiddleware`, mounted in `main.ts`.
 - `RequestIdMiddleware` runs on every route.
-- `PrismaService` logs a failed database connection at startup without crashing. Liveness stays up and readiness reports the failure ([prisma.service.ts:16-27](../../services/commerce-api/src/database/prisma.service.ts#L16-L27)).
+- `PrismaService` logs a failed database connection at startup without crashing. Liveness stays up and readiness reports the failure. It disconnects in `onApplicationShutdown`, after the HTTP server has drained ([prisma.service.ts](../../services/commerce-api/src/database/prisma.service.ts)).
 
 ## Request lifecycle
 
@@ -105,7 +107,14 @@ sequenceDiagram
   - `code` comes from the HTTP status ([error-codes.ts](../../services/commerce-api/src/common/http/error-codes.ts)). The mapping is 400 → `VALIDATION_ERROR`, 401 → `UNAUTHORIZED`, 403 → `FORBIDDEN`, 404 → `NOT_FOUND`, 409 → `CONFLICT`, 413 → `PAYLOAD_TOO_LARGE`, 429 → `TOO_MANY_REQUESTS` and 503 → `SERVICE_UNAVAILABLE`. **Every other status, including 422, 501 and 502, becomes `INTERNAL_ERROR`.**
   - For validation errors, `details` lists `{ field, message }` with dotted paths into nested DTOs ([validation-exception.ts](../../services/commerce-api/src/common/http/validation-exception.ts)).
   - Errors of 500 and above are logged with the request ID. Their message is only shown to the client if the error is an `HttpException`.
-- **Metrics.** `MetricsInterceptor` counts requests and total duration per method, route and status, in memory. `GET /api/v1/metrics` is `@Public` and returns the snapshot ([metrics.controller.ts](../../services/commerce-api/src/infrastructure/metrics/metrics.controller.ts)).
+- **Metrics.** `MetricsMiddleware` records every response, including guard rejections, unmatched routes and body-parser errors. It feeds latency histograms and status counts per method and route template; unmatched requests are labelled `unmatched`, and raw URLs are never recorded. `MetricsService` also tracks in-flight requests, event-loop delay over 60 s windows, memory, CPU, and job/outbox outcomes and lag. `OperationalMetricsCollector` adds cached database gauges:
+  - queue depth, oldest-due age, retry and dead-letter counts;
+  - stale job claims;
+  - unresolved payments, refunds and emails;
+  - PostgreSQL connections and locks;
+  - the Prisma pool (`metrics` preview feature).
+
+  `GET /api/v1/metrics` (ADMIN) returns JSON. `GET /api/v1/metrics/prometheus` (scrape token) returns the text exposition format ([metrics.controller.ts](../../services/commerce-api/src/infrastructure/metrics/metrics.controller.ts)). Values are per process and reset on restart.
 
 ## Module map
 

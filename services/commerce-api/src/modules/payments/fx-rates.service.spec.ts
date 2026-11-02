@@ -88,7 +88,13 @@ describe('FxRatesService', () => {
       const fetchedAt = new Date('2026-09-18T00:00:00Z');
       const expiresAt = new Date('2026-09-18T02:00:00Z');
       prisma.fxRate.findMany.mockResolvedValue([
-        { id: 'row-1', targetCurrency: 'USD', rate: '0.037', fetchedAt, expiresAt },
+        {
+          id: 'row-1',
+          targetCurrency: 'USD',
+          rate: '0.037',
+          fetchedAt,
+          expiresAt,
+        },
       ]);
       service = build();
 

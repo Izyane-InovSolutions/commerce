@@ -18,6 +18,10 @@ import { FulfillmentProvisioningService } from './provisioning/fulfillment-provi
     FulfillmentProvisioningService,
     FulfillmentProvisionHandler,
   ],
-  exports: [FulfillmentsService, FulfillmentProvisioningService, FulfillmentProvisionHandler],
+  exports: [
+    FulfillmentsService,
+    FulfillmentProvisioningService,
+    FulfillmentProvisionHandler,
+  ],
 })
 export class FulfillmentModule {}

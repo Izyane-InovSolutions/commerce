@@ -57,9 +57,11 @@ function buildPrisma(): {
   productRatingSummary: { findMany: jest.Mock };
   productReview: { findMany: jest.Mock; count: jest.Mock };
   orderItem: { count: jest.Mock };
+  inventoryRecord: { count: jest.Mock };
   attributeValue: { findMany: jest.Mock };
   category: { findMany: jest.Mock };
   inventoryMovement: { count: jest.Mock };
+  reservation: { count: jest.Mock };
   $transaction: jest.Mock;
   $queryRaw: jest.Mock;
 } {
@@ -105,11 +107,13 @@ function buildPrisma(): {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     orderItem: { count: jest.fn().mockResolvedValue(0) },
+    inventoryRecord: { count: jest.fn().mockResolvedValue(0) },
     attributeValue: { findMany: jest.fn().mockResolvedValue([]) },
     category: { findMany: jest.fn().mockResolvedValue([]) },
     inventoryMovement: { count: jest.fn().mockResolvedValue(0) },
+    reservation: { count: jest.fn().mockResolvedValue(0) },
     $transaction: jest.fn(),
-    $queryRaw: jest.fn().mockResolvedValue([]),
+    $queryRaw: jest.fn().mockResolvedValue([{ id: 'locked' }]),
   };
   // Runs the callback with `prisma` standing in for the transaction client.
   prisma.$transaction.mockImplementation(
@@ -185,9 +189,7 @@ describe('ProductsService', () => {
         },
       ]);
       prisma.product.count.mockResolvedValue(1);
-      inventory.getAvailableQuantities.mockResolvedValue(
-        new Map([['v1', 3]]),
-      );
+      inventory.getAvailableQuantities.mockResolvedValue(new Map([['v1', 3]]));
 
       const result = await service.findPublished({
         page: 1,
@@ -211,7 +213,7 @@ describe('ProductsService', () => {
       expect(inventory.getAvailableQuantities).toHaveBeenCalledWith(['v1']);
     });
 
-    it("marks an offer out of stock once available quantity runs out", async () => {
+    it('marks an offer out of stock once available quantity runs out', async () => {
       prisma.product.findMany.mockResolvedValue([
         {
           id: 'p1',
@@ -717,21 +719,24 @@ describe('ProductsService', () => {
       ['oldest', [{ createdAt: 'asc' }]],
       ['highest', [{ rating: 'desc' }, { createdAt: 'desc' }]],
       ['lowest', [{ rating: 'asc' }, { createdAt: 'desc' }]],
-    ] as const)('maps sort=%s to the expected orderBy', async (sort, expected) => {
-      prisma.product.findFirst.mockResolvedValue({
-        id: 'p1',
-        name: 'Widget',
-        slug: 'widget',
-      });
-      prisma.productReview.findMany.mockResolvedValue([]);
-      prisma.productReview.count.mockResolvedValue(0);
+    ] as const)(
+      'maps sort=%s to the expected orderBy',
+      async (sort, expected) => {
+        prisma.product.findFirst.mockResolvedValue({
+          id: 'p1',
+          name: 'Widget',
+          slug: 'widget',
+        });
+        prisma.productReview.findMany.mockResolvedValue([]);
+        prisma.productReview.count.mockResolvedValue(0);
 
-      await service.findPublicReviews('widget', { page: 1, limit: 20, sort });
+        await service.findPublicReviews('widget', { page: 1, limit: 20, sort });
 
-      expect(prisma.productReview.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ orderBy: expected }),
-      );
-    });
+        expect(prisma.productReview.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ orderBy: expected }),
+        );
+      },
+    );
 
     it('paginates using page/limit for skip/take', async () => {
       prisma.product.findFirst.mockResolvedValue({
@@ -839,11 +844,37 @@ describe('ProductsService', () => {
       expect(prisma.productVariant.delete).not.toHaveBeenCalled();
     });
 
+    it('refuses to delete a variant with a reservation', async () => {
+      prisma.reservation.count.mockResolvedValue(1);
+
+      await expect(service.removeVariant('p1', 'v1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(prisma.productVariant.delete).not.toHaveBeenCalled();
+    });
+
+    it('refuses to delete a variant with nonzero stock', async () => {
+      prisma.inventoryRecord.count.mockResolvedValue(1);
+
+      await expect(service.removeVariant('p1', 'v1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(prisma.productVariant.delete).not.toHaveBeenCalled();
+    });
+
     it('maps a restricting foreign key to the same conflict', async () => {
       prisma.productVariant.delete.mockRejectedValue({ code: 'P2003' });
 
       await expect(service.removeVariant('p1', 'v1')).rejects.toBeInstanceOf(
         ConflictException,
+      );
+    });
+
+    it('maps a concurrent disappearance to not found', async () => {
+      prisma.productVariant.delete.mockRejectedValue({ code: 'P2025' });
+
+      await expect(service.removeVariant('p1', 'v1')).rejects.toBeInstanceOf(
+        NotFoundException,
       );
     });
   });
@@ -1259,7 +1290,10 @@ describe('ProductsService', () => {
         currency: 'ZMW',
       });
 
-      expect(result.items.map((item) => item.id)).toEqual(['p-top', 'p-second']);
+      expect(result.items.map((item) => item.id)).toEqual([
+        'p-top',
+        'p-second',
+      ]);
       expect(result.items[0]?.variants[0]?.offers[0]?.currentPrice).toEqual({
         amount: 1500,
         currency: 'ZMW',
@@ -1373,9 +1407,11 @@ describe('ProductsService', () => {
         where: { id: 'v1' },
         data: { skuCode: 'NEW-SKU', name: undefined },
       });
-      expect(prisma.productVariantAttributeValue.createMany).toHaveBeenCalledWith(
-        { data: [{ variantId: 'v1', attributeValueId: 'av-1' }] },
-      );
+      expect(
+        prisma.productVariantAttributeValue.createMany,
+      ).toHaveBeenCalledWith({
+        data: [{ variantId: 'v1', attributeValueId: 'av-1' }],
+      });
     });
 
     it('404s for a variant that belongs to a different product', async () => {
@@ -1456,7 +1492,9 @@ describe('ProductsService', () => {
 
       expect(prisma.product.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ submissionStatus: 'PENDING' }) as object,
+          data: expect.objectContaining({
+            submissionStatus: 'PENDING',
+          }) as object,
         }),
       );
       expect(prisma.productVariant.delete).toHaveBeenCalledWith({
@@ -1465,7 +1503,9 @@ describe('ProductsService', () => {
     });
 
     it('requires an approved seller', async () => {
-      sellers.requireApproved.mockRejectedValue(new Error('Seller approval is required'));
+      sellers.requireApproved.mockRejectedValue(
+        new Error('Seller approval is required'),
+      );
 
       await expect(
         service.removeSellerVariant('user-1', 'p1', 'v1'),

@@ -50,7 +50,10 @@ export class PaymentCurrencyConverter {
       );
     if (!/^[A-Z]{3}$/.test(currency)) throw unavailable();
 
-    const { rate, quoteId, expiresAt } = this.resolveEntry(currency, unavailable);
+    const { rate, quoteId, expiresAt } = this.resolveEntry(
+      currency,
+      unavailable,
+    );
     const expiry = new Date(expiresAt);
     if (!Number.isFinite(expiry.getTime()) || expiry <= at) throw unavailable();
     const [whole, fraction = ''] = rate.split('.');

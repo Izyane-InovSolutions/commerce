@@ -19,6 +19,7 @@ import {
   ApiBearerAuth,
   ApiConsumes,
   ApiOperation,
+  ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import type { Response } from 'express';
@@ -55,6 +56,10 @@ export class MediaController {
   @Put(':id/content')
   @UseInterceptors(FileInterceptor('file'))
   @ApiConsumes('multipart/form-data')
+  @ApiResponse({
+    status: HttpStatus.PAYLOAD_TOO_LARGE,
+    description: 'Uploaded file exceeds the configured media size limit',
+  })
   @HttpCode(HttpStatus.NO_CONTENT)
   upload(
     @CurrentUser() user: AuthenticatedUser,

@@ -1,3 +1,5 @@
+> **Historical record.** This report preserves its original findings and execution dates. For current implementation status and newer verification, use the [current gap register](backend/known-gaps.md) and [2026-09-30 baseline](backend/baseline-verification.md). In particular, old statements deferring password-reset delivery are superseded; source implementation now exists.
+
 # Backend stabilization: verification and rollout
 
 This milestone does not complete releases 2–4. See the acceptance matrix. Password-reset delivery and payment hardening remain deferred. Do not close issues or enable live money movement based on unit tests alone.

@@ -46,14 +46,10 @@ export class WarehousesService {
   }
 
   /**
-   * Only an unused warehouse may be deleted. InventoryRecord's FK cascades,
-   * so deleting a stocked warehouse would silently wipe its stock rows and
-   * their movement history; that is refused here rather than by changing
-   * the FK. The row lock blocks a concurrent insert of a new stock row
-   * (its FK check needs a KEY SHARE lock) between the count and the delete.
-   * The other document references (purchase orders, goods receipts,
-   * fulfillment orders, shipments, return receipts/inspections) are
-   * Restrict; that violation surfaces as P2003 and maps to 409 as well.
+   * Only an unused warehouse may be deleted. The row lock blocks a concurrent
+   * stock-row insert between the count and delete. Movement and reservation
+   * history restrict inventory-record deletion; purchasing, fulfillment and
+   * return documents also restrict warehouse deletion. P2003 maps to 409.
    */
   async remove(id: string): Promise<void> {
     try {

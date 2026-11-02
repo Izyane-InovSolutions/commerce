@@ -32,7 +32,10 @@ import { FulfillmentsService } from './fulfillments.service';
 
 function parseWorkItemType(value: string): FulfillmentWorkItemType {
   const upper = value.toUpperCase();
-  if (upper !== FulfillmentWorkItemType.PICK && upper !== FulfillmentWorkItemType.PACK) {
+  if (
+    upper !== FulfillmentWorkItemType.PICK &&
+    upper !== FulfillmentWorkItemType.PACK
+  ) {
     throw new BadRequestException('type must be "pick" or "pack"');
   }
   return upper as FulfillmentWorkItemType;
@@ -198,7 +201,12 @@ export class AdminFulfillmentsController {
     @Param('exceptionId', ParseUUIDPipe) exceptionId: string,
     @Body() dto: ResolveExceptionDto,
   ): Promise<FulfillmentOrderWithDetail> {
-    return this.fulfillmentsService.resolveException(id, exceptionId, dto, user.id);
+    return this.fulfillmentsService.resolveException(
+      id,
+      exceptionId,
+      dto,
+      user.id,
+    );
   }
 
   @Post(':id/dispatches')
@@ -224,6 +232,11 @@ export class AdminFulfillmentsController {
     @Body() dto: CancelLinesDto,
     @Headers('idempotency-key') key?: string,
   ): Promise<FulfillmentOrderWithDetail> {
-    return this.fulfillmentsService.cancel(id, dto, user.id, requireIdempotencyKey(key));
+    return this.fulfillmentsService.cancel(
+      id,
+      dto,
+      user.id,
+      requireIdempotencyKey(key),
+    );
   }
 }

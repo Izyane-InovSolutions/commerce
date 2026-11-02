@@ -1,169 +1,358 @@
-import { BackgroundJobsService } from '../../infrastructure/jobs/background-jobs.service';
-import { CART_CLEANUP_JOB_TYPE } from '../cart/jobs/cart-cleanup.handler';
+import { BadRequestException } from '@nestjs/common';
+
 import { CartService } from '../cart/cart.service';
 import { OrdersService } from '../orders/orders.service';
 import { PaymentsService } from '../payments/payments.service';
+import { CheckoutAttemptSupersededError } from './checkout-attempt.errors';
+import { CheckoutAttemptsService } from './checkout-attempts.service';
 import { CheckoutService } from './checkout.service';
+import type { CheckoutAttemptContext } from './checkout.types';
+
+const KEY = {
+  key: '9b2f4c8e-1d3a-4f5b-9c7d-2e8f6a1b3c4d',
+  rawKey: '9B2F4C8E-1D3A-4F5B-9C7D-2E8F6A1B3C4D',
+};
+
+function firstCallOrder(mock: jest.Mock): number {
+  return mock.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY;
+}
 
 describe('CheckoutService', () => {
   let ordersService: {
     createFromCart: jest.Mock;
     createFromOffer: jest.Mock;
+    findForCheckout: jest.Mock;
     cancel: jest.Mock;
-    findByIdempotencyKey: jest.Mock;
-    releaseIdempotencyKey: jest.Mock;
     findOwn: jest.Mock;
   };
   let paymentsService: {
     initializeForOrder: jest.Mock;
-    getForOrder: jest.Mock;
+    findForOrder: jest.Mock;
   };
-  let cartService: { clearCart: jest.Mock; removeItems: jest.Mock };
-  let backgroundJobsService: { enqueue: jest.Mock };
+  let cartService: { cleanUpCheckout: jest.Mock };
+  let attempts: {
+    run: jest.Mock;
+    markPaymentStarted: jest.Mock;
+    complete: jest.Mock;
+  };
+  let context: CheckoutAttemptContext;
   let service: CheckoutService;
 
   beforeEach(() => {
     ordersService = {
-      createFromCart: jest.fn(),
-      createFromOffer: jest.fn(),
+      createFromCart: jest.fn().mockResolvedValue({ id: 'order-1' }),
+      createFromOffer: jest.fn().mockResolvedValue({ id: 'order-1' }),
+      findForCheckout: jest.fn(),
       cancel: jest.fn(),
-      findByIdempotencyKey: jest.fn().mockResolvedValue(null),
-      releaseIdempotencyKey: jest.fn(),
       findOwn: jest.fn(),
     };
     paymentsService = {
       initializeForOrder: jest.fn(),
-      getForOrder: jest.fn(),
+      findForOrder: jest.fn().mockResolvedValue(null),
     };
-    cartService = { clearCart: jest.fn(), removeItems: jest.fn() };
-    backgroundJobsService = { enqueue: jest.fn() };
+    cartService = { cleanUpCheckout: jest.fn() };
+    context = { attemptId: 'attempt-1', ownerToken: 'owner-1' };
+    // The attempt lifecycle itself is CheckoutAttemptsService's; here it
+    // only hands execution the context a keyed request would own.
+    attempts = {
+      run: jest.fn(
+        (
+          _userId: string,
+          key: unknown,
+          _request: unknown,
+          execute: (ctx: CheckoutAttemptContext | null) => Promise<unknown>,
+        ) => execute(key ? context : null),
+      ),
+      markPaymentStarted: jest.fn(),
+      complete: jest.fn(),
+    };
     service = new CheckoutService(
       ordersService as unknown as OrdersService,
       paymentsService as unknown as PaymentsService,
       cartService as unknown as CartService,
-      backgroundJobsService as unknown as BackgroundJobsService,
+      attempts as unknown as CheckoutAttemptsService,
     );
   });
 
-  it('clears the cart once payment initialization succeeds', async () => {
-    ordersService.createFromCart.mockResolvedValue({ id: 'order-1' });
-    paymentsService.initializeForOrder.mockResolvedValue({
-      id: 'payment-1',
-      status: 'SUCCEEDED',
-    });
+  describe('without an Idempotency-Key', () => {
+    it('cleans up the checked-out cart lines once payment initialization succeeds', async () => {
+      paymentsService.initializeForOrder.mockResolvedValue({
+        id: 'payment-1',
+        status: 'SUCCEEDED',
+      });
 
-    const result = await service.checkout('user-1', 'addr-1', 'USD');
-
-    expect(cartService.clearCart).toHaveBeenCalledWith({ userId: 'user-1' });
-    expect(ordersService.cancel).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      order: { id: 'order-1' },
-      payment: { id: 'payment-1', status: 'SUCCEEDED' },
-    });
-  });
-
-  it('cancels the order and leaves the cart alone when payment initialization fails', async () => {
-    ordersService.createFromCart.mockResolvedValue({ id: 'order-1' });
-    const error = new Error(
-      'Payment integration is awaiting the external provider API',
-    );
-    paymentsService.initializeForOrder.mockRejectedValue(error);
-
-    await expect(service.checkout('user-1', 'addr-1', 'USD')).rejects.toThrow(
-      error,
-    );
-
-    expect(ordersService.cancel).toHaveBeenCalledWith('order-1');
-    expect(cartService.clearCart).not.toHaveBeenCalled();
-  });
-
-  it('does not cancel or fail an accepted payment when clearing the cart fails, retrying via a background job instead', async () => {
-    ordersService.createFromCart.mockResolvedValue({ id: 'order-1' });
-    paymentsService.initializeForOrder.mockResolvedValue({
-      id: 'payment-1',
-      status: 'SUCCEEDED',
-    });
-    cartService.clearCart.mockRejectedValue(new Error('Database unavailable'));
-
-    const result = await service.checkout('user-1', 'addr-1', 'USD');
-
-    expect(ordersService.cancel).not.toHaveBeenCalled();
-    expect(backgroundJobsService.enqueue).toHaveBeenCalledWith({
-      type: CART_CLEANUP_JOB_TYPE,
-      payload: { userId: 'user-1', itemIds: [] },
-    });
-    expect(result).toEqual({
-      order: { id: 'order-1' },
-      payment: { id: 'payment-1', status: 'SUCCEEDED' },
-    });
-  });
-
-  it('preserves the cart and returns the cancelled order when the gateway declines inline', async () => {
-    ordersService.createFromCart.mockResolvedValue({ id: 'order-1' });
-    paymentsService.initializeForOrder.mockResolvedValue({
-      id: 'payment-1',
-      status: 'FAILED',
-    });
-    ordersService.findOwn.mockResolvedValue({
-      id: 'order-1',
-      status: 'CANCELLED',
-    });
-
-    const result = await service.checkout('user-1', 'addr-1', 'USD');
-
-    expect(cartService.clearCart).not.toHaveBeenCalled();
-    expect(cartService.removeItems).not.toHaveBeenCalled();
-    expect(ordersService.cancel).not.toHaveBeenCalled();
-    expect(ordersService.findOwn).toHaveBeenCalledWith('user-1', 'order-1');
-    expect(result).toEqual({
-      order: { id: 'order-1', status: 'CANCELLED' },
-      payment: { id: 'payment-1', status: 'FAILED' },
-    });
-  });
-
-  describe('partial checkout (itemIds)', () => {
-    it('removes only the checked-out lines, leaving the rest of the cart alone', async () => {
-      ordersService.createFromCart.mockResolvedValue({ id: 'order-1' });
-      paymentsService.initializeForOrder.mockResolvedValue({ id: 'payment-1' });
-
-      await service.checkout('user-1', 'addr-1', 'USD', undefined, [
-        'item-1',
-        'item-2',
-      ]);
+      const result = await service.checkout('user-1', 'addr-1', 'USD');
 
       expect(ordersService.createFromCart).toHaveBeenCalledWith(
         'user-1',
         'addr-1',
         'USD',
-        ['item-1', 'item-2'],
+        undefined,
+        undefined,
         undefined,
       );
-      expect(cartService.removeItems).toHaveBeenCalledWith(
-        { userId: 'user-1' },
-        ['item-1', 'item-2'],
+      expect(cartService.cleanUpCheckout).toHaveBeenCalledWith(
+        'user-1',
+        'order-1',
       );
-      expect(cartService.clearCart).not.toHaveBeenCalled();
+      expect(attempts.markPaymentStarted).not.toHaveBeenCalled();
+      expect(attempts.complete).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        order: { id: 'order-1' },
+        payment: { id: 'payment-1', status: 'SUCCEEDED' },
+      });
     });
 
-    it('leaves the cart untouched when payment initialization fails', async () => {
-      ordersService.createFromCart.mockResolvedValue({ id: 'order-1' });
-      paymentsService.initializeForOrder.mockRejectedValue(
-        new Error('Payment gateway rejected the charge'),
+    it('cancels the order and leaves the cart alone when payment fails before a payment row exists', async () => {
+      const error = new Error('Database unavailable');
+      paymentsService.initializeForOrder.mockRejectedValue(error);
+
+      await expect(service.checkout('user-1', 'addr-1', 'USD')).rejects.toBe(
+        error,
+      );
+
+      expect(ordersService.cancel).toHaveBeenCalledWith('order-1');
+      expect(cartService.cleanUpCheckout).not.toHaveBeenCalled();
+    });
+
+    it('keeps the order when its payment may still be pending at the gateway', async () => {
+      const error = new Error('Database unavailable');
+      paymentsService.initializeForOrder.mockRejectedValue(error);
+      paymentsService.findForOrder.mockResolvedValue({
+        id: 'payment-1',
+        status: 'PENDING',
+      });
+
+      await expect(service.checkout('user-1', 'addr-1', 'USD')).rejects.toBe(
+        error,
+      );
+
+      expect(ordersService.cancel).not.toHaveBeenCalled();
+    });
+
+    it('still reports the payment error when cancelling the order fails', async () => {
+      const error = new Error('Payment gateway rejected the charge');
+      paymentsService.initializeForOrder.mockRejectedValue(error);
+      ordersService.cancel.mockRejectedValue(new Error('lock timeout'));
+
+      await expect(service.checkout('user-1', 'addr-1', 'USD')).rejects.toBe(
+        error,
+      );
+    });
+
+    it('does not fail an accepted payment when cart cleanup fails', async () => {
+      paymentsService.initializeForOrder.mockResolvedValue({
+        id: 'payment-1',
+        status: 'SUCCEEDED',
+      });
+      cartService.cleanUpCheckout.mockRejectedValue(
+        new Error('Database unavailable'),
+      );
+
+      const result = await service.checkout('user-1', 'addr-1', 'USD');
+
+      expect(ordersService.cancel).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        order: { id: 'order-1' },
+        payment: { id: 'payment-1', status: 'SUCCEEDED' },
+      });
+    });
+
+    it('preserves the cart and returns the cancelled order when the gateway declines inline', async () => {
+      paymentsService.initializeForOrder.mockResolvedValue({
+        id: 'payment-1',
+        status: 'FAILED',
+      });
+      ordersService.findOwn.mockResolvedValue({
+        id: 'order-1',
+        status: 'CANCELLED',
+      });
+
+      const result = await service.checkout('user-1', 'addr-1', 'USD');
+
+      expect(cartService.cleanUpCheckout).not.toHaveBeenCalled();
+      expect(ordersService.cancel).not.toHaveBeenCalled();
+      expect(ordersService.findOwn).toHaveBeenCalledWith('user-1', 'order-1');
+      expect(result).toEqual({
+        order: { id: 'order-1', status: 'CANCELLED' },
+        payment: { id: 'payment-1', status: 'FAILED' },
+      });
+    });
+  });
+
+  describe('with an Idempotency-Key', () => {
+    it('fingerprints the validated request and links the order under the attempt fence', async () => {
+      paymentsService.initializeForOrder.mockResolvedValue({
+        id: 'payment-1',
+        status: 'PENDING',
+      });
+
+      await service.checkout(
+        'user-1',
+        'ADDR-1',
+        'USD',
+        undefined,
+        ['ITEM-2', 'item-1', 'item-2'],
+        KEY,
+      );
+
+      expect(attempts.run).toHaveBeenCalledWith(
+        'user-1',
+        KEY,
+        {
+          operation: 'cart',
+          shippingAddressId: 'addr-1',
+          currency: 'USD',
+          itemIds: ['item-1', 'item-2'],
+          paymentDetails: null,
+        },
+        expect.any(Function),
+      );
+      // Executed from the normalized request the fingerprint covers.
+      expect(ordersService.createFromCart).toHaveBeenCalledWith(
+        'user-1',
+        'addr-1',
+        'USD',
+        ['item-1', 'item-2'],
+        KEY.key,
+        { id: 'attempt-1', ownerToken: 'owner-1' },
+      );
+    });
+
+    it('marks payment started inside the payment insert and records the result before cart cleanup', async () => {
+      const payment = { id: 'payment-1', status: 'PENDING' };
+      paymentsService.initializeForOrder.mockImplementation(
+        async (
+          _order: unknown,
+          _details: unknown,
+          guard?: (tx: unknown) => Promise<void>,
+        ) => {
+          await guard?.('tx');
+          return payment;
+        },
+      );
+
+      const result = await service.checkout(
+        'user-1',
+        'addr-1',
+        'USD',
+        undefined,
+        undefined,
+        KEY,
+      );
+
+      expect(attempts.markPaymentStarted).toHaveBeenCalledWith(
+        context,
+        'order-1',
+        'tx',
+      );
+      expect(attempts.complete).toHaveBeenCalledWith(context, 'order-1', {
+        order: { id: 'order-1' },
+        payment,
+      });
+      expect(firstCallOrder(attempts.complete)).toBeLessThan(
+        firstCallOrder(cartService.cleanUpCheckout),
+      );
+      expect(result).toEqual({ order: { id: 'order-1' }, payment });
+    });
+
+    it('leaves the order to the new owner when the attempt was taken over', async () => {
+      const superseded = new CheckoutAttemptSupersededError();
+      attempts.markPaymentStarted.mockRejectedValue(superseded);
+      paymentsService.initializeForOrder.mockImplementation(
+        async (
+          _order: unknown,
+          _details: unknown,
+          guard?: (tx: unknown) => Promise<void>,
+        ) => {
+          await guard?.('tx');
+          return { id: 'payment-1' };
+        },
       );
 
       await expect(
-        service.checkout('user-1', 'addr-1', 'USD', undefined, ['item-1']),
-      ).rejects.toThrow('Payment gateway rejected the charge');
+        service.checkout('user-1', 'addr-1', 'USD', undefined, undefined, KEY),
+      ).rejects.toBe(superseded);
 
-      expect(cartService.removeItems).not.toHaveBeenCalled();
-      expect(cartService.clearCart).not.toHaveBeenCalled();
+      expect(paymentsService.findForOrder).not.toHaveBeenCalled();
+      expect(ordersService.cancel).not.toHaveBeenCalled();
+    });
+
+    it('keeps the order for a resume after a transient error before any payment row', async () => {
+      const error = new Error('Database unavailable');
+      paymentsService.initializeForOrder.mockRejectedValue(error);
+
+      await expect(
+        service.checkout('user-1', 'addr-1', 'USD', undefined, undefined, KEY),
+      ).rejects.toBe(error);
+
+      expect(ordersService.cancel).not.toHaveBeenCalled();
+      expect(attempts.complete).not.toHaveBeenCalled();
+    });
+
+    it('cancels the order on a definite refusal before any payment row', async () => {
+      const error = new BadRequestException('Invalid payment details');
+      paymentsService.initializeForOrder.mockRejectedValue(error);
+
+      await expect(
+        service.checkout('user-1', 'addr-1', 'USD', undefined, undefined, KEY),
+      ).rejects.toBe(error);
+
       expect(ordersService.cancel).toHaveBeenCalledWith('order-1');
+    });
+
+    it('cancels the order once its payment row has failed', async () => {
+      const error = new Error('Gateway refused the connection');
+      paymentsService.initializeForOrder.mockRejectedValue(error);
+      paymentsService.findForOrder.mockResolvedValue({
+        id: 'payment-1',
+        status: 'FAILED',
+      });
+
+      await expect(
+        service.checkout('user-1', 'addr-1', 'USD', undefined, undefined, KEY),
+      ).rejects.toBe(error);
+
+      expect(ordersService.cancel).toHaveBeenCalledWith('order-1');
+    });
+
+    it('resumes the order an interrupted attempt created instead of creating another', async () => {
+      context = { ...context, resumeOrderId: 'order-0' };
+      ordersService.findForCheckout.mockResolvedValue({ id: 'order-0' });
+      paymentsService.initializeForOrder.mockResolvedValue({
+        id: 'payment-1',
+        status: 'PENDING',
+      });
+
+      const result = await service.checkout(
+        'user-1',
+        'addr-1',
+        'USD',
+        undefined,
+        undefined,
+        KEY,
+      );
+
+      expect(ordersService.createFromCart).not.toHaveBeenCalled();
+      expect(paymentsService.initializeForOrder).toHaveBeenCalledWith(
+        { id: 'order-0' },
+        undefined,
+        expect.any(Function),
+      );
+      expect(attempts.complete).toHaveBeenCalledWith(
+        context,
+        'order-0',
+        result,
+      );
+      expect(cartService.cleanUpCheckout).toHaveBeenCalledWith(
+        'user-1',
+        'order-0',
+      );
     });
   });
 
   describe('checkoutOffer', () => {
-    it('never reads or clears the cart on success', async () => {
-      ordersService.createFromOffer.mockResolvedValue({ id: 'order-1' });
+    it('never touches the cart on success', async () => {
       paymentsService.initializeForOrder.mockResolvedValue({
         id: 'payment-1',
       });
@@ -183,8 +372,9 @@ describe('CheckoutService', () => {
         'addr-1',
         'USD',
         undefined,
+        undefined,
       );
-      expect(cartService.clearCart).not.toHaveBeenCalled();
+      expect(cartService.cleanUpCheckout).not.toHaveBeenCalled();
       expect(ordersService.cancel).not.toHaveBeenCalled();
       expect(result).toEqual({
         order: { id: 'order-1' },
@@ -192,84 +382,55 @@ describe('CheckoutService', () => {
       });
     });
 
+    it('fingerprints a buy-now request separately from a cart checkout', async () => {
+      paymentsService.initializeForOrder.mockResolvedValue({
+        id: 'payment-1',
+      });
+
+      await service.checkoutOffer(
+        'user-1',
+        'OFFER-1',
+        3,
+        'addr-1',
+        'USD',
+        undefined,
+        KEY,
+      );
+
+      expect(attempts.run).toHaveBeenCalledWith(
+        'user-1',
+        KEY,
+        {
+          operation: 'buy-now',
+          offerId: 'offer-1',
+          quantity: 3,
+          shippingAddressId: 'addr-1',
+          currency: 'USD',
+          paymentDetails: null,
+        },
+        expect.any(Function),
+      );
+      expect(ordersService.createFromOffer).toHaveBeenCalledWith(
+        'user-1',
+        'offer-1',
+        3,
+        'addr-1',
+        'USD',
+        KEY.key,
+        { id: 'attempt-1', ownerToken: 'owner-1' },
+      );
+      expect(cartService.cleanUpCheckout).not.toHaveBeenCalled();
+    });
+
     it('cancels the order when payment initialization fails', async () => {
-      ordersService.createFromOffer.mockResolvedValue({ id: 'order-1' });
       const error = new Error('Payment gateway rejected the charge');
       paymentsService.initializeForOrder.mockRejectedValue(error);
 
       await expect(
         service.checkoutOffer('user-1', 'offer-1', 1, 'addr-1', 'USD'),
-      ).rejects.toThrow(error);
+      ).rejects.toBe(error);
 
       expect(ordersService.cancel).toHaveBeenCalledWith('order-1');
-      expect(cartService.clearCart).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('idempotency', () => {
-    it('replays the order and payment already created for this key, without checking out again', async () => {
-      ordersService.findByIdempotencyKey.mockResolvedValue({
-        id: 'order-1',
-        payment: { id: 'payment-1', status: 'PENDING' },
-      });
-      paymentsService.getForOrder.mockResolvedValue({ id: 'payment-1' });
-
-      const result = await service.checkout(
-        'user-1',
-        'addr-1',
-        'USD',
-        undefined,
-        undefined,
-        'key-1',
-      );
-
-      expect(ordersService.findByIdempotencyKey).toHaveBeenCalledWith(
-        'user-1',
-        'key-1',
-      );
-      expect(paymentsService.getForOrder).toHaveBeenCalledWith('order-1');
-      expect(ordersService.createFromCart).not.toHaveBeenCalled();
-      expect(cartService.clearCart).not.toHaveBeenCalled();
-      expect(result).toEqual({
-        order: {
-          id: 'order-1',
-          payment: { id: 'payment-1', status: 'PENDING' },
-        },
-        payment: { id: 'payment-1' },
-      });
-    });
-
-    it('frees the key and checks out fresh when a prior order never reached payment', async () => {
-      ordersService.findByIdempotencyKey.mockResolvedValue({
-        id: 'dead-order',
-        payment: null,
-      });
-      ordersService.createFromCart.mockResolvedValue({ id: 'order-2' });
-      paymentsService.initializeForOrder.mockResolvedValue({ id: 'payment-2' });
-
-      const result = await service.checkout(
-        'user-1',
-        'addr-1',
-        'USD',
-        undefined,
-        undefined,
-        'key-1',
-      );
-
-      expect(ordersService.releaseIdempotencyKey).toHaveBeenCalledWith(
-        'dead-order',
-      );
-      expect(ordersService.createFromCart).toHaveBeenCalledWith(
-        'user-1',
-        'addr-1',
-        'USD',
-        undefined,
-        'key-1',
-      );
-      expect(result).toEqual({
-        order: { id: 'order-2' },
-        payment: { id: 'payment-2' },
-      });
     });
   });
 });

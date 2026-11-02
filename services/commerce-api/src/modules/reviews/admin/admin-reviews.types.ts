@@ -1,4 +1,8 @@
-import { Prisma, ReviewModerationState, ReviewVisibility } from '@prisma/client';
+import {
+  Prisma,
+  ReviewModerationState,
+  ReviewVisibility,
+} from '@prisma/client';
 
 /** URL/query-facing discriminator — see dto/list-admin-reviews.dto.ts. */
 export type AdminReviewTargetParam = 'product' | 'seller';

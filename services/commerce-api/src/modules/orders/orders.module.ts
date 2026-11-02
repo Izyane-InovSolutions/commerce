@@ -8,6 +8,7 @@ import { InventoryModule } from '../inventory/inventory.module';
 import { SellersModule } from '../sellers/sellers.module';
 import { ShippingModule } from '../shipping/shipping.module';
 import { AdminOrdersController } from './admin-orders.controller';
+import { UnpaidOrderExpiryHandler } from './jobs/unpaid-order-expiry.handler';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
 import { SellerOrdersController } from './seller-orders.controller';
@@ -23,8 +24,12 @@ import { SellerOrdersService } from './seller-orders.service';
     ShippingModule,
     FinancialsModule,
   ],
-  controllers: [OrdersController, AdminOrdersController, SellerOrdersController],
-  providers: [OrdersService, SellerOrdersService],
-  exports: [OrdersService],
+  controllers: [
+    OrdersController,
+    AdminOrdersController,
+    SellerOrdersController,
+  ],
+  providers: [OrdersService, SellerOrdersService, UnpaidOrderExpiryHandler],
+  exports: [OrdersService, UnpaidOrderExpiryHandler],
 })
 export class OrdersModule {}

@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import type { OutboxEvent } from '@prisma/client';
 
+import { MetricsService } from '../metrics/metrics.service';
 import { OutboxDispatcherService } from './outbox-dispatcher.service';
 import { OutboxService } from './outbox.service';
 import type { OutboxSubscriber } from './outbox-subscriber.interface';
@@ -130,5 +131,52 @@ describe('OutboxDispatcherService', () => {
     expect(() =>
       service.registerSubscriber(subscriber('notifications', ['x.y'])),
     ).toThrow(/already registered/);
+  });
+
+  it('records outcomes, with lag only for first attempts', async () => {
+    const metrics = {
+      recordOutboxEvent: jest.fn<
+        void,
+        Parameters<MetricsService['recordOutboxEvent']>
+      >(),
+    };
+    service = new OutboxDispatcherService(
+      outbox as unknown as OutboxService,
+      config as unknown as ConfigService,
+      registry as unknown as SchedulerRegistry,
+      metrics as unknown as MetricsService,
+    );
+    service.registerSubscriber(
+      subscriber(
+        'flaky',
+        ['order.paid'],
+        jest
+          .fn()
+          .mockResolvedValueOnce(undefined)
+          .mockRejectedValueOnce(new Error('down')),
+      ),
+    );
+    outbox.claimBatch.mockResolvedValueOnce([
+      buildEvent({ id: 'e1', createdAt: new Date(Date.now() - 1_000) }),
+      buildEvent({ id: 'e2', attempts: 9, maxAttempts: 10 }),
+    ]);
+
+    await service.dispatchPending();
+
+    expect(metrics.recordOutboxEvent).toHaveBeenNthCalledWith(
+      1,
+      'order.paid',
+      'published',
+      expect.any(Number),
+    );
+    expect(metrics.recordOutboxEvent.mock.calls[0]?.[2]).toBeGreaterThanOrEqual(
+      1_000,
+    );
+    expect(metrics.recordOutboxEvent).toHaveBeenNthCalledWith(
+      2,
+      'order.paid',
+      'dead_letter',
+      null,
+    );
   });
 });
