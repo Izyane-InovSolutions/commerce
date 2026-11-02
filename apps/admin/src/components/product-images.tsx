@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { BASE_PATH } from '@/lib/base-path';
 import { idleFormState, type FormState } from '@/lib/form';
 
 /**
@@ -75,7 +76,10 @@ export function ProductImages({
               <div className="bg-muted relative aspect-square overflow-hidden rounded-lg border">
                 {entry.url ? (
                   <Image
-                    src={entry.url}
+                    // The API signs an origin-relative path; Next doesn't add
+                    // basePath to an image src, and the rewrite to the API only
+                    // matches under it.
+                    src={`${BASE_PATH}${entry.url}`}
                     alt={entry.mediaAsset.originalFileName}
                     fill
                     sizes="(min-width: 1024px) 20vw, 40vw"

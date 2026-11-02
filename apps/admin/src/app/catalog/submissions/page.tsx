@@ -17,6 +17,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { apiClient } from '@/lib/api';
+import { BASE_PATH } from '@/lib/base-path';
 import { requireAdmin } from '@/lib/session';
 
 import { reviewSubmissionAction } from '../actions';
@@ -102,7 +103,7 @@ export default async function ProductSubmissionsPage() {
                           // eslint-disable-next-line @next/next/no-img-element -- a signed, short-lived admin URL isn't worth Next's image pipeline here.
                           <img
                             key={media.id}
-                            src={media.url}
+                            src={`${BASE_PATH}${media.url}`}
                             alt=""
                             className="size-20 rounded-lg border object-cover"
                           />
