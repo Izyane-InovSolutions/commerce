@@ -5,6 +5,7 @@ import { ConflictException } from '@nestjs/common';
 import {
   InventoryMovementType,
   OrderStatus,
+  PrismaClient,
   ReservationStatus,
   type Prisma,
   type Reservation,
@@ -130,6 +131,9 @@ describe('Inventory locking (integration, real Postgres)', () => {
   let inventory: InventoryService;
   let orders: OrdersService;
   let expireHandler: InventoryExpireReservationHandler;
+  // Its own pool: lock diagnostics must never wait for a connection held by
+  // the blocked checkouts they are watching.
+  let observer: PrismaClient;
   const userIds: string[] = [];
   const productIds: string[] = [];
   const offerIds: string[] = [];
@@ -143,6 +147,8 @@ describe('Inventory locking (integration, real Postgres)', () => {
     inventory = harness.app.get(InventoryService);
     orders = harness.app.get(OrdersService);
     expireHandler = harness.app.get(InventoryExpireReservationHandler);
+    observer = new PrismaClient();
+    await observer.$connect();
   });
 
   afterEach(async () => {
@@ -196,6 +202,7 @@ describe('Inventory locking (integration, real Postgres)', () => {
     await prisma.warehouse.deleteMany({ where: { id: { in: warehouseIds } } });
     await prisma.offer.deleteMany({ where: { id: { in: offerIds } } });
     await prisma.product.deleteMany({ where: { id: { in: productIds } } });
+    await observer.$disconnect();
     await harness.app.close();
   });
 
@@ -375,7 +382,7 @@ describe('Inventory locking (integration, real Postgres)', () => {
 
   /** Backends of this database waiting for a lock they have not been granted. */
   async function blockedBackends(): Promise<number> {
-    const [row] = await harness.prisma.$queryRaw<{ blocked: number }[]>`
+    const [row] = await observer.$queryRaw<{ blocked: number }[]>`
       SELECT count(DISTINCT l.pid)::int AS blocked
       FROM pg_locks l
       JOIN pg_stat_activity a ON a.pid = l.pid

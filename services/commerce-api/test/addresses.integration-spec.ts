@@ -263,7 +263,9 @@ describe('Addresses — default invariant (integration, real Postgres)', () => {
         ),
         async () => {
           // The barrier holds: nothing was written while the lock was held.
-          expect(await prisma.address.count({ where: { userId } })).toBe(0);
+          // Read through the observer: the n queued creates may hold every
+          // connection in the service's pool until the lock is released.
+          expect(await observer.address.count({ where: { userId } })).toBe(0);
         },
       );
 

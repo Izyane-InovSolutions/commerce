@@ -17,7 +17,14 @@ if (useApplication && loaded.parsed?.NODE_ENV === 'production') {
   );
 }
 
-process.env.DATABASE_URL = integrationTestDatabaseUrl(process.env);
+// Prisma's default pool is 2 x CPUs + 1, so it shrinks to 5 on a 2-vCPU CI
+// runner. Concurrency specs park more transactions than that on one row lock
+// (inventory-locking holds 6 checkouts plus the barrier), and they must not
+// pass or fail with the machine's core count. An explicit limit wins.
+const databaseUrl = new URL(integrationTestDatabaseUrl(process.env));
+if (!databaseUrl.searchParams.has('connection_limit'))
+  databaseUrl.searchParams.set('connection_limit', '15');
+process.env.DATABASE_URL = databaseUrl.toString();
 // Apply only after the database guard has checked the original environment.
 configureTestProviders(process.env);
 // migrate deploy never uses a shadow database, but Prisma rejects identical
